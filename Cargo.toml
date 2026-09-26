@@ -24,6 +24,7 @@ members = [
     "crates/sakura-neural-worker",
     "crates/sakura-ai-proto",
     "crates/sakura-ai-worker",
+    "crates/sakura-pad-worker",
     "tools/candidate-sweep",
     "tools/conversion-eval",
     "tools/ime-eval",

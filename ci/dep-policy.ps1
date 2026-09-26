@@ -114,6 +114,32 @@ $IsolatedWorkerRuntime = [ordered]@{
     'ryu'                   = 'serde_json float formatting implementation detail'
 }
 
+# Experimental preparation for sakura-pad-worker only. These packages are
+# cryptographic implementation dependencies, not generally permitted runtime
+# dependencies. The graph check below rejects them from every consumer except
+# the dedicated Pad worker.
+$PadWorkerRuntime = [ordered]@{
+    'argon2'         = 'experimental Pad password KDF; sakura-pad-worker only'
+    'aes-gcm'        = 'experimental Pad authenticated encryption; sakura-pad-worker only'
+    'aes'            = 'AES implementation for isolated Pad worker'
+    'aead'           = 'authenticated-encryption API for isolated Pad worker'
+    'cipher'         = 'cipher traits for isolated Pad worker'
+    'ctr'            = 'AES-GCM counter mode for isolated Pad worker'
+    'ghash'          = 'AES-GCM authentication for isolated Pad worker'
+    'polyval'        = 'GHASH field implementation for isolated Pad worker'
+    'universal-hash' = 'POLYVAL hash interface for isolated Pad worker'
+    'opaque-debug'   = 'cryptographic trait implementation detail for isolated Pad worker'
+    'inout'          = 'cipher buffer API for isolated Pad worker'
+    'subtle'         = 'constant-time operations for isolated Pad worker'
+    'blake2'         = 'Argon2 hash primitive for isolated Pad worker'
+    'base64ct'       = 'Argon2 encoding dependency; isolated Pad worker only'
+    'password-hash'  = 'Argon2 alloc-feature dependency; isolated Pad worker only'
+    'rand_core'      = 'password-hash salt source dependency; isolated Pad worker only'
+    'zeroize'        = 'secret-buffer clearing for isolated Pad worker'
+}
+
+$PadWorkerPackage = 'sakura-pad-worker'
+
 # These tools produce build artifacts but are not shipping runtime binaries.
 # A dependency admitted for dictc must not therefore become available to an IME
 # runtime transitively. Check the resolved graph, not just direct manifests.
@@ -198,9 +224,20 @@ function Get-DisallowedPackage {
         if ($name -match $WindowsFamilyPattern) { continue }
         if ($BuildTimeOnly.Contains($name)) { continue }
         if ($IsolatedWorkerRuntime.Contains($name)) { continue }
+        if ($PadWorkerRuntime.Contains($name)) { continue }
         $offenders.Add($name)
     }
     return , $offenders.ToArray()
+}
+
+function Get-PadWorkerDependencyLeak {
+    param(
+        [Parameter(Mandatory)][string]$Consumer,
+        [Parameter(Mandatory)][AllowEmptyCollection()][string[]]$PackageName
+    )
+
+    if ($Consumer -eq $PadWorkerPackage) { return , @() }
+    return , @($PackageName | Where-Object { $PadWorkerRuntime.Contains($_) } | Sort-Object -Unique)
 }
 
 function Invoke-SelfTest {
@@ -211,7 +248,10 @@ function Invoke-SelfTest {
         'sakura-core', 'sakura-tsf',
         'windows', 'windows-core', 'windows_x86_64_msvc', 'windows-implement',
         'proc-macro2', 'quote', 'syn', 'unicode-ident',
-        'ort', 'serde', 'serde_json', 'sha2'
+        'ort', 'serde', 'serde_json', 'sha2',
+        'argon2', 'aes-gcm', 'aes', 'aead', 'cipher', 'ctr', 'ghash',
+        'polyval', 'universal-hash', 'opaque-debug', 'inout', 'subtle',
+        'blake2', 'base64ct', 'password-hash', 'rand_core', 'zeroize'
     )
     $flagged = Get-DisallowedPackage -PackageName $allowed -WorkspaceCrate $workspace
     if ($flagged.Count -ne 0) {
@@ -228,6 +268,15 @@ function Invoke-SelfTest {
         }
     }
 
+    $padCryptoFixture = @('argon2', 'aes-gcm', 'aes', 'aead', 'cipher', 'zeroize')
+    if ((Get-PadWorkerDependencyLeak -Consumer $PadWorkerPackage -PackageName $padCryptoFixture).Count -ne 0) {
+        $failures.Add('Pad worker was rejected from its isolated crypto dependency set')
+    }
+    $padCryptoLeaks = Get-PadWorkerDependencyLeak -Consumer 'sakura-ai-worker' -PackageName $padCryptoFixture
+    if ($padCryptoLeaks.Count -ne $padCryptoFixture.Count) {
+        $failures.Add('Pad crypto isolation did not reject the synthetic AI-worker dependency set')
+    }
+
     # R11: every nested tool workspace must still be readable, or the audit of
     # its lock would silently stop. A stale entry fails here, not as a pass.
     foreach ($tool in $NestedToolWorkspaces) {
@@ -235,7 +284,11 @@ function Invoke-SelfTest {
         try {
             $names = Get-WorkspaceCrateName -Manifest (Join-Path $toolRoot 'Cargo.toml')
             if ($names.Count -eq 0) { $failures.Add("nested tool '$tool' declares no package") }
-            $null = Get-LockedPackageName -Lock (Join-Path $toolRoot 'Cargo.lock')
+            $locked = Get-LockedPackageName -Lock (Join-Path $toolRoot 'Cargo.lock')
+            $leaks = Get-PadWorkerDependencyLeak -Consumer $tool -PackageName $locked
+            if ($leaks.Count -ne 0) {
+                $failures.Add("Pad crypto leaked into nested workspace '$tool': $($leaks -join ', ')")
+            }
         } catch {
             $failures.Add("nested tool '$tool' cannot be audited: $_")
         }
@@ -272,6 +325,9 @@ foreach ($tool in $NestedToolWorkspaces) {
     foreach ($name in (Get-DisallowedPackage -PackageName $toolPackages -WorkspaceCrate $toolCrates)) {
         $offenders.Add("$name (in $tool/Cargo.lock)")
     }
+    foreach ($name in (Get-PadWorkerDependencyLeak -Consumer $tool -PackageName $toolPackages)) {
+        $offenders.Add("$name (Pad-only dependency in $tool/Cargo.lock)")
+    }
     Write-Host ("Checked {0} locked packages in nested tool workspace {1}." -f (
             $toolPackages | Sort-Object -Unique).Count, $tool)
 }
@@ -299,6 +355,24 @@ foreach ($crate in $RuntimeCrates) {
         if ($tree | Select-String -Quiet -Pattern ("^$([regex]::Escape($dependency)) v")) {
             throw "offline dictc LLM-detail dependency '$dependency' leaked into runtime crate '$crate'"
         }
+    }
+}
+
+# Keep the experimental Pad crypto closure out of all other workspace crates,
+# including AI/neural workers and offline tools. Restricting the check to the
+# dedicated package name makes adding a new direct or transitive dependency a
+# deliberate policy change rather than a broad allowlist expansion.
+foreach ($crate in ($workspaceCrates | Where-Object { $_ -ne $PadWorkerPackage })) {
+    $tree = & cargo tree --locked -p $crate --edges normal --prefix none 2>$null
+    if ($LASTEXITCODE -ne 0) {
+        throw "could not inspect resolved dependency graph for Pad crypto isolation crate '$crate'"
+    }
+    $treePackages = @($tree | ForEach-Object {
+        if ($_ -match '^([^ ]+) v') { $Matches[1] }
+    })
+    $leaks = Get-PadWorkerDependencyLeak -Consumer $crate -PackageName $treePackages
+    if ($leaks.Count -ne 0) {
+        throw "Pad-only dependency '$($leaks -join ', ')' leaked into '$crate'; only '$PadWorkerPackage' may use them"
     }
 }
 

@@ -1,0 +1,1469 @@
+<!doctype html>
+<!--
+Prototype map
+  Settings → protection summary → setup: method → recovery challenge → review → enabled.
+  Pad menu → whole-Pad lock → unlock; memo menu → independently lock/unlock memo.
+  Recovery is a separate path and never unlocks individually protected memos.
+State is in memory only. All credentials and keys are public demo fixtures, never real secrets.
+-->
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sakura Pad — 保護 UI 試作</title>
+<style>
+:root {
+  color-scheme:light;
+  --surface:#f7f6f4;
+  --paper:#fffdfb;
+  --ink:#2f2f2f;
+  --muted:#706e6b;
+  --selected:#e8e5e2;
+  --rail:#b28d96;
+  --border:#bdb9b5;
+  --line:#e4e0dc;
+  --button:#f7f6f4;
+  --button-hover:#e8e5e2;
+  --field:#fcfbfa;
+  --good:#496b59;
+  --bad:#9c4941;
+  --shadow:0 18px 54px #392e2b26;
+  --radius:6px;
+  font:14px/1.45 "Yu Gothic UI","Meiryo UI",system-ui,sans-serif
+}
+* {
+  box-sizing:border-box
+}
+body {
+  margin:0;
+  background:#e9e6e3;
+  color:var(--ink);
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  padding:24px
+}
+button,input,select {
+  font:inherit;
+  color:inherit
+}
+button {
+  cursor:pointer
+}
+button:focus-visible,input:focus-visible,select:focus-visible {
+  outline:2px solid var(--rail);
+  outline-offset:2px
+}
+button:disabled {
+  opacity:.48;
+  cursor:wait
+}
+.stage {
+  width:min(1080px,100%)
+}
+.major-tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:-10px 0 18px}
+.major-tab{min-height:34px;padding:5px 12px;border:0;border-bottom:2px solid transparent;color:var(--muted);background:transparent;font-size:12px}
+.major-tab.active{color:var(--ink);border-color:var(--rail);font-weight:600}
+.major-tab:disabled{color:var(--muted);opacity:.62;cursor:default}
+.static-check{color:var(--muted);margin:7px 0}
+.demo-strip {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin:0 0 10px;
+  color:#5a5552;
+  font-size:12px
+}
+.demo-strip strong {
+  font-weight:650;
+  color:var(--bad)
+}
+.theme-toggle {
+  border:1px solid #c9c3be;
+  border-radius:5px;
+  background:#f7f6f4;
+  padding:5px 10px;
+  font-size:12px
+}
+.window {
+  min-height:680px;
+  background:var(--surface);
+  border:1px solid #c9c3be;
+  border-radius:8px;
+  box-shadow:var(--shadow);
+  overflow:hidden;
+  display:flex;
+  flex-direction:column
+}
+.titlebar {
+  height:40px;
+  flex:none;
+  border-bottom:1px solid var(--line);
+  display:flex;
+  align-items:center;
+  padding:0 16px;
+  gap:9px
+}
+.brand-mark {
+  width:16px;
+  height:16px;
+  border:1.5px solid var(--rail);
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  color:var(--rail);
+  font-size:10px;
+  font-weight:700
+}
+.window-name {
+  font-size:13px
+}
+.window-caption {
+  margin-left:auto;
+  color:var(--muted);
+  font-size:12px
+}
+.window-actions {
+  display:flex;
+  gap:3px;
+  margin-left:18px
+}
+.window-actions span {
+  width:24px;
+  height:22px;
+  display:grid;
+  place-items:center;
+  color:var(--muted)
+}
+.window-body {
+  flex:1;
+  display:flex;
+  min-height:0
+}
+.shell-nav {
+  width:214px;
+  flex:none;
+  padding:18px 10px;
+  border-right:1px solid var(--line)
+}
+.product-label {
+  padding:0 11px 13px;
+  color:var(--muted);
+  font-size:11px;
+  letter-spacing:.04em
+}
+.nav-item {
+  display:flex;
+  gap:10px;
+  align-items:center;
+  min-height:36px;
+  padding:7px 11px;
+  border-radius:4px;
+  color:#4c4946;
+  font-size:13px
+}
+.nav-item.selected {
+  background:#eeebe8;
+  color:var(--ink);
+  box-shadow:inset 3px 0 var(--rail);
+  font-weight:600
+}
+.nav-icon {
+  width:16px;
+  text-align:center;
+  color:#827b76
+}
+.nav-sub {
+  padding:5px 0 0 36px;
+  color:var(--muted);
+  font-size:12px;
+  line-height:2
+}
+.nav-sub .current {
+  color:var(--ink);
+  font-weight:600
+}
+.content {
+  padding:26px 30px 22px;
+  flex:1;
+  min-width:0;
+  max-width:810px
+}
+.eyebrow {
+  font-size:11px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--muted);
+  margin-bottom:5px
+}
+.heading-row {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+  margin-bottom:18px
+}
+h1 {
+  font-size:21px;
+  line-height:1.3;
+  margin:0;
+  font-weight:650;
+  letter-spacing:-.02em
+}
+h2 {
+  font-size:15px;
+  margin:0;
+  font-weight:650
+}
+p {
+  margin:6px 0 0;
+  color:var(--muted);
+  font-size:13px
+}
+.status-pill {
+  white-space:nowrap;
+  border:1px solid #cfcac4;
+  border-radius:20px;
+  padding:4px 9px;
+  color:#4b6657;
+  background:#f4f6f3;
+  font-size:11px
+}
+.rows {
+  border-top:1px solid var(--line)
+}
+.setting-row {
+  display:grid;
+  grid-template-columns:minmax(155px,205px) 1fr;
+  gap:18px;
+  padding:15px 0;
+  border-bottom:1px solid var(--line);
+  align-items:start
+}
+.row-label {
+  font-size:13px;
+  font-weight:600;
+  padding-top:4px
+}
+.row-body {
+  font-size:13px
+}
+.row-actions {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:10px
+}
+.muted {
+  font-size:12px;
+  color:var(--muted)
+}
+.inline {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap
+}
+.field {
+  background:var(--field);
+  border:1px solid #bdb9b5;
+  border-radius:4px;
+  padding:8px 10px;
+  min-height:36px;
+  width:min(100%,340px)
+}
+.field.short {
+  width:124px
+}
+.select {
+  background:var(--field);
+  border:1px solid #bdb9b5;
+  border-radius:4px;
+  padding:7px 28px 7px 9px;
+  min-height:34px
+}
+.checkline {
+  display:flex;
+  align-items:flex-start;
+  gap:8px;
+  margin:7px 0;
+  color:#484542;
+  font-size:13px
+}
+.checkline input {
+  margin:3px 0 0;
+  accent-color:#92727b
+}
+.button {
+  min-height:34px;
+  border:1px solid #bdb9b5;
+  background:var(--button);
+  padding:6px 12px;
+  border-radius:4px;
+  font-size:13px;
+  transition:background .16s,border-color .16s
+}
+.button:hover {
+  background:var(--button-hover)
+}
+.button:active {
+  transform:translateY(1px)
+}
+.button.primary {
+  background:#7f626a;
+  color:#fff;
+  border-color:#7f626a;
+  font-weight:600
+}
+.button.primary:hover {
+  background:#6f515c
+}
+.button.quiet {
+  border-color:transparent;
+  background:transparent
+}
+.button.danger {
+  color:#8c403b
+}
+.note {
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:4px;
+  background:#f1efec;
+  color:#5e5a56;
+  font-size:12px;
+  margin-top:13px
+}
+.note.warn {
+  border-color:#dfc9a5;
+  background:#f7f1e6;
+  color:#665739
+}
+.note.error {
+  border-color:#ddc0bc;
+  background:#f8eeec;
+  color:#81423d
+}
+.note.success {
+  border-color:#c4d2c7;
+  background:#eff4ef;
+  color:#476351
+}
+.foot {
+  margin-top:16px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px
+}
+.foot-left {
+  font-size:12px;
+  color:var(--muted)
+}
+.foot-actions {
+  display:flex;
+  gap:8px
+}
+.toast {
+  position:fixed;
+  right:24px;
+  bottom:20px;
+  background:#35312f;
+  color:white;
+  padding:10px 14px;
+  border-radius:5px;
+  box-shadow:var(--shadow);
+  font-size:13px;
+  opacity:0;
+  transform:translateY(8px);
+  pointer-events:none;
+  transition:.2s
+}
+.toast.show {
+  opacity:1;
+  transform:none
+}
+.screen {
+  display:none
+}
+.screen.active {
+  display:block
+}
+.toolbar {
+  display:flex;
+  gap:8px;
+  align-items:center
+}
+.wizard {
+  max-width:610px
+}
+.wizard-top {
+  display:flex;
+  align-items:center;
+  gap:14px;
+  margin:5px 0 22px
+}
+.back {
+  border:0;
+  background:transparent;
+  padding:6px;
+  color:var(--muted);
+  font-size:13px
+}
+.steps {
+  display:flex;
+  gap:5px;
+  margin:0 0 24px
+}
+.step {
+  height:3px;
+  background:#ddd8d3;
+  flex:1;
+  border-radius:3px
+}
+.step.done {
+  background:var(--rail)
+}
+.scope-tag {
+  display:inline-block;
+  background:#efebe8;
+  border-radius:3px;
+  padding:3px 7px;
+  font-size:11px;
+  margin-bottom:9px
+}
+.method {
+  display:grid;
+  grid-template-columns:20px 1fr;
+  gap:10px;
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:5px;
+  margin-top:9px;
+  background:var(--paper)
+}
+.method.active {
+  border-color:var(--rail);
+  box-shadow:inset 0 0 0 1px var(--rail)
+}
+.method input {
+  margin:3px 0 0;
+  accent-color:#92727b
+}
+.method-title {
+  font-weight:600;
+  font-size:13px
+}
+.method-copy {
+  font-size:12px;
+  color:var(--muted);
+  margin-top:3px
+}
+.form-field {
+  margin-top:15px
+}
+.form-field label {
+  display:block;
+  font-size:12px;
+  font-weight:600;
+  margin-bottom:5px
+}
+.input-wrap {
+  display:flex;
+  gap:7px;
+  align-items:center;
+  flex-wrap:wrap
+}
+.reveal {
+  min-height:36px
+}
+.wizard-footer {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  border-top:1px solid var(--line);
+  padding-top:15px;
+  margin-top:23px
+}
+.wizard-footer .right {
+  display:flex;
+  gap:8px
+}
+.keybox {
+  font-family:ui-monospace,Consolas,monospace;
+  letter-spacing:.06em;
+  font-size:15px;
+  padding:12px;
+  background:#f1efec;
+  border:1px dashed #bdb9b5;
+  border-radius:4px;
+  margin-top:12px
+}
+.bullets {
+  padding-left:18px;
+  margin:10px 0;
+  color:var(--muted);
+  font-size:12px
+}
+.bullets li {
+  margin:4px 0
+}
+.locked-center {
+  max-width:420px;
+  margin:64px auto;
+  text-align:center
+}
+.lock-symbol {
+  width:46px;
+  height:46px;
+  border:1px solid #d4cbc7;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  margin:0 auto 16px;
+  color:#8e7179;
+  font-size:20px
+}
+.locked-center h1 {
+  font-size:20px
+}
+.locked-center .field {
+  margin:16px auto 0;
+  text-align:left
+}
+.center-actions {
+  display:flex;
+  justify-content:center;
+  gap:8px;
+  margin-top:12px
+}
+.pad-layout {
+  display:grid;
+  grid-template-columns:260px 1fr;
+  min-height:540px;
+  border:1px solid var(--line);
+  border-radius:5px;
+  background:var(--paper);
+  overflow:hidden
+}
+.pad-list {
+  border-right:1px solid var(--line);
+  padding:12px
+}
+.pad-head {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  font-weight:650;
+  font-size:13px;
+  margin-bottom:10px
+}
+.memo {
+  padding:10px 8px;
+  border-bottom:1px solid var(--line);
+  font-size:13px;
+  cursor:pointer
+}
+.memo.active {
+  background:var(--selected);
+  box-shadow:inset 3px 0 var(--rail)
+}
+.memo small {
+  display:block;
+  color:var(--muted);
+  font-size:11px;
+  margin-top:2px
+}
+.memo.protected {
+  color:#625d5a
+}
+.editor {
+  padding:18px
+}
+.editor-head {
+  display:flex;
+  align-items:center;
+  gap:7px;
+  justify-content:space-between
+}
+.editor-title {
+  font-size:16px;
+  font-weight:650
+}
+.editor-body {
+  margin-top:20px;
+  color:#504d49;
+  line-height:1.9;
+  max-width:510px
+}
+.pad-bottom {
+  border-top:1px solid var(--line);
+  margin-top:28px;
+  padding-top:12px;
+  color:var(--muted);
+  font-size:12px
+}
+.menu {
+  position:absolute;
+  background:var(--paper);
+  border:1px solid #c9c3be;
+  box-shadow:0 8px 24px #30292526;
+  border-radius:5px;
+  padding:5px;
+  z-index:5;
+  min-width:190px
+}
+.menu button {
+  display:block;
+  width:100%;
+  text-align:left;
+  border:0;
+  background:transparent;
+  padding:8px;
+  border-radius:3px;
+  font-size:12px
+}
+.menu button:hover {
+  background:var(--selected)
+}
+.menu-anchor {
+  position:relative
+}
+.two-col {
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px
+}
+.summary-cell {
+  background:#f1efec;
+  border-radius:4px;
+  padding:10px 12px
+}
+.summary-cell strong {
+  display:block;
+  font-size:12px
+}
+.summary-cell span {
+  display:block;
+  color:var(--muted);
+  font-size:12px;
+  margin-top:4px
+}
+.sr-only {
+  position:absolute;
+  width:1px;
+  height:1px;
+  padding:0;
+  margin:-1px;
+  overflow:hidden;
+  clip:rect(0,0,0,0);
+  white-space:nowrap;
+  border:0
+}
+body.dark {
+  color-scheme:dark;
+  --surface:#353535;
+  --paper:#2d2d2d;
+  --ink:#f5f3f1;
+  --muted:#aaa7a4;
+  --selected:#4c4649;
+  --rail:#b77c8c;
+  --border:#686365;
+  --line:#4a4846;
+  --button:#454545;
+  --button-hover:#4c4649;
+  --field:#252525;
+  --good:#a9c2ae;
+  --bad:#e0a19a;
+  background:#242424
+}
+body.dark .titlebar,body.dark .shell-nav {
+  border-color:var(--line)
+}
+body.dark .demo-strip {
+  color:#c9c4c0
+}
+body.dark .theme-toggle {
+  background:#353535;
+  color:var(--ink);
+  border-color:#686365
+}
+body.dark .nav-item {
+  color:#e2dedb
+}
+body.dark .nav-item.selected {
+  background:#454140
+}
+body.dark .note {
+  background:#3c3a38;
+  color:#d4cfcb
+}
+body.dark .note.warn {
+  background:#433c30;
+  color:#e2d0aa
+}
+body.dark .note.error {
+  background:#493634;
+  color:#e6b7b0
+}
+body.dark .note.success {
+  background:#35433a;
+  color:#bdd2c1
+}
+body.dark .status-pill {
+  background:#35433a;
+  color:#bdd2c1;
+  border-color:#536257
+}
+body.dark .method {
+  background:var(--paper)
+}
+body.dark .scope-tag,body.dark .summary-cell {
+  background:#403d3b
+}
+body.dark .pad-layout {
+  border-color:var(--line)
+}
+body.dark .keybox {
+  background:#393735;
+  border-color:#69615e
+}
+body.dark .button.primary {
+  background:#76535f;
+  border-color:#76535f
+}
+body.dark .button.primary:hover {
+  background:#684752
+}
+@media(max-width:760px) {
+  body {
+    padding:10px
+  }
+  .window {
+    min-height:calc(100vh - 52px)
+  }
+  .shell-nav {
+    width:172px
+  }
+  .content {
+    padding:22px 18px
+  }
+  .setting-row {
+    grid-template-columns:1fr;
+    gap:5px
+  }
+  .pad-layout {
+    grid-template-columns:180px 1fr
+  }
+}
+@media(max-width:560px) {
+  .shell-nav {
+    width:54px;
+    padding:12px 6px
+  }
+  .product-label,.nav-text,.nav-sub {
+    display:none
+  }
+  .nav-item {
+    justify-content:center;
+    padding:7px
+  }
+  .content {
+    padding:18px 12px
+  }
+  .pad-layout {
+    grid-template-columns:1fr
+  }
+  .pad-list {
+    border:0;
+    border-bottom:1px solid var(--line)
+  }
+  .pad-list .memo:not(.active) {
+    display:none
+  }
+  .window-actions {
+    display:none
+  }
+  .demo-strip {
+    align-items:flex-start;
+    gap:8px
+  }
+}
+@media(prefers-reduced-motion:reduce) {
+  *,*::before,*::after {
+    transition:none!important;
+    scroll-behavior:auto!important
+  }
+}
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="demo-strip"><span><strong>試作・デモ専用</strong>　実際の暗号化・設定変更は行わず、再読み込みで初期状態に戻ります。デモ用パスワード: <code>Sakura-demo1</code>。実際の秘密は入力しないでください。</span><button class="theme-toggle" id="themeToggle" type="button">暗色テーマ</button></div>
+  <div class="window" role="application" aria-label="Sakura Input protection UI prototype">
+    <div class="titlebar"><span class="brand-mark" aria-hidden="true">桜</span><span class="window-name">Sakura Input プロパティ</span><span class="window-caption" id="windowCaption">入力・変換 / Sakura Pad</span><div class="window-actions" aria-hidden="true"><span>—</span><span>□</span><span>×</span></div></div>
+    <div class="window-body">
+      <nav class="shell-nav" aria-label="入力・変換のページ">
+        <div class="product-label">SAKURA INPUT　設定</div>
+        <div class="nav-item selected"><span class="nav-icon">⌨</span><span class="nav-text">入力・変換</span></div>
+        <div class="nav-sub"><div>基本</div><div>入力補助</div><div>変換補助</div><div class="current">Sakura Pad</div></div>
+        <div class="nav-item" aria-disabled="true"><span class="nav-icon">▤</span><span class="nav-text">ユーザー辞書</span><small>試作対象外</small></div>
+        <div class="nav-item" aria-disabled="true"><span class="nav-icon">◷</span><span class="nav-text">学習</span><small>試作対象外</small></div>
+        <div class="nav-item" aria-disabled="true"><span class="nav-icon">⌁</span><span class="nav-text">診断</span><small>試作対象外</small></div>
+        <div class="nav-item" aria-disabled="true"><span class="nav-icon">↻</span><span class="nav-text">更新</span><small>試作対象外</small></div>
+      </nav>
+      <main class="content" id="app" tabindex="-1">
+        <div class="major-tabs" role="tablist" aria-label="設定の大分類">
+          <button class="major-tab active" role="tab" aria-selected="true">入力・変換</button>
+          <button class="major-tab" role="tab" aria-selected="false" disabled>ユーザー辞書</button>
+          <button class="major-tab" role="tab" aria-selected="false" disabled>学習</button>
+          <button class="major-tab" role="tab" aria-selected="false" disabled>診断</button>
+          <button class="major-tab" role="tab" aria-selected="false" disabled>更新</button>
+        </div>
+        <section class="screen active" id="settings">
+          <div class="heading-row"><div><div class="eyebrow">入力・変換　/　Sakura Pad</div><h1>Sakura Pad</h1><p>起動方法と、メモを開くときの保護を設定します。</p></div><span class="status-pill" id="lockBadge">現在は解除中</span></div>
+          <div class="rows">
+            <div class="setting-row"><div class="row-label">起動</div><div class="row-body"><select class="select" id="shortcutSelect" aria-label="Pad 起動ショートカット"><option>Ctrl を2回押す</option><option>ショートカットなし</option></select><div class="muted" style="margin-top:5px">通常設定。［適用］または［OK］で保存されます。</div></div></div>
+            <div class="setting-row"><div class="row-label">Pad 全体の保護</div><div class="row-body"><div id="protectionSummary">この Pad は専用のロックを設定していません。</div><div class="row-actions"><button class="button primary" id="setupProtection">Pad 全体の保護を設定</button></div><div class="muted" style="margin-top:7px">設定済みかどうかと、現在ロック中かどうかは別の状態です。</div></div></div>
+            <div class="setting-row"><div class="row-label">自動ロック</div><div class="row-body"><div>操作しない状態が <strong id="timeoutReadout">5分</strong> 続いたらロック <button class="button" data-action="setup-whole">保護設定を変更…</button></div><div class="checkline static-check">✓　Windows のロック・スリープ時は必ずロック</div><div class="checkline static-check">✓　Pad を閉じたときもロック</div><div class="muted">自動ロック時間の変更は再認証後、保護設定と一緒に確定します。</div></div></div>
+            <div class="setting-row"><div class="row-label">解除方法</div><div class="row-body"><div id="methodSummary">未設定</div><div class="row-actions"><button class="button" id="addKey">YubiKey を追加…</button><button class="button" id="addTotp">追加認証を設定…</button></div><div class="note">YubiKey は対応する機種・Windows API の実機確認後に利用できます。通常の TOTP はローカルでの追加確認です。単独で暗号鍵を守る方式ではありません。</div></div></div>
+            <div class="setting-row"><div class="row-label">復旧</div><div class="row-body"><div id="recoverySummary">復旧手段はありません</div><div class="row-actions"><button class="button" id="reviewRecovery">復旧方法を確認…</button></div></div></div>
+          </div>
+          <div class="foot"><div class="foot-left" id="settingsStatus" role="status" aria-live="polite">通常設定の変更は［適用］で保存されます。</div><div class="foot-actions"><button class="button" id="cancelParent">キャンセル</button><button class="button" id="applyParent">適用</button><button class="button" id="okParent">OK</button></div></div>
+        </section>
+        <section class="screen" id="setupReauth" aria-labelledby="reauthHeading"></section>
+        <section class="screen" id="setupMethod" aria-labelledby="methodHeading"></section>
+        <section class="screen" id="recoverySetup" aria-labelledby="recoveryHeading"></section>
+        <section class="screen" id="setupReview" aria-labelledby="reviewHeading"></section>
+        <section class="screen" id="setupDone" aria-labelledby="doneHeading"></section>
+        <section class="screen" id="pad" aria-labelledby="padHeading"></section>
+        <section class="screen" id="wholeUnlock" aria-labelledby="wholeHeading"></section>
+        <section class="screen" id="memoUnlock" aria-labelledby="memoHeading"></section>
+        <section class="screen" id="recoveryUnlock" aria-labelledby="recoveryUnlockHeading"></section>
+      </main>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<script id="pad-demo-model">
+var PadDemo = (function () {
+  "use strict";
+  var PASSWORD = "Sakura-demo1";
+  var RECOVERY = "PAD-7K4M-92QF";
+  var CONTENT = {
+    "note-01": { title: "計画のメモ", body: "来週の会議で相談する項目。試作用の内容です。" },
+    "note-02": { title: "買い物メモ", body: "牛乳、食パン、コーヒー。デモ用の内容です。" }
+  };
+  function clone(value) { return JSON.parse(JSON.stringify(value)); }
+  function Model() {
+    this.state = {
+      view: "settings", selectedMemo: "note-02", completedScope: "whole",
+      whole: { enabled: false, locked: false, password: PASSWORD, recovery: false, timeout: "5分" },
+      memos: {
+        "note-01": { enabled: true, locked: true, password: PASSWORD, recovery: true },
+        "note-02": { enabled: false, locked: false, password: "", recovery: false }
+      },
+      draft: null, shortcut: { saved: "Ctrl を2回押す", edited: "Ctrl を2回押す" },
+      busy: null, nextRequestId: 1, lastError: "", recoveryScope: "whole", reauthScope: null
+    };
+  }
+  Model.prototype.snapshot = function () { return clone(this.state); };
+  Model.prototype.beginSetup = function (scope) {
+    if (this.state.busy) return { ok: false, reason: "busy" };
+    if (scope !== "whole" && !this.state.memos[scope]) return { ok: false, reason: "invalid-scope" };
+    var policy = scope === "whole" ? this.state.whole : this.state.memos[scope];
+    if (this.state.whole.locked || policy.locked) return { ok: false, reason: "protected" };
+    if (policy.enabled) {
+      this.state.reauthScope = scope;
+      this.state.view = "setupReauth";
+      return { ok: false, reason: "reauth-required", scope: scope };
+    }
+    return this.createSetupDraft(scope);
+  };
+  Model.prototype.createSetupDraft = function (scope) {
+    if (this.state.busy) return { ok: false, reason: "busy" };
+    this.state.draft = { scope: scope, password: "", recoveryEnabled: false, recoveryStage: "reveal",
+      recoveryConfirmed: false, timeout: this.state.whole.timeout, injectFailure: false, error: "" };
+    this.state.reauthScope = null;
+    this.state.view = "setupMethod";
+    return { ok: true };
+  };
+  Model.prototype.authorizeSetup = function (scope, credential) {
+    if (this.state.busy) return { ok: false, reason: "busy" };
+    if (this.state.reauthScope !== scope) return { ok: false, reason: "no-reauth-pending" };
+    var policy = scope === "whole" ? this.state.whole : this.state.memos[scope];
+    if (!policy || !policy.enabled) return { ok: false, reason: "invalid-scope" };
+    if (this.state.whole.locked || policy.locked) return { ok: false, reason: "protected" };
+    if (credential !== policy.password) return { ok: false, reason: "wrong-credential" };
+    this.state.reauthScope = null;
+    return this.createSetupDraft(scope);
+  };
+  Model.prototype.cancelSetupReauth = function () {
+    if (!this.state.reauthScope) return false;
+    var scope = this.state.reauthScope;
+    this.state.reauthScope = null;
+    this.state.view = scope === "whole" ? "settings" : "pad";
+    return true;
+  };
+  Model.prototype.setPasswordDraft = function (password, confirmation, method) {
+    var d = this.state.draft;
+    if (!d) return { ok: false, reason: "no-draft" };
+    if (method && method !== "password") return { ok: false, reason: "unsupported-method" };
+    if (password.length < 12) return { ok: false, reason: "too-short" };
+    if (password !== confirmation) return { ok: false, reason: "mismatch" };
+    if (password !== PASSWORD) return { ok: false, reason: "demo-credential-only" };
+    d.password = password;
+    return { ok: true };
+  };
+  Model.prototype.revealRecovery = function () {
+    return this.state.draft && this.state.draft.recoveryStage === "reveal" ? RECOVERY : null;
+  };
+  Model.prototype.hideRecovery = function () {
+    if (!this.state.draft || this.state.draft.recoveryStage !== "reveal") return false;
+    this.state.draft.recoveryStage = "challenge";
+    return true;
+  };
+  Model.prototype.confirmRecovery = function (suffix, noRecoveryConfirmed) {
+    var d = this.state.draft;
+    if (!d || d.recoveryStage !== "challenge") return { ok: false, reason: "not-ready" };
+    if (noRecoveryConfirmed) {
+      d.recoveryEnabled = false;
+      d.recoveryConfirmed = true;
+      return { ok: true };
+    }
+    if (suffix !== "92QF") return { ok: false, reason: "challenge-mismatch" };
+    d.recoveryEnabled = true;
+    d.recoveryConfirmed = true;
+    return { ok: true };
+  };
+  Model.prototype.setTimeoutDraft = function (value) {
+    if (!this.state.draft || this.state.draft.scope !== "whole" || this.state.busy) return false;
+    this.state.draft.timeout = value;
+    return true;
+  };
+  Model.prototype.setSaveFailureDraft = function (value) {
+    if (!this.state.draft || this.state.busy) return false;
+    this.state.draft.injectFailure = Boolean(value);
+    return true;
+  };
+  Model.prototype.commitSetup = function () {
+    var d = this.state.draft;
+    if (!d || !d.password || !d.recoveryConfirmed) return { ok: false, reason: "incomplete" };
+    if (this.state.busy) return { ok: false, reason: "busy" };
+    var id = this.state.nextRequestId++;
+    this.state.busy = { id: id, type: "setup", scope: d.scope, draft: clone(d) };
+    return { ok: true, requestId: id };
+  };
+  Model.prototype.finishSetup = function (id, success) {
+    var b = this.state.busy;
+    if (!b || b.type !== "setup" || b.id !== id) return { ok: false, reason: "stale-request" };
+    this.state.busy = null;
+    if (!success) {
+      this.state.draft.error = "save-failed";
+      this.state.lastError = "設定を保存できませんでした。以前の設定を維持しています。";
+      this.state.view = "setupReview";
+      return { ok: false, reason: "save-failed" };
+    }
+    var d = b.draft;
+    var p = d.scope === "whole" ? this.state.whole : this.state.memos[d.scope];
+    var wasLocked = p.locked;
+    p.enabled = true; p.locked = wasLocked; p.password = d.password; p.recovery = d.recoveryEnabled;
+    if (d.scope === "whole") p.timeout = d.timeout;
+    this.state.completedScope = d.scope;
+    this.state.draft = null;
+    this.state.lastError = "";
+    this.state.view = d.scope === "whole" && p.locked ? "wholeUnlock" : "setupDone";
+    return { ok: true };
+  };
+  Model.prototype.cancelSetup = function () {
+    if (this.state.busy && this.state.busy.type === "setup") return false;
+    var d = this.state.draft;
+    this.state.draft = null;
+    this.state.view = d && d.scope === "whole" ? "settings" : "pad";
+    return true;
+  };
+  Model.prototype.setShortcutDraft = function (value) { this.state.shortcut.edited = value; };
+  Model.prototype.applyParent = function () {
+    this.state.shortcut.saved = this.state.shortcut.edited;
+    return { ok: true, savedShortcut: this.state.shortcut.saved };
+  };
+  Model.prototype.cancelParent = function () {
+    this.state.shortcut.edited = this.state.shortcut.saved;
+    return { ok: true, protectionPreserved: true };
+  };
+  Model.prototype.lockWhole = function () {
+    if (!this.state.whole.enabled) return false;
+    if (this.state.busy && this.state.busy.type === "unlock") {
+      this.state.busy = null;
+      this.state.nextRequestId++;
+    }
+    this.state.whole.locked = true;
+    Object.keys(this.state.memos).forEach(function (id) {
+      if (this.state.memos[id].enabled) this.state.memos[id].locked = true;
+    }, this);
+    this.state.view = "wholeUnlock";
+    return true;
+  };
+  Model.prototype.beginUnlock = function (scope) {
+    if (this.state.busy) return { ok: false, reason: "busy" };
+    if (scope !== "whole" && this.state.whole.locked) return { ok: false, reason: "whole-locked" };
+    var p = scope === "whole" ? this.state.whole : this.state.memos[scope];
+    if (!p) return { ok: false, reason: "invalid-scope" };
+    if (!p.locked) return { ok: false, reason: "not-locked" };
+    var id = this.state.nextRequestId++;
+    this.state.busy = { id: id, type: "unlock", scope: scope };
+    this.state.lastError = "";
+    return { ok: true, requestId: id };
+  };
+  Model.prototype.finishUnlock = function (id, credential) {
+    var b = this.state.busy;
+    if (!b || b.type !== "unlock" || b.id !== id) return { ok: false, reason: "stale-request" };
+    this.state.busy = null;
+    var p = b.scope === "whole" ? this.state.whole : this.state.memos[b.scope];
+    if (credential !== p.password) {
+      this.state.lastError = "パスワードが一致しません。内容はロックされたままです。";
+      return { ok: false, reason: "wrong-credential" };
+    }
+    this.state.lastError = "";
+    if (b.scope === "whole") {
+      this.state.whole.locked = false;
+      Object.keys(this.state.memos).forEach(function (id) {
+        if (this.state.memos[id].enabled) this.state.memos[id].locked = true;
+      }, this);
+    } else {
+      p.locked = false;
+      this.state.selectedMemo = b.scope;
+    }
+    this.state.view = "pad";
+    return { ok: true, scope: b.scope };
+  };
+  Model.prototype.cancelUnlock = function (id) {
+    if (!this.state.busy || this.state.busy.type !== "unlock" || this.state.busy.id !== id) return false;
+    this.state.busy = null;
+    this.state.nextRequestId++;
+    this.state.lastError = "";
+    return true;
+  };
+  Model.prototype.lockMemo = function (id) {
+    var p = this.state.memos[id];
+    if (!p || !p.enabled) return false;
+    if (this.state.busy && this.state.busy.type === "unlock" && this.state.busy.scope === id) {
+      this.state.busy = null;
+      this.state.nextRequestId++;
+    }
+    p.locked = true;
+    return true;
+  };
+  Model.prototype.selectMemo = function (id) {
+    if (!this.state.memos[id]) return false;
+    if (this.state.busy && this.state.busy.type === "unlock" && this.state.busy.scope !== "whole") {
+      this.state.busy = null;
+      this.state.nextRequestId++;
+    }
+    Object.keys(this.state.memos).forEach(function (memoId) {
+      if (this.state.memos[memoId].enabled) this.state.memos[memoId].locked = true;
+    }, this);
+    this.state.selectedMemo = id;
+    this.state.view = "pad";
+    return true;
+  };
+  Model.prototype.recover = function (scope, key) {
+    if (this.state.busy) return { ok: false, reason: "busy" };
+    if (scope !== "whole" && this.state.whole.locked) return { ok: false, reason: "whole-locked" };
+    var p = scope === "whole" ? this.state.whole : this.state.memos[scope];
+    if (!p || !p.enabled || !p.recovery) return { ok: false, reason: "recovery-not-registered" };
+    if (key !== RECOVERY) return { ok: false, reason: "wrong-recovery-key" };
+    if (scope === "whole") {
+      this.state.whole.locked = false;
+      Object.keys(this.state.memos).forEach(function (id) {
+        if (this.state.memos[id].enabled) this.state.memos[id].locked = true;
+      }, this);
+    } else {
+      p.locked = false;
+      this.state.selectedMemo = scope;
+    }
+    this.state.view = "pad";
+    return { ok: true, scope: scope };
+  };
+  Model.prototype.visibleMemo = function (id) {
+    var p = this.state.memos[id];
+    if (!p || this.state.whole.locked) return null;
+    if (p.enabled && (p.locked || this.state.selectedMemo !== id)) return { id: id, label: "保護されたメモ 01", locked: true };
+    return { id: id, title: CONTENT[id].title, body: CONTENT[id].body, locked: false };
+  };
+  return { Model: Model };
+})();
+</script>
+<script id="pad-demo-ui">
+(function () {
+  "use strict";
+  var model = new PadDemo.Model();
+  var screenIds = ["settings", "setupReauth", "setupMethod", "recoverySetup", "setupReview", "setupDone", "pad", "wholeUnlock", "memoUnlock", "recoveryUnlock"];
+  var unlockTimer = null;
+  var setupTimer = null;
+  var activeUnlockId = null;
+  function el(id) { return document.getElementById(id); }
+  function state() { return model.snapshot(); }
+  function escape(value) {
+    return String(value).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;" }[c];
+    });
+  }
+  function toast(message) {
+    var node = el("toast");
+    node.textContent = message;
+    node.classList.add("show");
+    window.clearTimeout(toast.timer);
+    toast.timer = window.setTimeout(function () { node.classList.remove("show"); }, 3000);
+  }
+  function clearSecrets() {
+    document.querySelectorAll("#setupReauth input[type=password], #setupMethod input[type=password], #pad input[type=password], #wholeUnlock input[type=password], #memoUnlock input[type=password], #recoveryUnlock input[type=password]")
+      .forEach(function (input) { input.value = ""; });
+  }
+  function show(name) {
+    clearSecrets();
+    screenIds.forEach(function (id) { el(id).classList.toggle("active", id === name); });
+    var heading = el(name).querySelector("h1");
+    if (heading) { heading.tabIndex = -1; heading.focus(); }
+    updateSettings();
+  }
+  function updateSettings() {
+    var s = state();
+    el("shortcutSelect").value = s.shortcut.edited;
+    el("timeoutReadout").textContent = s.whole.timeout;
+    el("protectionSummary").textContent = s.whole.enabled ?
+      "設定済み · " + (s.whole.locked ? "現在はロック中" : "現在は解除中") : "この Pad は専用のロックを設定していません。";
+    el("lockBadge").textContent = s.whole.locked ? "Pad 全体はロック中" :
+      s.whole.enabled ? "保護設定済み · 解除中" : "保護未設定";
+    el("setupProtection").textContent = s.whole.enabled ? "保護設定を変更…" : "Pad 全体の保護を設定";
+    el("methodSummary").textContent = s.whole.enabled ? "パスワード" : "未設定";
+    el("recoverySummary").textContent = s.whole.recovery ? "復旧キーを登録済み · 動作確認済み" : "復旧手段はありません";
+    el("settingsStatus").textContent = "通常設定は［適用］で保存します。保護設定は専用手順で確定します。";
+  }
+  function renderSetupReauth() {
+    var s = state();
+    var scope = s.reauthScope;
+    var whole = scope === "whole";
+    var policy = whole ? s.whole : s.memos[scope];
+    el("setupReauth").innerHTML =
+      "<div class='wizard'><div class='wizard-top'><button class='back' data-action='cancel-reauth'>← 戻る</button><span class='scope-tag'>対象 · " +
+      (whole ? "Pad 全体" : "このメモ · 保護されたメモ 01") + "</span></div><div class='eyebrow'>保護設定の変更</div><h1 id='reauthHeading' tabindex='-1'>現在のパスワードを確認</h1>" +
+      "<p>変更を始める前に、現在の解除方法で再認証してください。確認できるまで新しい設定の下書きは作りません。</p>" +
+      "<form data-action='setup-reauth-form' data-scope='" + scope + "'><label for='reauthPassword'>現在のパスワード</label><input class='field' id='reauthPassword' type='password' autocomplete='current-password'>" +
+      "<div class='note error' role='alert' hidden></div><div class='note warn'>デモ用パスワード Sakura-demo1 を使ってください。実際の秘密は入力しないでください。</div>" +
+      "<div class='wizard-footer'><span class='muted'>キャンセルすると変更手順を終了します。</span><div class='right'><button class='button' type='button' data-action='cancel-reauth'>キャンセル</button><button class='button primary' type='submit'>確認して続ける</button></div></div></form></div>";
+  }
+  function renderMethod() {
+    var d = state().draft, whole = d.scope === "whole";
+    var scope = whole ? "Pad 全体" : "このメモ · 保護されたメモ 01";
+    el("setupMethod").innerHTML =
+      "<div class='wizard'><div class='wizard-top'><button class='back' data-action='back-settings'>← 戻る</button><span class='scope-tag'>対象 · " + scope + "</span></div>" +
+      "<div class='steps'><i class='step done'></i><i class='step'></i><i class='step'></i></div><div class='eyebrow'>保護設定　/　1 of 3</div><h1>解除方法を決める</h1>" +
+      "<p>" + (whole ? "Pad 全体をロックします。個別保護メモは解除後も別にロックされたままです。" : "このメモ専用に保護します。Pad 全体を解除しても、このメモは閉じたままです。") + "</p>" +
+      "<label class='method active'><input type='radio' name='method' value='password' checked><span><span class='method-title'>パスワード</span><span class='method-copy'>貼り付け可能。12文字以上で入力し、確認欄に再入力します。</span></span></label>" +
+      "<label class='method disabled'><input type='radio' disabled><span><span class='method-title'>YubiKey（利用不可）</span><span class='method-copy'>Windows API と対応する実機の能力・キャンセル動作を確認するまで選択できません。</span></span></label>" +
+      "<label class='method disabled'><input type='radio' disabled><span><span class='method-title'>パスワード + YubiKey（利用不可）</span><span class='method-copy'>両方を必須にする方式。対応確認後に選択できます。</span></span></label>" +
+      "<div class='form-field'><label for='newPassword'>パスワード（12文字以上）</label><input class='field' id='newPassword' type='password' autocomplete='new-password'></div>" +
+      "<div class='form-field'><label for='confirmPassword'>パスワードをもう一度</label><input class='field' id='confirmPassword' type='password' autocomplete='new-password'></div>" +
+      "<div class='note warn'>デモ用パスワード Sakura-demo1 を入力してください。実際の秘密は使わないでください。</div><div class='note error' id='methodError' role='alert' aria-live='assertive' hidden></div>" +
+      "<div class='wizard-footer'><span class='muted'>準備中はいつでもキャンセルできます。</span><div class='right'><button class='button' data-action='cancel-setup'>キャンセル</button><button class='button primary' data-action='method-next'>次へ</button></div></div></div>";
+  }
+  function renderRecovery() {
+    var d = state().draft, scope = d.scope === "whole" ? "Pad 全体" : "このメモ · 保護されたメモ 01";
+    var html = "<div class='wizard'><div class='wizard-top'><button class='back' data-action='back-method'>← 戻る</button><span class='scope-tag'>対象 · " + scope + "</span></div>" +
+      "<div class='steps'><i class='step done'></i><i class='step done'></i><i class='step'></i></div><div class='eyebrow'>保護設定　/　2 of 3</div><h1>復旧方法を用意する</h1>";
+    if (d.recoveryStage === "reveal") {
+      html += "<p>このデモキーを控えたら隠し、末尾4文字を入力して登録を確認します。</p><div class='keybox'>PAD-7K4M-92QF</div>" +
+        "<div class='note warn'>画面を離れると再表示しません。この固定値は実際の秘密として使えません。</div>" +
+        "<div class='wizard-footer'><span class='muted'>復旧キーも別の解除経路になります。</span><div class='right'><button class='button' data-action='cancel-setup'>キャンセル</button><button class='button primary' data-action='hide-recovery'>キーを隠して次へ</button></div></div></div>";
+    } else {
+      html += "<p>キーを隠しました。控えたキーの末尾4文字を入力してください。</p><div class='keybox'>••••••••••••</div>" +
+        "<div class='form-field'><label for='recoveryCheck'>復旧キーの末尾4文字</label><input class='field' id='recoveryCheck' autocomplete='off'></div>" +
+        "<label class='checkline'><input type='checkbox' id='noRecovery'>復旧手段を登録せず、失った場合は復元できないことを理解しました</label>" +
+        "<div class='note warn'>復旧なしを選ぶと、解除方法を失ったとき内容を復元できません。</div><div class='note error' id='recoveryError' role='alert' aria-live='assertive' hidden></div>" +
+        "<div class='wizard-footer'><span class='muted'>確認を終えるまで設定は変わりません。</span><div class='right'><button class='button' data-action='back-method'>戻る</button><button class='button primary' data-action='recovery-next'>復旧方法を確認</button></div></div></div>";
+    }
+    el("recoverySetup").innerHTML = html;
+  }
+  function renderReview() {
+    var s = state(), d = s.draft, whole = d.scope === "whole";
+    var scope = whole ? "Pad 全体" : "このメモ · 保護されたメモ 01";
+    var busy = s.busy && s.busy.type === "setup";
+    el("setupReview").innerHTML =
+      "<div class='wizard'><div class='wizard-top'><button class='back' data-action='back-recovery' " + (busy ? "disabled" : "") + ">← 戻る</button><span class='scope-tag'>対象 · " + scope + "</span></div>" +
+      "<div class='steps'><i class='step done'></i><i class='step done'></i><i class='step done'></i></div><div class='eyebrow'>保護設定　/　3 of 3</div><h1>設定内容を確認</h1>" +
+      "<p>専用設定として確定します。親画面の［キャンセル］では元に戻りません。</p><div class='two-col' style='margin-top:17px'>" +
+      "<div class='summary-cell'><strong>対象</strong><span>" + (whole ? "Pad 全体の一覧と内容" : "このメモのタイトルと本文") + "</span></div>" +
+      "<div class='summary-cell'><strong>解除方法</strong><span>パスワード</span></div>" +
+      (whole ? "<div class='summary-cell'><strong>自動ロック</strong><span>操作しない状態が <select class='select' id='draftTimeout'>" +
+        ["1分", "5分", "10分", "15分", "しない"].map(function (v) { return "<option" + (d.timeout === v ? " selected" : "") + ">" + v + "</option>"; }).join("") +
+        "</select> 続いたらロック<br>Windows ロック・スリープ時は必ずロック<br>Pad を閉じたときもロック</span></div>" : "") +
+      "<div class='summary-cell'><strong>復旧</strong><span>" + (d.recoveryEnabled ? "復旧キー · 入力して確認済み" : "復旧手段なし") + "</span></div></div>" +
+      "<div class='note warn'>" + (whole ? "Pad 全体を解除しても、個別保護メモは別に解除するまで開きません。" : "Pad 全体を解除しても、このメモは閉じたままです。") + "</div>" +
+      "<label class='checkline'><input type='checkbox' id='injectFailure' " + (d.injectFailure ? "checked" : "") + ">デモ: 次の保護設定保存を失敗させる</label>" +
+      "<div class='note error' id='commitError' role='alert' " + (d.error ? "" : "hidden") + ">" + (d.error ? "設定を保存できませんでした。以前の設定を維持しています。再試行できます。" : "") + "</div>" +
+      "<div class='wizard-footer'><span class='muted'>保存・確認が終わるまで閉じられません。</span><div class='right'>" +
+      "<button class='button' data-action='back-recovery' " + (busy ? "disabled" : "") + ">戻る</button><button class='button' data-action='cancel-setup' " + (busy ? "disabled" : "") + ">キャンセル</button>" +
+      "<button class='button primary' data-action='enable-protection' " + (busy ? "disabled" : "") + ">" + (busy ? "設定を保存しています…" : d.error ? "再試行" : "保護を有効にする") + "</button></div></div></div>";
+  }
+  function renderDone() {
+    var scope = state().completedScope;
+    var memoScope = scope !== "whole";
+    el("setupDone").innerHTML =
+      "<div class='wizard' style='margin:52px auto'><div class='scope-tag'>対象 · " + (memoScope ? "このメモ · 保護されたメモ 01" : "Pad 全体") + "</div>" +
+      "<h1>保護を設定しました</h1><p>" + (memoScope ? "このメモの保護を有効にしました。全体の解除では開きません。" : "Pad 全体の保護を有効にしました。個別保護メモは別にロックされています。") + "</p>" +
+      "<div class='note success' role='status'>デモ設定を保存しました。実際の暗号化は行っていません。</div><div class='wizard-footer'>" +
+      "<span class='muted'>通常設定は親画面の［適用］で保存します。</span><button class='button primary' data-action='done-pad'>Pad を表示</button></div></div>";
+  }
+  function renderPad() {
+    var s = state();
+    if (s.whole.locked) {
+      el("pad").textContent = "";
+      return;
+    }
+    var rows = ["note-02", "note-01"].map(function (id) {
+      var memo = model.visibleMemo(id);
+      return "<button type='button' class='memo" + (id === s.selectedMemo ? " active" : "") + (memo.locked ? " protected" : "") +
+        "' data-action='select-memo' data-memo='" + id + "'>" + (memo.locked ? "⌑　保護されたメモ 01" : escape(memo.title)) +
+        "<small>" + (memo.locked ? "個別にロック中 · 内容は検索されません" : "デモ用メモ") + "</small></button>";
+    }).join("");
+    var memo = model.visibleMemo(s.selectedMemo);
+    var memoPolicy = s.memos[s.selectedMemo];
+    var memoBusy = s.busy && s.busy.type === "unlock" && s.busy.scope === s.selectedMemo;
+    var editor = memo.locked ?
+      "<div class='locked-center'><span class='lock-symbol' aria-hidden='true'>⌑</span><h2>このメモはロックされています</h2><p>タイトルと本文は表示していません。</p>" +
+      (s.view === "memoUnlock" ? "<form data-action='unlock-form' data-scope='" + s.selectedMemo + "'><label for='unlock-memo'>パスワード</label><input class='field' id='unlock-memo' type='password' autocomplete='current-password' " + (memoBusy ? "disabled" : "") + "><div class='note error' role='alert' " + (s.lastError ? "" : "hidden") + ">" + escape(s.lastError) + "</div>" + (memoBusy ? "<div class='note' role='status'>確認しています…</div><button type='button' class='button' data-action='cancel-unlock'>キャンセル</button>" : "") + "<div class='center-actions'><button class='button primary' type='submit' " + (memoBusy ? "disabled" : "") + ">このメモを解除</button><button class='button' type='button' data-action='back-pad' " + (memoBusy ? "disabled" : "") + ">一覧へ戻る</button></div></form>" : "<button type='button' class='button primary' data-action='unlock-memo'>このメモを解除</button>") + "</div>" :
+      "<div class='editor-title'>" + escape(memo.title) + "</div><div class='editor-body'>" + escape(memo.body) + "</div>";
+    el("pad").innerHTML =
+      "<div class='heading-row'><div><div class='eyebrow'>Sakura Pad　/　デモ</div><h1>メモ</h1><p>保護された行は内容に関係しない名前で表示します。</p></div>" +
+      "<div class='toolbar'><button class='button' data-action='lock-whole'>今すぐロック</button><div class='menu-anchor'><button class='button' data-action='pad-menu'>Pad の操作 ▾</button>" +
+      "<div class='menu' hidden><button data-action='menu-settings'>Pad の設定を開く</button><button data-action='lock-whole'>今すぐロック</button></div></div></div></div>" +
+      "<div class='pad-layout'><div class='pad-list'><div class='pad-head'><span>メモ 2件</span><span class='muted'>検索は解除済みだけ</span></div>" + rows +
+      "</div><div class='editor'><div class='editor-head'><strong class='editor-title'>" + (memo.locked ? "保護されたメモ 01" : escape(memo.title)) +
+      "</strong><div class='menu-anchor'><button class='button' data-action='memo-menu'>メモの操作 ▾</button><div class='menu' hidden>" +
+      (memo.locked ? "<button data-action='unlock-memo'>このメモを解除</button>" : memoPolicy.enabled ? "<button data-action='setup-memo'>保護設定を変更…</button>" : "") +
+      (!memoPolicy.enabled ? "<button data-action='setup-memo'>このメモを保護…</button>" : "") + "<button data-action='menu-settings'>Pad の設定…</button></div></div></div>" +
+      "<div class='editor-body' id='memoEditor'>" + editor + "</div><div class='pad-bottom'>ロック中のメモの内容は検索しません。保護設定と通常設定は別に保存されます。</div></div></div>";
+  }
+  function renderUnlock(scope) {
+    var s = state(), whole = scope === "whole", node = el(whole ? "wholeUnlock" : "memoUnlock");
+    var busy = s.busy && s.busy.type === "unlock";
+    var policy = whole ? s.whole : s.memos[s.selectedMemo];
+    var inactive = el(whole ? "memoUnlock" : "wholeUnlock");
+    inactive.textContent = "";
+    node.innerHTML =
+      "<div class='locked-center'><span class='lock-symbol' aria-hidden='true'>⌑</span><div class='scope-tag'>対象 · " + (whole ? "Pad 全体" : "このメモ · 保護されたメモ 01") +
+      "</div><h1 tabindex='-1'>" + (whole ? "Sakura Pad はロックされています" : "このメモはロックされています") + "</h1><p>" +
+      (whole ? "一覧・タイトル・本文はロック中に表示されません。" : "他のメモはそのまま使えます。解除に失敗しても戻れます。") +
+      "</p><form data-action='unlock-form' data-scope='" + (whole ? "whole" : s.selectedMemo) + "'><label for='unlock-" + (whole ? "whole" : "memo") + "'>パスワード</label>" +
+      "<input class='field' id='unlock-" + (whole ? "whole" : "memo") + "' type='password' autocomplete='current-password' " + (busy ? "disabled" : "") + ">" +
+      "<div class='note error' role='alert' " + (s.lastError ? "" : "hidden") + ">" + escape(s.lastError) + "</div>" +
+      (busy ? "<div class='note' role='status'>確認しています… 重複した確認は行いません。</div><button class='button' type='button' data-action='cancel-unlock'>キャンセル</button>" : "") +
+      "<div class='center-actions'><button class='button primary' type='submit' " + (busy ? "disabled" : "") + ">" + (busy ? "確認しています…" : "解除") + "</button>" +
+      (!whole ? "<button class='button' type='button' data-action='back-pad'>一覧へ戻る</button>" : "") + "</div></form>" +
+      (policy.recovery ? "<button type='button' class='button quiet' data-action='recovery-open' data-scope='" + (whole ? "whole" : s.selectedMemo) + "'>復旧キーを使う</button>" : "");
+  }
+  function renderRecoveryUnlock(scope) {
+    el("recoveryUnlock").innerHTML =
+      "<div class='locked-center'><span class='lock-symbol' aria-hidden='true'>⌑</span><div class='scope-tag'>対象 · " +
+      (scope === "whole" ? "Pad 全体" : "このメモ · 保護されたメモ 01") + "</div><h1 tabindex='-1'>復旧キーで解除</h1>" +
+      "<p>登録済みの解除経路だけを表示します。全体復旧で個別メモは開きません。</p><form data-action='recover-form' data-scope='" + scope + "'>" +
+      "<label for='recovery-unlock'>復旧キー</label><input id='recovery-unlock' class='field' type='password' autocomplete='off'>" +
+      "<div class='note error' role='alert' hidden></div><div class='center-actions'><button type='button' class='button' data-action='recovery-back'>戻る</button>" +
+      "<button class='button primary' type='submit'>復旧キーで解除</button></div></form></div>";
+  }
+  function refresh() {
+    var s = state();
+    if (s.whole.locked && (s.view === "pad" || s.view === "memoUnlock")) {
+      model.state.view = "wholeUnlock";
+      s = state();
+    }
+    updateSettings();
+    if (s.view === "settings") show("settings");
+    else if (s.view === "setupReauth") { renderSetupReauth(); show(s.view); }
+    else if (s.view === "setupMethod") { renderMethod(); show(s.view); }
+    else if (s.view === "recoverySetup") { renderRecovery(); show(s.view); }
+    else if (s.view === "setupReview") { renderReview(); show(s.view); }
+    else if (s.view === "setupDone") { renderDone(); show(s.view); }
+    else if (s.view === "pad" || s.view === "memoUnlock") { renderPad(); show("pad"); }
+    else if (s.view === "wholeUnlock") { el("pad").textContent = ""; renderUnlock("whole"); show(s.view); }
+    else if (s.view === "recoveryUnlock") { renderRecoveryUnlock(s.recoveryScope); show(s.view); }
+  }
+  function beginUnlock(scope, credential) {
+    var request = model.beginUnlock(scope);
+    if (!request.ok) return;
+    activeUnlockId = request.requestId;
+    model.state.view = scope === "whole" ? "wholeUnlock" : "memoUnlock";
+    refresh();
+    window.clearTimeout(unlockTimer);
+    unlockTimer = window.setTimeout(function () {
+      if (activeUnlockId !== request.requestId) return;
+      clearSecrets();
+      var result = model.finishUnlock(request.requestId, credential);
+      activeUnlockId = null;
+      refresh();
+      if (result.ok && scope !== "whole") toast("このメモだけを解除しました。ほかの保護メモは閉じたままです。");
+    }, 850);
+  }
+  function cancelUnlock() {
+    if (activeUnlockId === null) return;
+    var id = activeUnlockId;
+    activeUnlockId = null;
+    window.clearTimeout(unlockTimer);
+    model.cancelUnlock(id);
+    clearSecrets();
+    refresh();
+  }
+  function commitSetup() {
+    var request = model.commitSetup();
+    if (!request.ok) return;
+    refresh();
+    window.clearTimeout(setupTimer);
+    setupTimer = window.setTimeout(function () {
+      var d = model.snapshot().draft;
+      model.finishSetup(request.requestId, !d.injectFailure);
+      refresh();
+    }, 850);
+  }
+  function action(name, target) {
+    var s = state();
+    if (name === "setup-whole") {
+      var wholeSetup = model.beginSetup("whole");
+      if (!wholeSetup.ok && wholeSetup.reason === "protected") toast("Pad 全体がロック中のため変更を開始できません。");
+      refresh();
+    }
+    else if (name === "setup-memo") {
+      var memoSetup = model.beginSetup("note-01");
+      if (!memoSetup.ok && memoSetup.reason === "protected") toast("このメモがロック中のため変更を開始できません。先に解除してください。");
+      refresh();
+    }
+    else if (name === "method-next") {
+      var password = el("newPassword").value, confirm = el("confirmPassword").value;
+      var result = model.setPasswordDraft(password, confirm, "password");
+      clearSecrets();
+      if (!result.ok) {
+        el("methodError").textContent = result.reason === "mismatch" ? "確認欄のパスワードが一致しません。" :
+          result.reason === "too-short" ? "12文字以上で入力してください。" : "デモ用パスワード Sakura-demo1 を入力してください。";
+        el("methodError").hidden = false;
+        return;
+      }
+      model.state.view = "recoverySetup"; refresh();
+    } else if (name === "hide-recovery") { model.hideRecovery(); refresh(); }
+    else if (name === "recovery-next") {
+      var confirmed = model.confirmRecovery(el("recoveryCheck").value.trim(), el("noRecovery").checked);
+      clearSecrets();
+      if (!confirmed.ok) {
+        el("recoveryError").textContent = "復旧キーの末尾4文字が一致しません。";
+        el("recoveryError").hidden = false; return;
+      }
+      model.state.view = "setupReview"; refresh();
+    } else if (name === "cancel-setup") { if (model.cancelSetup()) refresh(); }
+    else if (name === "cancel-reauth") { if (model.cancelSetupReauth()) refresh(); }
+    else if (name === "back-method") { model.state.view = "setupMethod"; refresh(); }
+    else if (name === "back-recovery") { model.state.view = "recoverySetup"; refresh(); }
+    else if (name === "enable-protection") {
+      model.setSaveFailureDraft(el("injectFailure").checked);
+      commitSetup();
+    } else if (name === "done-pad") { model.state.view = "pad"; refresh(); }
+    else if (name === "lock-whole") {
+      if (!model.lockWhole()) { model.beginSetup("whole"); toast("全体保護は未設定です。保護設定を始めます。"); }
+      refresh();
+    }
+    else if (name === "select-memo") { model.selectMemo(target.getAttribute("data-memo")); refresh(); }
+    else if (name === "lock-memo") {
+      if (model.lockMemo(s.selectedMemo)) { refresh(); toast("メモをロックしました。"); }
+    }
+    else if (name === "unlock-memo") { model.state.view = "memoUnlock"; refresh(); }
+    else if (name === "pad-menu" || name === "memo-menu") {
+      var menu = target.parentElement.querySelector(".menu"); menu.hidden = !menu.hidden;
+    } else if (name === "menu-settings") { model.state.view = "settings"; refresh(); }
+    else if (name === "cancel-unlock") { cancelUnlock(); }
+    else if (name === "back-pad") { model.state.view = "pad"; refresh(); }
+    else if (name === "recovery-open") {
+      var scope = target.getAttribute("data-scope");
+      var policy = scope === "whole" ? s.whole : s.memos[scope];
+      if (!policy.recovery) return;
+      model.state.recoveryScope = scope; model.state.view = "recoveryUnlock"; refresh();
+    } else if (name === "recovery-back") {
+      model.state.view = s.recoveryScope === "whole" ? "wholeUnlock" : "memoUnlock"; refresh();
+    } else if (name === "theme") {
+      document.body.classList.toggle("dark");
+      el("themeToggle").textContent = document.body.classList.contains("dark") ? "明色テーマ" : "暗色テーマ";
+    }
+  }
+  document.addEventListener("click", function (event) {
+    var target = event.target.closest("[data-action]");
+    if (target) { action(target.getAttribute("data-action"), target); return; }
+    if (event.target.id === "themeToggle") action("theme", event.target);
+    else if (event.target.id === "setupProtection") action("setup-whole", event.target);
+    else if (event.target.id === "applyParent") {
+      model.applyParent(); updateSettings(); toast("通常設定を適用しました。保護設定とは別に保存しました。");
+    } else if (event.target.id === "cancelParent") {
+      model.cancelParent(); updateSettings(); toast("未適用の通常設定を破棄しました。確定済み保護は維持されます。");
+    } else if (event.target.id === "okParent") {
+      model.applyParent(); toast("通常設定を保存して閉じます（デモ）。");
+    } else if (event.target.id === "addKey") {
+      toast("YubiKey は Windows API と対応する実機の確認後に利用できます。");
+    } else if (event.target.id === "addTotp") {
+      toast("TOTP は任意のローカル追加確認です。6桁コードだけで暗号鍵を保護しません。");
+    } else if (event.target.id === "reviewRecovery") {
+      toast(state().whole.recovery ? "復旧キーは登録済みです。値は再表示しません。" : "Pad 全体に復旧方法は登録されていません。");
+    }
+  });
+  document.addEventListener("submit", function (event) {
+    var form = event.target;
+    if (form.matches("[data-action='setup-reauth-form']")) {
+      event.preventDefault();
+      var scope = form.getAttribute("data-scope");
+      var credential = form.querySelector("input[type=password]").value;
+      clearSecrets();
+      var authorization = model.authorizeSetup(scope, credential);
+      if (!authorization.ok) {
+        var reauthError = form.querySelector("[role=alert]");
+        reauthError.textContent = authorization.reason === "wrong-credential" ?
+          "現在のパスワードが一致しません。変更は開始していません。" :
+          "この保護状態では変更を開始できません。保護設定はそのままです。";
+        reauthError.hidden = false;
+      } else {
+        refresh();
+      }
+    } else if (form.matches("[data-action='unlock-form']")) {
+      event.preventDefault();
+      var credential = form.querySelector("input[type=password]").value;
+      clearSecrets();
+      beginUnlock(form.getAttribute("data-scope"), credential);
+    } else if (form.matches("[data-action='recover-form']")) {
+      event.preventDefault();
+      var scope = form.getAttribute("data-scope");
+      var result = model.recover(scope, form.querySelector("input").value);
+      clearSecrets();
+      if (!result.ok) {
+        var error = form.querySelector("[role=alert]");
+        error.textContent = result.reason === "recovery-not-registered" ? "この対象には復旧方法が登録されていません。" : "復旧キーが一致しません。データは変更されていません。";
+        error.hidden = false;
+      } else { refresh(); toast("対象だけを復旧しました。別の保護範囲はロック中です。"); }
+    }
+  });
+  document.addEventListener("change", function (event) {
+    if (event.target.id === "shortcutSelect") model.setShortcutDraft(event.target.value);
+    else if (event.target.id === "draftTimeout") model.setTimeoutDraft(event.target.value);
+    else if (event.target.id === "injectFailure") model.setSaveFailureDraft(event.target.checked);
+  });
+  document.addEventListener("keydown", function (event) {
+    if (event.key !== "Escape") return;
+    var s = state();
+    if (s.busy && s.busy.type === "setup") return;
+    if (s.busy && s.busy.type === "unlock") { cancelUnlock(); return; }
+    if (s.view === "setupReauth") { if (model.cancelSetupReauth()) refresh(); }
+    else if (s.view === "setupMethod" || s.view === "recoverySetup" || s.view === "setupReview") {
+      if (model.cancelSetup()) refresh();
+    } else if (s.view === "memoUnlock") { model.state.view = "pad"; refresh(); }
+    else if (s.view === "recoveryUnlock") { model.state.view = s.recoveryScope === "whole" ? "wholeUnlock" : "memoUnlock"; refresh(); }
+  });
+  renderPad();
+  show("settings");
+})();
+</script>
+</body>
+</html>
