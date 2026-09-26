@@ -19,7 +19,8 @@ $sakuraNames = @(
     'sakura_regtool.exe',
     'sakura_logon.exe',
     'sakura_settings.exe',
-    'sakura_settings_payload.exe'
+    'sakura_settings_payload.exe',
+    'sakura_pad_session.exe'
 )
 $runnerNames = @('cargo.exe', 'rustc.exe', 'clippy-driver.exe')
 

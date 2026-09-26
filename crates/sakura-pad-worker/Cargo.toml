@@ -1,0 +1,38 @@
+[package]
+name = "sakura-pad-worker"
+description = "Experimental isolated encryption boundary for Sakura Pad. Not yet connected to the Pad UI."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "sakura_pad_worker"
+path = "src/main.rs"
+
+[[bin]]
+name = "sakura_pad_session"
+path = "src/session_main.rs"
+
+[dependencies]
+sakura-pad-session-proto.workspace = true
+argon2 = { version = "=0.5.3", default-features = false, features = ["alloc", "zeroize"] }
+aes-gcm = { version = "=0.10.3", default-features = false, features = ["aes", "alloc", "zeroize"] }
+zeroize = "=1.8.2"
+# aes-gcm's zeroize feature erases its temporary hash key; it does not
+# propagate erasure to the AES key schedule or GHASH/POLYVAL backends.
+# Activate their available clearing paths too. This is best effort; it is
+# not a guarantee that every internal copy is cleared (see README).
+aes = { version = "=0.8.4", features = ["zeroize"] }
+ghash = { version = "=0.5.1", features = ["zeroize"] }
+polyval = { version = "=0.6.2", features = ["zeroize"] }
+
+[dependencies.windows]
+workspace = true
+features = ["Win32_Foundation", "Win32_Security_Cryptography"]
+
+[lints]
+workspace = true

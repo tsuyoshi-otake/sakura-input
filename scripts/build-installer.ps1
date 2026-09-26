@@ -209,6 +209,7 @@ $payloadPaths = @(
     'target\x86_64-pc-windows-msvc\release\sakura_engine.exe',
     'target\x86_64-pc-windows-msvc\release\sakura_ai_worker.exe',
     'target\x86_64-pc-windows-msvc\release\sakura_renderer.exe',
+    'target\x86_64-pc-windows-msvc\release\sakura_pad_session.exe',
     'target\x86_64-pc-windows-msvc\release\sakura_regtool.exe',
     'target\x86_64-pc-windows-msvc\release\sakura_logon.exe',
     'target\x86_64-pc-windows-msvc\release\sakura_settings.exe',

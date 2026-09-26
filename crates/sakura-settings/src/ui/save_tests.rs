@@ -310,3 +310,27 @@ fn blank_api_key_is_preserved_and_reset_is_published_only_by_apply() {
     );
     assert_eq!(fixture.app.configuration, fixture.saved());
 }
+
+#[test]
+fn pad_shortcut_has_its_own_page_and_still_publishes_only_on_apply() {
+    let mut fixture = Fixture::new();
+    let original = fixture.saved().preferences.pad_shortcut;
+    let double_ctrl = pad_shortcut_index(PadShortcut::DoubleCtrl);
+
+    fixture.app.show_topic_controls(INPUT_TOPIC_PAD);
+    assert!(has_visible_style(fixture.app.general.pad_panel));
+    assert!(!has_visible_style(fixture.app.general.basic_panel));
+    select_combo(fixture.app.general.pad_shortcut, double_ctrl);
+    assert_eq!(fixture.saved().preferences.pad_shortcut, original);
+
+    let mut store = Store::new(&fixture, None);
+    fixture.app.save_global_settings_to(&mut store).unwrap();
+    assert_eq!(
+        fixture.saved().preferences.pad_shortcut,
+        PadShortcut::DoubleCtrl
+    );
+    assert_eq!(
+        fixture.app.configuration.preferences.pad_shortcut,
+        PadShortcut::DoubleCtrl
+    );
+}

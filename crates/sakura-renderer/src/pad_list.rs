@@ -6,6 +6,8 @@
 //! and why here" has exactly one place to answer it — and that place is
 //! testable without an HWND.
 
+use std::collections::HashMap;
+
 use crate::pad_storage::{PadDocument, PadMemo, PadSort};
 
 /// A row is one title line over one preview line.
@@ -21,6 +23,86 @@ pub(crate) const ROW_RAIL_96: i32 = 3;
 /// A memo with no title still has to be findable in the list.
 pub(crate) const UNTITLED: &str = "無題";
 
+/// A protected memo without an explicit unlocked projection reveals no content.
+pub(crate) const PROTECTED_MEMO: &str = "保護されたメモ";
+
+/// Plaintext held by the window's unlock state, never by `PadDocument`.
+#[derive(Clone, Copy)]
+pub(crate) struct UnlockedMemo<'a> {
+    pub(crate) title: &'a str,
+    pub(crate) body: &'a str,
+}
+
+/// The content and timestamp a row is permitted to show.
+pub(crate) enum MemoProjection<'a> {
+    Readable {
+        title: &'a str,
+        body: &'a str,
+        updated_ms: u64,
+    },
+    Locked,
+}
+
+impl MemoProjection<'_> {
+    pub(crate) fn title(&self) -> &str {
+        match self {
+            Self::Readable { title, .. } if title.trim().is_empty() => UNTITLED,
+            Self::Readable { title, .. } => title,
+            Self::Locked => PROTECTED_MEMO,
+        }
+    }
+
+    pub(crate) fn preview(&self) -> String {
+        match self {
+            Self::Readable { body, .. } => preview_body(body),
+            Self::Locked => PROTECTED_MEMO.to_owned(),
+        }
+    }
+
+    pub(crate) fn updated_ms(&self) -> Option<u64> {
+        match self {
+            Self::Readable { updated_ms, .. } => Some(*updated_ms),
+            Self::Locked => None,
+        }
+    }
+
+    fn searchable(&self, needle: &str) -> bool {
+        match self {
+            Self::Readable { title, body, .. } => {
+                fold(title).contains(needle) || fold(body).contains(needle)
+            }
+            Self::Locked => false,
+        }
+    }
+
+    fn is_locked(&self) -> bool {
+        matches!(self, Self::Locked)
+    }
+}
+
+/// The caller must supply decrypted text for a protected memo by ID. A plain
+/// memo always reads its own document content, even if the map contains an ID.
+pub(crate) fn projection<'a>(
+    memo: &'a PadMemo,
+    unlocked: Option<UnlockedMemo<'a>>,
+) -> MemoProjection<'a> {
+    if let Some((title, body)) = memo.plain_content() {
+        MemoProjection::Readable {
+            title,
+            body,
+            updated_ms: memo.updated_ms,
+        }
+    } else if let Some(UnlockedMemo { title, body }) = unlocked {
+        MemoProjection::Readable {
+            title,
+            body,
+            updated_ms: memo.updated_ms,
+        }
+    } else {
+        MemoProjection::Locked
+    }
+}
+
 /// A preview line is clipped by the row long before this, but the string
 /// itself stays bounded so a 65,536-unit body never reaches `DrawTextW`.
 const PREVIEW_CHARS: usize = 120;
@@ -32,28 +114,47 @@ const PREVIEW_CHARS: usize = 120;
 /// can be published, and showing it back to the user would read as the delete
 /// having failed.
 pub(crate) fn rows(document: &PadDocument, query: &str) -> Vec<u64> {
+    rows_with_unlocked(document, query, &HashMap::new())
+}
+
+/// Search and sort with only the currently unlocked protected content visible.
+/// Locked rows have no searchable text or sortable title/time. They follow
+/// readable rows in stable ID order in every sort mode.
+pub(crate) fn rows_with_unlocked(
+    document: &PadDocument,
+    query: &str,
+    unlocked: &HashMap<u64, UnlockedMemo<'_>>,
+) -> Vec<u64> {
     let needle = fold(query);
     let mut visible: Vec<&PadMemo> = document
         .live()
-        .filter(|memo| needle.is_empty() || matches(memo, &needle))
+        .filter(|memo| {
+            needle.is_empty()
+                || projection(memo, unlocked.get(&memo.id).copied()).searchable(&needle)
+        })
         .collect();
-    visible.sort_by(|left, right| order(document.sort, left, right));
+    visible.sort_by(|left, right| order(document.sort, left, right, unlocked));
     visible.iter().map(|memo| memo.id).collect()
-}
-
-/// Whether a memo answers a search. `needle` must already be folded.
-///
-/// Title and body both count: a memo is often remembered by a word inside it
-/// rather than by whatever its first line happens to be.
-fn matches(memo: &PadMemo, needle: &str) -> bool {
-    fold(&memo.title).contains(needle) || fold(&memo.body).contains(needle)
 }
 
 /// The comparison the search box and the sort control share.
 ///
 /// Every order is total: `id` breaks every tie, so the list cannot reshuffle
 /// two same-second memos between two repaints.
-fn order(sort: PadSort, left: &PadMemo, right: &PadMemo) -> std::cmp::Ordering {
+fn order(
+    sort: PadSort,
+    left: &PadMemo,
+    right: &PadMemo,
+    unlocked: &HashMap<u64, UnlockedMemo<'_>>,
+) -> std::cmp::Ordering {
+    let left_view = projection(left, unlocked.get(&left.id).copied());
+    let right_view = projection(right, unlocked.get(&right.id).copied());
+    match (left_view.is_locked(), right_view.is_locked()) {
+        (true, true) => return left.id.cmp(&right.id),
+        (true, false) => return std::cmp::Ordering::Greater,
+        (false, true) => return std::cmp::Ordering::Less,
+        (false, false) => {}
+    }
     match sort {
         // Newest first, which is where the memo just edited is looked for.
         PadSort::Updated => right
@@ -66,8 +167,9 @@ fn order(sort: PadSort, left: &PadMemo, right: &PadMemo) -> std::cmp::Ordering {
             .then(left.id.cmp(&right.id)),
         // Code-point order, not a locale collation. It is stable, needs no
         // table, and it is honest: this is "名前順", not "五十音順".
-        PadSort::Title => display_title(left)
-            .cmp(display_title(right))
+        PadSort::Title => left_view
+            .title()
+            .cmp(right_view.title())
             .then(left.id.cmp(&right.id)),
     }
 }
@@ -78,21 +180,8 @@ fn fold(value: &str) -> String {
     value.to_lowercase()
 }
 
-/// The title as drawn. An empty title is still a row the user has to be able
-/// to hit, so it gets a name rather than a blank line.
-pub(crate) fn display_title(memo: &PadMemo) -> &str {
-    if memo.title.trim().is_empty() {
-        UNTITLED
-    } else {
-        &memo.title
-    }
-}
-
-/// The second line of a row: the first line of the body that has anything on
-/// it, with the line breaks removed so one row is one line.
-pub(crate) fn preview(memo: &PadMemo) -> String {
-    memo.body
-        .lines()
+fn preview_body(body: &str) -> String {
+    body.lines()
         .map(str::trim)
         .find(|line| !line.is_empty())
         .map(|line| {
@@ -209,6 +298,7 @@ mod tests {
 
     fn document(sort: PadSort, memos: Vec<PadMemo>) -> PadDocument {
         PadDocument {
+            document_id: [0; 16],
             generation: 1,
             sort,
             memos,
@@ -218,6 +308,13 @@ mod tests {
     fn memo(id: u64, title: &str, body: &str, created: u64, updated: u64) -> PadMemo {
         let mut memo = PadMemo::new(id, title, body, created);
         memo.updated_ms = updated;
+        memo
+    }
+
+    fn protected(id: u64, title: &str, body: &str, created: u64, updated: u64) -> PadMemo {
+        let mut memo = memo(id, title, body, created, updated);
+        memo.protect_with_envelope(b"opaque-ciphertext".to_vec())
+            .unwrap();
         memo
     }
 
@@ -281,20 +378,86 @@ mod tests {
     #[test]
     fn a_row_always_has_a_hittable_title_and_a_single_line_preview() {
         let untitled = memo(1, "   ", "\n\n  最初の行  \n二行目", 1, 1);
-        assert_eq!(display_title(&untitled), UNTITLED);
-        assert_eq!(preview(&untitled), "最初の行");
+        assert_eq!(projection(&untitled, None).title(), UNTITLED);
+        assert_eq!(projection(&untitled, None).preview(), "最初の行");
         let empty = memo(2, "題", "", 1, 1);
-        assert_eq!(display_title(&empty), "題");
-        assert_eq!(preview(&empty), "");
+        assert_eq!(projection(&empty, None).title(), "題");
+        assert_eq!(projection(&empty, None).preview(), "");
     }
 
     #[test]
     fn a_long_first_line_is_bounded_before_it_reaches_gdi() {
         let body = "あ".repeat(PREVIEW_CHARS * 4);
         let long = memo(1, "題", &body, 1, 1);
-        let preview = preview(&long);
+        let preview = projection(&long, None).preview();
         assert_eq!(preview.chars().count(), PREVIEW_CHARS + 1);
         assert!(preview.ends_with('…'));
+    }
+
+    #[test]
+    fn locked_content_has_constant_projection_and_never_answers_a_search() {
+        let secret = protected(2, "hidden-title", "hidden-body", 900, 900);
+        let plain = memo(1, "visible", "ordinary", 1, 1);
+        let document = document(PadSort::Updated, vec![secret.clone(), plain]);
+
+        let locked = projection(&secret, None);
+        assert_eq!(locked.title(), PROTECTED_MEMO);
+        assert_eq!(locked.preview(), PROTECTED_MEMO);
+        assert_eq!(locked.updated_ms(), None);
+        assert_eq!(projection(&secret, None).title(), PROTECTED_MEMO);
+        assert_eq!(projection(&secret, None).preview(), PROTECTED_MEMO);
+        for query in [
+            "hidden-title",
+            "hidden-body",
+            "opaque-ciphertext",
+            PROTECTED_MEMO,
+        ] {
+            assert!(rows(&document, query).is_empty(), "{query}");
+        }
+        assert_eq!(rows(&document, ""), [1, 2]);
+    }
+
+    #[test]
+    fn explicit_unlock_controls_search_and_sort_without_changing_document() {
+        let secret = protected(2, "persisted-secret", "persisted-body", 900, 900);
+        let plain = memo(1, "beta", "ordinary", 1, 1);
+        let other_locked = protected(3, "another-secret", "another-body", 999, 999);
+        let unlocked = HashMap::from([(
+            2,
+            UnlockedMemo {
+                title: "alpha",
+                body: "decrypted-only",
+            },
+        )]);
+        let title_document = document(
+            PadSort::Title,
+            vec![other_locked.clone(), secret.clone(), plain.clone()],
+        );
+        assert_eq!(
+            rows_with_unlocked(&title_document, "", &unlocked),
+            [2, 1, 3]
+        );
+        assert_eq!(
+            rows_with_unlocked(&title_document, "DECRYPTED", &unlocked),
+            [2]
+        );
+        assert!(rows_with_unlocked(&title_document, "persisted-secret", &unlocked).is_empty());
+        assert_eq!(
+            projection(&secret, unlocked.get(&2).copied()).title(),
+            "alpha"
+        );
+        assert_eq!(
+            projection(&secret, unlocked.get(&2).copied()).updated_ms(),
+            Some(900)
+        );
+        assert!(secret.plain_content().is_none());
+
+        let updated_document = document(PadSort::Updated, vec![other_locked, plain, secret]);
+        assert_eq!(
+            rows_with_unlocked(&updated_document, "", &unlocked),
+            [2, 1, 3]
+        );
+        assert_eq!(rows(&updated_document, ""), [1, 2, 3]);
     }
 
     #[test]

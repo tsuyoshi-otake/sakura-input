@@ -7,7 +7,9 @@
 //!
 //! # Shape
 //!
-//! Two threads and a strict rule about which touches what.
+//! The main UI thread and pipe watcher have a strict rule about which touches
+//! what. An optional Pad crypto client adds a dedicated pipe actor only while
+//! its isolated worker session is active.
 //!
 //! - [`watch`] owns the pipe. It blocks — that is the whole design of the
 //!   `WatchUi` long poll — so it can never be the thread that pumps
@@ -16,19 +18,22 @@
 //!   thread that created them, so the watcher reports what it learns by
 //!   posting a message rather than by touching a window.
 //!
-//! That is the whole of the concurrency in this process, and it is
-//! deliberately this small.
+//! The Pad crypto actor owns only worker stdin/stdout; the UI never blocks on
+//! its pipe exchange. Cancellation owns and reaps that exact child process.
 
 #![cfg(windows)]
 mod accessibility;
 mod candidate;
 mod glyph;
 mod indicator;
+mod memo_protection;
 mod pad;
 mod pad_caption;
+mod pad_crypto_client;
 mod pad_gesture;
 mod pad_icon;
 mod pad_list;
+mod pad_protection;
 mod pad_rail;
 mod pad_storage;
 mod pad_tooltip;
@@ -41,6 +46,7 @@ use std::ffi::c_void;
 use std::fs::OpenOptions;
 #[cfg(debug_assertions)]
 use std::io::Write;
+use std::sync::OnceLock;
 use std::sync::{mpsc::Receiver, Arc, Mutex};
 
 use sakura_proto::{AppearanceTheme, Mode, PadShortcut};
@@ -52,9 +58,10 @@ use windows::Win32::UI::HiDpi::{
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageTime, GetMessageW,
-    GetWindowLongPtrW, KillTimer, PostMessageW, PostQuitMessage, RegisterClassW, SetTimer,
-    SetWindowLongPtrW, TranslateMessage, GWLP_USERDATA, MSG, WM_APP, WM_CLOSE, WM_DESTROY,
-    WM_ENDSESSION, WM_INPUT, WM_INPUT_DEVICE_CHANGE, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
+    GetWindowLongPtrW, KillTimer, PostMessageW, PostQuitMessage, RegisterClassW,
+    RegisterWindowMessageW, SetTimer, SetWindowLongPtrW, TranslateMessage, GWLP_USERDATA, MSG,
+    WM_APP, WM_CLOSE, WM_DESTROY, WM_ENDSESSION, WM_INPUT, WM_INPUT_DEVICE_CHANGE,
+    WM_QUERYENDSESSION, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
 };
 
 use candidate::CandidateWindow;
@@ -102,6 +109,17 @@ const WM_CANDIDATE_COMMIT_FINISHED: u32 = WM_APP + 5;
 /// posts this deferred message so the complete USER32 packet has returned and
 /// normal message ordering/focus rules remain observable.
 const WM_PAD_TRIGGER: u32 = WM_APP + 6;
+/// Settings sends this process-independent, data-free request to the hidden
+/// host. The host then uses its existing deferred Pad trigger on its UI thread.
+const PAD_OPEN_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.OpenPad.v1");
+static PAD_OPEN_MESSAGE_ID: OnceLock<u32> = OnceLock::new();
+
+fn pad_open_message_id() -> u32 {
+    *PAD_OPEN_MESSAGE_ID.get_or_init(|| {
+        // SAFETY: the static message name is valid for this process lifetime.
+        unsafe { RegisterWindowMessageW(PAD_OPEN_MESSAGE) }
+    })
+}
 /// A short UI-thread timer gives the pure gesture reducer an explicit timeout
 /// even when no further keyboard packet arrives after the first tap.
 const PAD_GESTURE_TIMER: usize = 0x5342;
@@ -412,6 +430,15 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
     // local that outlives the pump. Null until it is published and again
     // after it is cleared, which is why every use below is guarded.
     let app = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut App;
+    let pad_open_message = pad_open_message_id();
+    if pad_open_message != 0 && message == pad_open_message {
+        if !app.is_null() {
+            // SAFETY: this host is on the renderer UI thread. Defer Pad work
+            // through the same trigger used by the raw-input gesture.
+            let _ = unsafe { PostMessageW(Some(window), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0)) };
+        }
+        return LRESULT(0);
+    }
     match message {
         WM_UI if !app.is_null() => {
             // SAFETY: `app` is the live local from `main`, and this runs on
@@ -605,24 +632,46 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
             }
             LRESULT(0)
         }
-        // The engine stopped on purpose, or is gone for good. Either way
-        // there is nothing left to render.
-        //
-        // `WM_CLOSE` and `WM_ENDSESSION` join it because logoff and shutdown
-        // have to end the same way.
+        WM_QUERYENDSESSION => {
+            // A protected Pad with a failed or uncertain save keeps its editor
+            // available for recovery and vetoes an ordinary session end.
+            // Windows can still force termination without this query.
+            if !app.is_null() {
+                // SAFETY: the host owns `app` on this UI thread.
+                let app = unsafe { &mut *app };
+                if app.pad.as_ref().is_some_and(|pad| !pad.hide()) {
+                    return LRESULT(0);
+                }
+            }
+            LRESULT(1)
+        }
+        // The engine stopped on purpose, or the host is being closed. A
+        // protected Pad can veto a voluntary exit while edits are unsaved.
+        // A completed Windows session end or destruction cannot be vetoed;
+        // those paths mask memo content before the process stops.
         WM_ENDED | WM_CLOSE | WM_ENDSESSION | WM_DESTROY => {
+            if message == WM_ENDSESSION && w.0 == 0 {
+                // A different application canceled logoff; keep rendering.
+                return LRESULT(0);
+            }
             if !app.is_null() {
                 // SAFETY: the main thread owns both registrations and can
                 // unregister before the hidden host is torn down.
                 let app = unsafe { &mut *app };
+                if let Some(pad) = app.pad.as_ref() {
+                    if matches!(message, WM_ENDED | WM_CLOSE) {
+                        if !pad.hide() {
+                            return LRESULT(0);
+                        }
+                    } else {
+                        pad.mask_for_session();
+                    }
+                }
                 let _ = app.raw_input.shutdown(message_time_ms());
                 let _ = app.raw_input.unregister();
                 // SAFETY: the timer belongs to this host window.
                 unsafe {
                     let _ = KillTimer(Some(window), PAD_GESTURE_TIMER);
-                }
-                if let Some(pad) = app.pad.as_ref() {
-                    pad.hide();
                 }
             }
             // SAFETY: no arguments; posts `WM_QUIT` to this thread.

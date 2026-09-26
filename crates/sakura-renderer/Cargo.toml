@@ -15,6 +15,8 @@ path = "src/main.rs"
 [dependencies]
 sakura-ipc.workspace = true
 sakura-proto.workspace = true
+sakura-pad-session-proto.workspace = true
+zeroize = "=1.8.2"
 windows-core.workspace = true
 
 [dependencies.windows]
@@ -41,6 +43,7 @@ features = [
     "Win32_System_Variant",
     "Win32_System_Pipes",
     "Win32_System_Registry",
+    "Win32_System_RemoteDesktop",
     "Win32_Storage_FileSystem",
     "Win32_Security_Cryptography",
     "Win32_UI_Input",

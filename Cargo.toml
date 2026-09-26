@@ -24,6 +24,8 @@ members = [
     "crates/sakura-neural-worker",
     "crates/sakura-ai-proto",
     "crates/sakura-ai-worker",
+    "crates/sakura-pad-worker",
+    "crates/sakura-pad-session-proto",
     "tools/candidate-sweep",
     "tools/conversion-eval",
     "tools/ime-eval",
@@ -56,6 +58,7 @@ sakura-engine = { path = "crates/sakura-engine" }
 sakura-context-research = { path = "crates/sakura-context-research" }
 sakura-oracles = { path = "crates/sakura-oracles" }
 sakura-rerank-proto = { path = "crates/sakura-rerank-proto" }
+sakura-pad-session-proto = { path = "crates/sakura-pad-session-proto" }
 windows-core = "0.62"
 windows = "0.62"
 # Pinned, streaming-only parsers used exclusively by the offline `dictc` build
