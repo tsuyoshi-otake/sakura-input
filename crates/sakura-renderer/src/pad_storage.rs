@@ -60,6 +60,21 @@ const LEGACY_MEMO_ID: u64 = 1;
 
 const MAX_PROTECTED_BYTES: u64 = 24 * 1024 * 1024;
 
+/// A newer `SKRLPADn` magic in DPAPI plaintext identifies a future document
+/// format and must not be treated as corruption during recovery. This only
+/// detects visible versioned plaintext; raw protected v3 needs a separate
+/// durable marker or versioned path because older builds cannot inspect it.
+fn newer_document_magic_version(bytes: &[u8]) -> Option<u16> {
+    let prefix = b"SKRLPAD";
+    let version = *bytes.get(prefix.len())?;
+    if bytes.starts_with(prefix) && version.is_ascii_digit() {
+        let version = u16::from(version - b'0');
+        (version > VERSION).then_some(version)
+    } else {
+        None
+    }
+}
+
 /// Wall-clock milliseconds since the Unix epoch, used only for the memo's own
 /// created/updated stamps.  A clock before the epoch reports 0, which the UI
 /// renders the same way it renders a migrated v1 memo: as unknown.
@@ -557,26 +572,38 @@ impl PadStore {
     }
 
     pub fn load(&self) -> Result<LoadOutcome, StorageError> {
-        if let Ok(document) = read_document(&self.path) {
-            return Ok(LoadOutcome {
-                document,
-                recovered_from_backup: false,
-            });
+        match read_document(&self.path) {
+            Ok(document) => {
+                return Ok(LoadOutcome {
+                    document,
+                    recovered_from_backup: false,
+                });
+            }
+            Err(error @ StorageError::UnsupportedVersion(_)) => return Err(error),
+            Err(_) => {}
         }
-        if let Ok(document) = read_document(&self.backup) {
-            return Ok(LoadOutcome {
-                document,
-                recovered_from_backup: true,
-            });
+        match read_document(&self.backup) {
+            Ok(document) => {
+                return Ok(LoadOutcome {
+                    document,
+                    recovered_from_backup: true,
+                });
+            }
+            Err(error @ StorageError::UnsupportedVersion(_)) => return Err(error),
+            Err(_) => {}
         }
         // A flushed temp is considered only after both published copies have
         // failed. A valid primary (including an empty list) always wins, so an
         // unpublished older edit can never resurrect deleted content.
-        if let Ok(document) = read_document(&self.temp) {
-            return Ok(LoadOutcome {
-                document,
-                recovered_from_backup: true,
-            });
+        match read_document(&self.temp) {
+            Ok(document) => {
+                return Ok(LoadOutcome {
+                    document,
+                    recovered_from_backup: true,
+                });
+            }
+            Err(error @ StorageError::UnsupportedVersion(_)) => return Err(error),
+            Err(_) => {}
         }
         if self.path.exists() || self.backup.exists() || self.temp.exists() {
             // Existing but unreadable data is a partial failure, not an empty
@@ -692,7 +719,10 @@ fn read_decrypted(path: &Path) -> Result<Vec<u8>, StorageError> {
 
 fn read_document(path: &Path) -> Result<PadDocument, StorageError> {
     let mut plaintext = read_decrypted(path)?;
-    let decoded = PadDocument::decode(&plaintext);
+    let decoded = match newer_document_magic_version(&plaintext) {
+        Some(version) => Err(StorageError::UnsupportedVersion(version)),
+        None => PadDocument::decode(&plaintext),
+    };
     plaintext.fill(0);
     decoded
 }
@@ -1220,6 +1250,60 @@ mod tests {
         let recovered = store.load().unwrap();
         assert!(recovered.recovered_from_backup);
         assert_eq!(recovered.document, first);
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn newer_primary_refuses_fallback_to_valid_v2_backup() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(&store.path, protect(b"SKRLPAD3future").unwrap()).unwrap();
+        fs::write(
+            &store.backup,
+            protect(&one("old", "backup", 2).encode().unwrap()).unwrap(),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            store.load(),
+            Err(StorageError::UnsupportedVersion(3))
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn newer_backup_refuses_fallback_to_valid_v2_temp() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(&store.path, b"corrupt primary").unwrap();
+        fs::write(&store.backup, protect(b"SKRLPAD3future").unwrap()).unwrap();
+        fs::write(
+            &store.temp,
+            protect(&one("old", "temp", 2).encode().unwrap()).unwrap(),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            store.load(),
+            Err(StorageError::UnsupportedVersion(3))
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn corrupt_primary_still_recovers_from_valid_v2_backup() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let backup = one("recover", "valid v2 backup", 2);
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(&store.path, b"corrupt primary").unwrap();
+        fs::write(&store.backup, protect(&backup.encode().unwrap()).unwrap()).unwrap();
+
+        let loaded = store.load().unwrap();
+        assert!(loaded.recovered_from_backup);
+        assert_eq!(loaded.document, backup);
         let _ = fs::remove_dir_all(directory);
     }
 
