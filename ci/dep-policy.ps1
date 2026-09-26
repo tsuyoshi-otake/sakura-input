@@ -114,10 +114,9 @@ $IsolatedWorkerRuntime = [ordered]@{
     'ryu'                   = 'serde_json float formatting implementation detail'
 }
 
-# Experimental preparation for sakura-pad-worker only. These packages are
-# cryptographic implementation dependencies, not generally permitted runtime
-# dependencies. The graph check below rejects them from every consumer except
-# the dedicated Pad worker.
+# Pad cryptographic implementation dependencies stay in the isolated worker.
+# `zeroize` also clears secret transport buffers in the wire crate and renderer;
+# it does not bring the KDF or cipher implementation into either process.
 $PadWorkerRuntime = [ordered]@{
     'argon2'         = 'experimental Pad password KDF; sakura-pad-worker only'
     'aes-gcm'        = 'experimental Pad authenticated encryption; sakura-pad-worker only'
@@ -139,6 +138,7 @@ $PadWorkerRuntime = [ordered]@{
 }
 
 $PadWorkerPackage = 'sakura-pad-worker'
+$PadSecretBufferConsumers = @($PadWorkerPackage, 'sakura-pad-session-proto', 'sakura-renderer')
 
 # These tools produce build artifacts but are not shipping runtime binaries.
 # A dependency admitted for dictc must not therefore become available to an IME
@@ -146,7 +146,8 @@ $PadWorkerPackage = 'sakura-pad-worker'
 $RuntimeCrates = @(
     'sakura-core', 'sakura-proto', 'sakura-ipc', 'sakura-reg', 'sakura-user-prefs',
     'sakura-install-maintenance', 'sakura-tsf',
-    'sakura-engine', 'sakura-renderer', 'sakura-regtool', 'sakura-logon', 'sakura-settings'
+    'sakura-engine', 'sakura-renderer', 'sakura-pad-session-proto',
+    'sakura-regtool', 'sakura-logon', 'sakura-settings'
 )
 # Tools that stay nested Cargo workspaces keep their own lockfile, which the
 # root lock never sees (R11). candidate-snapshot stays nested on purpose: the
@@ -237,7 +238,10 @@ function Get-PadWorkerDependencyLeak {
     )
 
     if ($Consumer -eq $PadWorkerPackage) { return , @() }
-    return , @($PackageName | Where-Object { $PadWorkerRuntime.Contains($_) } | Sort-Object -Unique)
+    return , @($PackageName | Where-Object {
+            $PadWorkerRuntime.Contains($_) -and
+            ($_ -ne 'zeroize' -or $PadSecretBufferConsumers -notcontains $Consumer)
+        } | Sort-Object -Unique)
 }
 
 function Invoke-SelfTest {
@@ -275,6 +279,12 @@ function Invoke-SelfTest {
     $padCryptoLeaks = Get-PadWorkerDependencyLeak -Consumer 'sakura-ai-worker' -PackageName $padCryptoFixture
     if ($padCryptoLeaks.Count -ne $padCryptoFixture.Count) {
         $failures.Add('Pad crypto isolation did not reject the synthetic AI-worker dependency set')
+    }
+    foreach ($consumer in @('sakura-pad-session-proto', 'sakura-renderer')) {
+        $leaks = Get-PadWorkerDependencyLeak -Consumer $consumer -PackageName $padCryptoFixture
+        if ($leaks.Count -ne $padCryptoFixture.Count - 1 -or $leaks -contains 'zeroize') {
+            $failures.Add("Pad secret buffer consumer '$consumer' was not restricted to zeroize")
+        }
     }
 
     # R11: every nested tool workspace must still be readable, or the audit of

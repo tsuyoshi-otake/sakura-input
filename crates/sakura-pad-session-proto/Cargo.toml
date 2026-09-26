@@ -1,0 +1,16 @@
+[package]
+name = "sakura-pad-session-proto"
+description = "Bounded wire format for the isolated Sakura Pad crypto session."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+zeroize = "=1.8.2"
+
+[lints]
+workspace = true

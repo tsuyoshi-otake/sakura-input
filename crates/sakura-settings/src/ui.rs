@@ -82,17 +82,17 @@ use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, FindWindowW, GetClientRect, GetMessageW, GetParent, GetWindow,
     GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW, IsDialogMessageW,
     IsIconic, LoadCursorW, LoadImageW, MessageBoxW, PostMessageW, PostQuitMessage, RegisterClassW,
-    SendMessageW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
-    SystemParametersInfoW, TranslateMessage, BM_GETCHECK, BM_SETCHECK, BS_AUTOCHECKBOX,
-    BS_AUTORADIOBUTTON, BS_DEFPUSHBUTTON, BS_OWNERDRAW, BS_PUSHBUTTON, BS_TYPEMASK, CBN_SELCHANGE,
-    CBS_DROPDOWNLIST, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CW_USEDEFAULT, ES_AUTOHSCROLL,
-    ES_AUTOVSCROLL, ES_MULTILINE, ES_PASSWORD, ES_READONLY, ES_WANTRETURN, GWLP_USERDATA,
-    GWL_STYLE, GW_CHILD, GW_ENABLEDPOPUP, GW_HWNDNEXT, GW_OWNER, ICON_BIG, ICON_SMALL, IDC_ARROW,
-    IDYES, IMAGE_ICON, LBN_SELCHANGE, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LB_ADDSTRING, LB_GETCURSEL,
-    LB_RESETCONTENT, LB_SETCURSEL, LR_LOADFROMFILE, MB_ICONERROR, MB_ICONINFORMATION,
-    MB_ICONWARNING, MB_OK, MB_YESNO, MSG, SPI_GETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOACTIVATE,
-    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_RESTORE, SW_SHOW,
-    SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_CLOSE,
+    RegisterWindowMessageW, SendMessageW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos,
+    SetWindowTextW, ShowWindow, SystemParametersInfoW, TranslateMessage, BM_GETCHECK, BM_SETCHECK,
+    BS_AUTOCHECKBOX, BS_AUTORADIOBUTTON, BS_DEFPUSHBUTTON, BS_OWNERDRAW, BS_PUSHBUTTON,
+    BS_TYPEMASK, CBN_SELCHANGE, CBS_DROPDOWNLIST, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL,
+    CW_USEDEFAULT, ES_AUTOHSCROLL, ES_AUTOVSCROLL, ES_MULTILINE, ES_PASSWORD, ES_READONLY,
+    ES_WANTRETURN, GWLP_USERDATA, GWL_STYLE, GW_CHILD, GW_ENABLEDPOPUP, GW_HWNDNEXT, GW_OWNER,
+    ICON_BIG, ICON_SMALL, IDC_ARROW, IDYES, IMAGE_ICON, LBN_SELCHANGE, LBS_NOINTEGRALHEIGHT,
+    LBS_NOTIFY, LB_ADDSTRING, LB_GETCURSEL, LB_RESETCONTENT, LB_SETCURSEL, LR_LOADFROMFILE,
+    MB_ICONERROR, MB_ICONINFORMATION, MB_ICONWARNING, MB_OK, MB_YESNO, MSG, SPI_GETHIGHCONTRAST,
+    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_RESTORE,
+    SW_SHOW, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_CLOSE,
     WM_COMMAND, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC, WM_DESTROY,
     WM_DPICHANGED, WM_DRAWITEM, WM_ERASEBKGND, WM_KEYDOWN, WM_NOTIFY, WM_SETFONT, WM_SETICON,
     WM_SETTINGCHANGE, WM_THEMECHANGED, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN,
@@ -106,6 +106,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 const WINDOW_CLASS: PCWSTR = windows::core::w!("SakuraInputSettingsWindow");
+/// Renderer host contract. The message carries no Pad content or credentials.
+const RENDERER_HOST_CLASS: PCWSTR = windows::core::w!("SakuraInputRenderer");
+const PAD_OPEN_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.OpenPad.v1");
 /// The class of the hidden window that owns the settings window.
 ///
 /// It exists for one reason: an unowned top-level window gets a taskbar
@@ -187,6 +190,7 @@ const INPUT_TOPIC_NORMALIZER: usize = 7;
 const INPUT_TOPIC_AI_TEXT: usize = 8;
 const INPUT_TOPIC_INPUT_REPAIR: usize = 9;
 const INPUT_TOPIC_INPUT_SYMBOL: usize = 10;
+const INPUT_TOPIC_PAD: usize = 11;
 const TREE_GROUP: usize = usize::MAX;
 // Shown after `NotationStyle::ALL`. It is a readout, never a value: choosing
 // it writes nothing, and it is what the preset falls back to whenever the
@@ -196,7 +200,7 @@ const NOTATION_STYLE_CUSTOM_LABEL: &str = "カスタム（個別に設定）";
 // invent ATOK-only pages or map a label to an unrelated Sakura setting. Each
 // leaf owns the panel the user sees on the right; category rows normalize to
 // their first leaf so the TreeView highlight and right-hand page agree.
-const INPUT_TREE_LABELS: [&str; 13] = [
+const INPUT_TREE_LABELS: [&str; 14] = [
     "基本",
     "入力補助",
     "AI文章変換",
@@ -210,11 +214,14 @@ const INPUT_TREE_LABELS: [&str; 13] = [
     "推測変換",
     "連想変換",
     "アプリ別の設定",
+    "Sakura Pad",
 ];
 
 #[derive(Debug)]
 struct GeneralControls {
     basic_panel: HWND,
+    pad_panel: HWND,
+    pad_open: HWND,
     profile_panel: HWND,
     input_assist_panel: HWND,
     ai_text_panel: HWND,
@@ -738,6 +745,25 @@ fn activate_existing_window() -> bool {
     false
 }
 
+/// Requests activation from the renderer's hidden host. Queueing is the only
+/// acknowledgement available here; the renderer owns Pad creation and focus.
+fn request_pad_open() -> Result<(), String> {
+    // SAFETY: both static class and null title are valid for a read-only
+    // top-level window lookup in this interactive session.
+    let host = unsafe { FindWindowW(RENDERER_HOST_CLASS, PCWSTR::null()) }.map_err(|_| {
+        "rendererが起動していません。Sakura Inputを起動してから再試行してください。".to_owned()
+    })?;
+    // SAFETY: the process-independent name contains no pointers or secrets.
+    let message = unsafe { RegisterWindowMessageW(PAD_OPEN_MESSAGE) };
+    if message == 0 {
+        return Err("Sakura Padを開くメッセージを登録できませんでした。".to_owned());
+    }
+    // SAFETY: only the registered scalar message and zero parameters cross
+    // processes. USER32 validates the HWND and reports a failed queue attempt.
+    unsafe { PostMessageW(Some(host), message, WPARAM(0), LPARAM(0)) }
+        .map_err(|_| "rendererにSakura Padを開く依頼を送信できませんでした。".to_owned())
+}
+
 pub fn run() -> Result<(), String> {
     let Some(_instance) = SettingsInstance::acquire().map_err(display)? else {
         // A second launch is an activation request, not a second settings
@@ -899,6 +925,11 @@ impl App {
     }
 
     fn handle_command(&mut self, source: HWND, notification: u16) -> Result<(), String> {
+        if source == self.general.pad_open {
+            request_pad_open()?;
+            self.set_status("Sakura Padを開く依頼をrendererへ送信しました。");
+            return Ok(());
+        }
         if source == self.apply {
             return self.save_global_settings();
         }
@@ -1181,6 +1212,13 @@ impl App {
             INPUT_TOPIC_PROFILE,
             false,
         );
+        let _ = insert_input_tree_item(
+            self.input_tree,
+            Default::default(),
+            INPUT_TREE_LABELS[13],
+            INPUT_TOPIC_PAD,
+            false,
+        );
         expand_input_tree_item(self.input_tree, conversion_assist);
         expand_input_tree_item(self.input_tree, input_support);
         select_input_tree_item(self.input_tree, basics);
@@ -1200,6 +1238,14 @@ impl App {
                     let _ = ShowWindow(
                         self.general.basic_panel,
                         if topic == INPUT_TOPIC_BASIC {
+                            SW_SHOW
+                        } else {
+                            SW_HIDE
+                        },
+                    );
+                    let _ = ShowWindow(
+                        self.general.pad_panel,
+                        if topic == INPUT_TOPIC_PAD {
                             SW_SHOW
                         } else {
                             SW_HIDE

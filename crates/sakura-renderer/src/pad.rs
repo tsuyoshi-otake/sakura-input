@@ -20,51 +20,64 @@ use std::cell::Cell;
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::sync::atomic::{AtomicIsize, Ordering};
+use std::sync::mpsc::{self, Receiver};
+use std::thread;
+use std::time::{Duration, Instant};
 
+use sakura_pad_session_proto::SecretBytes;
 use sakura_proto::AppearanceTheme;
 use windows::core::{Result, PCWSTR};
 use windows::Win32::Foundation::{COLORREF, HANDLE, HGLOBAL, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     BeginPaint, CreateCompatibleBitmap, CreateCompatibleDC, CreatePatternBrush, CreatePen,
     CreateSolidBrush, DeleteDC, DeleteObject, EndPaint, GetDC, InvalidateRect, RedrawWindow,
-    ReleaseDC, RoundRect, SelectObject, SetBkColor, SetBkMode, SetTextColor, DT_END_ELLIPSIS,
-    DT_LEFT, DT_RIGHT, HBRUSH, HDC, HFONT, OPAQUE, PAINTSTRUCT, PS_SOLID, RDW_ALLCHILDREN,
-    RDW_ERASE, RDW_INVALIDATE, RDW_UPDATENOW, TRANSPARENT,
+    ReleaseDC, RoundRect, SelectObject, SetBkColor, SetBkMode, SetTextColor, DT_CENTER,
+    DT_END_ELLIPSIS, DT_LEFT, DT_RIGHT, HBRUSH, HDC, HFONT, OPAQUE, PAINTSTRUCT, PS_SOLID,
+    RDW_ALLCHILDREN, RDW_ERASE, RDW_INVALIDATE, RDW_UPDATENOW, TRANSPARENT,
 };
 use windows::Win32::System::DataExchange::{CloseClipboard, EmptyClipboard, OpenClipboard};
 use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
+use windows::Win32::System::RemoteDesktop::{
+    WTSRegisterSessionNotification, WTSUnRegisterSessionNotification, NOTIFY_FOR_THIS_SESSION,
+};
 use windows::Win32::UI::Controls::{
     DRAWITEMSTRUCT, EM_GETFIRSTVISIBLELINE, EM_GETLINECOUNT, EM_GETMARGINS, EM_SETLIMITTEXT,
     EM_SETSEL, MEASUREITEMSTRUCT, ODS_FOCUS, ODS_SELECTED, ODT_BUTTON, ODT_LISTBOX,
 };
 use windows::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForWindow};
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetFocus, GetKeyState, SetFocus, VK_A, VK_CONTROL, VK_LBUTTON, VK_MENU,
+    EnableWindow, GetFocus, GetKeyState, SetFocus, VK_A, VK_CONTROL, VK_LBUTTON, VK_MENU,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     BeginDeferWindowPos, CallWindowProcW, CreateWindowExW, DefWindowProcW, DeferWindowPos,
     DestroyWindow, EndDeferWindowPos, FlashWindowEx, GetAncestor, GetClassNameW, GetClientRect,
     GetDlgCtrlID, GetParent, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW,
-    IsDialogMessageW, IsIconic, IsWindowVisible, KillTimer, LoadCursorW, PostMessageW,
+    IsDialogMessageW, IsIconic, IsWindowVisible, KillTimer, LoadCursorW, MessageBoxW, PostMessageW,
     RegisterClassW, SendMessageW, SetForegroundWindow, SetTimer, SetWindowLongPtrW, SetWindowPos,
     SetWindowTextW, ShowWindow, BN_CLICKED, BS_OWNERDRAW, CREATESTRUCTW, EN_CHANGE, ES_AUTOHSCROLL,
-    ES_AUTOVSCROLL, ES_LEFT, ES_MULTILINE, ES_NOHIDESEL, ES_WANTRETURN, FLASHWINFO, GA_ROOT,
-    GWLP_USERDATA, GWLP_WNDPROC, HMENU, HWND_TOP, HWND_TOPMOST, IDC_ARROW, LBN_DBLCLK,
-    LBN_SELCHANGE, LBS_HASSTRINGS, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LBS_OWNERDRAWFIXED,
-    LB_ADDSTRING, LB_DELETESTRING, LB_GETTOPINDEX, LB_INSERTSTRING, LB_RESETCONTENT, LB_SETCURSEL,
-    LB_SETITEMHEIGHT, LB_SETTOPINDEX, MSG, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-    SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_RESTORE, SW_SHOW, WINDOW_EX_STYLE, WM_CHAR, WM_CLOSE,
-    WM_COMMAND, WM_CREATE, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC,
-    WM_DESTROY, WM_DPICHANGED, WM_DRAWITEM, WM_ERASEBKGND, WM_GETFONT, WM_GETMINMAXINFO,
-    WM_GETTEXTLENGTH, WM_KEYDOWN, WM_KILLFOCUS, WM_MEASUREITEM, WM_NCCREATE, WM_NCDESTROY,
-    WM_PAINT, WM_SETFOCUS, WM_SETFONT, WM_SETTEXT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSCHAR,
-    WM_SYSKEYDOWN, WM_THEMECHANGED, WM_TIMER, WNDCLASSW, WNDPROC, WS_CHILD, WS_CLIPCHILDREN,
-    WS_EX_TOPMOST, WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE,
+    ES_AUTOVSCROLL, ES_LEFT, ES_MULTILINE, ES_NOHIDESEL, ES_PASSWORD, ES_WANTRETURN, FLASHWINFO,
+    GA_ROOT, GWLP_USERDATA, GWLP_WNDPROC, HMENU, HWND_TOP, HWND_TOPMOST, IDC_ARROW, IDYES,
+    LBN_DBLCLK, LBN_SELCHANGE, LBS_HASSTRINGS, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY,
+    LBS_OWNERDRAWFIXED, LB_ADDSTRING, LB_DELETESTRING, LB_GETTOPINDEX, LB_INSERTSTRING,
+    LB_RESETCONTENT, LB_SETCURSEL, LB_SETITEMHEIGHT, LB_SETTOPINDEX, MB_ICONWARNING, MB_YESNO, MSG,
+    SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE,
+    SW_RESTORE, SW_SHOW, WINDOW_EX_STYLE, WM_APP, WM_CHAR, WM_CLOSE, WM_COMMAND, WM_CREATE,
+    WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC, WM_DESTROY,
+    WM_DPICHANGED, WM_DRAWITEM, WM_ERASEBKGND, WM_GETFONT, WM_GETMINMAXINFO, WM_GETTEXTLENGTH,
+    WM_KEYDOWN, WM_KILLFOCUS, WM_MEASUREITEM, WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WM_SETFOCUS,
+    WM_SETFONT, WM_SETTEXT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSCHAR, WM_SYSKEYDOWN, WM_THEMECHANGED,
+    WM_TIMER, WM_WTSSESSION_CHANGE, WNDCLASSW, WNDPROC, WS_CHILD, WS_CLIPCHILDREN, WS_EX_TOPMOST,
+    WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE, WTS_SESSION_LOCK,
 };
+use zeroize::{Zeroize, Zeroizing};
 
 use crate::pad_caption;
 use crate::pad_icon::{self, PadIcon};
 use crate::pad_list::{self, CalendarTime};
+use crate::pad_protection::{
+    FailurePhase, FailureReason, PadProtectionEngine, ProtectedLockStatus, ProtectedSaveActor,
+    ProtectedSaveStatus, ProtectionError, SubmitRejectReason,
+};
 use crate::pad_rail;
 use crate::pad_storage::{
     now_ms, PadDocument, PadMemo, PadStore, SaveStatus, StorageError, StorageWorker,
@@ -81,6 +94,15 @@ pub const PAD_COMPLETION_TIMER: usize = 0x5341;
 pub const PAD_EDIT_TIMER: usize = 0x5343;
 /// When a notice hands the status row back to the memo.
 pub const PAD_NOTICE_TIMER: usize = 0x5344;
+const PAD_UNLOCK_RETRY_TIMER: usize = 0x5345;
+const WM_PAD_UNLOCK_FINISHED: u32 = WM_APP + 7;
+const WM_PAD_MASK_FOR_SESSION: u32 = WM_APP + 8;
+const MAX_PASSWORD_UTF16_UNITS: usize = 256;
+
+fn unlock_retry_delay(failures: u32) -> Duration {
+    let exponent = failures.saturating_sub(1).min(5);
+    Duration::from_secs((1u64 << exponent).min(30))
+}
 /// How long a notice stays, in milliseconds. Long enough to read a sentence
 /// that was not asked for, short enough that it does not become the row.
 const NOTICE_MS: u32 = 4_000;
@@ -157,6 +179,55 @@ const COPY_ID: u16 = 113;
 const DELETE_ID: u16 = 114;
 const LIST_RAIL_ID: u16 = 115;
 const BODY_RAIL_ID: u16 = 116;
+const LOCK_HEADLINE_ID: u16 = 117;
+const LOCK_PASSWORD_ID: u16 = 118;
+const LOCK_UNLOCK_ID: u16 = 119;
+const LOCK_STATUS_ID: u16 = 120;
+const LOCK_PASSWORD_LABEL_ID: u16 = 121;
+const PROTECT_ID: u16 = 122;
+const ENROLL_HEADLINE_ID: u16 = 123;
+const ENROLL_PASSWORD_LABEL_ID: u16 = 124;
+const ENROLL_PASSWORD_ID: u16 = 125;
+const ENROLL_CONFIRM_LABEL_ID: u16 = 126;
+const ENROLL_CONFIRM_PASSWORD_ID: u16 = 127;
+const ENROLL_SUBMIT_ID: u16 = 128;
+const ENROLL_CANCEL_ID: u16 = 129;
+const ENROLL_STATUS_ID: u16 = 130;
+const WM_PAD_ENROLL_FINISHED: u32 = WM_APP + 9;
+const ENROLL_CONTROL_IDS: [u16; 8] = [
+    ENROLL_HEADLINE_ID,
+    ENROLL_PASSWORD_LABEL_ID,
+    ENROLL_PASSWORD_ID,
+    ENROLL_CONFIRM_LABEL_ID,
+    ENROLL_CONFIRM_PASSWORD_ID,
+    ENROLL_SUBMIT_ID,
+    ENROLL_CANCEL_ID,
+    ENROLL_STATUS_ID,
+];
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+enum EnrollPhase {
+    #[default]
+    None,
+    Prompt,
+    Running,
+}
+
+struct EnrollCompletion {
+    epoch: u64,
+    result: std::result::Result<(), ProtectionError>,
+    legacy_exact: bool,
+}
+
+impl std::fmt::Debug for EnrollCompletion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EnrollCompletion")
+            .field("epoch", &self.epoch)
+            .field("success", &self.result.is_ok())
+            .field("legacy_exact", &self.legacy_exact)
+            .finish()
+    }
+}
 
 /// `SS_CENTERIMAGE | SS_ENDELLIPSIS`. The windows crate exposes the static
 /// styles from `Win32_System_SystemServices`, a feature nothing else in this
@@ -194,6 +265,7 @@ pub(crate) struct PadLayout {
     pub(crate) count: Option<RECT>,
     pub(crate) copy: RECT,
     pub(crate) delete: RECT,
+    pub(crate) protect: RECT,
     pub(crate) search: Option<RECT>,
     pub(crate) list: Option<RECT>,
     /// The strip beside the list holding its own scroll rail.
@@ -389,7 +461,7 @@ pub(crate) fn layout(client: RECT, dpi: u32, pane: PadPane, status_want: i32) ->
     // Copying and deleting act on the memo, so they sit with the memo: in the
     // editor's own first row when there is an editor beside the list, and in
     // the bar when the bar is the only place the whole window has for them.
-    let (copy, delete, title, status, count, new, sort, sync) = if let Some(meta) = meta {
+    let (copy, delete, protect, title, status, count, new, sort, sync) = if let Some(meta) = meta {
         let meta_glyph_top = centred(meta, glyph);
         let meta_glyph = |edge: i32| {
             within(
@@ -404,12 +476,13 @@ pub(crate) fn layout(client: RECT, dpi: u32, pane: PadPane, status_want: i32) ->
         };
         let delete = meta_glyph(meta.right.saturating_sub(pad));
         let copy = meta_glyph(delete.left.saturating_sub(gap));
+        let protect = meta_glyph(copy.left.saturating_sub(gap));
         // The title is the heading of the row and the two readings beside it
         // are supports. A narrow editor column drops the supports — the length
         // before the time, because when a memo last changed is the more useful
         // of the two — rather than squeezing the heading into a stub.
         let text_left = meta.left.saturating_add(pad);
-        let right_edge = copy.left.saturating_sub(gap);
+        let right_edge = protect.left.saturating_sub(gap);
         let title_min = scaled(TITLE_MIN_96, dpi);
         let status_width = scaled(STATUS_WIDTH_96, dpi);
         let count_width = scaled(COUNT_WIDTH_96, dpi);
@@ -471,7 +544,17 @@ pub(crate) fn layout(client: RECT, dpi: u32, pane: PadPane, status_want: i32) ->
             ),
             bar,
         );
-        (copy, delete, Some(title), status, count, new, sort, sync)
+        (
+            copy,
+            delete,
+            protect,
+            Some(title),
+            status,
+            count,
+            new,
+            sort,
+            sync,
+        )
     } else {
         let band = header.unwrap_or(content);
         let text_left = menu.map_or(band.left.saturating_add(pad), |menu| {
@@ -530,14 +613,15 @@ pub(crate) fn layout(client: RECT, dpi: u32, pane: PadPane, status_want: i32) ->
         // the far one, and the three that neither create nor destroy between.
         let new = within(bar_glyph(bar.left.saturating_add(pad), glyph), bar);
         let delete = within(bar_glyph(bar.right.saturating_sub(pad + glyph), glyph), bar);
-        let group = glyph * 3 + gap * 2;
+        let group = glyph * 4 + gap * 3;
         let group_left = (bar.left + (bar.right - bar.left - group) / 2)
             .min(delete.left.saturating_sub(gap).saturating_sub(group))
             .max(new.right.saturating_add(gap));
         let sort = within(bar_glyph(group_left, glyph), bar);
         let sync = within(bar_glyph(sort.right.saturating_add(gap), glyph), bar);
         let copy = within(bar_glyph(sync.right.saturating_add(gap), glyph), bar);
-        (copy, delete, title, status, None, new, sort, sync)
+        let protect = within(bar_glyph(copy.right.saturating_add(gap), glyph), bar);
+        (copy, delete, protect, title, status, None, new, sort, sync)
     };
 
     // The band wears its own name only while the list is the pane on screen;
@@ -648,6 +732,7 @@ pub(crate) fn layout(client: RECT, dpi: u32, pane: PadPane, status_want: i32) ->
         count,
         copy,
         delete,
+        protect,
         search,
         list,
         list_rail,
@@ -725,8 +810,40 @@ impl PadFonts {
 /// Stable ids and labels make the pad readable to a screen reader without a
 /// custom provider, and the top-level class and title identify the singleton
 /// window to test clients.
-#[derive(Debug)]
+struct UnlockCompletion {
+    epoch: u64,
+    result: std::result::Result<
+        (crate::pad_storage::LoadOutcome, PadProtectionEngine),
+        ProtectionError,
+    >,
+}
+
+impl std::fmt::Debug for UnlockCompletion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("UnlockCompletion")
+            .field("epoch", &self.epoch)
+            .field("success", &self.result.is_ok())
+            .finish()
+    }
+}
+
+#[allow(missing_debug_implementations)]
 struct PadState {
+    locked: bool,
+    lock_headline: HWND,
+    lock_password_label: HWND,
+    lock_password: HWND,
+    lock_unlock: HWND,
+    lock_status: HWND,
+    unlock_epoch: u64,
+    unlock_in_flight: bool,
+    unlock_result: Option<Receiver<UnlockCompletion>>,
+    unlock_failures: u32,
+    unlock_retry_at: Option<Instant>,
+    enroll_phase: EnrollPhase,
+    enroll_controls: [HWND; 8],
+    enroll_epoch: u64,
+    enroll_result: Option<Receiver<EnrollCompletion>>,
     menu: HWND,
     header_title: HWND,
     status: HWND,
@@ -742,12 +859,20 @@ struct PadState {
     sync: HWND,
     copy: HWND,
     delete: HWND,
+    protect: HWND,
     fonts: PadFonts,
     brushes: PadBrushes,
     /// The hover text for the drawn faces. Optional because losing it costs
     /// the pad an explanation and nothing else.
     tooltips: Option<Tooltips>,
-    worker: StorageWorker,
+    worker: Option<StorageWorker>,
+    protected_worker: Option<ProtectedSaveActor>,
+    protected_session_seen: bool,
+    /// Plaintext edits that the protected actor did not confirm. Kept only
+    /// inside this live Pad process for reauthentication and retry.
+    unsaved_recovery: Option<PadDocument>,
+    recovery_base: Option<PadDocument>,
+    recovery_conflict: bool,
     /// The full persisted document. Every save carries all of it.
     document: PadDocument,
     /// Which memo the editor is bound to. It need not be in `document`: an
@@ -782,7 +907,7 @@ struct PadState {
 /// Owns exactly one Pad HWND and its state. The object must stay on the
 /// renderer's message-pump thread; child controls and the worker mailbox are
 /// never touched from another thread.
-#[derive(Debug)]
+#[allow(missing_debug_implementations)]
 pub struct PadWindow {
     hwnd: HWND,
     state: Box<PadState>,
@@ -802,17 +927,28 @@ impl PadWindow {
     pub fn new(owner: HWND) -> Result<Self> {
         register_class();
         let store = PadStore::default().map_err(storage_error)?;
-        let (document, recovered_from_backup, load_status, save_blocked) = match store.load() {
-            Ok(loaded) => (loaded.document, loaded.recovered_from_backup, None, false),
-            Err(error) => (
-                PadDocument::default(),
-                false,
-                Some(format!(
-                    "メモを復元できません。既存データは保護されています ({error})"
-                )),
-                true,
-            ),
-        };
+        let (document, recovered_from_backup, load_status, save_blocked, locked) =
+            match store.load() {
+                Ok(loaded) => (
+                    loaded.document,
+                    loaded.recovered_from_backup,
+                    None,
+                    false,
+                    false,
+                ),
+                Err(StorageError::ProtectedCutover) => {
+                    (PadDocument::default(), false, None, true, true)
+                }
+                Err(error) => (
+                    PadDocument::default(),
+                    false,
+                    Some(format!(
+                        "メモを復元できません。既存データは保護されています ({error})"
+                    )),
+                    true,
+                    false,
+                ),
+            };
         let active = document
             .live()
             .next()
@@ -820,6 +956,21 @@ impl PadWindow {
             .unwrap_or_else(|| document.next_id());
         let generation = document.generation;
         let mut state = Box::new(PadState {
+            locked,
+            lock_headline: HWND::default(),
+            lock_password_label: HWND::default(),
+            lock_password: HWND::default(),
+            lock_unlock: HWND::default(),
+            lock_status: HWND::default(),
+            unlock_epoch: 0,
+            unlock_in_flight: false,
+            unlock_result: None,
+            unlock_failures: 0,
+            unlock_retry_at: None,
+            enroll_phase: EnrollPhase::None,
+            enroll_controls: [HWND::default(); 8],
+            enroll_epoch: 0,
+            enroll_result: None,
             menu: HWND::default(),
             header_title: HWND::default(),
             status: HWND::default(),
@@ -835,10 +986,20 @@ impl PadWindow {
             sync: HWND::default(),
             copy: HWND::default(),
             delete: HWND::default(),
+            protect: HWND::default(),
             fonts: PadFonts::new(96),
             brushes: PadBrushes::default(),
             tooltips: None,
-            worker: StorageWorker::spawn(store).map_err(storage_error)?,
+            worker: if locked {
+                None
+            } else {
+                Some(StorageWorker::spawn(store).map_err(storage_error)?)
+            },
+            protected_worker: None,
+            protected_session_seen: false,
+            unsaved_recovery: None,
+            recovery_base: None,
+            recovery_conflict: false,
             document,
             active,
             rows: Vec::new(),
@@ -885,6 +1046,17 @@ impl PadWindow {
         // of window, and it is corrected here rather than at the first resize
         // so that the opening frame is already the right shape.
         resize_to_logical(hwnd);
+        // SAFETY: hwnd is the live Pad window created above; USER32 owns the
+        // session notification registration until Drop unregisters it.
+        if let Err(error) = unsafe { WTSRegisterSessionNotification(hwnd, NOTIFY_FOR_THIS_SESSION) }
+        {
+            // SAFETY: registration failed, so this newly created HWND can be
+            // destroyed before it becomes visible or escapes this method.
+            unsafe {
+                let _ = DestroyWindow(hwnd);
+            }
+            return Err(error);
+        }
         Ok(Self { hwnd, state })
     }
 
@@ -950,7 +1122,13 @@ impl PadWindow {
             if !SetForegroundWindow(self.hwnd).as_bool() {
                 flash(self.hwnd);
             }
-            let focus = if self.state.pane == PadPane::Editor || is_wide(self.hwnd) {
+            let focus = if self.state.locked {
+                self.state.lock_password
+            } else if self.state.enroll_phase == EnrollPhase::Prompt {
+                self.state.enroll_controls[2]
+            } else if self.state.enroll_phase == EnrollPhase::Running {
+                self.state.enroll_controls[0]
+            } else if self.state.pane == PadPane::Editor || is_wide(self.hwnd) {
                 self.state.body
             } else {
                 self.state.list
@@ -961,10 +1139,22 @@ impl PadWindow {
         }
     }
 
-    pub fn hide(&self) {
-        // SAFETY: the window is live for the lifetime of this object.
+    /// Returns false when protected edits remain unsaved and the window must
+    /// stay available for the user to copy them before renderer shutdown.
+    pub fn hide(&self) -> bool {
+        // Route ordinary host close through the same protected save boundary
+        // as the Pad title-bar button. Session lock has a separate mask path.
+        // SAFETY: self owns this live HWND and its procedure defines WM_CLOSE
+        // with no pointer parameters and a boolean result.
+        unsafe { SendMessageW(self.hwnd, WM_CLOSE, None, None).0 != 0 }
+    }
+
+    /// OS session lock must remove exposed memo HWNDs even when persistence
+    /// is uncertain. The draft stays in this Pad process for reauthentication.
+    pub fn mask_for_session(&self) {
+        // SAFETY: only the Pad's UI thread handles its own synchronous message.
         unsafe {
-            let _ = ShowWindow(self.hwnd, SW_HIDE);
+            let _ = SendMessageW(self.hwnd, WM_PAD_MASK_FOR_SESSION, None, None);
         }
     }
 
@@ -977,6 +1167,9 @@ impl PadWindow {
 
 impl Drop for PadWindow {
     fn drop(&mut self) {
+        if self.state.protected_worker.is_some() {
+            self.state.lock_protected(self.hwnd, true);
+        }
         // Shutdown can precede the edit timer. The worker can flush only
         // snapshots it has received, so capture while the controls still live.
         if self.state.capture_controls() {
@@ -984,12 +1177,16 @@ impl Drop for PadWindow {
         }
         // SAFETY: the timers and window belong to this object.
         unsafe {
+            let _ = WTSUnRegisterSessionNotification(self.hwnd);
             let _ = KillTimer(Some(self.hwnd), PAD_EDIT_TIMER);
             let _ = KillTimer(Some(self.hwnd), PAD_COMPLETION_TIMER);
             let _ = KillTimer(Some(self.hwnd), PAD_NOTICE_TIMER);
+            let _ = KillTimer(Some(self.hwnd), PAD_UNLOCK_RETRY_TIMER);
             let _ = DestroyWindow(self.hwnd);
         }
-        let _ = self.state.worker.shutdown(SHUTDOWN_FLUSH_BUDGET);
+        if let Some(worker) = self.state.worker.as_mut() {
+            let _ = worker.shutdown(SHUTDOWN_FLUSH_BUDGET);
+        }
     }
 }
 
@@ -1341,6 +1538,59 @@ fn create_child(class: PCWSTR, text: PCWSTR, style: i32, parent: HWND, id: u16) 
 
 fn create_controls(state: &mut PadState, parent: HWND) -> Result<()> {
     state.window = parent;
+    if state.locked {
+        // Construct no memo controls in protected mode. Native child text is
+        // also UI Automation text, so hiding old controls after creation is
+        // too late for the first accessible frame.
+        state.lock_headline = create_child(
+            windows::core::w!("STATIC"),
+            windows::core::w!("Sakura Pad はロックされています"),
+            STATIC_CENTERED_ELLIPSIS,
+            parent,
+            LOCK_HEADLINE_ID,
+        )?;
+        state.lock_password_label = create_child(
+            windows::core::w!("STATIC"),
+            windows::core::w!("パスワード"),
+            STATIC_CENTERED_ELLIPSIS,
+            parent,
+            LOCK_PASSWORD_LABEL_ID,
+        )?;
+        state.lock_password = create_child(
+            windows::core::w!("EDIT"),
+            windows::core::w!(""),
+            WS_TABSTOP.0 as i32 | ES_LEFT | ES_AUTOHSCROLL | ES_PASSWORD,
+            parent,
+            LOCK_PASSWORD_ID,
+        )?;
+        // SAFETY: the edit is live; 256 UTF-16 units encode to at most the
+        // protocol's 1024 password bytes.
+        unsafe {
+            let _ = SendMessageW(
+                state.lock_password,
+                EM_SETLIMITTEXT,
+                Some(WPARAM(MAX_PASSWORD_UTF16_UNITS)),
+                Some(LPARAM(0)),
+            );
+        }
+        state.lock_unlock = create_child(
+            windows::core::w!("BUTTON"),
+            windows::core::w!("解除"),
+            WS_TABSTOP.0 as i32,
+            parent,
+            LOCK_UNLOCK_ID,
+        )?;
+        state.lock_status = create_child(
+            windows::core::w!("STATIC"),
+            windows::core::w!("パスワードを入力して解除してください"),
+            STATIC_CENTERED_ELLIPSIS,
+            parent,
+            LOCK_STATUS_ID,
+        )?;
+        state.apply_dpi(dpi_of(parent));
+        state.refresh_brushes();
+        return Ok(());
+    }
     let button = |label: PCWSTR, id: u16| -> Result<HWND> {
         create_child(
             windows::core::w!("BUTTON"),
@@ -1359,6 +1609,7 @@ fn create_controls(state: &mut PadState, parent: HWND) -> Result<()> {
     state.sync = button(windows::core::w!("同期"), SYNC_ID)?;
     state.copy = button(windows::core::w!("Markdown としてコピー"), COPY_ID)?;
     state.delete = button(windows::core::w!("削除"), DELETE_ID)?;
+    state.protect = button(windows::core::w!("この Pad をパスワードで保護"), PROTECT_ID)?;
 
     // The pointer gets a sentence for each drawn face. The window text above
     // stays the short name, because that is what a screen reader announces
@@ -1370,6 +1621,7 @@ fn create_controls(state: &mut PadState, parent: HWND) -> Result<()> {
         (state.sync, SYNC_ID),
         (state.copy, COPY_ID),
         (state.delete, DELETE_ID),
+        (state.protect, PROTECT_ID),
     ];
     state.tooltips = Tooltips::new(parent);
     if let Some(tooltips) = state.tooltips.as_mut() {
@@ -1558,6 +1810,14 @@ fn get_control_text(window: HWND, max_units: usize) -> String {
     String::from_utf16_lossy(&buffer[..(length.max(0) as usize).min(max_units)])
 }
 
+fn get_password_text(window: HWND) -> Option<String> {
+    let mut buffer = Zeroizing::new(vec![0u16; MAX_PASSWORD_UTF16_UNITS + 1]);
+    // SAFETY: the zeroizing buffer bounds the native copy and stays live
+    // through UTF-16 decoding. Invalid UTF-16 is rejected, not replaced.
+    let length = unsafe { GetWindowTextW(window, &mut buffer) };
+    String::from_utf16(&buffer[..(length.max(0) as usize).min(MAX_PASSWORD_UTF16_UNITS)]).ok()
+}
+
 fn flash(window: HWND) {
     let info = FLASHWINFO {
         cbSize: size_of::<FLASHWINFO>() as u32,
@@ -1634,17 +1894,128 @@ fn update_layout(state: &PadState, window: HWND) {
         return;
     }
     let dpi = dpi_of(window);
+    if state.locked {
+        let width = (client.right - client.left).max(0);
+        let center = client.left + width / 2;
+        let field_width = scaled(320, dpi).min((width - scaled(32, dpi)).max(1));
+        let left = center - field_width / 2;
+        let top = client.top + ((client.bottom - client.top - scaled(180, dpi)) / 2).max(0);
+        let height = scaled(30, dpi);
+        let placements = [
+            (
+                state.lock_headline,
+                RECT {
+                    left,
+                    top,
+                    right: left + field_width,
+                    bottom: top + height,
+                },
+            ),
+            (
+                state.lock_password_label,
+                RECT {
+                    left,
+                    top: top + scaled(38, dpi),
+                    right: left + field_width,
+                    bottom: top + scaled(38, dpi) + height,
+                },
+            ),
+            (
+                state.lock_password,
+                RECT {
+                    left,
+                    top: top + scaled(70, dpi),
+                    right: left + field_width,
+                    bottom: top + scaled(70, dpi) + height,
+                },
+            ),
+            (
+                state.lock_unlock,
+                RECT {
+                    left,
+                    top: top + scaled(110, dpi),
+                    right: left + field_width,
+                    bottom: top + scaled(110, dpi) + height,
+                },
+            ),
+            (
+                state.lock_status,
+                RECT {
+                    left,
+                    top: top + scaled(150, dpi),
+                    right: left + field_width,
+                    bottom: top + scaled(150, dpi) + height,
+                },
+            ),
+        ];
+        // SAFETY: all lock controls are live children of this window.
+        unsafe {
+            for (child, rect) in placements {
+                let _ = SetWindowPos(
+                    child,
+                    None,
+                    rect.left,
+                    rect.top,
+                    rect.right - rect.left,
+                    rect.bottom - rect.top,
+                    SWP_NOZORDER | SWP_NOACTIVATE,
+                );
+            }
+        }
+        return;
+    }
+    if state.enroll_phase != EnrollPhase::None {
+        let width = (client.right - client.left).max(0);
+        let height = (client.bottom - client.top).max(0);
+        let field_width = scaled(360, dpi).min((width - scaled(32, dpi)).max(1));
+        let left = client.left + (width - field_width) / 2;
+        let top = client.top + ((height - scaled(296, dpi)) / 2).max(0);
+        let line = scaled(30, dpi);
+        let offsets = [0, 40, 70, 110, 140, 190, 190, 238];
+        for (index, child) in state.enroll_controls.iter().enumerate() {
+            if child.is_invalid() {
+                continue;
+            }
+            let y = top + scaled(offsets[index], dpi);
+            let (x, w) = match index {
+                5 => (left, (field_width - scaled(8, dpi)) / 2),
+                6 => (
+                    left + (field_width + scaled(8, dpi)) / 2,
+                    (field_width - scaled(8, dpi)) / 2,
+                ),
+                _ => (left, field_width),
+            };
+            // SAFETY: child is a live Pad child in the current layout and the
+            // coordinates are bounded by the computed Pad client rectangle.
+            unsafe {
+                let _ = SetWindowPos(
+                    *child,
+                    None,
+                    x,
+                    y,
+                    w.max(1),
+                    line,
+                    SWP_NOZORDER | SWP_NOACTIVATE,
+                );
+            }
+        }
+        return;
+    }
     let want = state.status_want();
     state.status_slot.set(want);
     let plan = layout(client, dpi, state.pane, want);
     let field = |frame: Option<RECT>| frame.map(|frame| field_child(frame, dpi));
-    let placements: [(HWND, Option<RECT>); 15] = [
+    let placements: [(HWND, Option<RECT>); 16] = [
         (state.menu, plan.menu),
         (state.header_title, plan.header_title),
         (state.status, plan.status),
         (state.count, plan.count),
         (state.copy, Some(plan.copy)),
         (state.delete, Some(plan.delete)),
+        (
+            state.protect,
+            (!state.protected_session_seen).then_some(plan.protect),
+        ),
         (state.search, field(plan.search)),
         (state.list, plan.list),
         (state.list_rail, plan.list_rail),
@@ -1699,6 +2070,14 @@ fn paint(window: HWND, state: &PadState) {
     if unsafe { GetClientRect(window, &mut client) }.is_ok() {
         let dpi = dpi_of(window);
         let colors = palette(state.theme);
+        if state.locked || state.enroll_phase != EnrollPhase::None {
+            fill_color(dc, &client, colors.surface);
+            // SAFETY: BeginPaint above always pairs with EndPaint.
+            unsafe {
+                let _ = EndPaint(window, &ps);
+            }
+            return;
+        }
         let plan = layout(client, dpi, state.pane, state.status_want());
         let border = scaled(BORDER_96, dpi).max(1);
         fill_color(dc, &client, colors.surface);
@@ -2137,6 +2516,35 @@ fn draw_button(
     );
 }
 
+fn draw_protect_button(item: &DRAWITEMSTRUCT, colors: Palette, dpi: u32) {
+    let pressed = item.itemState.0 & ODS_SELECTED.0 != 0;
+    let focused = item.itemState.0 & ODS_FOCUS.0 != 0;
+    fill_color(item.hDC, &item.rcItem, colors.surface);
+    rounded_box(
+        item.hDC,
+        item.rcItem,
+        if pressed {
+            colors.selected
+        } else {
+            colors.surface
+        },
+        Some(if focused { colors.rail } else { colors.border }),
+        scaled(BORDER_96, dpi).max(1),
+        scaled(CORNER_96, dpi).max(1),
+    );
+    text(
+        item.hDC,
+        "保護",
+        item.rcItem,
+        if pressed {
+            colors.selected_ink
+        } else {
+            colors.ink
+        },
+        DT_CENTER,
+    );
+}
+
 fn draw_row(item: &DRAWITEMSTRUCT, state: &PadState, colors: Palette, dpi: u32) {
     let Some(memo) = state
         .rows
@@ -2291,6 +2699,7 @@ fn hint(id: u16) -> Option<&'static str> {
         SYNC_ID => "GitHub と同期",
         COPY_ID => "このメモを Markdown としてコピー",
         DELETE_ID => "このメモを削除",
+        PROTECT_ID => "Pad 全体をパスワードで保護",
         _ => return None,
     })
 }
@@ -2310,6 +2719,872 @@ fn button_shape(id: u16, wide: bool) -> ButtonShape {
 }
 
 impl PadState {
+    fn show_enroll_prompt(&mut self, window: HWND) {
+        if self.locked || self.enroll_phase != EnrollPhase::None || self.protected_session_seen {
+            return;
+        }
+        // SAFETY: window is the live Pad HWND; this cancels its pending edit
+        // timer before taking a final snapshot for the enrollment prompt.
+        unsafe {
+            let _ = KillTimer(Some(window), PAD_EDIT_TIMER);
+        }
+        if self.capture_controls() {
+            self.publish(window);
+        }
+        if self.save_blocked {
+            self.set_status("保存を確認できません。メモをコピーして保管してください".to_owned());
+            self.update_status();
+            return;
+        }
+        let specs = [
+            (
+                windows::core::w!("STATIC"),
+                windows::core::w!("Pad 全体をパスワードで保護"),
+                STATIC_CENTERED_ELLIPSIS,
+            ),
+            (
+                windows::core::w!("STATIC"),
+                windows::core::w!("パスワード"),
+                STATIC_CENTERED_ELLIPSIS,
+            ),
+            (
+                windows::core::w!("EDIT"),
+                windows::core::w!(""),
+                WS_TABSTOP.0 as i32 | ES_LEFT | ES_AUTOHSCROLL | ES_PASSWORD,
+            ),
+            (
+                windows::core::w!("STATIC"),
+                windows::core::w!("パスワードを再入力"),
+                STATIC_CENTERED_ELLIPSIS,
+            ),
+            (
+                windows::core::w!("EDIT"),
+                windows::core::w!(""),
+                WS_TABSTOP.0 as i32 | ES_LEFT | ES_AUTOHSCROLL | ES_PASSWORD,
+            ),
+            (
+                windows::core::w!("BUTTON"),
+                windows::core::w!("保護を有効化"),
+                WS_TABSTOP.0 as i32,
+            ),
+            (
+                windows::core::w!("BUTTON"),
+                windows::core::w!("キャンセル"),
+                WS_TABSTOP.0 as i32,
+            ),
+            (
+                windows::core::w!("STATIC"),
+                windows::core::w!("パスワードを失うと復元できません"),
+                STATIC_CENTERED_ELLIPSIS,
+            ),
+        ];
+        pad_caption::cloak(window, true);
+        for (index, (class, label, style)) in specs.into_iter().enumerate() {
+            match create_child(class, label, style, window, ENROLL_CONTROL_IDS[index]) {
+                Ok(child) => self.enroll_controls[index] = child,
+                Err(_) => {
+                    self.destroy_enroll_controls();
+                    pad_caption::cloak(window, false);
+                    self.set_status("保護画面を開けません".to_owned());
+                    self.update_status();
+                    return;
+                }
+            }
+        }
+        for index in [2, 4] {
+            // SAFETY: both indexed HWNDs were created above as Pad password
+            // edits; EM_SETLIMITTEXT takes an integer limit and no pointer.
+            unsafe {
+                let _ = SendMessageW(
+                    self.enroll_controls[index],
+                    EM_SETLIMITTEXT,
+                    Some(WPARAM(MAX_PASSWORD_UTF16_UNITS)),
+                    Some(LPARAM(0)),
+                );
+            }
+        }
+        self.enroll_phase = EnrollPhase::Prompt;
+        self.hide_normal_controls();
+        self.apply_dpi(dpi_of(window));
+        update_layout(self, window);
+        // SAFETY: window is live and the flags request repaint without
+        // passing an unowned region or update rectangle.
+        unsafe {
+            let _ = RedrawWindow(
+                Some(window),
+                None,
+                None,
+                RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW,
+            );
+        }
+        pad_caption::cloak(window, false);
+        // SAFETY: the first password edit was created as a live Pad child.
+        unsafe {
+            let _ = SetFocus(Some(self.enroll_controls[2]));
+        }
+    }
+
+    fn hide_normal_controls(&self) {
+        for child in [
+            self.menu,
+            self.header_title,
+            self.status,
+            self.count,
+            self.search,
+            self.list,
+            self.list_rail,
+            self.title,
+            self.body,
+            self.body_rail,
+            self.new,
+            self.sort,
+            self.sync,
+            self.copy,
+            self.delete,
+            self.protect,
+        ] {
+            if !child.is_invalid() {
+                // SAFETY: each non-invalid HWND is a live Pad child owned by
+                // this state; hiding it does not destroy its editor content.
+                unsafe {
+                    let _ = ShowWindow(child, SW_HIDE);
+                }
+            }
+        }
+    }
+
+    fn destroy_enroll_controls(&mut self) {
+        for child in &mut self.enroll_controls {
+            if !child.is_invalid() {
+                // SAFETY: the enrollment state owns each created child and
+                // clears the handle immediately after destroying it.
+                unsafe {
+                    let _ = DestroyWindow(*child);
+                }
+                *child = HWND::default();
+            }
+        }
+    }
+
+    fn cancel_enroll_prompt(&mut self, window: HWND) {
+        if self.enroll_phase != EnrollPhase::Prompt {
+            return;
+        }
+        for index in [2, 4] {
+            set_control_text(self.enroll_controls[index], "");
+        }
+        pad_caption::cloak(window, true);
+        self.destroy_enroll_controls();
+        self.enroll_phase = EnrollPhase::None;
+        update_layout(self, window);
+        // SAFETY: window remains live while cancelling the prompt; no
+        // caller-owned drawing buffers are passed to USER32.
+        unsafe {
+            let _ = RedrawWindow(
+                Some(window),
+                None,
+                None,
+                RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW,
+            );
+        }
+        pad_caption::cloak(window, false);
+        // SAFETY: the normal editor remains a live Pad child after layout.
+        unsafe {
+            let _ = SetFocus(Some(self.body));
+        }
+    }
+
+    fn start_enrollment(&mut self, window: HWND) {
+        if self.enroll_phase != EnrollPhase::Prompt {
+            return;
+        }
+        for index in [2, 4] {
+            // SAFETY: these two indexed HWNDs are live password edit controls
+            // owned by the visible enrollment prompt.
+            if unsafe { GetWindowTextLengthW(self.enroll_controls[index]) } as usize
+                > MAX_PASSWORD_UTF16_UNITS
+            {
+                for clear in [2, 4] {
+                    set_control_text(self.enroll_controls[clear], "");
+                }
+                set_control_text(self.enroll_controls[7], "パスワードが長すぎます");
+                return;
+            }
+        }
+        let first = get_password_text(self.enroll_controls[2]);
+        let second = get_password_text(self.enroll_controls[4]);
+        for index in [2, 4] {
+            set_control_text(self.enroll_controls[index], "");
+        }
+        let (Some(mut first), Some(mut second)) = (first, second) else {
+            set_control_text(self.enroll_controls[7], "パスワードを読み取れません");
+            return;
+        };
+        if first.is_empty() || first != second {
+            first.zeroize();
+            second.zeroize();
+            set_control_text(self.enroll_controls[7], "パスワードが一致しません");
+            return;
+        }
+        second.zeroize();
+        // This release has no recovery wrap. Ask for a separate, explicit
+        // no-recovery decision before the legacy writer is stopped.
+        // SAFETY: the live Pad HWND owns this modal dialog, and all message
+        // and caption pointers refer to static NUL-terminated UTF-16 data.
+        let no_recovery = unsafe {
+            MessageBoxW(Some(window),
+                windows::core::w!("この Pad 全体をパスワードで保護します。復旧キーは作成されません。パスワードを失うと、すべてのメモを復元できません。それでも続けますか？"),
+                windows::core::w!("復旧手段なしで保護"), MB_YESNO | MB_ICONWARNING)
+        };
+        if no_recovery != IDYES {
+            first.zeroize();
+            set_control_text(
+                self.enroll_controls[7],
+                "保護を中止しました。Pad は保護されていません",
+            );
+            return;
+        }
+        let password = SecretBytes::new(first.as_bytes().to_vec());
+        first.zeroize();
+        // SAFETY: window is the live Pad HWND and the timer belongs to it.
+        unsafe {
+            let _ = KillTimer(Some(window), PAD_EDIT_TIMER);
+        }
+        if self.capture_controls() {
+            self.publish(window);
+        }
+        if self.save_blocked {
+            self.cancel_enroll_prompt(window);
+            self.set_status("保存を確認できません。メモをコピーして保管してください".to_owned());
+            self.update_status();
+            return;
+        }
+        let Some(mut legacy_worker) = self.worker.take() else {
+            self.save_blocked = true;
+            self.cancel_enroll_prompt(window);
+            self.set_status("保存を確認できません。メモをコピーして保管してください".to_owned());
+            self.update_status();
+            return;
+        };
+        if !legacy_worker.shutdown(SHUTDOWN_FLUSH_BUDGET) {
+            self.save_blocked = true;
+            self.cancel_enroll_prompt(window);
+            self.set_status("保存を確認できません。メモをコピーして保管してください".to_owned());
+            self.update_status();
+            return;
+        }
+        // SAFETY: window is live and this pending completion timer belongs to
+        // the stopped legacy storage worker.
+        unsafe {
+            let _ = KillTimer(Some(window), PAD_COMPLETION_TIMER);
+        }
+        let store = match PadStore::default() {
+            Ok(store) => store,
+            Err(_) => {
+                self.save_blocked = true;
+                self.cancel_enroll_prompt(window);
+                self.set_status(
+                    "保存先を確認できません。メモをコピーして保管してください".to_owned(),
+                );
+                self.update_status();
+                return;
+            }
+        };
+        let expected = self.document.clone();
+        self.enroll_epoch = self.enroll_epoch.wrapping_add(1);
+        let epoch = self.enroll_epoch;
+        let (sender, receiver) = mpsc::channel();
+        let raw_window = window.0 as isize;
+        let spawn = thread::Builder::new()
+            .name("sakura-pad-enroll".to_owned())
+            .spawn(move || {
+                let mut engine = PadProtectionEngine::new(Duration::from_secs(15));
+                let result = engine.enroll(&store, &expected, password);
+                let legacy_exact = result.is_err()
+                    && store.load().is_ok_and(|loaded| {
+                        !loaded.recovered_from_backup && loaded.document == expected
+                    });
+                drop(engine);
+                if sender
+                    .send(EnrollCompletion {
+                        epoch,
+                        result,
+                        legacy_exact,
+                    })
+                    .is_ok()
+                {
+                    // SAFETY: raw_window came from the Pad HWND before this
+                    // thread started. A stale HWND is harmless: the UI-side
+                    // receiver and epoch gate any eventual message.
+                    unsafe {
+                        let _ = PostMessageW(
+                            Some(HWND(raw_window as *mut c_void)),
+                            WM_PAD_ENROLL_FINISHED,
+                            WPARAM(0),
+                            LPARAM(0),
+                        );
+                    }
+                }
+            });
+        if spawn.is_err() {
+            self.save_blocked = true;
+            self.cancel_enroll_prompt(window);
+            self.set_status("保護を開始できません。メモをコピーして保管してください".to_owned());
+            self.update_status();
+            return;
+        }
+        self.enroll_result = Some(receiver);
+        self.enroll_phase = EnrollPhase::Running;
+        // No legacy child text survives while a protected cutover may publish.
+        pad_caption::cloak(window, true);
+        self.destroy_normal_controls();
+        set_control_text(self.enroll_controls[7], "保護へ切り替えています…");
+        // SAFETY: both HWNDs are live enrollment buttons; disable them while
+        // the one in-flight cutover owns this state transition.
+        unsafe {
+            let _ = EnableWindow(self.enroll_controls[5], false);
+            let _ = EnableWindow(self.enroll_controls[6], false);
+        }
+        update_layout(self, window);
+        pad_caption::cloak(window, false);
+    }
+
+    fn finish_enrollment(&mut self, window: HWND) {
+        let Some(completion) = self
+            .enroll_result
+            .as_ref()
+            .and_then(|rx| rx.try_recv().ok())
+        else {
+            return;
+        };
+        if self.enroll_phase != EnrollPhase::Running || completion.epoch != self.enroll_epoch {
+            return;
+        }
+        self.enroll_result = None;
+        pad_caption::cloak(window, true);
+        self.destroy_enroll_controls();
+        self.enroll_phase = EnrollPhase::None;
+        let mut reading = "Pad を保護しました。パスワードで解除してください";
+        match completion.result {
+            Ok(()) => {
+                self.locked = true;
+                self.save_blocked = true;
+                self.document = PadDocument::default();
+                self.rows.clear();
+                self.query.clear();
+                let _ = create_controls(self, window);
+            }
+            Err(error) if error.phase == FailurePhase::BeforeIntent => {
+                // No protected intent was published. Keep the in-memory
+                // editor available for copying even if the disk snapshot
+                // changed; only the exact original may restart a writer.
+                self.worker = completion
+                    .legacy_exact
+                    .then(|| {
+                        PadStore::default()
+                            .ok()
+                            .and_then(|store| StorageWorker::spawn(store).ok())
+                    })
+                    .flatten();
+                self.save_blocked = self.worker.is_none();
+                let _ = create_controls(self, window);
+                reading = if self.save_blocked {
+                    "保護できず、保存も確認できません。メモをコピーしてください"
+                } else {
+                    "保護できませんでした。Pad は保護されていません"
+                };
+                self.set_status(reading.to_owned());
+                self.update_status();
+            }
+            Err(_) => {
+                // Intent may already be durable. Never restart a v2 writer
+                // or recreate old memo child text after an uncertain cutover.
+                // Retain this draft until an authenticated load can check it
+                // against a known base; without that base it stays copy-only.
+                self.unsaved_recovery = Some(self.document.clone());
+                self.recovery_base = None;
+                self.recovery_conflict = true;
+                self.locked = true;
+                self.save_blocked = true;
+                self.document = PadDocument::default();
+                self.rows.clear();
+                self.query.clear();
+                let _ = create_controls(self, window);
+                reading = "保護の切替を確認できません。復旧が必要です";
+            }
+        }
+        if self.locked {
+            set_control_text(self.lock_status, reading);
+        }
+        update_layout(self, window);
+        // SAFETY: window remains live throughout this UI-thread transition;
+        // no external drawing buffers are passed to USER32.
+        unsafe {
+            let _ = RedrawWindow(
+                Some(window),
+                None,
+                None,
+                RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW,
+            );
+        }
+        pad_caption::cloak(window, false);
+        let focus = if self.locked {
+            self.lock_password
+        } else {
+            self.body
+        };
+        // SAFETY: focus is the live child created for the resulting surface.
+        unsafe {
+            let _ = SetFocus(Some(focus));
+        }
+    }
+    fn update_unlock_retry(&mut self) -> bool {
+        let Some(deadline) = self.unlock_retry_at else {
+            return false;
+        };
+        if let Some(remaining) = deadline.checked_duration_since(Instant::now()) {
+            set_control_text(
+                self.lock_status,
+                &format!(
+                    "パスワードが正しくありません。再試行まで {} 秒",
+                    remaining.as_secs() + 1
+                ),
+            );
+            return true;
+        }
+        self.unlock_retry_at = None;
+        set_control_text(self.lock_status, "再試行できます");
+        // SAFETY: self.window is this live Pad HWND; only its own retry timer
+        // is cancelled after the monotonic deadline has elapsed.
+        unsafe {
+            let _ = KillTimer(Some(self.window), PAD_UNLOCK_RETRY_TIMER);
+        }
+        false
+    }
+
+    fn start_unlock(&mut self) {
+        if !self.locked || self.unlock_in_flight {
+            return;
+        }
+        if self.update_unlock_retry() {
+            return;
+        }
+        // WM_SETTEXT can bypass a user-typing limit. Reject rather than
+        // silently truncating a password and trying a different secret.
+        // SAFETY: lock_password is the live edit child of the locked Pad.
+        if unsafe { GetWindowTextLengthW(self.lock_password) } as usize > MAX_PASSWORD_UTF16_UNITS {
+            set_control_text(self.lock_password, "");
+            set_control_text(self.lock_status, "パスワードが長すぎます");
+            return;
+        }
+        let password = get_password_text(self.lock_password);
+        // Erase the edit before dispatch; a queued worker owns only the
+        // zeroizing byte buffer, and no hidden HWND retains the passphrase.
+        set_control_text(self.lock_password, "");
+        let Some(mut password) = password else {
+            set_control_text(self.lock_status, "パスワードを読み取れません");
+            return;
+        };
+        if password.is_empty() {
+            set_control_text(self.lock_status, "パスワードを入力してください");
+            return;
+        }
+        let secret = SecretBytes::new(password.as_bytes().to_vec());
+        password.zeroize();
+        self.unlock_epoch = self.unlock_epoch.wrapping_add(1);
+        let epoch = self.unlock_epoch;
+        let (sender, receiver) = mpsc::channel();
+        let store = match PadStore::default() {
+            Ok(store) => store,
+            Err(_) => {
+                set_control_text(self.lock_status, "保護されたメモを開けません");
+                return;
+            }
+        };
+        let window = self.window.0 as isize;
+        let spawn = thread::Builder::new()
+            .name("sakura-pad-unlock".to_owned())
+            .spawn(move || {
+                let mut engine = PadProtectionEngine::new(Duration::from_secs(15));
+                let result = engine.unlock(&store, secret).map(|loaded| (loaded, engine));
+                if sender.send(UnlockCompletion { epoch, result }).is_ok() {
+                    // SAFETY: posting is harmless if the Pad closed during the
+                    // bounded request; the epoch and receiver gate delivery.
+                    unsafe {
+                        let _ = PostMessageW(
+                            Some(HWND(window as *mut c_void)),
+                            WM_PAD_UNLOCK_FINISHED,
+                            WPARAM(0),
+                            LPARAM(0),
+                        );
+                    }
+                }
+            });
+        match spawn {
+            Ok(_) => {
+                self.unlock_result = Some(receiver);
+                self.unlock_in_flight = true;
+                set_control_text(self.lock_status, "解除しています…");
+                // SAFETY: the button belongs to this Pad and is disabled for
+                // the entire request, including retries and completion.
+                unsafe {
+                    let _ = EnableWindow(self.lock_unlock, false);
+                }
+            }
+            Err(_) => set_control_text(self.lock_status, "解除を開始できません"),
+        }
+    }
+
+    fn cancel_unlock(&mut self) {
+        let cancelled = self.unlock_in_flight;
+        self.unlock_epoch = self.unlock_epoch.wrapping_add(1);
+        self.unlock_in_flight = false;
+        self.unlock_result = None;
+        if self.locked {
+            set_control_text(self.lock_password, "");
+            if cancelled {
+                set_control_text(self.lock_status, "解除を中止しました");
+            } else if self.unlock_retry_at.is_some() {
+                self.update_unlock_retry();
+            }
+            // SAFETY: the child button remains live in locked mode.
+            unsafe {
+                let _ = EnableWindow(self.lock_unlock, true);
+            }
+        }
+    }
+
+    fn finish_unlock(&mut self, window: HWND) {
+        let Some(completion) = self
+            .unlock_result
+            .as_ref()
+            .and_then(|rx| rx.try_recv().ok())
+        else {
+            return;
+        };
+        if !self.locked || !self.unlock_in_flight || completion.epoch != self.unlock_epoch {
+            return;
+        }
+        self.unlock_result = None;
+        self.unlock_in_flight = false;
+        let (loaded, engine) = match completion.result {
+            Ok(success) => success,
+            Err(error) => {
+                let status = match error.reason {
+                    FailureReason::Authentication => {
+                        self.unlock_failures = self.unlock_failures.saturating_add(1);
+                        self.unlock_retry_at =
+                            Some(Instant::now() + unlock_retry_delay(self.unlock_failures));
+                        // SAFETY: window is the live Pad HWND. The timer only
+                        // refreshes a monotonic retry countdown on its UI thread.
+                        unsafe {
+                            let _ = SetTimer(Some(window), PAD_UNLOCK_RETRY_TIMER, 250, None);
+                        }
+                        self.update_unlock_retry();
+                        // SAFETY: lock_unlock remains a live child of the
+                        // locked surface. Clicks during cooldown are bounded
+                        // by the monotonic deadline before any Argon2 work.
+                        unsafe {
+                            let _ = EnableWindow(self.lock_unlock, true);
+                        }
+                        return;
+                    }
+                    FailureReason::Unavailable => "保護機能を利用できません",
+                    _ => "メモを解除できませんでした",
+                };
+                set_control_text(self.lock_status, status);
+                // SAFETY: the live button can accept another explicit attempt.
+                unsafe {
+                    let _ = EnableWindow(self.lock_unlock, true);
+                }
+                return;
+            }
+        };
+        let store = match PadStore::default() {
+            Ok(store) => store,
+            Err(_) => {
+                set_control_text(self.lock_status, "保護されたメモを開けません");
+                // SAFETY: lock_unlock is still a live child while locked;
+                // re-enable it for a later explicit retry.
+                unsafe {
+                    let _ = EnableWindow(self.lock_unlock, true);
+                }
+                return;
+            }
+        };
+        let Ok(actor) = ProtectedSaveActor::spawn_unlocked(store, engine, loaded.document.clone())
+        else {
+            set_control_text(self.lock_status, "保護された保存を開始できません");
+            // SAFETY: lock_unlock remains live because the locked surface
+            // has not yet been replaced with memo controls.
+            unsafe {
+                let _ = EnableWindow(self.lock_unlock, true);
+            }
+            return;
+        };
+        self.unlock_failures = 0;
+        self.unlock_retry_at = None;
+        // SAFETY: window is the live Pad HWND; no retry timer is needed after
+        // a successful authenticated unlock.
+        unsafe {
+            let _ = KillTimer(Some(window), PAD_UNLOCK_RETRY_TIMER);
+        }
+        // The document was authenticated before any ordinary HWND exists.
+        // Cloak through child creation so neither sighted users nor screen
+        // readers observe a partial editor during the transition.
+        pad_caption::cloak(window, true);
+        let mut shown_document = loaded.document;
+        let mut restored_unsaved = false;
+        let mut recovery_rejected = false;
+        let mut recovery_conflict = false;
+        if let Some(mut recovery) = self.unsaved_recovery.take() {
+            if recovery != shown_document {
+                if !self.recovery_conflict && self.recovery_base.as_ref() == Some(&shown_document) {
+                    recovery.generation = recovery
+                        .generation
+                        .max(shown_document.generation)
+                        .wrapping_add(1);
+                    recovery_rejected = actor.submit(recovery.clone()).is_err();
+                } else {
+                    // Authenticated persisted content changed since this
+                    // draft's last confirmed base. Show the retained draft
+                    // for copying, but never auto-publish over that change.
+                    recovery_conflict = true;
+                    self.recovery_conflict = true;
+                    recovery_rejected = true;
+                    self.unsaved_recovery = Some(recovery.clone());
+                }
+                shown_document = recovery;
+                restored_unsaved = true;
+            }
+        }
+        if !recovery_conflict {
+            self.recovery_base = None;
+            self.recovery_conflict = false;
+        }
+        self.protected_worker = Some(actor);
+        self.protected_session_seen = true;
+        self.document = shown_document;
+        self.active = self
+            .document
+            .live()
+            .next()
+            .map(|memo| memo.id)
+            .unwrap_or_else(|| self.document.next_id());
+        self.generation = self.document.generation;
+        self.latest_submitted = self.generation;
+        self.locked = false;
+        self.save_blocked = recovery_rejected;
+        if restored_unsaved {
+            self.set_status(if recovery_conflict {
+                "保存済みのメモが変更されました。未保存のメモをコピーしてください".to_owned()
+            } else if recovery_rejected {
+                "未保存のメモを復元しました。保存できません".to_owned()
+            } else {
+                "未保存のメモを復元し、保存しています…".to_owned()
+            });
+            if !recovery_rejected {
+                // SAFETY: window is the live Pad HWND; this timer polls only
+                // the protected actor for the pending accepted snapshot.
+                unsafe {
+                    let _ = SetTimer(Some(window), PAD_COMPLETION_TIMER, 100, None);
+                }
+            }
+        } else {
+            self.set_status(String::new());
+        }
+        for child in [
+            self.lock_headline,
+            self.lock_password_label,
+            self.lock_password,
+            self.lock_unlock,
+            self.lock_status,
+        ] {
+            // SAFETY: these are live children, no longer needed after auth.
+            unsafe {
+                let _ = DestroyWindow(child);
+            }
+        }
+        self.lock_headline = HWND::default();
+        self.lock_password_label = HWND::default();
+        self.lock_password = HWND::default();
+        self.lock_unlock = HWND::default();
+        self.lock_status = HWND::default();
+        if create_controls(self, window).is_err() {
+            // Control construction failed. Never expose a partly initialized
+            // editor or accept edits without a complete native surface.
+            self.save_blocked = true;
+            self.locked = true;
+            self.unsaved_recovery = Some(self.document.clone());
+            self.protected_worker = None;
+            self.destroy_normal_controls();
+            self.document = PadDocument::default();
+            let _ = create_controls(self, window);
+            set_control_text(self.lock_status, "メモ画面を作成できません");
+        }
+        update_layout(self, window);
+        // SAFETY: the Pad HWND remains live throughout this UI-thread change.
+        unsafe {
+            let _ = RedrawWindow(
+                Some(window),
+                None,
+                None,
+                RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW,
+            );
+        }
+        pad_caption::cloak(window, false);
+        if !self.locked {
+            // SAFETY: the normal editor now exists and may receive focus.
+            unsafe {
+                let _ = SetFocus(Some(self.body));
+            }
+        }
+    }
+
+    fn destroy_normal_controls(&mut self) {
+        self.tooltips = None;
+        for child in [
+            self.menu,
+            self.header_title,
+            self.status,
+            self.count,
+            self.search,
+            self.list,
+            self.list_rail,
+            self.title,
+            self.body,
+            self.body_rail,
+            self.new,
+            self.sort,
+            self.sync,
+            self.copy,
+            self.delete,
+            self.protect,
+        ] {
+            if !child.is_invalid() {
+                // SAFETY: every initialized HWND is a child of this Pad.
+                unsafe {
+                    let _ = DestroyWindow(child);
+                }
+            }
+        }
+        self.menu = HWND::default();
+        self.header_title = HWND::default();
+        self.status = HWND::default();
+        self.count = HWND::default();
+        self.search = HWND::default();
+        self.list = HWND::default();
+        self.list_rail = HWND::default();
+        self.title = HWND::default();
+        self.body = HWND::default();
+        self.body_rail = HWND::default();
+        self.new = HWND::default();
+        self.sort = HWND::default();
+        self.sync = HWND::default();
+        self.copy = HWND::default();
+        self.delete = HWND::default();
+        self.protect = HWND::default();
+    }
+
+    fn lock_protected(&mut self, window: HWND, mask_even_if_unsaved: bool) -> bool {
+        if self.locked {
+            self.cancel_unlock();
+            return true;
+        }
+        if self.protected_worker.is_none() {
+            if self.protected_session_seen && self.save_blocked {
+                if mask_even_if_unsaved {
+                    self.unsaved_recovery = Some(self.document.clone());
+                    self.mask_protected_contents(
+                        window,
+                        "保存を確認できません。未保存のメモを保持しています",
+                    );
+                    return true;
+                }
+                return false;
+            }
+            return true;
+        }
+        // Capture the final edit before controls are destroyed and before the
+        // actor stops accepting complete snapshots.
+        // SAFETY: window is the live Pad HWND and owns this edit timer.
+        unsafe {
+            let _ = KillTimer(Some(window), PAD_EDIT_TIMER);
+        }
+        if self.capture_controls() {
+            self.publish(window);
+        }
+        let mut actor = self
+            .protected_worker
+            .take()
+            .expect("checked protected actor");
+        actor.begin_lock();
+        let outcome = actor.finish_lock(SHUTDOWN_FLUSH_BUDGET);
+        let unsaved = !matches!(outcome.status, ProtectedLockStatus::Saved)
+            || self.save_blocked
+            || self.document.generation > outcome.confirmed_generation;
+        if unsaved {
+            let actor_draft = outcome.latest_unsaved.as_ref().map(|doc| doc.as_ref());
+            self.unsaved_recovery = Some(match actor_draft {
+                Some(doc) if doc.generation > self.document.generation => doc.clone(),
+                _ => self.document.clone(),
+            });
+            if !self.recovery_conflict {
+                self.recovery_base = Some((*outcome.confirmed_document).clone());
+            }
+        } else {
+            self.unsaved_recovery = None;
+            self.recovery_base = None;
+            self.recovery_conflict = false;
+        }
+        if unsaved && !mask_even_if_unsaved {
+            self.save_blocked = true;
+            self.set_status(match outcome.status {
+                ProtectedLockStatus::Unsaved(_) => {
+                    "保存に失敗しました。メモをコピーして保管してください".to_owned()
+                }
+                _ => "保存を確認できません。メモをコピーして保管してください".to_owned(),
+            });
+            self.update_status();
+            return false;
+        }
+        let reading = if unsaved {
+            "保存を確認できません。未保存のメモを保持しています"
+        } else {
+            "保存してロックしました"
+        };
+        self.mask_protected_contents(window, reading);
+        true
+    }
+
+    fn mask_protected_contents(&mut self, window: HWND, reading: &str) {
+        // Never let an unlocked child or its UI Automation text survive the
+        // transition back to the locked surface.
+        pad_caption::cloak(window, true);
+        self.destroy_normal_controls();
+        self.document = PadDocument::default();
+        self.rows.clear();
+        self.query.clear();
+        self.locked = true;
+        self.save_blocked = true;
+        let _ = create_controls(self, window);
+        set_control_text(self.lock_status, reading);
+        update_layout(self, window);
+        // SAFETY: window remains live during masking; its timers and child
+        // paint requests use no caller-owned buffers or pointers.
+        unsafe {
+            let _ = KillTimer(Some(window), PAD_COMPLETION_TIMER);
+            let _ = KillTimer(Some(window), PAD_NOTICE_TIMER);
+            let _ = RedrawWindow(
+                Some(window),
+                None,
+                None,
+                RDW_INVALIDATE | RDW_ERASE | RDW_ALLCHILDREN | RDW_UPDATENOW,
+            );
+        }
+        pad_caption::cloak(window, false);
+    }
+
     fn now(&self) -> Option<CalendarTime> {
         pad_list::local_time(now_ms())
     }
@@ -2320,6 +3595,11 @@ impl PadState {
             replaced.destroy();
         }
         let assignments = [
+            (self.lock_headline, self.fonts.heading),
+            (self.lock_password_label, self.fonts.small),
+            (self.lock_password, self.fonts.body),
+            (self.lock_unlock, self.fonts.body),
+            (self.lock_status, self.fonts.small),
             (self.menu, self.fonts.body),
             (self.header_title, self.fonts.heading),
             (self.status, self.fonts.small),
@@ -2333,6 +3613,7 @@ impl PadState {
             (self.sync, self.fonts.body),
             (self.copy, self.fonts.body),
             (self.delete, self.fonts.body),
+            (self.protect, self.fonts.small),
         ];
         // SAFETY: every handle is a live child and every font is owned here
         // until the next DPI change replaces the whole set.
@@ -2348,12 +3629,29 @@ impl PadState {
                     Some(LPARAM(1)),
                 );
             }
-            let _ = SendMessageW(
-                self.list,
-                LB_SETITEMHEIGHT,
-                Some(WPARAM(0)),
-                Some(LPARAM(scaled(pad_list::ROW_HEIGHT_96, dpi) as isize)),
-            );
+            for (index, child) in self.enroll_controls.iter().enumerate() {
+                if !child.is_invalid() {
+                    let font = if index == 0 {
+                        self.fonts.heading
+                    } else {
+                        self.fonts.body
+                    };
+                    let _ = SendMessageW(
+                        *child,
+                        WM_SETFONT,
+                        Some(WPARAM(font.0 as usize)),
+                        Some(LPARAM(1)),
+                    );
+                }
+            }
+            if !self.list.is_invalid() {
+                let _ = SendMessageW(
+                    self.list,
+                    LB_SETITEMHEIGHT,
+                    Some(WPARAM(0)),
+                    Some(LPARAM(scaled(pad_list::ROW_HEIGHT_96, dpi) as isize)),
+                );
+            }
         }
         // The ruled squares are a physical size too.
         self.refresh_brushes();
@@ -2521,7 +3819,7 @@ impl PadState {
     /// order is allowed to move: reordering the list on every keystroke would
     /// pull the row the user is reading out from under them.
     fn capture_controls(&mut self) -> bool {
-        if self.updating_controls || self.title.is_invalid() {
+        if self.locked || self.updating_controls || self.title.is_invalid() {
             return false;
         }
         let title = get_control_text(self.title, MAX_TITLE_UTF16_UNITS);
@@ -2552,6 +3850,9 @@ impl PadState {
 
     /// Hands the whole document to the storage worker under a new generation.
     fn publish(&mut self, window: HWND) {
+        if self.locked {
+            return;
+        }
         if self.save_blocked {
             self.set_status("既存データを保護するため保存を停止しています".to_owned());
             self.update_status();
@@ -2560,14 +3861,48 @@ impl PadState {
         self.generation = self.generation.wrapping_add(1);
         self.document.generation = self.generation;
         self.latest_submitted = self.generation;
-        if self.worker.submit(self.document.clone()) {
+        let protected_submission = self
+            .protected_worker
+            .as_ref()
+            .map(|worker| worker.submit(self.document.clone()));
+        let mut rejected_status = None;
+        let submitted = if let Some(result) = protected_submission {
+            match result {
+                Ok(()) => true,
+                Err(rejected) => {
+                    self.unsaved_recovery = Some(rejected.document);
+                    rejected_status = Some(match rejected.reason {
+                        SubmitRejectReason::Stale => {
+                            "保存順序が古くなりました。未保存のメモを保持しています"
+                        }
+                        SubmitRejectReason::Closing => {
+                            "ロック処理中です。未保存のメモを保持しています"
+                        }
+                        SubmitRejectReason::Failed => {
+                            "保存に失敗しました。未保存のメモを保持しています"
+                        }
+                    });
+                    false
+                }
+            }
+        } else {
+            self.worker
+                .as_mut()
+                .is_some_and(|worker| worker.submit(self.document.clone()))
+        };
+        if submitted {
             self.set_status("保存中…".to_owned());
             // SAFETY: the window is live for the lifetime of this state.
             unsafe {
                 let _ = SetTimer(Some(window), PAD_COMPLETION_TIMER, 100, None);
             }
         } else {
-            self.set_status("保存要求を送信できませんでした".to_owned());
+            self.save_blocked = true;
+            self.set_status(
+                rejected_status
+                    .unwrap_or("保存できません。未保存のメモを保持しています")
+                    .to_owned(),
+            );
         }
         self.update_status();
     }
@@ -2575,8 +3910,37 @@ impl PadState {
     /// Returns true once the latest submitted generation has a terminal
     /// completion and the polling timer can stop.
     fn poll_storage(&mut self) -> bool {
+        if self.locked {
+            return true;
+        }
         let mut terminal = false;
-        while let Some(completion) = self.worker.try_completion() {
+        if self.protected_worker.is_some() {
+            let completion = self
+                .protected_worker
+                .as_ref()
+                .and_then(ProtectedSaveActor::try_completion);
+            if let Some(completion) = completion {
+                match completion.status {
+                    ProtectedSaveStatus::Written(_)
+                        if completion.generation == self.latest_submitted =>
+                    {
+                        self.set_status(String::new());
+                        terminal = true;
+                    }
+                    ProtectedSaveStatus::Written(_) => {}
+                    ProtectedSaveStatus::Failed(_) => {
+                        self.save_blocked = true;
+                        self.set_status(
+                            "保護された保存に失敗しました。未保存のメモを保持しています".to_owned(),
+                        );
+                        terminal = true;
+                    }
+                }
+            }
+            self.update_status();
+            return terminal;
+        }
+        while let Some(completion) = self.worker.as_ref().and_then(StorageWorker::try_completion) {
             if completion.generation != self.latest_submitted {
                 continue;
             }
@@ -2803,6 +4167,9 @@ impl PadState {
     }
 
     fn cycle_sort(&mut self, window: HWND) {
+        if self.locked {
+            return;
+        }
         let changed = self.capture_controls();
         self.document.sort = self.document.sort.next();
         self.refresh_list();
@@ -2820,6 +4187,9 @@ impl PadState {
     }
 
     fn search_changed(&mut self) {
+        if self.locked {
+            return;
+        }
         if self.updating_controls {
             return;
         }
@@ -2829,6 +4199,9 @@ impl PadState {
     }
 
     fn copy_memo(&mut self, window: HWND) {
+        if self.locked {
+            return;
+        }
         if self.capture_controls() {
             self.sync_rows();
             self.publish(window);
@@ -2928,7 +4301,18 @@ extern "system" fn pad_procedure(window: HWND, message: u32, w: WPARAM, l: LPARA
             if item.CtlType == ODT_BUTTON {
                 let id = item.CtlID as u16;
                 let wide = is_wide(window);
-                if let Some(face) = button_face(id, wide) {
+                if id == PROTECT_ID {
+                    let previous = select_font(item.hDC, state.fonts.small);
+                    draw_protect_button(item, colors, dpi);
+                    if let Some(previous) = previous {
+                        // SAFETY: previous was selected out of this same
+                        // DRAWITEMSTRUCT HDC just above; restore it before
+                        // returning the drawing context to USER32.
+                        unsafe {
+                            let _ = windows::Win32::Graphics::Gdi::SelectObject(item.hDC, previous);
+                        }
+                    }
+                } else if let Some(face) = button_face(id, wide) {
                     // Every control in the window stands on the window's own
                     // chrome, including the two in the editor's head row.
                     let ground = colors.surface;
@@ -2959,6 +4343,26 @@ extern "system" fn pad_procedure(window: HWND, message: u32, w: WPARAM, l: LPARA
         WM_COMMAND if !state_ptr.is_null() => {
             // SAFETY: as above.
             let state = unsafe { &mut *state_ptr };
+            if state.enroll_phase != EnrollPhase::None {
+                let id = (w.0 & 0xffff) as u16;
+                let code = ((w.0 >> 16) & 0xffff) as u16;
+                if code == BN_CLICKED as u16 && state.enroll_phase == EnrollPhase::Prompt {
+                    match id {
+                        ENROLL_SUBMIT_ID => state.start_enrollment(window),
+                        ENROLL_CANCEL_ID => state.cancel_enroll_prompt(window),
+                        _ => {}
+                    }
+                }
+                return LRESULT(0);
+            }
+            if state.locked {
+                let id = (w.0 & 0xffff) as u16;
+                let code = ((w.0 >> 16) & 0xffff) as u16;
+                if id == LOCK_UNLOCK_ID && code == BN_CLICKED as u16 {
+                    state.start_unlock();
+                }
+                return LRESULT(0);
+            }
             let id = (w.0 & 0xffff) as u16;
             let code = ((w.0 >> 16) & 0xffff) as u16;
             match (id, code) {
@@ -2994,8 +4398,25 @@ extern "system" fn pad_procedure(window: HWND, message: u32, w: WPARAM, l: LPARA
                     state.notify("GitHub 未設定".to_owned());
                     state.update_status();
                 }
+                (PROTECT_ID, value) if value == BN_CLICKED as u16 => {
+                    state.show_enroll_prompt(window)
+                }
                 _ => {}
             }
+            LRESULT(0)
+        }
+        WM_PAD_UNLOCK_FINISHED if !state_ptr.is_null() => {
+            // SAFETY: completion was posted to this live Pad HWND; the epoch
+            // check inside rejects a result from an earlier visible session.
+            let state = unsafe { &mut *state_ptr };
+            state.finish_unlock(window);
+            LRESULT(0)
+        }
+        WM_PAD_ENROLL_FINISHED if !state_ptr.is_null() => {
+            // SAFETY: state_ptr was stored on this live Pad HWND and the
+            // procedure is executing on its single UI thread.
+            let state = unsafe { &mut *state_ptr };
+            state.finish_enrollment(window);
             LRESULT(0)
         }
         WM_TIMER if !state_ptr.is_null() && w.0 == PAD_EDIT_TIMER => {
@@ -3005,6 +4426,9 @@ extern "system" fn pad_procedure(window: HWND, message: u32, w: WPARAM, l: LPARA
             }
             // SAFETY: as above.
             let state = unsafe { &mut *state_ptr };
+            if state.locked {
+                return LRESULT(0);
+            }
             if state.capture_controls() {
                 state.sync_rows();
                 state.publish(window);
@@ -3020,6 +4444,9 @@ extern "system" fn pad_procedure(window: HWND, message: u32, w: WPARAM, l: LPARA
             }
             // SAFETY: as above.
             let state = unsafe { &mut *state_ptr };
+            if state.locked {
+                return LRESULT(0);
+            }
             // A state that arrived while the notice stood is the newer fact
             // and keeps the row; only the notice itself expires.
             if state.status_notice {
@@ -3028,9 +4455,30 @@ extern "system" fn pad_procedure(window: HWND, message: u32, w: WPARAM, l: LPARA
             }
             LRESULT(0)
         }
+        WM_TIMER if !state_ptr.is_null() && w.0 == PAD_UNLOCK_RETRY_TIMER => {
+            // SAFETY: state_ptr is the non-null Pad state stored on this live
+            // HWND; its message procedure runs on the owning UI thread.
+            let state = unsafe { &mut *state_ptr };
+            if state.locked {
+                state.update_unlock_retry();
+            } else {
+                // SAFETY: window is the live Pad HWND and owns this timer.
+                unsafe {
+                    let _ = KillTimer(Some(window), PAD_UNLOCK_RETRY_TIMER);
+                }
+            }
+            LRESULT(0)
+        }
         WM_TIMER if !state_ptr.is_null() && w.0 == PAD_COMPLETION_TIMER => {
             // SAFETY: as above.
             let state = unsafe { &mut *state_ptr };
+            if state.locked {
+                // SAFETY: window is the live Pad HWND and owns this timer.
+                unsafe {
+                    let _ = KillTimer(Some(window), PAD_COMPLETION_TIMER);
+                }
+                return LRESULT(0);
+            }
             if state.poll_storage() {
                 // SAFETY: the timer belongs to this window.
                 unsafe {
@@ -3040,7 +4488,58 @@ extern "system" fn pad_procedure(window: HWND, message: u32, w: WPARAM, l: LPARA
             LRESULT(0)
         }
         WM_CLOSE => {
-            // SAFETY: the window is live.
+            let mut may_hide = true;
+            if !state_ptr.is_null() {
+                // SAFETY: the state and controls belong to the live Pad.
+                let state = unsafe { &mut *state_ptr };
+                if state.enroll_phase == EnrollPhase::Running {
+                    set_control_text(state.enroll_controls[7], "切替結果を確認中です");
+                    may_hide = false;
+                } else if state.enroll_phase == EnrollPhase::Prompt {
+                    state.cancel_enroll_prompt(window);
+                } else if state.locked {
+                    state.cancel_unlock();
+                } else {
+                    may_hide = state.lock_protected(window, false);
+                }
+            }
+            if may_hide {
+                // SAFETY: the window is live.
+                unsafe {
+                    let _ = ShowWindow(window, SW_HIDE);
+                }
+            }
+            LRESULT(isize::from(may_hide))
+        }
+        WM_PAD_MASK_FOR_SESSION if !state_ptr.is_null() => {
+            // SAFETY: the Pad owns this state on the UI thread.
+            let state = unsafe { &mut *state_ptr };
+            if state.enroll_phase == EnrollPhase::Prompt {
+                state.cancel_enroll_prompt(window);
+            } else if state.enroll_phase == EnrollPhase::None {
+                let _ = state.lock_protected(window, true);
+            }
+            // SAFETY: session lock must mask the Pad even if the last save
+            // outcome is uncertain; the in-process draft remains retained.
+            unsafe {
+                let _ = ShowWindow(window, SW_HIDE);
+            }
+            LRESULT(1)
+        }
+        WM_WTSSESSION_CHANGE if !state_ptr.is_null() && w.0 == WTS_SESSION_LOCK as usize => {
+            // WTS sends this only to registered HWNDs in this session. Keep
+            // the draft in memory if persistence is uncertain, but revoke
+            // the active key session and remove all memo child HWNDs.
+            // SAFETY: state_ptr is the non-null state owned by this Pad HWND;
+            // WTS delivery runs on the same UI thread as other Pad messages.
+            let state = unsafe { &mut *state_ptr };
+            if state.enroll_phase == EnrollPhase::Prompt {
+                state.cancel_enroll_prompt(window);
+            } else if state.enroll_phase == EnrollPhase::None {
+                let _ = state.lock_protected(window, true);
+            }
+            // SAFETY: window is the registered live Pad HWND; hiding it
+            // follows removal of memo child controls above.
             unsafe {
                 let _ = ShowWindow(window, SW_HIDE);
             }
@@ -3166,3 +4665,14 @@ fn selected_row(list: HWND) -> Option<usize> {
 #[cfg(test)]
 #[path = "pad_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod unlock_retry_tests {
+    use super::unlock_retry_delay;
+
+    #[test]
+    fn wrong_password_delay_grows_and_caps_at_thirty_seconds() {
+        let seconds: Vec<u64> = (1..=8).map(|n| unlock_retry_delay(n).as_secs()).collect();
+        assert_eq!(seconds, [1, 2, 4, 8, 16, 30, 30, 30]);
+    }
+}

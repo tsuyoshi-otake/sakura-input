@@ -13,12 +13,15 @@
 //! the user's own memos are never touched.
 
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command};
+use std::process::{Child, Command, Stdio};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, sleep, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sakura_ipc::{security::Descriptor, Client, PipeInstance};
+use sakura_pad_session_proto::{
+    self as session, Operation, Request as SessionRequest, SecretBytes, Status as SessionStatus,
+};
 use sakura_proto::{
     decode_request, encode_response, AppearanceTheme, PadShortcut, Request, Response, UiState,
     PROTOCOL_VERSION,
@@ -32,15 +35,16 @@ use windows::Win32::Graphics::Gdi::{
     SRCCOPY,
 };
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
+use windows::Win32::UI::Input::KeyboardAndMouse::IsWindowEnabled;
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowExW, GetClientRect, GetDlgItem, GetSystemMetrics, GetWindow, GetWindowLongPtrW,
-    GetWindowRect, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, SendMessageW,
-    SetForegroundWindow, SetWindowPos, BN_CLICKED, EN_CHANGE, GWL_EXSTYLE, GW_OWNER,
-    HWND_NOTOPMOST, ICON_BIG, ICON_SMALL, LBN_SELCHANGE, LB_GETCOUNT, LB_GETCURSEL, LB_GETTEXT,
-    LB_GETTEXTLEN, LB_GETTOPINDEX, LB_SETCURSEL, LB_SETTOPINDEX, SM_CXVSCROLL, SWP_NOACTIVATE,
-    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WM_APP, WM_CLOSE, WM_COMMAND, WM_GETFONT, WM_GETICON,
-    WM_GETTEXT, WM_GETTEXTLENGTH, WM_SETTEXT, WS_EX_APPWINDOW, WS_EX_DLGMODALFRAME,
-    WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
+    GetWindowRect, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, RegisterWindowMessageW,
+    SendMessageW, SetForegroundWindow, SetWindowPos, BN_CLICKED, EN_CHANGE, GWL_EXSTYLE, GWL_STYLE,
+    GW_OWNER, HWND_NOTOPMOST, ICON_BIG, ICON_SMALL, LBN_SELCHANGE, LB_GETCOUNT, LB_GETCURSEL,
+    LB_GETTEXT, LB_GETTEXTLEN, LB_GETTOPINDEX, LB_SETCURSEL, LB_SETTOPINDEX, SM_CXVSCROLL,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WM_APP, WM_CLOSE, WM_COMMAND, WM_GETFONT,
+    WM_GETICON, WM_GETTEXT, WM_GETTEXTLENGTH, WM_SETTEXT, WM_WTSSESSION_CHANGE, WS_EX_APPWINDOW,
+    WS_EX_DLGMODALFRAME, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WTS_SESSION_LOCK,
 };
 
 const PATIENT: Duration = Duration::from_secs(5);
@@ -51,6 +55,39 @@ const PAD_CLASS: PCWSTR = windows::core::w!("SakuraInputPad");
 /// Ctrl double tap, which a test cannot deliver without typing into whatever
 /// the user has in front.
 const WM_PAD_TRIGGER: u32 = WM_APP + 6;
+
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn settings_registered_message_opens_pad_in_isolated_renderer() {
+    let app_data = IsolatedAppData::new("pad-settings-activation");
+    let mut engine = FixtureEngine::new(initial_state());
+    let child = Command::new(PathBuf::from(env!("CARGO_BIN_EXE_sakura_renderer")))
+        .arg("--test-pipe")
+        .arg(engine.pipe_name())
+        .env("LOCALAPPDATA", app_data.path())
+        .spawn()
+        .expect("spawn test-owned renderer");
+    let mut renderer = OwnedChild::new(child, "renderer");
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    // SAFETY: the static registered-message name is shared with Settings;
+    // the only recipient is this test-owned renderer host HWND.
+    unsafe {
+        let message = RegisterWindowMessageW(windows::core::w!("SakuraInput.OpenPad.v1"));
+        assert_ne!(message, 0);
+        PostMessageW(Some(host), message, WPARAM(0), LPARAM(0))
+            .expect("queue Settings Pad activation");
+    }
+    let pad = wait_for_renderer_window(renderer.pid(), PAD_CLASS, true);
+    // SAFETY: the discovered Pad HWND remains owned by the live renderer.
+    assert_ne!(
+        // SAFETY: pad is a live window owned by this test renderer; the call
+        // reads only its extended style bits.
+        unsafe { GetWindowLongPtrW(pad, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST.0,
+        0
+    );
+    engine.stop();
+    renderer.wait_for_exit();
+}
 
 /// Control identifiers, mirrored from `pad.rs`.
 ///
@@ -72,8 +109,327 @@ const SHARE_ID: i32 = 113;
 const DELETE_ID: i32 = 114;
 const LIST_RAIL_ID: i32 = 115;
 const BODY_RAIL_ID: i32 = 116;
+const LOCK_HEADLINE_ID: i32 = 117;
+const LOCK_PASSWORD_ID: i32 = 118;
+const LOCK_UNLOCK_ID: i32 = 119;
+const LOCK_STATUS_ID: i32 = 120;
+const LOCK_PASSWORD_LABEL_ID: i32 = 121;
+const PROTECT_ID: i32 = 122;
+const ENROLL_PASSWORD_ID: i32 = 125;
+const ENROLL_CONFIRM_PASSWORD_ID: i32 = 127;
+const ENROLL_CANCEL_ID: i32 = 129;
+const ENROLL_STATUS_ID: i32 = 130;
 
-const ALL_CONTROLS: [(&str, i32); 15] = [
+// The renderer is a binary crate. Include its storage contract to construct
+// an actual migrated fixture, rather than forging a marker that merely looks
+// like one to the legacy loader.
+#[allow(dead_code)] // The fixture uses only the storage APIs needed for migration.
+#[path = "../src/pad_storage.rs"]
+mod pad_storage;
+
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn migrated_protected_pad_starts_and_reopens_without_legacy_text() {
+    const SECRET_TITLE: &str = "protected title sentinel 7f4c";
+    const SECRET_BODY: &str = "protected body sentinel 93ab";
+    let app_data = IsolatedAppData::new("pad-protected-ui");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut document = pad_storage::PadDocument {
+        generation: 1,
+        ..Default::default()
+    };
+    document
+        .memos
+        .push(pad_storage::PadMemo::new(1, SECRET_TITLE, SECRET_BODY, 1));
+    store.write(&document).expect("seed legacy memo");
+    let vault_id = [0x42; 16];
+    let protected_bytes = b"synthetic authenticated v3 fixture";
+    store
+        .migrate_to_protected(
+            &document,
+            document.generation,
+            vault_id,
+            protected_bytes,
+            |path| {
+                assert_eq!(
+                    std::fs::read(path).expect("read protected copy"),
+                    protected_bytes
+                );
+                Ok((vault_id, document.clone()))
+            },
+        )
+        .expect("migrate synthetic protected vault");
+    assert!(matches!(
+        store.load(),
+        Err(pad_storage::StorageError::ProtectedCutover)
+    ));
+
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    for pass in 0..2 {
+        let headline = control(pad, LOCK_HEADLINE_ID);
+        let password = control(pad, LOCK_PASSWORD_ID);
+        let unlock = control(pad, LOCK_UNLOCK_ID);
+        let status = control(pad, LOCK_STATUS_ID);
+        let label = control(pad, LOCK_PASSWORD_LABEL_ID);
+        assert_eq!(text_of(headline), "Sakura Pad はロックされています");
+        assert_eq!(text_of(status), "パスワードを入力して解除してください");
+        assert_eq!(text_of(label), "パスワード");
+        assert_eq!(text_of(unlock), "解除");
+        assert!(
+            // SAFETY: unlock is a live child of the test-owned Pad HWND.
+            unsafe { IsWindowEnabled(unlock) }.as_bool()
+        );
+        assert_ne!(
+            // SAFETY: password is a live Pad child and this reads style bits.
+            unsafe { GetWindowLongPtrW(password, GWL_STYLE) } as u32 & 0x20,
+            0,
+            "password edit must retain ES_PASSWORD"
+        );
+        for (_, id) in ALL_CONTROLS {
+            assert!(
+                // SAFETY: pad remains live; GetDlgItem only probes an ID.
+                unsafe { GetDlgItem(Some(pad), id) }.is_err(),
+                "legacy control {id} exists on locked pass {pass}"
+            );
+        }
+        // Native child window text is the accessible label exposed by these
+        // standard controls. Inspect every child, including unseen ones.
+        let mut previous = None;
+        loop {
+            // SAFETY: pad is live and previous is either None or a child
+            // returned by this same enumeration in the prior iteration.
+            let child =
+                unsafe { FindWindowExW(Some(pad), previous, PCWSTR::null(), PCWSTR::null()) };
+            let Ok(child) = child else {
+                break;
+            };
+            let label = text_of(child);
+            assert!(
+                !label.contains(SECRET_TITLE) && !label.contains(SECRET_BODY),
+                "protected memo leaked through child text: {label}"
+            );
+            previous = Some(child);
+        }
+        assert_eq!(
+            // SAFETY: pad remains live; this only reads its extended style.
+            unsafe { GetWindowLongPtrW(pad, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST.0,
+            WS_EX_TOPMOST.0
+        );
+        if pass == 0 {
+            // SAFETY: pad and host are live HWNDs owned by this fixture;
+            // these messages have no caller-owned pointer parameters.
+            unsafe {
+                SendMessageW(pad, WM_CLOSE, None, None);
+                assert!(!IsWindowVisible(pad).as_bool());
+                PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+                    .expect("reopen locked pad");
+            }
+            assert_eq!(
+                wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+                pad
+            );
+        }
+    }
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires SAKURA_PAD_SESSION_TEST_EXE and an interactive Windows desktop"]
+fn session_lock_removes_unlocked_protected_memo_hwnds() {
+    const PASSWORD: &str = "Pad fixture password 7f93";
+    const SECRET_TITLE: &str = "protected title after unlock 2c7b";
+    const SECRET_BODY: &str = "protected body after unlock 6a19";
+    let image = PathBuf::from(
+        std::env::var_os("SAKURA_PAD_SESSION_TEST_EXE")
+            .expect("SAKURA_PAD_SESSION_TEST_EXE is required for real protected HWND test"),
+    );
+    assert!(
+        image.is_absolute() && image.is_file(),
+        "Pad session image must be an absolute existing file"
+    );
+    let app_data = IsolatedAppData::new("pad-protected-session-lock");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut document = pad_storage::PadDocument {
+        generation: 1,
+        ..Default::default()
+    };
+    document
+        .memos
+        .push(pad_storage::PadMemo::new(1, SECRET_TITLE, SECRET_BODY, 1));
+    store.write(&document).expect("seed legacy Pad document");
+    let vault_id = [0x5b; 16];
+    let envelope = create_test_envelope(&image, vault_id, PASSWORD, &document);
+    store
+        .migrate_to_protected(
+            &document,
+            document.generation,
+            vault_id,
+            &envelope,
+            |path| {
+                assert_eq!(std::fs::read(path).expect("read staged envelope"), envelope);
+                Ok((vault_id, document.clone()))
+            },
+        )
+        .expect("migrate authenticated fixture");
+
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    set_text(pad, LOCK_PASSWORD_ID, PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        // SAFETY: pad is a live fixture HWND; this checks whether the native
+        // editor child was created after authentication.
+        if let Ok(title) = unsafe { GetDlgItem(Some(pad), TITLE_ID) } {
+            if text_of(title) == SECRET_TITLE {
+                break;
+            }
+        }
+        assert!(Instant::now() < deadline, "protected Pad did not unlock");
+        sleep(Duration::from_millis(20));
+    }
+    assert_eq!(text_of(control(pad, BODY_ID)), SECRET_BODY);
+    // SAFETY: pad is a live, registered session-notification HWND. This
+    // synthetic message carries an integer event code and no pointer data.
+    unsafe {
+        SendMessageW(
+            pad,
+            WM_WTSSESSION_CHANGE,
+            Some(WPARAM(WTS_SESSION_LOCK as usize)),
+            None,
+        );
+    }
+    assert!(
+        // SAFETY: pad remains a live HWND after ShowWindow(SW_HIDE).
+        !unsafe { IsWindowVisible(pad) }.as_bool()
+    );
+    for id in [TITLE_ID, BODY_ID, LIST_ID, SEARCH_ID] {
+        assert!(
+            // SAFETY: pad is live; GetDlgItem only queries a child ID.
+            unsafe { GetDlgItem(Some(pad), id) }.is_err(),
+            "memo child {id} survived simulated session lock"
+        );
+    }
+    assert_eq!(
+        text_of(control(pad, LOCK_HEADLINE_ID)),
+        "Sakura Pad はロックされています"
+    );
+    // SAFETY: host is the live renderer host HWND and this trigger message
+    // has no pointer payload.
+    unsafe {
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0)).expect("reopen locked Pad");
+    }
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    assert_ne!(
+        // SAFETY: pad remains live on reopen; this only reads style bits.
+        unsafe { GetWindowLongPtrW(pad, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST.0,
+        0
+    );
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn enrollment_prompt_can_cancel_without_cutover() {
+    let app_data = IsolatedAppData::new("pad-enroll-cancel");
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    set_text(pad, TITLE_ID, "enrollment cancellation sentinel");
+    click(pad, PROTECT_ID);
+    let first = wait_for_control(pad, ENROLL_PASSWORD_ID);
+    let again = wait_for_control(pad, ENROLL_CONFIRM_PASSWORD_ID);
+    for child in [first, again] {
+        assert_ne!(
+            // SAFETY: child is a live enrollment edit from this Pad HWND;
+            // this only reads its style flags.
+            unsafe { GetWindowLongPtrW(child, GWL_STYLE) } as u32 & 0x20,
+            0,
+            "enrollment password must be masked"
+        );
+    }
+    assert_eq!(
+        text_of(control(pad, ENROLL_STATUS_ID)),
+        "パスワードを失うと復元できません"
+    );
+    set_text(pad, ENROLL_PASSWORD_ID, "discard this secret");
+    set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, "discard this secret");
+    click(pad, ENROLL_CANCEL_ID);
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    assert_eq!(
+        text_of(control(pad, TITLE_ID)),
+        "enrollment cancellation sentinel"
+    );
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    assert!(!matches!(
+        store.load(),
+        Err(pad_storage::StorageError::ProtectedCutover)
+    ));
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+fn create_test_envelope(
+    image: &Path,
+    vault_id: [u8; 16],
+    password: &str,
+    document: &pad_storage::PadDocument,
+) -> Vec<u8> {
+    use std::io::Write;
+    let child = Command::new(image)
+        .env_clear()
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("start isolated Pad session fixture");
+    let mut owned = OwnedChild::new(child, "Pad session fixture");
+    let mut stdin = owned.child.stdin.take().expect("session stdin");
+    let stdout = owned.child.stdout.take().expect("session stdout");
+    let request = SessionRequest {
+        id: 1,
+        generation: 1,
+        operation: Operation::Create,
+        vault_id,
+        memo_id: 0,
+        password: SecretBytes::new(password.as_bytes().to_vec()),
+        payload: SecretBytes::new(document.encode().expect("encode protected document")),
+    };
+    session::write_request(&mut stdin, &request).expect("send Create request");
+    stdin.flush().expect("flush Create request");
+    drop(stdin);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let reader = thread::spawn(move || {
+        let _ = sender.send(session::read_response(stdout));
+    });
+    let response = match receiver.recv_timeout(Duration::from_secs(10)) {
+        Ok(result) => result.expect("read Create response"),
+        Err(_) => {
+            let _ = owned.child.kill();
+            let _ = owned.child.wait();
+            let _ = reader.join();
+            panic!("Pad session Create did not return within 10 seconds");
+        }
+    };
+    reader.join().expect("join session response reader");
+    assert_eq!(
+        response.status,
+        SessionStatus::Success,
+        "Create must seal fixture"
+    );
+    let envelope = response.payload.to_vec();
+    owned.wait_for_exit();
+    envelope
+}
+
+const ALL_CONTROLS: [(&str, i32); 16] = [
     ("menu", MENU_ID),
     ("count", COUNT_ID),
     ("search", SEARCH_ID),
@@ -87,6 +443,7 @@ const ALL_CONTROLS: [(&str, i32); 15] = [
     ("sync", SYNC_ID),
     ("share", SHARE_ID),
     ("delete", DELETE_ID),
+    ("protect", PROTECT_ID),
     ("list-rail", LIST_RAIL_ID),
     ("body-rail", BODY_RAIL_ID),
 ];
@@ -1020,7 +1377,14 @@ fn set_text(pad: HWND, id: i32, value: &str) {
         )
     };
     assert_eq!(set.0, 1, "the control accepted the text");
-    assert_eq!(text_of(child), value, "the control kept the text");
+    // USER32 masks ES_PASSWORD edit contents from callers in another process,
+    // including this renderer fixture. The authenticated unlock outcome below
+    // proves the password reached the Pad without reading it back here.
+    // SAFETY: child is the live edit control found just above; GWL_STYLE is a
+    // read-only query with no caller-owned pointer data.
+    if unsafe { GetWindowLongPtrW(child, GWL_STYLE) } as u32 & 0x20 == 0 {
+        assert_eq!(text_of(child), value, "the control kept the text");
+    }
 }
 
 /// Reads one of the pad's edit controls.
@@ -1053,6 +1417,32 @@ fn text_of(control: HWND) -> String {
 fn control(pad: HWND, id: i32) -> HWND {
     // SAFETY: `pad` is live and the identifier is a plain integer.
     unsafe { GetDlgItem(Some(pad), id) }.expect("the control exists")
+}
+
+fn wait_for_control(pad: HWND, id: i32) -> HWND {
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        // SAFETY: pad remains live for this bounded wait; GetDlgItem only
+        // probes whether its child with this numeric ID now exists.
+        if let Ok(child) = unsafe { GetDlgItem(Some(pad), id) } {
+            return child;
+        }
+        assert!(Instant::now() < deadline, "control {id} did not appear");
+        sleep(Duration::from_millis(20));
+    }
+}
+
+fn wait_for_control_absent(pad: HWND, id: i32) {
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        // SAFETY: pad remains live for this bounded wait; GetDlgItem only
+        // checks whether the enrollment child has been destroyed.
+        if unsafe { GetDlgItem(Some(pad), id) }.is_err() {
+            return;
+        }
+        assert!(Instant::now() < deadline, "control {id} did not disappear");
+        sleep(Duration::from_millis(20));
+    }
 }
 
 fn list_of(pad: HWND) -> HWND {

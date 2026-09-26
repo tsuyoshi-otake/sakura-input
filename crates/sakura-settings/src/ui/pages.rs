@@ -10,7 +10,7 @@ pub(super) fn create_general_controls(
         parent,
         "基本設定",
         "いつもの入力方法と、使い慣れたキー操作を選びます。",
-        368,
+        320,
     )?;
     let basic_panel = p.window();
     p.section("既定の入力", 100)?;
@@ -32,10 +32,27 @@ pub(super) fn create_general_controls(
     for mode in Mode::ALL {
         add_combo(default_mode, mode_label(mode));
     }
-    let pad_shortcut = p.row_combo("Sakura Pad", 296)?;
+    let mut p = layout.page(
+        parent,
+        "Sakura Pad",
+        "起動キーを設定します。変更は［適用］を押すと保存されます。",
+        380,
+    )?;
+    let pad_panel = p.window();
+    p.section("起動キー", 100)?;
+    let pad_shortcut = p.row_combo("ショートカット", 148)?;
     for value in PadShortcut::ALL {
         add_combo(pad_shortcut, pad_shortcut_label(value));
     }
+    p.helper(
+        "Sakura Padは開くと最前面に表示されます。ショートカットを無効にすると、キーからは起動しません。",
+        204,
+    )?;
+    let pad_open = p.button("Sakura Padを開く", R::new(0, 264, 188, 34))?;
+    p.helper(
+        "Pad 全体のパスワード保護は、Pad 内の［保護］から設定します。",
+        316,
+    )?;
 
     let mut p = layout.page(
         parent,
@@ -100,7 +117,7 @@ pub(super) fn create_general_controls(
         parent,
         "推測変換",
         "入力中に候補を自動表示し、確定方法を選べます。",
-        260,
+        380,
     )?;
     let prediction_panel = p.window();
     let prediction = p.checkbox("予測入力を使う", R::new(0, 108, 552, 34))?;
@@ -276,6 +293,8 @@ pub(super) fn create_general_controls(
 
     Ok(GeneralControls {
         basic_panel,
+        pad_panel,
+        pad_open,
         profile_panel,
         input_assist_panel,
         ai_text_panel,
