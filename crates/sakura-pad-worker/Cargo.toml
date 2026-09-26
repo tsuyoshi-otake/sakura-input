@@ -1,6 +1,6 @@
 [package]
 name = "sakura-pad-worker"
-description = "Experimental isolated encryption boundary for Sakura Pad. Not yet connected to the Pad UI."
+description = "Isolated encryption and unlock session for Sakura Pad and protected memos."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

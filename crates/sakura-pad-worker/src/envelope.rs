@@ -53,6 +53,24 @@ const V2_RECOVERY_PURPOSE: &[u8] = b"Sakura Pad recovery wrap v2";
 const V2_CONTENT_PURPOSE: &[u8] = b"Sakura Pad content v2";
 const RECOVERY_PREFIX: &str = "SPRK1";
 
+// V3 has the same bounded Argon2id profile as v1/v2. The PRF output is an
+// Argon2 secret (AND) or input (PRF-only), never the content-encryption key.
+const V3_MAGIC: &[u8; 8] = b"SKRPENV3";
+const V3_VERSION: u8 = 3;
+const V3_POLICY_PRF: u8 = 1;
+const V3_POLICY_PASSWORD_AND_PRF: u8 = 2;
+const V3_MAX_CREDENTIAL_ID: usize = 1024;
+const V3_FIXED_HEADER: usize = 8 + 1 + 1 + 1 + 16 + 8 + 1 + 2;
+const V3_POLICY_OFFSET: usize = 35;
+const V3_CREDENTIAL_LEN_OFFSET: usize = 36;
+const V3_CREDENTIAL_OFFSET: usize = 38;
+const V3_PRF_PURPOSE: &[u8] = b"Sakura Pad YubiKey PRF wrap v3";
+const V3_AND_PURPOSE: &[u8] = b"Sakura Pad password AND YubiKey PRF wrap v3";
+const V3_RECOVERY_PURPOSE: &[u8] = b"Sakura Pad recovery wrap v3";
+const V3_CONTENT_PURPOSE: &[u8] = b"Sakura Pad content v3";
+type V3Nonces = ([u8; NONCE_LEN], [u8; NONCE_LEN], [u8; NONCE_LEN]);
+type V3Parts<'a> = (&'a [u8], &'a [u8], &'a [u8]);
+
 /// Maximum plaintext accepted by this primitive (8 MiB).
 ///
 /// The caller must enforce tighter domain limits where the format has them.
@@ -786,6 +804,548 @@ fn decrypt_v2_payload(
     ))
 }
 
+/// Create a YubiKey PRF-only envelope with an independent one-time recovery
+/// wrap. `credential_id` is authenticated metadata; `prf` is the result for
+/// the envelope's stored salt and is never persisted by this function.
+pub fn seal_with_prf(
+    scope: Scope,
+    credential_id: &[u8],
+    prf: &[u8; KEY_LEN],
+    plaintext: &[u8],
+) -> Result<(Vec<u8>, RecoveryKey), EnvelopeError> {
+    seal_v3(scope, credential_id, prf, None, plaintext)
+}
+
+/// Create an AND-policy envelope. Both the password and the PRF result are
+/// required to derive its sole ordinary wrap; the recovery wrap is separate.
+pub fn seal_with_password_and_prf(
+    scope: Scope,
+    credential_id: &[u8],
+    password: &[u8],
+    prf: &[u8; KEY_LEN],
+    plaintext: &[u8],
+) -> Result<(Vec<u8>, RecoveryKey), EnvelopeError> {
+    validate_password(password)?;
+    seal_v3(scope, credential_id, prf, Some(password), plaintext)
+}
+
+fn seal_v3(
+    scope: Scope,
+    credential_id: &[u8],
+    prf: &[u8; KEY_LEN],
+    password: Option<&[u8]>,
+    plaintext: &[u8],
+) -> Result<(Vec<u8>, RecoveryKey), EnvelopeError> {
+    validate_scope(scope)?;
+    validate_credential_id(credential_id)?;
+    if plaintext.len() > MAX_PLAINTEXT_BYTES {
+        return Err(EnvelopeError::InvalidInput);
+    }
+    let policy = if password.is_some() {
+        V3_POLICY_PASSWORD_AND_PRF
+    } else {
+        V3_POLICY_PRF
+    };
+    let mut header = v3_header(scope, credential_id, policy, plaintext.len())?;
+    let recovery_key = RecoveryKey::generate()?;
+    let key = derive_v3_key(prf, password, &header)?;
+    let data_key = random_key()?;
+    let (wrap_nonce, recovery_nonce, payload_nonce) = v3_nonces(&mut header)?;
+    let wrap = wrap_v3(&key, &data_key, &header, &wrap_nonce, v3_purpose(policy))?;
+    let recovery_wrap = wrap_v3(
+        &recovery_key.0,
+        &data_key,
+        &header,
+        &recovery_nonce,
+        V3_RECOVERY_PURPOSE,
+    )?;
+    let payload = encrypt_v3_payload(
+        &header,
+        &wrap,
+        &recovery_wrap,
+        &data_key,
+        &payload_nonce,
+        plaintext,
+    )?;
+    header.extend_from_slice(&wrap);
+    header.extend_from_slice(&recovery_wrap);
+    header.extend_from_slice(&payload);
+    Ok((header, recovery_key))
+}
+
+/// Authenticate and open a PRF-only v3 envelope.
+pub fn unlock_with_prf(
+    scope: Scope,
+    credential_id: &[u8],
+    prf: &[u8; KEY_LEN],
+    envelope: &[u8],
+) -> Result<(Zeroizing<Vec<u8>>, UnlockedHardwareEnvelope), EnvelopeError> {
+    unlock_v3(scope, credential_id, prf, None, envelope)
+}
+
+/// Authenticate and open an AND-policy v3 envelope; either missing factor
+/// makes the wrap key unavailable and no plaintext is returned.
+pub fn unlock_with_password_and_prf(
+    scope: Scope,
+    credential_id: &[u8],
+    password: &[u8],
+    prf: &[u8; KEY_LEN],
+    envelope: &[u8],
+) -> Result<(Zeroizing<Vec<u8>>, UnlockedHardwareEnvelope), EnvelopeError> {
+    validate_password(password)?;
+    unlock_v3(scope, credential_id, prf, Some(password), envelope)
+}
+
+/// Authenticate and open either v3 policy using its separately wrapped
+/// recovery key. This remains an explicit recovery route.
+pub fn unlock_with_recovery_v3(
+    scope: Scope,
+    recovery_key: &RecoveryKey,
+    envelope: &[u8],
+) -> Result<(Zeroizing<Vec<u8>>, UnlockedHardwareEnvelope), EnvelopeError> {
+    unlock_v3_recovery(scope, recovery_key, envelope)
+}
+
+fn unlock_v3_recovery(
+    scope: Scope,
+    recovery_key: &RecoveryKey,
+    envelope: &[u8],
+) -> Result<(Zeroizing<Vec<u8>>, UnlockedHardwareEnvelope), EnvelopeError> {
+    let header_len = validate_v3(scope, None, envelope)?;
+    let header = &envelope[..header_len];
+    let (wrap, recovery_wrap, payload) = v3_parts(envelope, header_len)?;
+    let nonce_offsets = v3_nonce_offsets(header)?;
+    let data_key = unwrap_v3(
+        &recovery_key.0,
+        recovery_wrap,
+        header,
+        &header[nonce_offsets.1..nonce_offsets.1 + NONCE_LEN],
+        V3_RECOVERY_PURPOSE,
+    )?;
+    let plaintext = decrypt_v3_payload(header, wrap, recovery_wrap, payload, &data_key)?;
+    Ok((
+        plaintext,
+        UnlockedHardwareEnvelope::new(header, wrap, recovery_wrap, data_key)?,
+    ))
+}
+
+fn unlock_v3(
+    scope: Scope,
+    credential_id: &[u8],
+    prf: &[u8; KEY_LEN],
+    password: Option<&[u8]>,
+    envelope: &[u8],
+) -> Result<(Zeroizing<Vec<u8>>, UnlockedHardwareEnvelope), EnvelopeError> {
+    let header_len = validate_v3(scope, Some(credential_id), envelope)?;
+    let header = &envelope[..header_len];
+    let policy = header[V3_POLICY_OFFSET];
+    if (policy == V3_POLICY_PASSWORD_AND_PRF) != password.is_some() {
+        return Err(EnvelopeError::InvalidEnvelope);
+    }
+    let key = derive_v3_key(prf, password, header)?;
+    let (wrap, recovery_wrap, payload) = v3_parts(envelope, header_len)?;
+    let nonce_offsets = v3_nonce_offsets(header)?;
+    let data_key = unwrap_v3(
+        &key,
+        wrap,
+        header,
+        &header[nonce_offsets.0..nonce_offsets.0 + NONCE_LEN],
+        v3_purpose(policy),
+    )?;
+    let plaintext = decrypt_v3_payload(header, wrap, recovery_wrap, payload, &data_key)?;
+    Ok((
+        plaintext,
+        UnlockedHardwareEnvelope::new(header, wrap, recovery_wrap, data_key)?,
+    ))
+}
+
+/// Active v3 session. It retains only the DEK, authenticated metadata, and
+/// wraps; it never retains a password or the authenticator PRF output.
+#[allow(missing_debug_implementations)]
+pub struct UnlockedHardwareEnvelope {
+    header: Vec<u8>,
+    wrap: [u8; WRAPPED_KEY_LEN],
+    recovery_wrap: [u8; WRAPPED_KEY_LEN],
+    data_key: Zeroizing<[u8; KEY_LEN]>,
+}
+
+impl UnlockedHardwareEnvelope {
+    fn new(
+        header: &[u8],
+        wrap: &[u8],
+        recovery_wrap: &[u8],
+        data_key: Zeroizing<[u8; KEY_LEN]>,
+    ) -> Result<Self, EnvelopeError> {
+        let mut wrap_bytes = [0; WRAPPED_KEY_LEN];
+        wrap_bytes.copy_from_slice(wrap);
+        let mut recovery_bytes = [0; WRAPPED_KEY_LEN];
+        recovery_bytes.copy_from_slice(recovery_wrap);
+        Ok(Self {
+            header: header.to_vec(),
+            wrap: wrap_bytes,
+            recovery_wrap: recovery_bytes,
+            data_key,
+        })
+    }
+
+    pub fn reseal(&self, plaintext: &[u8]) -> Result<Vec<u8>, EnvelopeError> {
+        if plaintext.len() > MAX_PLAINTEXT_BYTES {
+            return Err(EnvelopeError::InvalidInput);
+        }
+        let mut header = self.header.clone();
+        let offsets = v3_nonce_offsets(&header)?;
+        fill_random(&mut header[offsets.2..offsets.2 + NONCE_LEN])?;
+        let len_offset = offsets.2 + NONCE_LEN;
+        header[len_offset..len_offset + 4].copy_from_slice(&(plaintext.len() as u32).to_le_bytes());
+        let payload = encrypt_v3_payload(
+            &header,
+            &self.wrap,
+            &self.recovery_wrap,
+            &self.data_key,
+            &header[offsets.2..offsets.2 + NONCE_LEN],
+            plaintext,
+        )?;
+        header.extend_from_slice(&self.wrap);
+        header.extend_from_slice(&self.recovery_wrap);
+        header.extend_from_slice(&payload);
+        Ok(header)
+    }
+
+    pub fn open_authenticated(&self, envelope: &[u8]) -> Result<Zeroizing<Vec<u8>>, EnvelopeError> {
+        let scope = scope_from_v3_header(&self.header)?;
+        let header_len = validate_v3(scope, None, envelope)?;
+        let header = &envelope[..header_len];
+        let (wrap, recovery, payload) = v3_parts(envelope, header_len)?;
+        let stable_end = v3_nonce_offsets(header)?.0;
+        if header[..stable_end] != self.header[..stable_end]
+            || wrap != self.wrap
+            || recovery != self.recovery_wrap
+        {
+            return Err(EnvelopeError::AuthenticationFailed);
+        }
+        decrypt_v3_payload(header, wrap, recovery, payload, &self.data_key)
+    }
+}
+
+fn validate_credential_id(id: &[u8]) -> Result<(), EnvelopeError> {
+    if id.is_empty() || id.len() > V3_MAX_CREDENTIAL_ID {
+        Err(EnvelopeError::InvalidInput)
+    } else {
+        Ok(())
+    }
+}
+
+fn v3_header(
+    scope: Scope,
+    credential: &[u8],
+    policy: u8,
+    plaintext_len: usize,
+) -> Result<Vec<u8>, EnvelopeError> {
+    let mut header = Vec::with_capacity(V3_FIXED_HEADER + credential.len() + 16 + 12 + 12 + 4 + 12);
+    header.extend_from_slice(V3_MAGIC);
+    header.extend_from_slice(&[
+        V3_VERSION,
+        CIPHER_AES_256_GCM,
+        if scope.memo_id.is_some() {
+            SCOPE_MEMO
+        } else {
+            SCOPE_VAULT
+        },
+    ]);
+    header.extend_from_slice(&scope.vault_id);
+    header.extend_from_slice(&scope.memo_id.unwrap_or(0).to_le_bytes());
+    header.push(policy);
+    header.extend_from_slice(&(credential.len() as u16).to_le_bytes());
+    header.extend_from_slice(credential);
+    header.extend_from_slice(&[KDF_ARGON2ID]);
+    header.extend_from_slice(&KDF_MEMORY_KIB.to_le_bytes());
+    header.extend_from_slice(&KDF_ITERATIONS.to_le_bytes());
+    header.push(KDF_PARALLELISM as u8);
+    let mut salt = [0; 16];
+    fill_random(&mut salt)?;
+    header.extend_from_slice(&salt);
+    header.resize(header.len() + 12 + 12 + 12, 0);
+    header.extend_from_slice(&(plaintext_len as u32).to_le_bytes());
+    header.resize(header.len() + 12, 0);
+    Ok(header)
+}
+
+fn v3_nonce_offsets(header: &[u8]) -> Result<(usize, usize, usize), EnvelopeError> {
+    let credential_len = read_u16(header, V3_CREDENTIAL_LEN_OFFSET)? as usize;
+    if credential_len == 0 || credential_len > V3_MAX_CREDENTIAL_ID {
+        return Err(EnvelopeError::InvalidEnvelope);
+    }
+    let kdf_salt = V3_CREDENTIAL_OFFSET + credential_len + 1 + 4 + 4 + 1 + 16;
+    Ok((kdf_salt, kdf_salt + 12, kdf_salt + 24))
+}
+
+fn v3_nonces(header: &mut [u8]) -> Result<V3Nonces, EnvelopeError> {
+    let offsets = v3_nonce_offsets(header)?;
+    for offset in [offsets.0, offsets.1, offsets.2] {
+        fill_random(&mut header[offset..offset + 12])?;
+    }
+    Ok((
+        header[offsets.0..offsets.0 + 12].try_into().unwrap(),
+        header[offsets.1..offsets.1 + 12].try_into().unwrap(),
+        header[offsets.2..offsets.2 + 12].try_into().unwrap(),
+    ))
+}
+
+fn validate_v3(
+    scope: Scope,
+    credential: Option<&[u8]>,
+    envelope: &[u8],
+) -> Result<usize, EnvelopeError> {
+    validate_scope(scope)?;
+    if envelope.len() < V3_FIXED_HEADER + 1 + 10 + 16 + 52 + 2 * WRAPPED_KEY_LEN + TAG_LEN
+        || envelope.len()
+            > MAX_PLAINTEXT_BYTES
+                + 2 * WRAPPED_KEY_LEN
+                + V3_FIXED_HEADER
+                + V3_MAX_CREDENTIAL_ID
+                + 94
+    {
+        return Err(EnvelopeError::InvalidEnvelope);
+    }
+    let cred_len = read_u16(envelope, V3_CREDENTIAL_LEN_OFFSET)? as usize;
+    if cred_len == 0 || cred_len > V3_MAX_CREDENTIAL_ID {
+        return Err(EnvelopeError::InvalidEnvelope);
+    }
+    let (kdf, memory, iterations, parallelism, salt_at, header_len) = (
+        V3_CREDENTIAL_OFFSET + cred_len,
+        V3_CREDENTIAL_OFFSET + cred_len + 1,
+        V3_CREDENTIAL_OFFSET + cred_len + 5,
+        V3_CREDENTIAL_OFFSET + cred_len + 9,
+        V3_CREDENTIAL_OFFSET + cred_len + 10,
+        V3_CREDENTIAL_OFFSET + cred_len + 10 + 16 + 36 + 4 + 12,
+    );
+    if envelope.len() < header_len + 2 * WRAPPED_KEY_LEN + TAG_LEN
+        || &envelope[..8] != V3_MAGIC
+        || envelope[8] != V3_VERSION
+        || envelope[9] != CIPHER_AES_256_GCM
+        || ![V3_POLICY_PRF, V3_POLICY_PASSWORD_AND_PRF].contains(&envelope[V3_POLICY_OFFSET])
+        || envelope[kdf] != KDF_ARGON2ID
+        || read_u32(envelope, memory)? != KDF_MEMORY_KIB
+        || read_u32(envelope, iterations)? != KDF_ITERATIONS
+        || envelope[parallelism] != KDF_PARALLELISM as u8
+        || salt_at + 16 > header_len
+    {
+        return Err(EnvelopeError::InvalidEnvelope);
+    }
+    let kind = if scope.memo_id.is_some() {
+        SCOPE_MEMO
+    } else {
+        SCOPE_VAULT
+    };
+    if envelope[10] != kind
+        || envelope[11..27] != scope.vault_id
+        || envelope[27..35] != scope.memo_id.unwrap_or(0).to_le_bytes()
+    {
+        return Err(EnvelopeError::AuthenticationFailed);
+    }
+    if let Some(id) = credential {
+        if id != &envelope[V3_CREDENTIAL_OFFSET..V3_CREDENTIAL_OFFSET + cred_len] {
+            return Err(EnvelopeError::AuthenticationFailed);
+        }
+    }
+    let payload_len_at = header_len - 16;
+    let payload_len = read_u32(envelope, payload_len_at)? as usize;
+    if payload_len > MAX_PLAINTEXT_BYTES
+        || envelope.len() != header_len + 2 * WRAPPED_KEY_LEN + payload_len + TAG_LEN
+    {
+        return Err(EnvelopeError::InvalidEnvelope);
+    }
+    Ok(header_len)
+}
+
+fn derive_v3_key(
+    prf: &[u8; KEY_LEN],
+    password: Option<&[u8]>,
+    header: &[u8],
+) -> Result<Zeroizing<[u8; KEY_LEN]>, EnvelopeError> {
+    let offsets = v3_nonce_offsets(header)?;
+    let salt_at = offsets.0 - 16;
+    let salt = &header[salt_at..salt_at + 16];
+    let scope = scope_from_v3_header(header)?;
+    let credential_len = read_u16(header, V3_CREDENTIAL_LEN_OFFSET)? as usize;
+    let credential = &header[V3_CREDENTIAL_OFFSET..V3_CREDENTIAL_OFFSET + credential_len];
+    let policy = header[V3_POLICY_OFFSET];
+    let mut context = Zeroizing::new(Vec::new());
+    context.extend_from_slice(if policy == V3_POLICY_PRF {
+        V3_PRF_PURPOSE
+    } else {
+        V3_AND_PURPOSE
+    });
+    context.extend_from_slice(&scope.vault_id);
+    context.extend_from_slice(&scope.memo_id.unwrap_or(0).to_le_bytes());
+    context.push(policy);
+    context.extend_from_slice(credential);
+    let mut material = Zeroizing::new(Vec::with_capacity(
+        prf.len() + password.map_or(0, <[u8]>::len) + context.len(),
+    ));
+    if let Some(password) = password {
+        material.extend_from_slice(password);
+    } else {
+        material.extend_from_slice(prf);
+    }
+    material.extend_from_slice(&context);
+    let params = Params::new(
+        KDF_MEMORY_KIB,
+        KDF_ITERATIONS,
+        KDF_PARALLELISM,
+        Some(KEY_LEN),
+    )
+    .map_err(|_| EnvelopeError::KdfFailed)?;
+    let argon = if password.is_some() {
+        Argon2::new_with_secret(prf, Algorithm::Argon2id, Version::V0x13, params)
+            .map_err(|_| EnvelopeError::KdfFailed)?
+    } else {
+        Argon2::new(Algorithm::Argon2id, Version::V0x13, params)
+    };
+    let mut memory = Zeroizing::new(vec![Block::new(); KDF_BLOCKS]);
+    let mut key = Zeroizing::new([0; KEY_LEN]);
+    argon
+        .hash_password_into_with_memory(&material, salt, &mut *key, &mut *memory)
+        .map_err(|_| EnvelopeError::KdfFailed)?;
+    Ok(key)
+}
+
+fn v3_purpose(policy: u8) -> &'static [u8] {
+    if policy == V3_POLICY_PRF {
+        V3_PRF_PURPOSE
+    } else {
+        V3_AND_PURPOSE
+    }
+}
+fn v3_parts(envelope: &[u8], header_len: usize) -> Result<V3Parts<'_>, EnvelopeError> {
+    Ok((
+        &envelope[header_len..header_len + WRAPPED_KEY_LEN],
+        &envelope[header_len + WRAPPED_KEY_LEN..header_len + 2 * WRAPPED_KEY_LEN],
+        &envelope[header_len + 2 * WRAPPED_KEY_LEN..],
+    ))
+}
+fn v3_wrap_aad(header: &[u8], purpose: &[u8]) -> Result<Vec<u8>, EnvelopeError> {
+    let stable_end = v3_nonce_offsets(header)?.0;
+    let mut aad = header[..stable_end].to_vec();
+    aad.extend_from_slice(purpose);
+    Ok(aad)
+}
+fn wrap_v3(
+    key: &[u8; KEY_LEN],
+    dek: &[u8; KEY_LEN],
+    header: &[u8],
+    nonce: &[u8],
+    purpose: &[u8],
+) -> Result<[u8; WRAPPED_KEY_LEN], EnvelopeError> {
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| EnvelopeError::CryptoFailed)?;
+    cipher
+        .encrypt(
+            Nonce::from_slice(nonce),
+            Payload {
+                msg: dek,
+                aad: &v3_wrap_aad(header, purpose)?,
+            },
+        )
+        .map_err(|_| EnvelopeError::CryptoFailed)?
+        .try_into()
+        .map_err(|_| EnvelopeError::CryptoFailed)
+}
+fn unwrap_v3(
+    key: &[u8; KEY_LEN],
+    wrapped: &[u8],
+    header: &[u8],
+    nonce: &[u8],
+    purpose: &[u8],
+) -> Result<Zeroizing<[u8; KEY_LEN]>, EnvelopeError> {
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| EnvelopeError::CryptoFailed)?;
+    let clear = Zeroizing::new(
+        cipher
+            .decrypt(
+                Nonce::from_slice(nonce),
+                Payload {
+                    msg: wrapped,
+                    aad: &v3_wrap_aad(header, purpose)?,
+                },
+            )
+            .map_err(|_| EnvelopeError::AuthenticationFailed)?,
+    );
+    if clear.len() != KEY_LEN {
+        return Err(EnvelopeError::InvalidEnvelope);
+    }
+    let mut out = Zeroizing::new([0; KEY_LEN]);
+    out.copy_from_slice(&clear);
+    Ok(out)
+}
+fn encrypt_v3_payload(
+    header: &[u8],
+    wrap: &[u8],
+    recovery: &[u8],
+    key: &[u8; KEY_LEN],
+    nonce: &[u8],
+    plain: &[u8],
+) -> Result<Vec<u8>, EnvelopeError> {
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| EnvelopeError::CryptoFailed)?;
+    let mut aad = header.to_vec();
+    aad.extend_from_slice(wrap);
+    aad.extend_from_slice(recovery);
+    aad.extend_from_slice(V3_CONTENT_PURPOSE);
+    cipher
+        .encrypt(
+            Nonce::from_slice(nonce),
+            Payload {
+                msg: plain,
+                aad: &aad,
+            },
+        )
+        .map_err(|_| EnvelopeError::CryptoFailed)
+}
+fn decrypt_v3_payload(
+    header: &[u8],
+    wrap: &[u8],
+    recovery: &[u8],
+    ciphertext: &[u8],
+    key: &[u8; KEY_LEN],
+) -> Result<Zeroizing<Vec<u8>>, EnvelopeError> {
+    let offsets = v3_nonce_offsets(header)?;
+    let mut aad = header.to_vec();
+    aad.extend_from_slice(wrap);
+    aad.extend_from_slice(recovery);
+    aad.extend_from_slice(V3_CONTENT_PURPOSE);
+    let cipher = Aes256Gcm::new_from_slice(key).map_err(|_| EnvelopeError::CryptoFailed)?;
+    Ok(Zeroizing::new(
+        cipher
+            .decrypt(
+                Nonce::from_slice(&header[offsets.2..offsets.2 + 12]),
+                Payload {
+                    msg: ciphertext,
+                    aad: &aad,
+                },
+            )
+            .map_err(|_| EnvelopeError::AuthenticationFailed)?,
+    ))
+}
+fn scope_from_v3_header(header: &[u8]) -> Result<Scope, EnvelopeError> {
+    if header.len() < 35 {
+        return Err(EnvelopeError::InvalidEnvelope);
+    }
+    Ok(Scope {
+        vault_id: header[11..27].try_into().unwrap(),
+        memo_id: (header[10] == SCOPE_MEMO)
+            .then(|| u64::from_le_bytes(header[27..35].try_into().unwrap())),
+    })
+}
+fn random_key() -> Result<Zeroizing<[u8; KEY_LEN]>, EnvelopeError> {
+    let mut key = Zeroizing::new([0; KEY_LEN]);
+    fill_random(&mut *key)?;
+    Ok(key)
+}
+fn read_u16(bytes: &[u8], offset: usize) -> Result<u16, EnvelopeError> {
+    let value = bytes
+        .get(offset..offset + 2)
+        .ok_or(EnvelopeError::InvalidEnvelope)?;
+    Ok(u16::from_le_bytes(value.try_into().unwrap()))
+}
+
 fn validate_scope(scope: Scope) -> Result<(), EnvelopeError> {
     if scope.vault_id == [0; 16] || scope.memo_id == Some(0) {
         Err(EnvelopeError::InvalidInput)
@@ -1280,6 +1840,117 @@ mod tests {
                 .open_authenticated(&vec![0; PAYLOAD_OFFSET + MAX_PLAINTEXT_BYTES + TAG_LEN + 1])
                 .err(),
             Some(EnvelopeError::InvalidEnvelope)
+        );
+    }
+
+    #[test]
+    fn v3_prf_only_round_trips_reseals_and_recovers() {
+        let credential = b"credential-id-1";
+        let prf = [0x39; KEY_LEN];
+        let (envelope, recovery) =
+            seal_with_prf(MEMO_SCOPE, credential, &prf, b"memo v3").expect("seal PRF envelope");
+        assert!(envelope.starts_with(V3_MAGIC));
+        let (plain, session) =
+            unlock_with_prf(MEMO_SCOPE, credential, &prf, &envelope).expect("open PRF envelope");
+        assert_eq!(&*plain, b"memo v3");
+        let next = session.reseal(b"updated v3").expect("reseal");
+        assert_eq!(
+            &*unlock_with_prf(MEMO_SCOPE, credential, &prf, &next)
+                .unwrap()
+                .0,
+            b"updated v3"
+        );
+        assert_eq!(
+            &*unlock_with_recovery_v3(MEMO_SCOPE, &recovery, &next)
+                .unwrap()
+                .0,
+            b"updated v3"
+        );
+    }
+
+    #[test]
+    fn v3_and_policy_requires_both_factors_and_recovery_is_separate() {
+        let credential = b"and-credential";
+        let prf = [0x72; KEY_LEN];
+        let password = b"both factors required";
+        let (envelope, recovery) =
+            seal_with_password_and_prf(MEMO_SCOPE, credential, password, &prf, b"and protected")
+                .expect("seal AND envelope");
+        assert_eq!(
+            &*unlock_with_password_and_prf(MEMO_SCOPE, credential, password, &prf, &envelope)
+                .unwrap()
+                .0,
+            b"and protected"
+        );
+        assert_eq!(
+            unlock_with_prf(MEMO_SCOPE, credential, &prf, &envelope).err(),
+            Some(EnvelopeError::InvalidEnvelope)
+        );
+        assert_eq!(
+            unlock_with_password_and_prf(MEMO_SCOPE, credential, b"wrong", &prf, &envelope).err(),
+            Some(EnvelopeError::AuthenticationFailed)
+        );
+        assert_eq!(
+            &*unlock_with_recovery_v3(MEMO_SCOPE, &recovery, &envelope)
+                .unwrap()
+                .0,
+            b"and protected"
+        );
+    }
+
+    #[test]
+    fn v3_rejects_other_credential_scope_and_tampered_authenticated_fields() {
+        let credential = b"credential-a";
+        let prf = [0xA4; KEY_LEN];
+        let (envelope, recovery) =
+            seal_with_prf(MEMO_SCOPE, credential, &prf, b"secret").expect("seal");
+        assert_eq!(
+            unlock_with_prf(MEMO_SCOPE, b"credential-b", &prf, &envelope).err(),
+            Some(EnvelopeError::AuthenticationFailed)
+        );
+        assert_eq!(
+            unlock_with_prf(
+                Scope::memo(MEMO_SCOPE.vault_id, 99),
+                credential,
+                &prf,
+                &envelope
+            )
+            .err(),
+            Some(EnvelopeError::AuthenticationFailed)
+        );
+        let offsets = v3_nonce_offsets(&envelope).unwrap();
+        for offset in [
+            V3_POLICY_OFFSET,
+            V3_CREDENTIAL_OFFSET,
+            offsets.0,
+            offsets.1,
+            offsets.2,
+            offsets.2 + 12,
+            envelope.len() - 1,
+        ] {
+            let mut changed = envelope.clone();
+            changed[offset] ^= 1;
+            assert!(
+                unlock_with_prf(MEMO_SCOPE, credential, &prf, &changed).is_err(),
+                "offset {offset}"
+            );
+            assert!(
+                unlock_with_recovery_v3(MEMO_SCOPE, &recovery, &changed).is_err(),
+                "recovery offset {offset}"
+            );
+        }
+    }
+
+    #[test]
+    fn v3_rejects_empty_or_oversized_credential_ids() {
+        let prf = [0x55; KEY_LEN];
+        assert_eq!(
+            seal_with_prf(SCOPE, &[], &prf, b"x").err(),
+            Some(EnvelopeError::InvalidInput)
+        );
+        assert_eq!(
+            seal_with_prf(SCOPE, &vec![1; V3_MAX_CREDENTIAL_ID + 1], &prf, b"x").err(),
+            Some(EnvelopeError::InvalidInput)
         );
     }
 }

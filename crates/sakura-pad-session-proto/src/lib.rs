@@ -14,12 +14,20 @@ const RESPONSE_HEADER: usize = 8 + 8 + 8 + 1 + 4;
 const MAX_PASSWORD_BYTES: usize = 1024;
 /// V2 overhead is a 102-byte header, two 48-byte wraps, and a 16-byte tag.
 pub const V2_ENVELOPE_OVERHEAD: usize = 214;
-pub const MAX_ENVELOPE_BYTES: usize = MAX_PLAINTEXT_BYTES + V2_ENVELOPE_OVERHEAD;
+/// Maximum v3 overhead uses the maximum supported credential ID length.
+pub const V3_ENVELOPE_OVERHEAD: usize = 1252;
+pub const V3_MIN_ENVELOPE_OVERHEAD: usize = 229;
+pub const MAX_ENVELOPE_BYTES: usize = MAX_PLAINTEXT_BYTES + V3_ENVELOPE_OVERHEAD;
 const RECOVERY_KEY_BYTES: usize = 77;
 const CREATED_HEADER: usize = 8 + 4;
 const CREATED_MAGIC: &[u8; 8] = b"SKRCR001";
+const V3_AUTH_MAGIC: &[u8; 8] = b"SKR3AUTH";
+const V3_PRF_BYTES: usize = 32;
+const V3_CREDENTIAL_ID_MAX: usize = 1024;
+const V3_AUTH_HEADER: usize = 8 + 2 + V3_PRF_BYTES;
+const V3_AUTH_OVERHEAD: usize = V3_AUTH_HEADER + V3_CREDENTIAL_ID_MAX;
 /// Includes the length-delimited envelope and the one-time display key.
-pub const MAX_PAYLOAD_BYTES: usize = MAX_ENVELOPE_BYTES + CREATED_HEADER + RECOVERY_KEY_BYTES;
+pub const MAX_PAYLOAD_BYTES: usize = MAX_ENVELOPE_BYTES + V3_AUTH_OVERHEAD;
 const MAX_REQUEST_FRAME: usize = REQUEST_HEADER + MAX_PASSWORD_BYTES + MAX_PAYLOAD_BYTES;
 
 /// Owned wire bytes whose initialized contents are overwritten on drop.
@@ -38,6 +46,11 @@ pub enum Operation {
     CreateRecoverable = 7,
     UnlockPasswordV2 = 8,
     UnlockRecoveryV2 = 9,
+    CreatePrfV3 = 10,
+    CreatePasswordAndPrfV3 = 11,
+    UnlockPrfV3 = 12,
+    UnlockPasswordAndPrfV3 = 13,
+    UnlockRecoveryV3 = 14,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -61,6 +74,9 @@ pub struct Request {
     /// Zero denotes the Pad vault; nonzero denotes an individual memo.
     pub memo_id: u64,
     pub password: SecretBytes,
+    /// V3 payload prefix: `SKR3AUTH`, u16 credential ID length, credential
+    /// ID, and exactly 32 PRF bytes. The suffix is plaintext (create) or an
+    /// envelope (unlock). Password data remains in the separate password field.
     pub payload: SecretBytes,
 }
 
@@ -103,6 +119,40 @@ fn validate_request(request: &Request) -> io::Result<()> {
             if request.vault_id == [0; 16]
                 || request.password.len() != RECOVERY_KEY_BYTES
                 || request.payload.len() > MAX_ENVELOPE_BYTES
+            {
+                return Err(invalid());
+            }
+        }
+        Operation::CreatePrfV3 | Operation::CreatePasswordAndPrfV3 => {
+            let with_password = request.operation == Operation::CreatePasswordAndPrfV3;
+            let Ok(auth) = parse_v3_auth_payload(&request.payload) else {
+                return Err(invalid());
+            };
+            if request.vault_id == [0; 16]
+                || (with_password && !(1..=MAX_PASSWORD_BYTES).contains(&request.password.len()))
+                || (!with_password && !request.password.is_empty())
+                || auth.data.len() > MAX_PLAINTEXT_BYTES
+            {
+                return Err(invalid());
+            }
+        }
+        Operation::UnlockPrfV3 | Operation::UnlockPasswordAndPrfV3 => {
+            let with_password = request.operation == Operation::UnlockPasswordAndPrfV3;
+            let Ok(auth) = parse_v3_auth_payload(&request.payload) else {
+                return Err(invalid());
+            };
+            if request.vault_id == [0; 16]
+                || (with_password && !(1..=MAX_PASSWORD_BYTES).contains(&request.password.len()))
+                || (!with_password && !request.password.is_empty())
+                || !(V3_MIN_ENVELOPE_OVERHEAD..=MAX_ENVELOPE_BYTES).contains(&auth.data.len())
+            {
+                return Err(invalid());
+            }
+        }
+        Operation::UnlockRecoveryV3 => {
+            if request.vault_id == [0; 16]
+                || request.password.len() != RECOVERY_KEY_BYTES
+                || !(V3_MIN_ENVELOPE_OVERHEAD..=MAX_ENVELOPE_BYTES).contains(&request.payload.len())
             {
                 return Err(invalid());
             }
@@ -178,6 +228,11 @@ pub fn read_request(mut reader: impl Read) -> io::Result<Option<Request>> {
         7 => Operation::CreateRecoverable,
         8 => Operation::UnlockPasswordV2,
         9 => Operation::UnlockRecoveryV2,
+        10 => Operation::CreatePrfV3,
+        11 => Operation::CreatePasswordAndPrfV3,
+        12 => Operation::UnlockPrfV3,
+        13 => Operation::UnlockPasswordAndPrfV3,
+        14 => Operation::UnlockRecoveryV3,
         _ => return Err(invalid()),
     };
     let vault_id = frame[25..41].try_into().map_err(|_| invalid())?;
@@ -212,6 +267,58 @@ pub struct CreatedRecovery<'a> {
     pub recovery_key: &'a str,
 }
 
+/// Borrowed v3 authenticator bundle. The containing request payload is a
+/// `Zeroizing` frame, so this view never owns or copies the PRF result.
+#[allow(missing_debug_implementations)]
+pub struct V3AuthPayload<'a> {
+    pub credential_id: &'a [u8],
+    pub prf: &'a [u8; V3_PRF_BYTES],
+    pub data: &'a [u8],
+}
+
+pub fn encode_v3_auth_payload(
+    credential_id: &[u8],
+    prf: &[u8; V3_PRF_BYTES],
+    data: &[u8],
+) -> io::Result<SecretBytes> {
+    if credential_id.is_empty() || credential_id.len() > V3_CREDENTIAL_ID_MAX {
+        return Err(invalid());
+    }
+    let mut payload = SecretBytes::new(Vec::with_capacity(
+        V3_AUTH_HEADER + credential_id.len() + data.len(),
+    ));
+    payload.extend_from_slice(V3_AUTH_MAGIC);
+    payload.extend_from_slice(&(credential_id.len() as u16).to_le_bytes());
+    payload.extend_from_slice(credential_id);
+    payload.extend_from_slice(prf);
+    payload.extend_from_slice(data);
+    Ok(payload)
+}
+
+pub fn parse_v3_auth_payload(payload: &[u8]) -> io::Result<V3AuthPayload<'_>> {
+    if payload.len() < V3_AUTH_HEADER || !payload.starts_with(V3_AUTH_MAGIC) {
+        return Err(invalid());
+    }
+    let credential_len =
+        u16::from_le_bytes(payload[8..10].try_into().map_err(|_| invalid())?) as usize;
+    if credential_len == 0 || credential_len > V3_CREDENTIAL_ID_MAX {
+        return Err(invalid());
+    }
+    let prf_start = 10 + credential_len;
+    let data_start = prf_start + V3_PRF_BYTES;
+    if data_start > payload.len() || payload.len() - data_start > MAX_ENVELOPE_BYTES {
+        return Err(invalid());
+    }
+    let prf = payload[prf_start..data_start]
+        .try_into()
+        .map_err(|_| invalid())?;
+    Ok(V3AuthPayload {
+        credential_id: &payload[10..prf_start],
+        prf,
+        data: &payload[data_start..],
+    })
+}
+
 fn valid_recovery_key(bytes: &[u8]) -> bool {
     bytes.len() == RECOVERY_KEY_BYTES
         && bytes.starts_with(b"SPRK1-")
@@ -226,8 +333,13 @@ fn valid_recovery_key(bytes: &[u8]) -> bool {
 
 /// Build the one-time creation payload: magic, u32 envelope length, envelope, key.
 pub fn encode_created_recovery(envelope: &[u8], recovery_key: &str) -> io::Result<SecretBytes> {
-    if !(V2_ENVELOPE_OVERHEAD..=MAX_ENVELOPE_BYTES).contains(&envelope.len())
-        || !envelope.starts_with(b"SKRPENV2")
+    let minimum = if envelope.starts_with(b"SKRPENV3") {
+        V3_MIN_ENVELOPE_OVERHEAD
+    } else {
+        V2_ENVELOPE_OVERHEAD
+    };
+    if !(minimum..=MAX_ENVELOPE_BYTES).contains(&envelope.len())
+        || !(envelope.starts_with(b"SKRPENV2") || envelope.starts_with(b"SKRPENV3"))
         || !valid_recovery_key(recovery_key.as_bytes())
     {
         return Err(invalid());
@@ -251,18 +363,26 @@ pub fn parse_created_recovery(payload: &[u8]) -> io::Result<CreatedRecovery<'_>>
     }
     let envelope_len =
         u32::from_le_bytes(payload[8..12].try_into().map_err(|_| invalid())?) as usize;
-    if !(V2_ENVELOPE_OVERHEAD..=MAX_ENVELOPE_BYTES).contains(&envelope_len)
+    let magic = &payload[CREATED_HEADER..CREATED_HEADER + 8];
+    let minimum = if magic == b"SKRPENV3" {
+        V3_MIN_ENVELOPE_OVERHEAD
+    } else if magic == b"SKRPENV2" {
+        V2_ENVELOPE_OVERHEAD
+    } else {
+        return Err(invalid());
+    };
+    if !(minimum..=MAX_ENVELOPE_BYTES).contains(&envelope_len)
         || payload.len() != CREATED_HEADER + envelope_len + RECOVERY_KEY_BYTES
-        || !payload[CREATED_HEADER..].starts_with(b"SKRPENV2")
     {
         return Err(invalid());
     }
+    let envelope = &payload[CREATED_HEADER..CREATED_HEADER + envelope_len];
     let key_bytes = &payload[CREATED_HEADER + envelope_len..];
     if !valid_recovery_key(key_bytes) {
         return Err(invalid());
     }
     Ok(CreatedRecovery {
-        envelope: &payload[CREATED_HEADER..CREATED_HEADER + envelope_len],
+        envelope,
         recovery_key: std::str::from_utf8(key_bytes).map_err(|_| invalid())?,
     })
 }
@@ -401,5 +521,56 @@ mod tests {
         assert!(write_request(Vec::new(), &request).is_ok());
         request.payload = SecretBytes::new(vec![0; MAX_ENVELOPE_BYTES + 1]);
         assert!(write_request(Vec::new(), &request).is_err());
+    }
+
+    #[test]
+    fn v3_auth_payload_round_trips_without_mixing_password_and_prf() {
+        let prf = [0xA7; V3_PRF_BYTES];
+        let data = b"opaque envelope bytes";
+        let payload = encode_v3_auth_payload(b"credential", &prf, data).unwrap();
+        let parsed = parse_v3_auth_payload(&payload).unwrap();
+        assert_eq!(parsed.credential_id, b"credential");
+        assert_eq!(parsed.prf, &prf);
+        assert_eq!(parsed.data, data);
+        let mut req = request();
+        req.operation = Operation::UnlockPrfV3;
+        req.vault_id = *b"session-vault-01";
+        req.payload =
+            encode_v3_auth_payload(b"credential", &prf, &vec![0; V3_ENVELOPE_OVERHEAD]).unwrap();
+        write_request(Vec::new(), &req).unwrap();
+        req.password = SecretBytes::new(b"must stay separate".to_vec());
+        assert!(write_request(Vec::new(), &req).is_err());
+    }
+
+    #[test]
+    fn v3_auth_payload_rejects_malformed_lengths_and_credentials() {
+        assert!(encode_v3_auth_payload(&[], &[0; V3_PRF_BYTES], b"x").is_err());
+        assert!(encode_v3_auth_payload(
+            &vec![0; V3_CREDENTIAL_ID_MAX + 1],
+            &[0; V3_PRF_BYTES],
+            b"x"
+        )
+        .is_err());
+        let mut payload = encode_v3_auth_payload(b"id", &[0; V3_PRF_BYTES], b"data").unwrap();
+        payload[8..10].copy_from_slice(&u16::MAX.to_le_bytes());
+        assert!(parse_v3_auth_payload(&payload).is_err());
+    }
+
+    #[test]
+    fn v3_create_payload_is_bounded_and_created_recovery_accepts_v3() {
+        let auth = encode_v3_auth_payload(b"id", &[1; V3_PRF_BYTES], b"").unwrap();
+        let mut req = request();
+        req.operation = Operation::CreatePrfV3;
+        req.vault_id = *b"session-vault-01";
+        req.payload = auth;
+        write_request(Vec::new(), &req).unwrap();
+
+        let mut envelope = vec![0; V3_MIN_ENVELOPE_OVERHEAD];
+        envelope[..8].copy_from_slice(b"SKRPENV3");
+        let key = "SPRK1-00000000-00000000-00000000-00000000-00000000-00000000-00000000-00000000";
+        let created = encode_created_recovery(&envelope, key).unwrap();
+        let parsed = parse_created_recovery(&created).unwrap();
+        assert_eq!(parsed.envelope, envelope);
+        assert_eq!(parsed.recovery_key, key);
     }
 }

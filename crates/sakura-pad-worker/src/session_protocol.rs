@@ -3,14 +3,16 @@
 use std::io::{self, Read, Write};
 
 pub use sakura_pad_session_proto::{
-    encode_created_recovery, parse_created_recovery, read_request, read_response, write_request,
-    write_response, Operation, Request, Response, Status,
+    encode_created_recovery, encode_v3_auth_payload, parse_created_recovery, parse_v3_auth_payload,
+    read_request, read_response, write_request, write_response, Operation, Request, Response,
+    Status,
 };
 use zeroize::Zeroizing;
 
 use crate::envelope::{
-    seal_with_recovery, unlock_with_password_v2, unlock_with_recovery_v2, RecoveryKey,
-    UnlockedRecoveryEnvelope,
+    seal_with_password_and_prf, seal_with_prf, seal_with_recovery, unlock_with_password_and_prf,
+    unlock_with_password_v2, unlock_with_prf, unlock_with_recovery_v2, unlock_with_recovery_v3,
+    RecoveryKey, UnlockedHardwareEnvelope, UnlockedRecoveryEnvelope,
 };
 use crate::{seal, unlock, EnvelopeError, Scope, UnlockedEnvelope};
 
@@ -27,6 +29,7 @@ struct Session {
 enum UnlockedSession {
     V1(UnlockedEnvelope),
     V2(UnlockedRecoveryEnvelope),
+    V3(UnlockedHardwareEnvelope),
 }
 
 impl UnlockedSession {
@@ -34,6 +37,7 @@ impl UnlockedSession {
         match self {
             Self::V1(session) => session.reseal(plaintext),
             Self::V2(session) => session.reseal(plaintext),
+            Self::V3(session) => session.reseal(plaintext),
         }
     }
 
@@ -41,6 +45,7 @@ impl UnlockedSession {
         match self {
             Self::V1(session) => session.open_authenticated(envelope),
             Self::V2(session) => session.open_authenticated(envelope),
+            Self::V3(session) => session.open_authenticated(envelope),
         }
     }
 }
@@ -80,7 +85,12 @@ impl Session {
         }
         self.last_request_id = request.id;
         match request.operation {
-            Operation::Unlock | Operation::UnlockPasswordV2 | Operation::UnlockRecoveryV2 => {
+            Operation::Unlock
+            | Operation::UnlockPasswordV2
+            | Operation::UnlockRecoveryV2
+            | Operation::UnlockPrfV3
+            | Operation::UnlockPasswordAndPrfV3
+            | Operation::UnlockRecoveryV3 => {
                 if self.unlocked.is_some() || request.generation <= self.generation {
                     response.status = Status::Stale;
                 } else {
@@ -99,6 +109,37 @@ impl Session {
                             .and_then(RecoveryKey::decode)
                             .and_then(|key| unlock_with_recovery_v2(scope, &key, &request.payload))
                             .map(|(plaintext, session)| (plaintext, UnlockedSession::V2(session))),
+                        Operation::UnlockPrfV3 | Operation::UnlockPasswordAndPrfV3 => {
+                            match parse_v3_auth_payload(&request.payload) {
+                                Ok(auth) => {
+                                    let result = if request.operation == Operation::UnlockPrfV3 {
+                                        unlock_with_prf(
+                                            scope,
+                                            auth.credential_id,
+                                            auth.prf,
+                                            auth.data,
+                                        )
+                                    } else {
+                                        unlock_with_password_and_prf(
+                                            scope,
+                                            auth.credential_id,
+                                            &request.password,
+                                            auth.prf,
+                                            auth.data,
+                                        )
+                                    };
+                                    result.map(|(plain, session)| {
+                                        (plain, UnlockedSession::V3(session))
+                                    })
+                                }
+                                Err(_) => Err(EnvelopeError::InvalidEnvelope),
+                            }
+                        }
+                        Operation::UnlockRecoveryV3 => std::str::from_utf8(&request.password)
+                            .map_err(|_| EnvelopeError::InvalidInput)
+                            .and_then(RecoveryKey::decode)
+                            .and_then(|key| unlock_with_recovery_v3(scope, &key, &request.payload))
+                            .map(|(plaintext, session)| (plaintext, UnlockedSession::V3(session))),
                         _ => unreachable!(),
                     };
                     match result {
@@ -111,7 +152,10 @@ impl Session {
                     }
                 }
             }
-            Operation::Create | Operation::CreateRecoverable => {
+            Operation::Create
+            | Operation::CreateRecoverable
+            | Operation::CreatePrfV3
+            | Operation::CreatePasswordAndPrfV3 => {
                 if self.unlocked.is_some() || request.generation <= self.generation {
                     response.status = Status::Stale;
                 } else {
@@ -129,7 +173,7 @@ impl Session {
                             },
                             Err(error) => response.status = status_for(error),
                         }
-                    } else {
+                    } else if request.operation == Operation::CreateRecoverable {
                         match seal_with_recovery(scope, &request.password, &request.payload) {
                             Ok((envelope, key)) => {
                                 let envelope = Zeroizing::new(envelope);
@@ -146,6 +190,65 @@ impl Session {
                                         }
                                     }
                                     Err(error) => response.status = status_for(error),
+                                }
+                            }
+                            Err(error) => response.status = status_for(error),
+                        }
+                    } else {
+                        let result = parse_v3_auth_payload(&request.payload)
+                            .map_err(|_| EnvelopeError::InvalidEnvelope)
+                            .and_then(|auth| {
+                                if request.operation == Operation::CreatePrfV3 {
+                                    seal_with_prf(scope, auth.credential_id, auth.prf, auth.data)
+                                } else {
+                                    seal_with_password_and_prf(
+                                        scope,
+                                        auth.credential_id,
+                                        &request.password,
+                                        auth.prf,
+                                        auth.data,
+                                    )
+                                }
+                            });
+                        match result {
+                            Ok((envelope, key)) => {
+                                let envelope = Zeroizing::new(envelope);
+                                let opened =
+                                    parse_v3_auth_payload(&request.payload).and_then(|auth| {
+                                        let opened = if request.operation == Operation::CreatePrfV3
+                                        {
+                                            unlock_with_prf(
+                                                scope,
+                                                auth.credential_id,
+                                                auth.prf,
+                                                &envelope,
+                                            )
+                                        } else {
+                                            unlock_with_password_and_prf(
+                                                scope,
+                                                auth.credential_id,
+                                                &request.password,
+                                                auth.prf,
+                                                &envelope,
+                                            )
+                                        };
+                                        opened.map_err(|_| {
+                                            std::io::Error::other("v3 self-open failed")
+                                        })
+                                    });
+                                match opened {
+                                    Ok((_plain, unlocked)) => {
+                                        let display = key.encode();
+                                        match encode_created_recovery(&envelope, &display) {
+                                            Ok(payload) => {
+                                                self.unlocked = Some(UnlockedSession::V3(unlocked));
+                                                response.status = Status::Success;
+                                                response.payload = payload;
+                                            }
+                                            Err(_) => response.status = Status::Unavailable,
+                                        }
+                                    }
+                                    Err(_) => response.status = Status::Unavailable,
                                 }
                             }
                             Err(error) => response.status = status_for(error),

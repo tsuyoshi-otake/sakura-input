@@ -77,3 +77,57 @@ impl PadShortcut {
         }
     }
 }
+
+/// User-selected idle interval before an unlocked Sakura Pad locks again.
+/// The renderer owns measuring activity and enforcing the lock.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[repr(u8)]
+pub enum PadIdleLockTimeout {
+    OneMinute = 1,
+    #[default]
+    FiveMinutes = 5,
+    FifteenMinutes = 15,
+    ThirtyMinutes = 30,
+}
+
+impl PadIdleLockTimeout {
+    pub const ALL: [Self; 4] = [
+        Self::OneMinute,
+        Self::FiveMinutes,
+        Self::FifteenMinutes,
+        Self::ThirtyMinutes,
+    ];
+
+    pub const fn minutes(self) -> u64 {
+        self as u64
+    }
+
+    pub const fn from_minutes(minutes: u8) -> Option<Self> {
+        match minutes {
+            1 => Some(Self::OneMinute),
+            5 => Some(Self::FiveMinutes),
+            15 => Some(Self::FifteenMinutes),
+            30 => Some(Self::ThirtyMinutes),
+            _ => None,
+        }
+    }
+
+    pub const fn name(self) -> &'static str {
+        match self {
+            Self::OneMinute => "1",
+            Self::FiveMinutes => "5",
+            Self::FifteenMinutes => "15",
+            Self::ThirtyMinutes => "30",
+        }
+    }
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "1" => Some(Self::OneMinute),
+            "5" => Some(Self::FiveMinutes),
+            "15" => Some(Self::FifteenMinutes),
+            "30" => Some(Self::ThirtyMinutes),
+            _ => None,
+        }
+    }
+}

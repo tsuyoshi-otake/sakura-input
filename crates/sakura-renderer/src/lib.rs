@@ -31,12 +31,17 @@ mod pad;
 mod pad_caption;
 mod pad_crypto_client;
 mod pad_gesture;
+mod pad_hardware;
 mod pad_icon;
 mod pad_list;
 mod pad_protection;
 mod pad_rail;
 mod pad_storage;
 mod pad_tooltip;
+mod pad_totp;
+mod pad_totp_store;
+mod pad_totp_ui;
+mod pad_webauthn;
 mod raw_input;
 mod theme;
 mod watch;
@@ -49,7 +54,7 @@ use std::io::Write;
 use std::sync::OnceLock;
 use std::sync::{mpsc::Receiver, Arc, Mutex};
 
-use sakura_proto::{AppearanceTheme, Mode, PadShortcut};
+use sakura_proto::{AppearanceTheme, Mode, PadIdleLockTimeout, PadShortcut};
 use windows::core::{Result, PCWSTR};
 use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::Threading::CreateMutexW;
@@ -148,6 +153,7 @@ struct App {
     pad_theme: AppearanceTheme,
     raw_input: RawInputOwner,
     pad_shortcut: PadShortcut,
+    pad_idle_lock_timeout: PadIdleLockTimeout,
     pad_config_generation: u64,
     /// The mode and theme of the previous UI state. The engine retains the
     /// mode on every revision — candidate updates included — so the
@@ -206,6 +212,7 @@ pub fn run() -> Result<()> {
         pad_theme: AppearanceTheme::Auto,
         raw_input,
         pad_shortcut: PadShortcut::Disabled,
+        pad_idle_lock_timeout: PadIdleLockTimeout::default(),
         pad_config_generation: 0,
         shown_indicator: None,
         mailbox: Arc::clone(&mailbox),
@@ -459,7 +466,9 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
                 app.pad_theme = state.appearance_theme;
                 if let Some(pad) = app.pad.as_mut() {
                     pad.set_theme(state.appearance_theme);
+                    pad.set_idle_lock_timeout(state.pad_idle_lock_timeout);
                 }
+                app.pad_idle_lock_timeout = state.pad_idle_lock_timeout;
                 if state.pad_shortcut != app.pad_shortcut {
                     // Wrapping still produces a distinct generation at the
                     // u64 boundary (max -> 0), so a configuration change
@@ -615,6 +624,7 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
                 if let Ok(mut pad) = PadWindow::new(window) {
                     pad_debug("pad:created");
                     pad.set_theme(app.pad_theme);
+                    pad.set_idle_lock_timeout(app.pad_idle_lock_timeout);
                     app.pad = Some(pad);
                 } else {
                     pad_debug("pad:create-failed");
@@ -703,6 +713,7 @@ mod tests {
             revision,
             appearance_theme: AppearanceTheme::Dark,
             pad_shortcut: PadShortcut::Disabled,
+            pad_idle_lock_timeout: sakura_proto::PadIdleLockTimeout::default(),
             mode: Some(Mode::Hiragana),
             candidates: Some(sakura_proto::CandidateList {
                 kind: sakura_proto::CandidateKind::Conversion,

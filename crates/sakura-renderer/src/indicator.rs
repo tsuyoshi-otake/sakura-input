@@ -758,6 +758,7 @@ mod tests {
             revision: 1,
             appearance_theme: AppearanceTheme::Light,
             pad_shortcut: PadShortcut::Disabled,
+            pad_idle_lock_timeout: sakura_proto::PadIdleLockTimeout::default(),
             mode: Some(Mode::Hiragana),
             candidates: None,
             candidate_detail: None,

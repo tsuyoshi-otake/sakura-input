@@ -17,7 +17,9 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use sakura_pad_session_proto::{parse_created_recovery, Operation, Request, SecretBytes, Status};
+use sakura_pad_session_proto::{
+    encode_v3_auth_payload, parse_created_recovery, Operation, Request, SecretBytes, Status,
+};
 use zeroize::Zeroizing;
 
 use crate::pad_crypto_client::{ClientError, PadCryptoCancellation, PadCryptoClient};
@@ -40,6 +42,8 @@ pub enum MemoError {
 pub enum MemoEnvelopeFormat {
     PasswordOnlyV1,
     PasswordRecoveryV2,
+    PrfV3,
+    PasswordAndPrfV3,
     Unknown,
 }
 
@@ -48,9 +52,67 @@ pub fn classify_envelope(envelope: &[u8]) -> MemoEnvelopeFormat {
         MemoEnvelopeFormat::PasswordOnlyV1
     } else if envelope.starts_with(b"SKRPENV2") {
         MemoEnvelopeFormat::PasswordRecoveryV2
+    } else if envelope.len() > 35 && envelope.starts_with(b"SKRPENV3") {
+        match envelope[35] {
+            1 => MemoEnvelopeFormat::PrfV3,
+            2 => MemoEnvelopeFormat::PasswordAndPrfV3,
+            _ => MemoEnvelopeFormat::Unknown,
+        }
     } else {
         MemoEnvelopeFormat::Unknown
     }
+}
+
+/// Unauthenticated v3 header fields needed to choose a WebAuthn credential.
+/// The worker verifies this ID and the complete envelope after the assertion.
+#[allow(missing_debug_implementations)]
+pub struct MemoHardwareHint<'a> {
+    pub credential_id: &'a [u8],
+    pub requires_password: bool,
+}
+
+pub fn hardware_hint(envelope: &[u8]) -> Option<MemoHardwareHint<'_>> {
+    let requires_password = match classify_envelope(envelope) {
+        MemoEnvelopeFormat::PrfV3 => false,
+        MemoEnvelopeFormat::PasswordAndPrfV3 => true,
+        _ => return None,
+    };
+    let len = u16::from_le_bytes(envelope.get(36..38)?.try_into().ok()?) as usize;
+    if !(1..=1024).contains(&len) {
+        return None;
+    }
+    let credential_id = envelope.get(38..38 + len)?;
+    Some(MemoHardwareHint {
+        credential_id,
+        requires_password,
+    })
+}
+
+/// Stable per-document and per-memo WebAuthn PRF input. The credential itself
+/// is unique, while this salt separates a key's output between Pad scopes.
+/// A changed scope cannot unlock the old envelope; recovery handles moves.
+pub fn memo_prf_salt(document_id: [u8; 16], memo_id: u64) -> Option<[u8; 32]> {
+    if memo_id == 0 {
+        return None;
+    }
+    scope_prf_salt(document_id, memo_id)
+}
+
+/// Whole-Pad PRF input. The zero memo ID distinguishes the vault from every
+/// valid memo scope while retaining the same stable salt construction.
+pub fn pad_prf_salt(vault_id: [u8; 16]) -> Option<[u8; 32]> {
+    scope_prf_salt(vault_id, 0)
+}
+
+fn scope_prf_salt(document_id: [u8; 16], memo_id: u64) -> Option<[u8; 32]> {
+    if document_id == [0; 16] {
+        return None;
+    }
+    let mut salt = [0_u8; 32];
+    salt[..16].copy_from_slice(&document_id);
+    salt[16..24].copy_from_slice(&memo_id.to_le_bytes());
+    salt[24..].copy_from_slice(b"SPadPRF1");
+    Some(salt)
 }
 
 /// One memo's isolated v1 worker session. No password or key is retained in
@@ -150,6 +212,81 @@ impl MemoProtectionSession {
         }
     }
 
+    /// Create a v3 memo whose ordinary unlock requires this credential's PRF.
+    /// `prf` is obtained from a fresh, user-verified WebAuthn assertion. The
+    /// caller must persist the returned envelope only after the one-time
+    /// recovery key is shown and confirmed; the PRF is never persisted.
+    pub fn create_with_prf(
+        &mut self,
+        credential_id: &[u8],
+        prf: Zeroizing<[u8; 32]>,
+        plaintext: SecretBytes,
+    ) -> Result<(SecretBytes, Zeroizing<String>), MemoError> {
+        self.create_v3(
+            Operation::CreatePrfV3,
+            SecretBytes::new(Vec::new()),
+            credential_id,
+            prf,
+            plaintext,
+        )
+    }
+
+    /// Create a v3 memo requiring both its password and this credential's PRF.
+    pub fn create_with_password_and_prf(
+        &mut self,
+        password: SecretBytes,
+        credential_id: &[u8],
+        prf: Zeroizing<[u8; 32]>,
+        plaintext: SecretBytes,
+    ) -> Result<(SecretBytes, Zeroizing<String>), MemoError> {
+        self.create_v3(
+            Operation::CreatePasswordAndPrfV3,
+            password,
+            credential_id,
+            prf,
+            plaintext,
+        )
+    }
+
+    fn create_v3(
+        &mut self,
+        operation: Operation,
+        password: SecretBytes,
+        credential_id: &[u8],
+        prf: Zeroizing<[u8; 32]>,
+        plaintext: SecretBytes,
+    ) -> Result<(SecretBytes, Zeroizing<String>), MemoError> {
+        if self.unlocked {
+            return Err(MemoError::Active);
+        }
+        let payload = encode_v3_auth_payload(credential_id, &prf, &plaintext)
+            .map_err(|_| MemoError::Protocol)?;
+        self.fresh_worker()?;
+        let result = self.exchange(
+            operation,
+            self.document_vault_id,
+            self.memo_id,
+            password,
+            payload,
+        );
+        match result.and_then(|payload| {
+            let created = parse_created_recovery(&payload).map_err(|_| MemoError::Protocol)?;
+            Ok((
+                SecretBytes::new(created.envelope.to_vec()),
+                Zeroizing::new(created.recovery_key.to_owned()),
+            ))
+        }) {
+            Ok(created) => {
+                self.unlocked = true;
+                Ok(created)
+            }
+            Err(error) => {
+                self.lock();
+                Err(error)
+            }
+        }
+    }
+
     /// Authenticate a stored v1 or recoverable v2 envelope with its password
     /// using this memo's exact scope. The format marker selects one worker
     /// operation; the worker authenticates it, and unknown markers are never
@@ -167,6 +304,9 @@ impl MemoProtectionSession {
         let operation = match classify_envelope(&envelope) {
             MemoEnvelopeFormat::PasswordOnlyV1 => Operation::Unlock,
             MemoEnvelopeFormat::PasswordRecoveryV2 => Operation::UnlockPasswordV2,
+            MemoEnvelopeFormat::PrfV3 | MemoEnvelopeFormat::PasswordAndPrfV3 => {
+                return Err(MemoError::Authentication)
+            }
             MemoEnvelopeFormat::Unknown => return Err(MemoError::Authentication),
         };
         self.fresh_worker()?;
@@ -183,8 +323,77 @@ impl MemoProtectionSession {
         if self.unlocked {
             return Err(MemoError::Active);
         }
+        let operation = match classify_envelope(&envelope) {
+            MemoEnvelopeFormat::PasswordRecoveryV2 => Operation::UnlockRecoveryV2,
+            MemoEnvelopeFormat::PrfV3 | MemoEnvelopeFormat::PasswordAndPrfV3 => {
+                Operation::UnlockRecoveryV3
+            }
+            _ => return Err(MemoError::Authentication),
+        };
         self.fresh_worker()?;
-        self.start_request(Operation::UnlockRecoveryV2, canonical_key, envelope)
+        self.start_request(operation, canonical_key, envelope)
+    }
+
+    /// Unlock a PRF-only v3 memo. The caller must obtain a fresh WebAuthn
+    /// assertion using the credential ID hinted by this envelope and then let
+    /// the worker authenticate that same ID and the full ciphertext.
+    pub fn unlock_with_prf(
+        &mut self,
+        credential_id: &[u8],
+        prf: Zeroizing<[u8; 32]>,
+        envelope: SecretBytes,
+    ) -> Result<SecretBytes, MemoError> {
+        self.unlock_v3(
+            Operation::UnlockPrfV3,
+            SecretBytes::new(Vec::new()),
+            credential_id,
+            prf,
+            envelope,
+        )
+    }
+
+    /// Unlock a v3 memo only when both its password and WebAuthn PRF match.
+    pub fn unlock_with_password_and_prf(
+        &mut self,
+        password: SecretBytes,
+        credential_id: &[u8],
+        prf: Zeroizing<[u8; 32]>,
+        envelope: SecretBytes,
+    ) -> Result<SecretBytes, MemoError> {
+        self.unlock_v3(
+            Operation::UnlockPasswordAndPrfV3,
+            password,
+            credential_id,
+            prf,
+            envelope,
+        )
+    }
+
+    fn unlock_v3(
+        &mut self,
+        operation: Operation,
+        password: SecretBytes,
+        credential_id: &[u8],
+        prf: Zeroizing<[u8; 32]>,
+        envelope: SecretBytes,
+    ) -> Result<SecretBytes, MemoError> {
+        if self.unlocked {
+            return Err(MemoError::Active);
+        }
+        if !matches!(
+            (operation, classify_envelope(&envelope)),
+            (Operation::UnlockPrfV3, MemoEnvelopeFormat::PrfV3)
+                | (
+                    Operation::UnlockPasswordAndPrfV3,
+                    MemoEnvelopeFormat::PasswordAndPrfV3
+                )
+        ) {
+            return Err(MemoError::Authentication);
+        }
+        let payload = encode_v3_auth_payload(credential_id, &prf, &envelope)
+            .map_err(|_| MemoError::Protocol)?;
+        self.fresh_worker()?;
+        self.start_request(operation, password, payload)
     }
 
     /// Produce new ciphertext under the already authenticated memo key.
@@ -323,6 +532,9 @@ fn map_client(error: ClientError) -> MemoError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::pad_hardware;
+    use crate::pad_webauthn::Cancellation;
+    use windows::Win32::UI::WindowsAndMessaging::GetDesktopWindow;
 
     fn bytes(value: &[u8]) -> SecretBytes {
         SecretBytes::new(value.to_vec())
@@ -351,6 +563,178 @@ mod tests {
             MemoEnvelopeFormat::PasswordRecoveryV2
         );
         assert_eq!(classify_envelope(b"damaged"), MemoEnvelopeFormat::Unknown);
+        let mut v3 = vec![0_u8; 42];
+        v3[..8].copy_from_slice(b"SKRPENV3");
+        v3[35] = 1;
+        v3[36..38].copy_from_slice(&4_u16.to_le_bytes());
+        v3[38..42].copy_from_slice(b"key1");
+        assert_eq!(classify_envelope(&v3), MemoEnvelopeFormat::PrfV3);
+        assert_eq!(hardware_hint(&v3).unwrap().credential_id, b"key1");
+        v3[35] = 2;
+        assert_eq!(classify_envelope(&v3), MemoEnvelopeFormat::PasswordAndPrfV3);
+        assert!(hardware_hint(&v3).unwrap().requires_password);
+        v3[36..38].copy_from_slice(&1025_u16.to_le_bytes());
+        assert!(hardware_hint(&v3).is_none());
+        assert_eq!(memo_prf_salt([17; 16], 42), memo_prf_salt([17; 16], 42));
+        assert_ne!(memo_prf_salt([17; 16], 42), memo_prf_salt([17; 16], 43));
+        assert_ne!(pad_prf_salt([17; 16]), memo_prf_salt([17; 16], 1));
+        assert_eq!(pad_prf_salt([0; 16]), None);
+    }
+
+    /// Exercises the same per-memo key and worker boundaries used by the Pad
+    /// UI with a real YubiKey, including older hmac-secret-only firmware.
+    #[test]
+    #[ignore = "requires SAKURA_PAD_SESSION_TEST_EXE, connected YubiKey 5, and interactive Windows desktop"]
+    fn physical_yubikey5_seals_and_reopens_isolated_memo() {
+        let image = PathBuf::from(
+            std::env::var_os("SAKURA_PAD_SESSION_TEST_EXE")
+                .expect("set SAKURA_PAD_SESSION_TEST_EXE to the built absolute session image"),
+        );
+        assert!(image.is_absolute() && image.is_file());
+        let timeout = Duration::from_secs(20);
+        let document_id = [91; 16];
+        let memo_id = 23;
+        let cancellation = Cancellation::new().expect("Windows WebAuthn support");
+        // SAFETY: the desktop window remains live throughout these synchronous
+        // Windows Security interactions.
+        let parent = unsafe { GetDesktopWindow() };
+        let (credential_id, prf) = pad_hardware::register_and_derive(
+            parent,
+            document_id,
+            memo_id,
+            Duration::from_secs(120),
+            &cancellation,
+        )
+        .expect("YubiKey 5 registration and scoped memo assertion");
+        let mut created = MemoProtectionSession::new(document_id, memo_id, timeout)
+            .unwrap()
+            .with_worker_image(image.clone());
+        let (envelope, recovery_key) = created
+            .create_with_prf(
+                &credential_id,
+                prf,
+                bytes(b"isolated YubiKey 5 memo content"),
+            )
+            .expect("real worker memo seal");
+        assert_eq!(
+            hardware_hint(&envelope).unwrap().credential_id,
+            credential_id
+        );
+        created.lock();
+
+        let derived = pad_hardware::derive_for_envelope(
+            parent,
+            document_id,
+            memo_id,
+            &envelope,
+            Duration::from_secs(120),
+            &cancellation,
+        )
+        .expect("YubiKey 5 memo assertion after reopen");
+        let mut reopened = MemoProtectionSession::new(document_id, memo_id, timeout)
+            .unwrap()
+            .with_worker_image(image.clone());
+        assert_eq!(
+            reopened
+                .unlock_with_prf(&derived.credential_id, derived.prf, bytes(&envelope),)
+                .expect("real worker memo reopen")
+                .as_slice(),
+            b"isolated YubiKey 5 memo content"
+        );
+        reopened.lock();
+
+        let mut wrong_scope = MemoProtectionSession::new(document_id, memo_id + 1, timeout)
+            .unwrap()
+            .with_worker_image(image.clone());
+        assert_eq!(
+            wrong_scope
+                .unlock_with_recovery(bytes(recovery_key.as_bytes()), bytes(&envelope))
+                .err(),
+            Some(MemoError::Authentication)
+        );
+        let mut recovered = MemoProtectionSession::new(document_id, memo_id, timeout)
+            .unwrap()
+            .with_worker_image(image);
+        assert_eq!(
+            recovered
+                .unlock_with_recovery(bytes(recovery_key.as_bytes()), bytes(&envelope))
+                .expect("memo recovery remains scoped")
+                .as_slice(),
+            b"isolated YubiKey 5 memo content"
+        );
+    }
+
+    /// Real worker coverage uses deterministic test PRF bytes. Hardware
+    /// registration and user verification are checked separately on-device.
+    #[test]
+    #[ignore = "requires SAKURA_PAD_SESSION_TEST_EXE"]
+    fn real_worker_v3_memo_prf_and_recovery_routes() {
+        let image = PathBuf::from(
+            std::env::var_os("SAKURA_PAD_SESSION_TEST_EXE")
+                .expect("set SAKURA_PAD_SESSION_TEST_EXE to the built absolute session image"),
+        );
+        let timeout = Duration::from_secs(20);
+        let scope = [31; 16];
+        let id = b"test-fido-credential";
+        let prf = Zeroizing::new([53; 32]);
+        let mut created = MemoProtectionSession::new(scope, 19, timeout)
+            .unwrap()
+            .with_worker_image(image.clone());
+        let (envelope, key) = created
+            .create_with_password_and_prf(bytes(b"password"), id, prf, bytes(b"v3 secret"))
+            .unwrap();
+        assert_eq!(hardware_hint(&envelope).unwrap().credential_id, id);
+        created.lock();
+
+        let mut missing_key = MemoProtectionSession::new(scope, 19, timeout)
+            .unwrap()
+            .with_worker_image(image.clone());
+        assert_eq!(
+            missing_key
+                .unlock(bytes(b"password"), bytes(&envelope))
+                .err(),
+            Some(MemoError::Authentication)
+        );
+        let mut wrong_prf = MemoProtectionSession::new(scope, 19, timeout)
+            .unwrap()
+            .with_worker_image(image.clone());
+        assert_eq!(
+            wrong_prf
+                .unlock_with_password_and_prf(
+                    bytes(b"password"),
+                    id,
+                    Zeroizing::new([54; 32]),
+                    bytes(&envelope),
+                )
+                .err(),
+            Some(MemoError::Authentication)
+        );
+        let mut unlocked = MemoProtectionSession::new(scope, 19, timeout)
+            .unwrap()
+            .with_worker_image(image.clone());
+        assert_eq!(
+            unlocked
+                .unlock_with_password_and_prf(
+                    bytes(b"password"),
+                    id,
+                    Zeroizing::new([53; 32]),
+                    bytes(&envelope),
+                )
+                .unwrap()
+                .as_slice(),
+            b"v3 secret"
+        );
+        unlocked.lock();
+        let mut recovered = MemoProtectionSession::new(scope, 19, timeout)
+            .unwrap()
+            .with_worker_image(image);
+        assert_eq!(
+            recovered
+                .unlock_with_recovery(bytes(key.as_bytes()), bytes(&envelope))
+                .unwrap()
+                .as_slice(),
+            b"v3 secret"
+        );
     }
 
     /// Another package's binary is not built by `cargo test -p sakura-renderer`.

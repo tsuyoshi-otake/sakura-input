@@ -1,15 +1,14 @@
 # Sakura Pad crypto and session worker (#269)
 
-The renderer now calls the sibling `sakura_pad_session` executable for
-whole-Pad password protection. Existing Pad files remain in the v2
-current-user DPAPI format until the user explicitly enables protection; that
-transaction publishes a protected v3 store. The installer inventory includes
-the session executable, but no user installation or real-data migration has
-been performed by this work. The older one-request `sakura_pad_worker`
-executable remains an isolated prototype and is not installed. Recovery-key
-and per-memo primitives in this crate are not connected to the Pad UI yet.
-The [product plan](../../docs/plans/sakura-pad-protection.md) owns the
-remaining flows.
+The renderer calls the sibling `sakura_pad_session` executable for whole-Pad
+and per-memo password, recovery-key, and WebAuthn PRF protection. Existing Pad
+files remain in the current-user DPAPI format until the user explicitly enables
+protection; the cutover publishes a protected v3 whole-Pad store or v4 store
+with individually protected memos. The installer inventory includes the
+session executable, but no user installation or real-data migration has been
+performed by this work. The older one-request `sakura_pad_worker` executable
+remains an isolated prototype and is not installed. The [product plan](../../docs/plans/sakura-pad-protection.md)
+owns the remaining release and verification criteria.
 
 ## Current contract
 
@@ -104,27 +103,31 @@ the worker then exits. All failure statuses have empty payloads. Password and
 plaintext frame copies are zeroized on drop. These IDs provide correlation and
 replay rejection within one trusted child, not peer authentication.
 
-Frames are limited before allocation (8 MiB plaintext, at most 8 MiB plus 153
-bytes of v1 envelope overhead or 214 bytes of v2 envelope overhead, and at
-most 1024 password bytes). The recoverable creation response contains one
+Frames are limited before allocation (8 MiB plaintext, at most 8 MiB plus 1252
+bytes of v3 envelope overhead, and at most 1024 password bytes). The
+recoverable creation response contains one
 bounded, length-delimited envelope and a canonical 77-byte display key; the
 protocol parser rejects truncated, extra, or malformed data. The v2 format
 explicitly permits password **or** recovery-key unlock, with separately
 authenticated data-key wraps. This is a recovery route, not a two-factor
-policy. The UI currently uses only v1; v2 creation, key display/confirmation,
-and recovery unlock are not available to users. A watchdog
+policy. The Pad UI uses recoverable v2 and hardware-backed v3 envelopes,
+including independent per-memo scopes. It displays the one-time recovery key
+and checks a suffix copied from the saved key before the protected cutover.
+A watchdog
 terminates the child after 60 seconds without a completed response or five
 minutes of total life, even with a blocked pipe. The parent must still own the
 exact child, drain responses, enforce its own deadline, and reap it on cancel.
 Watchdog expiry exits with code 124 and cannot guarantee a response frame.
 
-Before shipping the complete protection plan: connect and verify a recovery
-registration flow, independent per-memo keys and locked entries, YubiKey PRF,
-optional local TOTP confirmation, idle/sleep behavior, UI Automation and
-clipboard checks, and end-to-end failure recovery. This draft's renderer
-already provides the password-based whole-Pad path, an authenticated protected
-store cutover, locked native surface, explicit save epochs, session-lock
-masking, and installer inventory. YubiKey PRF and TOTP are not implemented.
+Before shipping the complete protection plan: finish the native YubiKey UI
+flow, spare-key management, TOTP interaction and rollback verification,
+UI Automation and clipboard review, and end-to-end forced-exit recovery.
+This draft's renderer provides whole-Pad and per-memo password/key protection,
+the recoverable storage cutovers, locked native surfaces, local-only TOTP
+confirmation, idle/session masking, explicit save epochs, and installer
+inventory. A physical YubiKey 5 NFC with firmware 5.4.3 passed isolated
+whole-Pad worker sealing and reopening; a later per-memo interactive attempt
+timed out during Windows registration, so that path remains unverified.
 
 ## Verification
 

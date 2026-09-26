@@ -43,6 +43,7 @@ fn current_format_roundtrips_every_setting() {
         neural_reranker_scope: NeuralRerankerScope::AllNormalConversions,
         appearance_theme: AppearanceTheme::Dark,
         pad_shortcut: PadShortcut::DoubleCtrl,
+        pad_idle_lock_timeout: PadIdleLockTimeout::ThirtyMinutes,
         developer_mode: true,
     };
     let parsed = parse_preferences(&serialize_preferences(preferences)).expect("parse");
@@ -85,6 +86,48 @@ fn pad_shortcut_is_optional_and_unknown_values_fail_closed() {
             .pad_shortcut,
         PadShortcut::DoubleCtrl
     );
+}
+
+#[test]
+fn pad_idle_lock_timeout_is_bounded_optional_and_roundtrips() {
+    assert_eq!(
+        Preferences::default().pad_idle_lock_timeout,
+        PadIdleLockTimeout::FiveMinutes
+    );
+    assert_eq!(
+        parse_preferences("[input]\n")
+            .expect("missing optional timeout")
+            .preferences
+            .pad_idle_lock_timeout,
+        PadIdleLockTimeout::FiveMinutes
+    );
+    for timeout in PadIdleLockTimeout::ALL {
+        let preferences = Preferences {
+            pad_idle_lock_timeout: timeout,
+            ..Preferences::default()
+        };
+        let serialized = serialize_preferences(preferences);
+        assert!(serialized.contains(&format!("pad-idle-lock-minutes = \"{}\"", timeout.name())));
+        assert_eq!(
+            parse_preferences(&serialized)
+                .expect("serialized timeout")
+                .preferences
+                .pad_idle_lock_timeout,
+            timeout
+        );
+        assert_eq!(PadIdleLockTimeout::from_name(timeout.name()), Some(timeout));
+        assert_eq!(timeout.minutes().to_string(), timeout.name());
+    }
+    for invalid in ["0", "2", "60", "forever", "05"] {
+        let text = format!("[input]\npad-idle-lock-minutes = \"{invalid}\"\n");
+        assert_eq!(
+            parse_preferences(&text)
+                .expect("unknown timeout is structurally valid")
+                .preferences
+                .pad_idle_lock_timeout,
+            PadIdleLockTimeout::FiveMinutes
+        );
+    }
 }
 
 #[test]
@@ -667,6 +710,7 @@ fn notation_style_apply_to_only_touches_its_seven_fields() {
         neural_reranker_scope: NeuralRerankerScope::AllNormalConversions,
         appearance_theme: AppearanceTheme::Dark,
         pad_shortcut: PadShortcut::DoubleCtrl,
+        pad_idle_lock_timeout: PadIdleLockTimeout::FifteenMinutes,
         developer_mode: true,
     };
 

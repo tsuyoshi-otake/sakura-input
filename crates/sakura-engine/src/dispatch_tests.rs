@@ -7507,15 +7507,15 @@ fn the_session_table_reports_busy_once_full() {
 }
 
 #[test]
-fn hello_with_the_previous_v22_version_is_rejected() {
+fn hello_with_the_previous_v23_version_is_rejected() {
     assert_eq!(
-        PROTOCOL_VERSION, 23,
-        "v23 carries the independent single-kanji candidate tail"
+        PROTOCOL_VERSION, 24,
+        "v24 carries the Pad idle-lock interval"
     );
     let mut dispatcher = builtin_dispatcher();
     let mut out = OutputBuf::new();
 
-    let reply = dispatcher.dispatch(&Request::Hello { client_version: 22 }, &mut out);
+    let reply = dispatcher.dispatch(&Request::Hello { client_version: 23 }, &mut out);
 
     assert_eq!(
         reply,
@@ -7524,10 +7524,10 @@ fn hello_with_the_previous_v22_version_is_rejected() {
 }
 
 #[test]
-fn hello_with_v23_version_is_accepted() {
+fn hello_with_v24_version_is_accepted() {
     assert_eq!(
-        PROTOCOL_VERSION, 23,
-        "v23 carries the independent single-kanji candidate tail"
+        PROTOCOL_VERSION, 24,
+        "v24 carries the Pad idle-lock interval"
     );
     let mut dispatcher = builtin_dispatcher();
     let mut out = OutputBuf::new();

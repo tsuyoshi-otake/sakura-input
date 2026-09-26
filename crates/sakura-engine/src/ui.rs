@@ -46,9 +46,10 @@ use sakura_ipc::debug_trace;
 use sakura_proto::types::CandidatePresentation;
 use sakura_proto::{
     AppearanceTheme, Candidate, CandidateDetail, CandidateKind, CandidateList, FixedStr, FixedVec,
-    Mode, OutputBuf, PadShortcut, Revision, ScreenRect, SessionId, UiState, CANDIDATE_PAGE_SIZE,
-    MAX_CANDIDATES, MAX_CANDIDATE_DETAIL_DEFINITION_BYTES, MAX_CANDIDATE_DETAIL_READING_BYTES,
-    MAX_CANDIDATE_DETAIL_RELATIONS, MAX_CANDIDATE_DETAIL_RELATION_BYTES, MAX_CANDIDATE_TEXT_BYTES,
+    Mode, OutputBuf, PadIdleLockTimeout, PadShortcut, Revision, ScreenRect, SessionId, UiState,
+    CANDIDATE_PAGE_SIZE, MAX_CANDIDATES, MAX_CANDIDATE_DETAIL_DEFINITION_BYTES,
+    MAX_CANDIDATE_DETAIL_READING_BYTES, MAX_CANDIDATE_DETAIL_RELATIONS,
+    MAX_CANDIDATE_DETAIL_RELATION_BYTES, MAX_CANDIDATE_TEXT_BYTES,
 };
 
 /// How long [`UiBoard::wait_past`] blocks before answering with unchanged
@@ -443,6 +444,7 @@ struct UiSnapshot {
     revision: Revision,
     appearance_theme: AppearanceTheme,
     pad_shortcut: PadShortcut,
+    pad_idle_lock_timeout: PadIdleLockTimeout,
     mode: Option<Mode>,
     has_candidates: bool,
     candidates: CandidateSnapshot,
@@ -466,11 +468,16 @@ struct UiSnapshot {
 }
 
 impl UiSnapshot {
-    fn initial(appearance_theme: AppearanceTheme, pad_shortcut: PadShortcut) -> Self {
+    fn initial(
+        appearance_theme: AppearanceTheme,
+        pad_shortcut: PadShortcut,
+        pad_idle_lock_timeout: PadIdleLockTimeout,
+    ) -> Self {
         Self {
             revision: 1,
             appearance_theme,
             pad_shortcut,
+            pad_idle_lock_timeout,
             mode: None,
             has_candidates: false,
             candidates: CandidateSnapshot::new(),
@@ -490,6 +497,7 @@ impl UiSnapshot {
             revision: self.revision,
             appearance_theme: self.appearance_theme,
             pad_shortcut: self.pad_shortcut,
+            pad_idle_lock_timeout: self.pad_idle_lock_timeout,
             mode: self.mode,
             candidates: self.has_candidates.then(|| self.candidates.to_owned()),
             candidate_detail: self
@@ -515,6 +523,8 @@ pub struct UiBoard {
     /// atomic is only used for the poisoned-lock recovery state; normal
     /// snapshots are always read under `state`.
     pad_shortcut: AtomicU8,
+    /// Last published interval for poisoned-lock recovery.
+    pad_idle_lock_timeout: AtomicU8,
     state: Mutex<UiSnapshot>,
     changed: Condvar,
     /// Watchers that have been handed a state but have not finished
@@ -560,10 +570,27 @@ impl UiBoard {
         appearance_theme: AppearanceTheme,
         pad_shortcut: PadShortcut,
     ) -> Self {
+        Self::with_global_preferences(
+            appearance_theme,
+            pad_shortcut,
+            PadIdleLockTimeout::default(),
+        )
+    }
+
+    pub fn with_global_preferences(
+        appearance_theme: AppearanceTheme,
+        pad_shortcut: PadShortcut,
+        pad_idle_lock_timeout: PadIdleLockTimeout,
+    ) -> Self {
         UiBoard {
             appearance_theme: AtomicU8::new(appearance_theme as u8),
             pad_shortcut: AtomicU8::new(pad_shortcut as u8),
-            state: Mutex::new(UiSnapshot::initial(appearance_theme, pad_shortcut)),
+            pad_idle_lock_timeout: AtomicU8::new(pad_idle_lock_timeout as u8),
+            state: Mutex::new(UiSnapshot::initial(
+                appearance_theme,
+                pad_shortcut,
+                pad_idle_lock_timeout,
+            )),
             changed: Condvar::new(),
             delivering: Mutex::new(0),
             quiet: Condvar::new(),
@@ -582,7 +609,13 @@ impl UiBoard {
         let changed = match self.state.lock() {
             Ok(mut state) => {
                 let pad_shortcut = state.pad_shortcut;
-                self.apply_global_preferences(&mut state, appearance_theme, pad_shortcut)
+                let pad_idle_lock_timeout = state.pad_idle_lock_timeout;
+                self.apply_global_preferences(
+                    &mut state,
+                    appearance_theme,
+                    pad_shortcut,
+                    pad_idle_lock_timeout,
+                )
             }
             Err(_) => false,
         };
@@ -600,7 +633,13 @@ impl UiBoard {
         let changed = match self.state.lock() {
             Ok(mut state) => {
                 let appearance_theme = state.appearance_theme;
-                self.apply_global_preferences(&mut state, appearance_theme, pad_shortcut)
+                let pad_idle_lock_timeout = state.pad_idle_lock_timeout;
+                self.apply_global_preferences(
+                    &mut state,
+                    appearance_theme,
+                    pad_shortcut,
+                    pad_idle_lock_timeout,
+                )
             }
             Err(_) => false,
         };
@@ -621,8 +660,36 @@ impl UiBoard {
     ) -> bool {
         let changed = match self.state.lock() {
             Ok(mut state) => {
-                self.apply_global_preferences(&mut state, appearance_theme, pad_shortcut)
+                let pad_idle_lock_timeout = state.pad_idle_lock_timeout;
+                self.apply_global_preferences(
+                    &mut state,
+                    appearance_theme,
+                    pad_shortcut,
+                    pad_idle_lock_timeout,
+                )
             }
+            Err(_) => false,
+        };
+        if changed {
+            self.changed.notify_all();
+        }
+        changed
+    }
+
+    /// Publishes all user-wide renderer preferences in a single revision.
+    pub fn set_global_preferences(
+        &self,
+        appearance_theme: AppearanceTheme,
+        pad_shortcut: PadShortcut,
+        pad_idle_lock_timeout: PadIdleLockTimeout,
+    ) -> bool {
+        let changed = match self.state.lock() {
+            Ok(mut state) => self.apply_global_preferences(
+                &mut state,
+                appearance_theme,
+                pad_shortcut,
+                pad_idle_lock_timeout,
+            ),
             Err(_) => false,
         };
         if changed {
@@ -636,17 +703,24 @@ impl UiBoard {
         state: &mut UiSnapshot,
         appearance_theme: AppearanceTheme,
         pad_shortcut: PadShortcut,
+        pad_idle_lock_timeout: PadIdleLockTimeout,
     ) -> bool {
-        if state.appearance_theme == appearance_theme && state.pad_shortcut == pad_shortcut {
+        if state.appearance_theme == appearance_theme
+            && state.pad_shortcut == pad_shortcut
+            && state.pad_idle_lock_timeout == pad_idle_lock_timeout
+        {
             return false;
         }
         state.revision = state.revision.wrapping_add(1);
         state.appearance_theme = appearance_theme;
         state.pad_shortcut = pad_shortcut;
+        state.pad_idle_lock_timeout = pad_idle_lock_timeout;
         self.appearance_theme
             .store(appearance_theme as u8, Ordering::Release);
         self.pad_shortcut
             .store(pad_shortcut as u8, Ordering::Release);
+        self.pad_idle_lock_timeout
+            .store(pad_idle_lock_timeout as u8, Ordering::Release);
         true
     }
 
@@ -1160,6 +1234,10 @@ impl UiBoard {
                         self.appearance_theme.load(Ordering::Acquire),
                     ),
                     pad_shortcut: pad_shortcut_from_u8(self.pad_shortcut.load(Ordering::Acquire)),
+                    pad_idle_lock_timeout: PadIdleLockTimeout::from_minutes(
+                        self.pad_idle_lock_timeout.load(Ordering::Acquire),
+                    )
+                    .unwrap_or_default(),
                     mode: None,
                     candidates: None,
                     candidate_detail: None,
@@ -1302,6 +1380,33 @@ mod tests {
         assert_eq!(updated.appearance_theme, AppearanceTheme::Light);
         assert_ne!(updated.revision, initial.revision);
         assert!(!board.set_appearance_theme(AppearanceTheme::Light));
+    }
+
+    #[test]
+    fn changed_pad_idle_lock_timeout_wakes_renderer_once() {
+        let board = UiBoard::new();
+        let initial = look(&board, 0);
+        assert_eq!(
+            initial.pad_idle_lock_timeout,
+            PadIdleLockTimeout::FiveMinutes
+        );
+        assert!(board.set_global_preferences(
+            initial.appearance_theme,
+            initial.pad_shortcut,
+            PadIdleLockTimeout::FifteenMinutes,
+        ));
+        let updated = look(&board, initial.revision);
+        assert_eq!(
+            updated.pad_idle_lock_timeout,
+            PadIdleLockTimeout::FifteenMinutes
+        );
+        assert_eq!(updated.revision, initial.revision + 1);
+        assert!(!board.set_global_preferences(
+            updated.appearance_theme,
+            updated.pad_shortcut,
+            updated.pad_idle_lock_timeout,
+        ));
+        assert_eq!(look(&board, 0).revision, updated.revision);
     }
 
     #[test]

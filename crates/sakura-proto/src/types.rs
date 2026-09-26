@@ -13,7 +13,8 @@
 //!   [`crate::message::Header`], not by silently guessing a value.
 
 pub use sakura_values::{
-    AppearanceTheme, InputScope, KeyCode, KeyInput, Mode, Modifiers, PadShortcut,
+    AppearanceTheme, InputScope, KeyCode, KeyInput, Mode, Modifiers, PadIdleLockTimeout,
+    PadShortcut,
 };
 
 use crate::wire::{Error, Reader, Sink};
@@ -910,6 +911,27 @@ mod tests {
         VecSink::new(&mut buf).write_u8(2).expect("write");
         let mut reader = Reader::new(&buf);
         assert_eq!(PadShortcut::decode(&mut reader), Err(Error::BadEnum));
+    }
+
+    #[test]
+    fn pad_idle_lock_timeout_is_bounded_and_strict_on_the_wire() {
+        for expected in PadIdleLockTimeout::ALL {
+            let mut buf = Vec::new();
+            expected
+                .encode(&mut VecSink::new(&mut buf))
+                .expect("encode");
+            assert_eq!(buf, [expected.minutes() as u8]);
+            assert_eq!(
+                PadIdleLockTimeout::decode(&mut Reader::new(&buf)),
+                Ok(expected)
+            );
+        }
+        for invalid in [0, 2, 31, u8::MAX] {
+            assert_eq!(
+                PadIdleLockTimeout::decode(&mut Reader::new(&[invalid])),
+                Err(Error::BadEnum)
+            );
+        }
     }
 
     #[test]

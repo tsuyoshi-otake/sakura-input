@@ -3,7 +3,9 @@ use std::io::{Read, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 use std::time::{Duration, Instant};
 
-use sakura_pad_worker::envelope::{open_with_password_v2, open_with_recovery_v2, RecoveryKey};
+use sakura_pad_worker::envelope::{
+    open_with_password_v2, open_with_recovery_v2, unlock_with_prf, RecoveryKey,
+};
 use sakura_pad_worker::session_protocol::{self, Operation, Request, Response, Status};
 use sakura_pad_worker::{seal, Scope};
 use zeroize::Zeroizing;
@@ -142,6 +144,105 @@ fn recoverable_creation_returns_exactly_one_key_and_both_routes_reseal() {
             .status,
         Status::Success
     );
+    child.exit_within(Duration::from_secs(2));
+}
+
+#[test]
+fn v3_session_creates_prf_and_and_policies_reseals_and_recovers() {
+    const CREDENTIAL: &[u8] = b"synthetic-yubikey-credential";
+    const PRF: [u8; 32] = [0x6D; 32];
+    const AND_PASSWORD: &[u8] = b"password plus authenticator";
+    let mut child = OwnedChild::spawn();
+
+    let mut create = request(
+        1,
+        1,
+        Operation::CreatePrfV3,
+        session_protocol::encode_v3_auth_payload(CREDENTIAL, &PRF, b"PRF memo")
+            .unwrap()
+            .to_vec(),
+    );
+    create.vault_id = VAULT;
+    let created = child.exchange(&create);
+    assert_eq!(created.status, Status::Success);
+    let recovery = session_protocol::parse_created_recovery(&created.payload).unwrap();
+    let recovery_key = RecoveryKey::decode(recovery.recovery_key).unwrap();
+    let envelope = recovery.envelope.to_vec();
+    assert_eq!(
+        &*unlock_with_prf(Scope::pad(VAULT), CREDENTIAL, &PRF, &envelope)
+            .unwrap()
+            .0,
+        b"PRF memo"
+    );
+    let resealed = child.exchange(&request(
+        2,
+        1,
+        Operation::Reseal,
+        b"changed PRF memo".to_vec(),
+    ));
+    assert_eq!(resealed.status, Status::Success);
+    assert_eq!(
+        &*unlock_with_prf(Scope::pad(VAULT), CREDENTIAL, &PRF, &resealed.payload)
+            .unwrap()
+            .0,
+        b"changed PRF memo"
+    );
+    child.exchange(&request(3, 1, Operation::Lock, vec![]));
+
+    let auth =
+        session_protocol::encode_v3_auth_payload(CREDENTIAL, &PRF, &resealed.payload).unwrap();
+    let mut unlock = request(4, 2, Operation::UnlockPrfV3, auth.to_vec());
+    unlock.vault_id = VAULT;
+    assert_eq!(&*child.exchange(&unlock).payload, b"changed PRF memo");
+    let v3_reseal = child.exchange(&request(
+        5,
+        2,
+        Operation::Reseal,
+        b"recovered PRF memo".to_vec(),
+    ));
+    child.exchange(&request(6, 2, Operation::Lock, vec![]));
+    let mut recovery_unlock = request(
+        7,
+        3,
+        Operation::UnlockRecoveryV3,
+        v3_reseal.payload.to_vec(),
+    );
+    recovery_unlock.vault_id = VAULT;
+    recovery_unlock.password = Zeroizing::new(recovery_key.encode().as_bytes().to_vec());
+    assert_eq!(
+        &*child.exchange(&recovery_unlock).payload,
+        b"recovered PRF memo"
+    );
+    child.exchange(&request(8, 3, Operation::Lock, vec![]));
+
+    let mut create_and = request(
+        9,
+        4,
+        Operation::CreatePasswordAndPrfV3,
+        session_protocol::encode_v3_auth_payload(CREDENTIAL, &PRF, b"AND memo")
+            .unwrap()
+            .to_vec(),
+    );
+    create_and.vault_id = VAULT;
+    create_and.password = Zeroizing::new(AND_PASSWORD.to_vec());
+    let and_created = child.exchange(&create_and);
+    assert_eq!(and_created.status, Status::Success);
+    let and_fields = session_protocol::parse_created_recovery(&and_created.payload).unwrap();
+    let and_envelope = and_fields.envelope.to_vec();
+    child.exchange(&request(10, 4, Operation::Lock, vec![]));
+    let prf_only =
+        session_protocol::encode_v3_auth_payload(CREDENTIAL, &PRF, &and_envelope).unwrap();
+    let mut missing_factor = request(11, 5, Operation::UnlockPrfV3, prf_only.to_vec());
+    missing_factor.vault_id = VAULT;
+    assert_eq!(child.exchange(&missing_factor).status, Status::Rejected);
+    let and_auth =
+        session_protocol::encode_v3_auth_payload(CREDENTIAL, &PRF, &and_envelope).unwrap();
+    let mut and_unlock = request(12, 6, Operation::UnlockPasswordAndPrfV3, and_auth.to_vec());
+    and_unlock.vault_id = VAULT;
+    and_unlock.password = Zeroizing::new(AND_PASSWORD.to_vec());
+    assert_eq!(&*child.exchange(&and_unlock).payload, b"AND memo");
+    let shutdown = child.exchange(&request(13, 6, Operation::Shutdown, vec![]));
+    assert_eq!(shutdown.status, Status::Success);
     child.exit_within(Duration::from_secs(2));
 }
 

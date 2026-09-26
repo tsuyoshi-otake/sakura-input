@@ -66,7 +66,7 @@ pub use preferences::{
     CONFIG_FORMAT_VERSION,
 };
 pub use romaji::Input;
-pub use sakura_values::{AppearanceTheme, PadShortcut};
+pub use sakura_values::{AppearanceTheme, PadIdleLockTimeout, PadShortcut};
 pub use text::TextSink;
 pub use user_dictionary::{
     UserDictionary, UserDictionaryEntry, UserDictionaryError, UserPartOfSpeech,

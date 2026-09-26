@@ -1,12 +1,16 @@
 # Sakura Pad protected-store transaction — #269
 
-Status: whole-Pad password and one-time recovery-key enrollment are connected
-in the checkout; the broader protection plan remains in progress. Existing
+Status: stage3 whole-Pad password, recovery-key, WebAuthn PRF, and optional
+local TOTP paths are implemented in the checkout; the broader protection plan
+remains in progress and PR #270 remains draft. Existing
 Pads stay in v1/v2 DPAPI storage until their owner explicitly enables
 protection. No migration of the user's actual Pad, installation, or release is
-claimed here. Per-memo password and recovery-key protection has separate
-evidence in `sakura-pad-memo-protection.md`; YubiKey and TOTP are not connected
-to the product.
+claimed here. Per-memo password, recovery-key, and WebAuthn PRF protection has
+separate evidence in `sakura-pad-memo-protection.md`. A physical YubiKey 5 NFC
+(firmware 5.4.3) successfully enrolled and reopened an isolated whole-Pad store
+through the real worker. This verifies the exercised API/storage path, not the
+full Pad UI flow or spare-key management. TOTP is local confirmation backed by a current-user DPAPI
+sidecar; it is not independent cryptographic protection or online 2FA.
 
 ## Rubric
 
@@ -25,10 +29,18 @@ to the product.
 The storage transaction owns the durable protected cutover and version guard.
 The worker owns password KDF, authenticated encryption, and the unlocked
 session. The renderer owns UI state, save epochs, confirmation before cutover,
-and the native locked surface. These contracts establish the whole-Pad
-password and recovery-key paths. UI Automation client traversal,
-forced-process-exit recovery of an uncertain unsaved edit, YubiKey PRF, TOTP,
-and migration of real user data remain separate acceptance criteria in
+and the native locked surface. The WebAuthn adapter requests user verification
+and derives scope-bound PRF material. The physical test first reproduced
+`PrfUnavailable` with a PRF-only registration request; requesting Windows'
+legacy `hmac-secret` extension during credential registration enabled the
+tested YubiKey 5 NFC path. Microsoft documents that its `webauthn.h` maps PRF
+values to the HMAC-secret extension ([header](https://github.com/microsoft/webauthn/blob/master/webauthn.h));
+Yubico documents the firmware capability matrix in its [technical manual](https://docs.yubico.com/hardware/yubikey/yk-tech-manual/yk5-firmware-overview.html).
+The TOTP sidecar owns its local secret,
+replay floor, and failure state. UI Automation client traversal,
+forced-process-exit recovery of an uncertain unsaved edit, full Pad UI key
+flow, spare-key management, broader TOTP rollback assurance, and migration of real user
+data remain separate acceptance criteria in
 `docs/plans/sakura-pad-protection.md`.
 
 ## Evidence recorded so far
@@ -54,6 +66,9 @@ and migration of real user data remain separate acceptance criteria in
   The isolated native UI passed key display/confirmation before cutover,
   recovery unlock, password unlock after reopening, cancellation with legacy
   writer restoration, and key erasure on a simulated Windows session lock.
+- Physical YubiKey 5 NFC, firmware 5.4.3: `pad_hardware::tests::physical_yubikey5_pad_prf_enroll_and_reopen` passed with repeated enrollment using the same PRF secret. The isolated real-worker test `pad_protection::process_tests::physical_yubikey5_seals_and_reopens_isolated_whole_pad` also passed, covering whole-Pad protected sealing and reopening. The PRF-only attempt failed with `PrfUnavailable`; adding the Windows legacy `hmac-secret` extension to registration fixed the exercised path. The complete Pad UI key test reached decrypted content once but failed teardown, and a later registration attempt timed out before recovery setup; it remains unverified. No device serial is recorded.
+- During WebAuthn calls the Pad parent releases its topmost z-order, restores it on completion, and rejects overlapping requests. A focused native-window test passed. Visibility of the actual Windows Security prompt over the real Pad remains to be observed.
+- Password-entry labeling was improved so the field remains visibly identified while editing; this is a focused UX change, not completion of the planned visual/accessibility matrix.
 - Storage cutover/fault tests: 31 pass; protected actor tests: four pass.
 - The quiet runner's workflow self-test passed after the new CI step was
   written in the form it recognizes.
@@ -62,8 +77,7 @@ and migration of real user data remain separate acceptance criteria in
   `cargo audit --file Cargo.lock` passed. The IRV regression gate returned
   success with warnings for the intentionally broad storage and CI scope.
 
-The native confirmation button records the user's assertion that the recovery
-key was saved. The plan's stronger in-product proof (masking the displayed key
-and asking the user to enter a portion from the saved copy) is still open.
-The isolated test verifies that the displayed key actually unlocks after a
-fresh session; it does not prove a user stored it externally.
+Native onboarding now shows the recovery key once, hides it, and asks the user
+to enter its final six alphanumeric characters before the durable cutover.
+The isolated test verifies that the displayed key unlocks after a fresh
+session. This check cannot prove that a user saved the key outside Pad.

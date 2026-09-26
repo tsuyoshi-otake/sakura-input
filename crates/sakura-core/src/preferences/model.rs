@@ -4,7 +4,7 @@
 
 use crate::keymap::Preset;
 use crate::width::{BracketStyle, Normalizer, PunctuationStyle, Width, WidthPolicy};
-use sakura_values::{AppearanceTheme, Mode, PadShortcut};
+use sakura_values::{AppearanceTheme, Mode, PadIdleLockTimeout, PadShortcut};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum SuggestAccept {
@@ -526,6 +526,9 @@ pub struct Preferences {
     /// Keyboard shortcut used to show or focus Sakura Pad. This is a global
     /// renderer preference and is intentionally not part of an app profile.
     pub pad_shortcut: PadShortcut,
+    /// Global Pad idle-lock choice. The renderer enforces it only while the
+    /// Pad is protected and unlocked; Settings never accesses Pad secrets.
+    pub pad_idle_lock_timeout: PadIdleLockTimeout,
     /// Enables the explicitly opt-in developer interaction history. The
     /// engine keeps this separate from ordinary learning so a normal install
     /// never records raw key events.
@@ -549,6 +552,7 @@ impl Default for Preferences {
             neural_reranker_scope: NeuralRerankerScope::LongTextOnly,
             appearance_theme: AppearanceTheme::Auto,
             pad_shortcut: PadShortcut::Disabled,
+            pad_idle_lock_timeout: PadIdleLockTimeout::FiveMinutes,
             developer_mode: false,
         }
     }
