@@ -7,7 +7,6 @@ use std::ffi::c_void;
 use std::mem::size_of;
 use std::sync::Once;
 
-use qrcodegen::{QrCode, QrCodeEcc};
 use windows::core::PCWSTR;
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
@@ -60,17 +59,8 @@ fn qr_image(uri: &str, rect: RECT) -> Option<QrImage> {
     if uri.len() > MAX_OTPAUTH_URI_BYTES {
         return None;
     }
-    let qr = QrCode::encode_text(uri, QrCodeEcc::Medium).ok()?;
-    let size = qr.size();
-    if size > 65 {
-        return None;
-    }
-    let mut modules = Zeroizing::new(Vec::with_capacity((size * size) as usize));
-    for y in 0..size {
-        for x in 0..size {
-            modules.push(u8::from(qr.get_module(x, y)));
-        }
-    }
+    let modules = crate::pad_totp_qr::encode(uri)?;
+    let size = 49;
     Some(QrImage {
         size,
         modules,
