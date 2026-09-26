@@ -39,6 +39,7 @@ mod pad_rail;
 mod pad_storage;
 mod pad_tooltip;
 mod pad_totp;
+mod pad_totp_qr;
 mod pad_totp_store;
 mod pad_totp_ui;
 mod pad_webauthn;

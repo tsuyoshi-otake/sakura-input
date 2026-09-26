@@ -17,7 +17,6 @@ sakura-ipc.workspace = true
 sakura-proto.workspace = true
 sakura-pad-session-proto.workspace = true
 zeroize = "=1.8.2"
-qrcodegen = "=1.8.0"
 windows-core.workspace = true
 
 [dependencies.windows]
