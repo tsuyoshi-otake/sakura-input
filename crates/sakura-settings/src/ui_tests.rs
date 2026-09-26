@@ -207,6 +207,22 @@ fn pad_shortcut_mapping_is_bounded_and_japanese() {
 }
 
 #[test]
+fn pad_idle_lock_timeout_mapping_rejects_invalid_selection() {
+    for timeout in PadIdleLockTimeout::ALL {
+        assert_eq!(
+            pad_idle_lock_timeout_from_index(Some(pad_idle_lock_timeout_index(timeout))),
+            Ok(timeout)
+        );
+    }
+    assert!(pad_idle_lock_timeout_from_index(None).is_err());
+    assert!(pad_idle_lock_timeout_from_index(Some(PadIdleLockTimeout::ALL.len())).is_err());
+    assert_eq!(
+        PadIdleLockTimeout::ALL.map(pad_idle_lock_timeout_label),
+        ["1分", "5分（既定）", "15分", "30分"]
+    );
+}
+
+#[test]
 fn update_status_is_japanese_at_the_settings_presentation_boundary() {
     assert_eq!(
         App::describe_update_check(&updater::UpdateCheckOutcome::Disabled),

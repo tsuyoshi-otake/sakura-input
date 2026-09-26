@@ -1,6 +1,6 @@
 use sakura_values::{
     AiTextOperation, AiTextStatus, AppearanceTheme, InputScope, KeyCode, KeyInput, Mode, Modifiers,
-    PadShortcut,
+    PadIdleLockTimeout, PadShortcut,
 };
 
 use crate::wire::{Error, Reader, Sink};
@@ -158,6 +158,16 @@ impl Wire for PadShortcut {
             1 => Ok(Self::DoubleCtrl),
             _ => Err(Error::BadEnum),
         }
+    }
+}
+
+impl Wire for PadIdleLockTimeout {
+    fn encode<S: Sink>(&self, w: &mut S) -> Result<(), Error> {
+        w.write_u8(*self as u8)
+    }
+
+    fn decode(r: &mut Reader<'_>) -> Result<Self, Error> {
+        PadIdleLockTimeout::from_minutes(r.read_u8()?).ok_or(Error::BadEnum)
     }
 }
 

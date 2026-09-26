@@ -1,6 +1,7 @@
 # Sakura Pad 全体・メモ単位の保護計画
 
-状態: 2026-09-27 に承認、実装中。追跡先は
+状態: 2026-09-27 に承認、Issue #269 の実装・検証中。PR は draft のまま。
+追跡先は
 [#269](https://github.com/tsuyoshi-otake/sakura-input/issues/269)（既存 Pad は #92）。
 最初の成果物は操作可能な画面試作と暗号処理の基礎。
 画面試作は [`docs/prototypes/sakura-pad-protection.html`](../prototypes/sakura-pad-protection.html)。
@@ -20,13 +21,23 @@ Sakura Pad専用ページとPadを開く入口を追加した。個別メモは 
 全体保護でも復旧キーを一度表示し、保存確認前は旧データのまま、確認後は
 パスワード・復旧キーの両方で解除できる。キャンセルと Windows ロック時の
 キー消去・旧保存処理への復帰を、隔離した実 Windows UI で確認した。
-YubiKey による鍵保護、TOTP の画面と永続状態、
-自動ロック・保護設定変更・障害注入の総合検証は未完了。現状の検証と限界は
+Windows WebAuthn PRF の登録・解除経路と、TOTP のローカル追加確認・DPAPI
+サイドカーは stage3 実装に含まれる。YubiKey 5 NFC firmware 5.4.3 での
+物理キー登録と解除を確認した。PRF-only の登録要求は `PrfUnavailable` となり、
+登録時にも Windows WebAuthn の legacy `hmac-secret` extension を要求する修正後、
+同じ秘密値での再登録・解除を確認した。さらに隔離した whole-Pad 実 worker で
+保護保存・再起動後の再解除を確認した。これは物理キーの API / 保存経路の証拠で、
+Pad 全 UI 経路や予備キー管理の完了を意味しない。TOTP サイドカーも同一ユーザーの DPAPI 保護であり、暗号鍵の解除を
+独立して防ぐオンライン二要素認証ではない。設定変更・自動ロック・障害注入の
+総合検証は未完了。パスワード入力欄には見えるラベルを追加し、値の意味が
+入力後も分かるようにした。現状の検証と限界は
 `verification/sakura-pad-protected-store.md` と
 `verification/sakura-pad-memo-protection.md` に記録する。旧形式への後退防止の
 初期検証は `verification/sakura-pad-protection-foundation.md` を参照。
-ユーザーは YubiKey 5 シリーズを所有。FIDO 接続と Windows WebAuthn API v9
-を読み取り確認したが、キーでの PRF 登録・解除成功を確認したものではない。
+実機検証は YubiKey 5 NFC firmware 5.4.3 で行った。登録では Windows の
+legacy `hmac-secret` extension が必要だった。仕様上の PRF 値は Windows API 側で
+WebAuthn PRF 値へ変換される（[Microsoft `webauthn.h`](https://github.com/microsoft/webauthn/blob/master/webauthn.h)）。
+YubiKey firmware 機能の対応表は [Yubico の技術マニュアル](https://docs.yubico.com/hardware/yubikey/yk-tech-manual/yk5-firmware-overview.html)を参照。
 
 ## 1. 提供する操作と保護範囲
 
@@ -229,9 +240,8 @@ Pad 本文16 / 補助13 logical px、8 logical px の基本余白、設定側は
 | レイアウトと状態 | 幅519/520/521、96/144/192 DPI、light/dark/high contrast で全状態を描画・確認 | 長い日本語、エラー文、ボタンが重ならず、操作と保護状態が読める |
 | 復旧と保存失敗 | `pad_protection_ui::recovery_and_save_failure` で紛失・失敗・取消を注入 | 次の操作が一つ以上示され、内容を漏らさず、消去へ誘導しない |
 
-実装前に、設定ページ・全体解除・個別解除・復旧の4画面と主要な失敗状態を、
-既存の見た目に合わせたクリック可能な試作で確認する。実際の秘密は使わない。
-試作での操作確認と、本番の暗号・ネイティブ UI の検証は分けて報告する。
+クリック可能な試作は画面構成の確認に使うもので、本番 UI の操作検証を代替しない。
+実装済みの画面・暗号経路と未検証の操作状態は、下記の検証記録で分けて報告する。
 
 ## 4. 現状と変更責任
 
@@ -239,7 +249,10 @@ Pad 本文16 / 補助13 logical px、8 logical px の基本余白、設定側は
 DPAPI で暗号化する。最大 200 メモ、タイトル 256 UTF-16 単位、本文 65,536
 UTF-16 単位、文書合計 4,000,000 UTF-16 単位。v1 からの読み込みにも対応する。
 `PadWindow::new` は起動時に文書全体を復号し、`PadState` に保持する。
-Pad 専用パスワード、ロック状態、TOTP、YubiKey の実装はない。
+stage3 では Pad 専用パスワード保護、ロック状態、WebAuthn PRF による
+YubiKey 系認証経路、ローカル TOTP 追加確認が実装されている。実機 YubiKey 5
+での登録・解除も、前掲のとおり隔離したテストで確認済み。TOTP は DPAPI サイドカー内の共有秘密とローカル
+照合を使う追加確認であって、ファイル復号を独立して保護するオンライン二要素ではない。
 
 | 責任 | 所有する知識・状態 | 他の責任に渡す契約 |
 |---|---|---|

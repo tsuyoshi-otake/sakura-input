@@ -35,8 +35,8 @@ pub(super) fn create_general_controls(
     let mut p = layout.page(
         parent,
         "Sakura Pad",
-        "起動キーを設定します。変更は［適用］を押すと保存されます。",
-        380,
+        "起動キーと保護中の自動ロック時間を設定します。変更は［適用］を押すと保存されます。",
+        500,
     )?;
     let pad_panel = p.window();
     p.section("起動キー", 100)?;
@@ -48,10 +48,16 @@ pub(super) fn create_general_controls(
         "Sakura Padは開くと最前面に表示されます。ショートカットを無効にすると、キーからは起動しません。",
         204,
     )?;
-    let pad_open = p.button("Sakura Padを開く", R::new(0, 264, 188, 34))?;
+    p.section("保護中の自動ロック", 252)?;
+    let pad_idle_lock_timeout = p.row_combo("操作がないとき", 300)?;
+    for value in PadIdleLockTimeout::ALL {
+        add_combo(pad_idle_lock_timeout, pad_idle_lock_timeout_label(value));
+    }
+    p.helper("保護したPadやメモを開いている間に適用します。", 354)?;
+    let pad_open = p.button("Sakura Padを開く", R::new(0, 400, 188, 34))?;
     p.helper(
-        "Pad 全体のパスワード保護は、Pad 内の［保護］から設定します。",
-        316,
+        "Pad内の［保護］と［このメモの保護と解除］から、パスワードやセキュリティキーを設定します。",
+        448,
     )?;
 
     let mut p = layout.page(
@@ -310,6 +316,7 @@ pub(super) fn create_general_controls(
         input_method_kana,
         default_mode,
         pad_shortcut,
+        pad_idle_lock_timeout,
         input_assist_space_width,
         input_assist_shift_space,
         ai_text_key,

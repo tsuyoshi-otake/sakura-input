@@ -36,7 +36,7 @@ use crate::width::{
 #[cfg(test)]
 use parse::parse_punctuation;
 #[cfg(test)]
-use sakura_values::{AppearanceTheme, Mode, PadShortcut};
+use sakura_values::{AppearanceTheme, Mode, PadIdleLockTimeout, PadShortcut};
 #[cfg(test)]
 use serialize::{mode_name, punctuation_name};
 

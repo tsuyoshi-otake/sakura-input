@@ -316,12 +316,18 @@ fn pad_shortcut_has_its_own_page_and_still_publishes_only_on_apply() {
     let mut fixture = Fixture::new();
     let original = fixture.saved().preferences.pad_shortcut;
     let double_ctrl = pad_shortcut_index(PadShortcut::DoubleCtrl);
+    let thirty_minutes = pad_idle_lock_timeout_index(PadIdleLockTimeout::ThirtyMinutes);
 
     fixture.app.show_topic_controls(INPUT_TOPIC_PAD);
     assert!(has_visible_style(fixture.app.general.pad_panel));
     assert!(!has_visible_style(fixture.app.general.basic_panel));
     select_combo(fixture.app.general.pad_shortcut, double_ctrl);
+    select_combo(fixture.app.general.pad_idle_lock_timeout, thirty_minutes);
     assert_eq!(fixture.saved().preferences.pad_shortcut, original);
+    assert_eq!(
+        fixture.saved().preferences.pad_idle_lock_timeout,
+        PadIdleLockTimeout::FiveMinutes
+    );
 
     let mut store = Store::new(&fixture, None);
     fixture.app.save_global_settings_to(&mut store).unwrap();
@@ -333,4 +339,35 @@ fn pad_shortcut_has_its_own_page_and_still_publishes_only_on_apply() {
         fixture.app.configuration.preferences.pad_shortcut,
         PadShortcut::DoubleCtrl
     );
+    assert_eq!(
+        fixture.saved().preferences.pad_idle_lock_timeout,
+        PadIdleLockTimeout::ThirtyMinutes
+    );
+    assert_eq!(
+        fixture.app.configuration.preferences.pad_idle_lock_timeout,
+        PadIdleLockTimeout::ThirtyMinutes
+    );
+}
+
+#[test]
+fn invalid_pad_idle_lock_choice_does_not_publish_configuration() {
+    let mut fixture = Fixture::new();
+    let original = fixture.saved();
+    // CB_SETCURSEL with -1 clears the selection, as can happen when a native
+    // control loses its value. Validation must fail before any save stage.
+    // SAFETY: the fixture owns this live native combo HWND, and CB_SETCURSEL
+    // does not retain the supplied integer selection index.
+    unsafe {
+        SendMessageW(
+            fixture.app.general.pad_idle_lock_timeout,
+            CB_SETCURSEL,
+            Some(WPARAM(usize::MAX)),
+            Some(LPARAM(0)),
+        );
+    }
+    let mut store = Store::new(&fixture, None);
+    assert!(fixture.app.save_global_settings_to(&mut store).is_err());
+    assert!(store.calls.is_empty());
+    assert_eq!(fixture.saved(), original);
+    assert_eq!(fixture.app.configuration, original);
 }

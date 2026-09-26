@@ -864,6 +864,16 @@ pub struct LoadOutcome {
     pub recovered_from_backup: bool,
 }
 
+/// Bounded, unauthenticated v3 header data for selecting the external key.
+/// It grants no access to Pad content; unlock must authenticate the complete
+/// envelope against the durable vault ID before using any document bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PadHardwareHint {
+    pub vault_id: [u8; 16],
+    pub credential_id: Vec<u8>,
+    pub requires_password: bool,
+}
+
 impl PadStore {
     pub fn default() -> Result<Self, StorageError> {
         let root = std::env::var_os("LOCALAPPDATA").ok_or(StorageError::MissingLocalAppData)?;
@@ -896,12 +906,20 @@ impl PadStore {
         &self.path
     }
 
+    /// Directory shared with Pad's scope-bound protection metadata.
+    pub fn directory(&self) -> &Path {
+        self.path.parent().expect("PadStore paths have a parent")
+    }
+
     /// Presence alone claims v4 ownership, including a damaged signal. The
     /// caller must use v4 recovery or report failure rather than open v3/v2.
+    /// A published whole-Pad intent supersedes retained v4 source evidence.
     pub fn has_v4_cutover(&self) -> Result<bool, StorageError> {
-        Ok(self.v4_intent.try_exists()?
-            || self.v4_marker.try_exists()?
-            || self.v4_floor.try_exists()?)
+        Ok(!self.intent.try_exists()?
+            && !self.marker.try_exists()?
+            && (self.v4_intent.try_exists()?
+                || self.v4_marker.try_exists()?
+                || self.v4_floor.try_exists()?))
     }
 
     pub fn load(&self) -> Result<LoadOutcome, StorageError> {
@@ -1025,17 +1043,21 @@ impl PadStore {
     }
 
     fn require_active_protected(&self) -> Result<[u8; VAULT_ID_LEN], StorageError> {
+        Ok(self.active_protected_intent()?.vault_id())
+    }
+
+    fn active_protected_intent(&self) -> Result<ProtectedIntent, StorageError> {
         // Both independently protected signals are required. Their presence
         // blocks legacy readers even if either signal is damaged.
         if !self.intent.try_exists()? || !self.marker.try_exists()? {
             return Err(StorageError::ProtectedCutover);
         }
-        let intent_id = read_protected_signal(&self.intent, b"committing")?;
+        let intent = read_protected_intent(&self.intent)?;
         let marker_id = read_protected_signal(&self.marker, b"committed")?;
-        if intent_id != marker_id {
+        if intent.vault_id() != marker_id {
             return Err(StorageError::ProtectedCutover);
         }
-        Ok(intent_id)
+        Ok(intent)
     }
 
     pub fn protected_vault_id(&self) -> Result<[u8; VAULT_ID_LEN], StorageError> {
@@ -1051,7 +1073,42 @@ impl PadStore {
         if !self.intent.try_exists()? {
             return Err(StorageError::ProtectedCutover);
         }
-        read_protected_signal(&self.intent, b"committing")
+        Ok(read_protected_intent(&self.intent)?.vault_id())
+    }
+
+    /// Read at most the fixed v3 header and one bounded credential ID from
+    /// the published primary (or a missing primary's backup). This is only a
+    /// key-selection hint; the worker still authenticates all envelope bytes.
+    pub fn protected_hardware_hint(&self) -> Result<Option<PadHardwareHint>, StorageError> {
+        let _lock = self.exclusive_writer()?;
+        if !self.intent.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let vault_id = if self.marker.try_exists()? {
+            self.require_active_protected()?
+        } else {
+            read_protected_intent(&self.intent)?.vault_id()
+        };
+        match read_hardware_hint(&self.protected_path, vault_id) {
+            Ok(hint) => Ok(hint),
+            Err(StorageError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {
+                read_hardware_hint(&self.protected_backup, vault_id)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// A v4 source and a v3 intent identify the pending v4-to-v3 transaction.
+    /// Source evidence remains after cutover to bind the original memo scope.
+    pub fn has_v4_to_protected_intent(&self) -> Result<bool, StorageError> {
+        let _lock = self.exclusive_writer()?;
+        if !self.intent.try_exists()? {
+            return Ok(false);
+        }
+        Ok(matches!(
+            read_protected_intent(&self.intent)?,
+            ProtectedIntent::FromV4 { .. }
+        ))
     }
 
     /// A present floor claims per-memo v3 recovery even when damaged.
@@ -1086,16 +1143,14 @@ impl PadStore {
     where
         F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
     {
-        let vault_id = self.require_active_protected()?;
+        let intent = self.active_protected_intent()?;
+        let vault_id = intent.vault_id();
         let floor = self.protected_memo_generation_floor(vault_id)?;
         match open_v3(&self.protected_path) {
             Ok((opened_id, _document)) if opened_id != vault_id => {
                 return Err(StorageError::ProtectedVerification)
             }
-            Ok((_, document))
-                if document.generation >= floor
-                    && (floor == 0 || document.document_id == vault_id) =>
-            {
+            Ok((_, document)) if intent.accepts(&document, floor) => {
                 return Ok(LoadOutcome {
                     document,
                     recovered_from_backup: false,
@@ -1106,9 +1161,7 @@ impl PadStore {
         }
         match open_v3(&self.protected_backup) {
             Ok((opened_id, document))
-                if opened_id == vault_id
-                    && document.generation >= floor
-                    && (floor == 0 || document.document_id == vault_id) =>
+                if opened_id == vault_id && intent.accepts(&document, floor) =>
             {
                 Ok(LoadOutcome {
                     document,
@@ -1157,7 +1210,8 @@ impl PadStore {
         let mut validated = next.encode()?;
         validated.fill(0);
         let _lock = self.exclusive_writer()?;
-        let vault_id = self.require_active_protected()?;
+        let intent = self.active_protected_intent()?;
+        let vault_id = intent.vault_id();
         let loaded = self.load_protected_unlocked(&mut open_v3)?;
         if loaded.recovered_from_backup {
             return Err(StorageError::ProtectedVerification);
@@ -1189,8 +1243,9 @@ impl PadStore {
             protects_plain = true;
         }
         if protects_plain {
-            if next.document_id != vault_id
-                || (expected.document_id != [0; 16] && expected.document_id != vault_id)
+            let document_id = intent.document_id_for_new_protection();
+            if next.document_id != document_id
+                || (expected.document_id != [0; 16] && expected.document_id != document_id)
             {
                 return Err(StorageError::InvalidFormat);
             }
@@ -1349,6 +1404,200 @@ impl PadStore {
         Ok(())
     }
 
+    /// Move an already-published v4 document into a whole-Pad vault. The
+    /// authenticated v4 document is sealed byte-for-byte: individual memo
+    /// envelopes retain their original document scope and ciphertext. The
+    /// v3 intent binds that scope and generation before v4 can be retired.
+    pub fn migrate_v4_to_protected<F>(
+        &self,
+        expected_v4: &PadDocument,
+        vault_id: [u8; VAULT_ID_LEN],
+        encrypted_v3: &[u8],
+        open_v3: F,
+    ) -> Result<(), StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        self.migrate_v4_to_protected_with_hook(expected_v4, vault_id, encrypted_v3, open_v3, |_| {
+            Ok(())
+        })
+    }
+
+    fn migrate_v4_to_protected_with_hook<F, H>(
+        &self,
+        expected_v4: &PadDocument,
+        vault_id: [u8; VAULT_ID_LEN],
+        encrypted_v3: &[u8],
+        mut open_v3: F,
+        mut hook: H,
+    ) -> Result<(), StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+        H: FnMut(MigrationPoint) -> Result<(), StorageError>,
+    {
+        if vault_id == [0; VAULT_ID_LEN]
+            || expected_v4.document_id == [0; 16]
+            || expected_v4.generation == 0
+            || encrypted_v3.is_empty()
+            || encrypted_v3.len() as u64 > MAX_PROTECTED_BYTES
+        {
+            return Err(StorageError::InvalidFormat);
+        }
+        let _lock = self.exclusive_writer()?;
+        if self.protected_memo_floor.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        self.require_expected_v4(expected_v4)?;
+        // No v3 intent exists and the exact v4 primary is authoritative.
+        // Retire an abandoned pre-intent attempt so a new one-time recovery
+        // key can be prepared after process death or a staging failure.
+        let mut stale_copy = false;
+        for path in [&self.protected_path, &self.protected_backup] {
+            if path.try_exists()? && fs::read(path)? != encrypted_v3 {
+                stale_copy = true;
+            }
+        }
+        if stale_copy || self.protected_temp.try_exists()? {
+            remove_if_present(&self.protected_temp)?;
+            remove_if_present(&self.protected_path)?;
+            remove_if_present(&self.protected_backup)?;
+        }
+        stage_protected_copy(&self.protected_temp, &self.protected_path, encrypted_v3)?;
+        hook(MigrationPoint::FirstProtectedCopy)?;
+        stage_protected_copy(&self.protected_temp, &self.protected_backup, encrypted_v3)?;
+        if self.protected_temp.try_exists()? {
+            return Err(StorageError::TempConflict);
+        }
+        hook(MigrationPoint::SecondProtectedCopy)?;
+        for path in [&self.protected_path, &self.protected_backup] {
+            let (opened_id, opened) =
+                open_v3(path).map_err(|_| StorageError::ProtectedVerification)?;
+            if opened_id != vault_id || opened != *expected_v4 {
+                return Err(StorageError::ProtectedVerification);
+            }
+        }
+        hook(MigrationPoint::CopiesVerified)?;
+        self.require_expected_v4(expected_v4)?;
+        remove_if_present(&signal_temp_path(&self.intent))?;
+        publish_protected_v4_intent(
+            &self.intent,
+            vault_id,
+            expected_v4.document_id,
+            expected_v4.generation,
+        )?;
+        hook(MigrationPoint::IntentPublished)?;
+        self.retire_v4_source()?;
+        hook(MigrationPoint::LegacyRecoveryRetired)?;
+        self.tombstone_v4_primary()?;
+        hook(MigrationPoint::LegacyTombstoned)?;
+        publish_protected_signal(&self.marker, b"committed", vault_id)?;
+        hook(MigrationPoint::FinalMarkerPublished)?;
+        Ok(())
+    }
+
+    fn require_expected_v4(&self, expected: &PadDocument) -> Result<(), StorageError> {
+        let id = self.require_v4_intent()?;
+        if !self.v4_marker.try_exists()? || expected.document_id != id {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let current =
+            read_v4_document(&self.path).map_err(|_| StorageError::ProtectedVerification)?;
+        if current.document_id != id || current.generation < self.v4_generation_floor(id)? {
+            return Err(StorageError::ProtectedVerification);
+        }
+        if current != *expected {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        Ok(())
+    }
+
+    fn retire_v4_source(&self) -> Result<(), StorageError> {
+        // The marker is retired first so an older v4 reader cannot reopen the
+        // DPAPI primary once whole-Pad intent has been published.
+        remove_if_present(&self.v4_marker)?;
+        remove_if_present(&self.v4_backup)?;
+        remove_if_present(&self.v4_temp)?;
+        remove_if_present(&self.backup)?;
+        remove_if_present(&self.temp)?;
+        Ok(())
+    }
+
+    fn tombstone_v4_primary(&self) -> Result<(), StorageError> {
+        let already_tombstoned = match read_document(&self.path) {
+            Err(StorageError::UnsupportedVersion(PROTECTED_VERSION)) => true,
+            Err(StorageError::UnsupportedVersion(V4_VERSION)) => false,
+            Err(error @ StorageError::UnsupportedVersion(_)) => return Err(error),
+            _ => false,
+        };
+        if already_tombstoned {
+            return Ok(());
+        }
+        let mut tombstone = Vec::from(PROTECTED_MAGIC);
+        tombstone.extend_from_slice(&PROTECTED_VERSION.to_le_bytes());
+        let protected_tombstone = protect(&tombstone)?;
+        tombstone.fill(0);
+        let retire_temp = self.path.with_extension("bin.retire.tmp");
+        remove_if_present(&retire_temp)?;
+        write_flushed_temp(&retire_temp, &protected_tombstone)?;
+        if self.path.try_exists()? {
+            replace_without_backup(&self.path, &retire_temp)
+        } else {
+            move_first_write(&retire_temp, &self.path)
+        }
+    }
+
+    /// Resume a committed v4-to-v3 intent using the two authenticated v3
+    /// copies. The v4 primary and backups never authorize recovery.
+    pub fn recover_v4_to_protected_cutover<F>(
+        &self,
+        mut open_v3: F,
+    ) -> Result<PadDocument, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        let _lock = self.exclusive_writer()?;
+        let ProtectedIntent::FromV4 {
+            vault_id,
+            document_id,
+            generation,
+        } = read_protected_intent(&self.intent)?
+        else {
+            return Err(StorageError::ProtectedCutover);
+        };
+        if self.protected_memo_floor.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        if read_v4_signal(&self.v4_intent, b"committing")? != document_id
+            || generation < self.v4_generation_floor(document_id)?
+        {
+            return Err(StorageError::ProtectedCutover);
+        }
+        if self.marker.try_exists()?
+            && read_protected_signal(&self.marker, b"committed")? != vault_id
+        {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let (primary_id, primary) =
+            open_v3(&self.protected_path).map_err(|_| StorageError::ProtectedVerification)?;
+        let (backup_id, backup) =
+            open_v3(&self.protected_backup).map_err(|_| StorageError::ProtectedVerification)?;
+        if primary_id != vault_id
+            || backup_id != vault_id
+            || primary != backup
+            || primary.document_id != document_id
+            || primary.generation != generation
+        {
+            return Err(StorageError::ProtectedVerification);
+        }
+        self.retire_v4_source()?;
+        self.tombstone_v4_primary()?;
+        if !self.marker.try_exists()? {
+            remove_if_present(&signal_temp_path(&self.marker))?;
+            publish_protected_signal(&self.marker, b"committed", vault_id)?;
+        }
+        Ok(primary)
+    }
+
     /// Resume only an interrupted protected cutover. Recovery consults v3
     /// copies exclusively; no legacy document can authorize the transition.
     pub fn recover_protected_cutover<F>(&self, mut open_v3: F) -> Result<PadDocument, StorageError>
@@ -1417,22 +1666,20 @@ impl PadStore {
         F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
     {
         let _lock = self.exclusive_writer()?;
-        let vault_id = self.require_active_protected()?;
+        let intent = self.active_protected_intent()?;
+        let vault_id = intent.vault_id();
         if !self.protected_memo_floor.try_exists()? {
             return Err(StorageError::ProtectedCutover);
         }
         let floor = self.protected_memo_generation_floor(vault_id)?;
         if let Ok((opened_id, document)) = open_v3(&self.protected_path) {
-            if opened_id == vault_id
-                && document.document_id == vault_id
-                && document.generation >= floor
-            {
+            if opened_id == vault_id && intent.accepts(&document, floor) {
                 return Ok(document);
             }
         }
         let (backup_id, backup) =
             open_v3(&self.protected_backup).map_err(|_| StorageError::ProtectedVerification)?;
-        if backup_id != vault_id || backup.document_id != vault_id || backup.generation < floor {
+        if backup_id != vault_id || !intent.accepts(&backup, floor) {
             return Err(StorageError::ProtectedVerification);
         }
         remove_if_present(&self.protected_temp)?;
@@ -1669,6 +1916,11 @@ impl PadStore {
     }
 
     fn require_v4_intent(&self) -> Result<[u8; 16], StorageError> {
+        // Once v3 intent is durable, even a valid v4 primary or backup is no
+        // longer an authorized fallback. Presence wins over signal validity.
+        if self.intent.try_exists()? || self.marker.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
         if !self.v4_intent.try_exists()? {
             return Err(StorageError::ProtectedCutover);
         }
@@ -1900,6 +2152,150 @@ fn stage_protected_copy(temp: &Path, target: &Path, bytes: &[u8]) -> Result<(), 
     }
     write_flushed_temp(temp, bytes)?;
     move_first_write(temp, target)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ProtectedIntent {
+    Legacy([u8; VAULT_ID_LEN]),
+    FromV4 {
+        vault_id: [u8; VAULT_ID_LEN],
+        document_id: [u8; 16],
+        generation: u64,
+    },
+}
+
+impl ProtectedIntent {
+    fn vault_id(self) -> [u8; VAULT_ID_LEN] {
+        match self {
+            Self::Legacy(id) | Self::FromV4 { vault_id: id, .. } => id,
+        }
+    }
+
+    fn document_id_for_new_protection(self) -> [u8; 16] {
+        match self {
+            Self::Legacy(id) => id,
+            Self::FromV4 { document_id, .. } => document_id,
+        }
+    }
+
+    fn accepts(self, document: &PadDocument, memo_floor: u64) -> bool {
+        match self {
+            Self::Legacy(id) => {
+                document.generation >= memo_floor && (memo_floor == 0 || document.document_id == id)
+            }
+            Self::FromV4 {
+                document_id,
+                generation,
+                ..
+            } => {
+                document.document_id == document_id
+                    && document.generation >= generation.max(memo_floor)
+            }
+        }
+    }
+}
+
+fn publish_protected_v4_intent(
+    path: &Path,
+    vault_id: [u8; VAULT_ID_LEN],
+    document_id: [u8; 16],
+    generation: u64,
+) -> Result<(), StorageError> {
+    if vault_id == [0; VAULT_ID_LEN] || document_id == [0; 16] || generation == 0 {
+        return Err(StorageError::InvalidFormat);
+    }
+    let mut plaintext = Vec::from(PROTECTED_MAGIC);
+    plaintext.extend_from_slice(&PROTECTED_VERSION.to_le_bytes());
+    plaintext.extend_from_slice(b"from-v4");
+    plaintext.extend_from_slice(&vault_id);
+    plaintext.extend_from_slice(&document_id);
+    plaintext.extend_from_slice(&generation.to_le_bytes());
+    let protected = protect(&plaintext)?;
+    plaintext.fill(0);
+    let temp = signal_temp_path(path);
+    write_flushed_temp(&temp, &protected)?;
+    move_first_write(&temp, path)
+}
+
+fn read_hardware_hint(
+    path: &Path,
+    expected_vault_id: [u8; 16],
+) -> Result<Option<PadHardwareHint>, StorageError> {
+    let mut file = File::open(path)?;
+    let length = file.metadata()?.len();
+    if !(8..=MAX_PROTECTED_BYTES).contains(&length) {
+        return Err(StorageError::InvalidFormat);
+    }
+    let mut magic = [0_u8; 8];
+    file.read_exact(&mut magic)?;
+    if &magic == b"SKRPENV1" || &magic == b"SKRPENV2" {
+        return Ok(None);
+    }
+    if &magic != b"SKRPENV3" || length < 229 {
+        return Err(StorageError::InvalidFormat);
+    }
+    let mut prefix = [0_u8; 38];
+    prefix[..8].copy_from_slice(&magic);
+    file.read_exact(&mut prefix[8..])?;
+    if prefix[8] != 3
+        || prefix[9] != 1
+        || prefix[10] != 1
+        || prefix[11..27] != expected_vault_id
+        || prefix[27..35] != [0_u8; 8]
+    {
+        return Err(StorageError::InvalidFormat);
+    }
+    let requires_password = match prefix[35] {
+        1 => false,
+        2 => true,
+        _ => return Err(StorageError::InvalidFormat),
+    };
+    let credential_len = u16::from_le_bytes([prefix[36], prefix[37]]) as usize;
+    if !(1..=1024).contains(&credential_len) || length < (38 + credential_len) as u64 {
+        return Err(StorageError::InvalidFormat);
+    }
+    let mut credential_id = vec![0_u8; credential_len];
+    file.read_exact(&mut credential_id)?;
+    Ok(Some(PadHardwareHint {
+        vault_id: expected_vault_id,
+        credential_id,
+        requires_password,
+    }))
+}
+
+fn read_protected_intent(path: &Path) -> Result<ProtectedIntent, StorageError> {
+    let mut plaintext = read_decrypted(path).map_err(|_| StorageError::ProtectedCutover)?;
+    let result = if plaintext.starts_with(&PROTECTED_MAGIC)
+        && plaintext.get(8..10) == Some(PROTECTED_VERSION.to_le_bytes().as_slice())
+        && plaintext.get(10..20) == Some(b"committing".as_slice())
+        && plaintext.len() == 20 + VAULT_ID_LEN
+    {
+        let id: [u8; VAULT_ID_LEN] = plaintext[20..].try_into().unwrap();
+        (id != [0; VAULT_ID_LEN])
+            .then_some(ProtectedIntent::Legacy(id))
+            .ok_or(StorageError::ProtectedCutover)
+    } else if plaintext.starts_with(&PROTECTED_MAGIC)
+        && plaintext.get(8..10) == Some(PROTECTED_VERSION.to_le_bytes().as_slice())
+        && plaintext.get(10..17) == Some(b"from-v4".as_slice())
+        && plaintext.len() == 17 + VAULT_ID_LEN + 16 + 8
+    {
+        let id: [u8; VAULT_ID_LEN] = plaintext[17..33].try_into().unwrap();
+        let document_id: [u8; 16] = plaintext[33..49].try_into().unwrap();
+        let generation = u64::from_le_bytes(plaintext[49..57].try_into().unwrap());
+        if id == [0; VAULT_ID_LEN] || document_id == [0; 16] || generation == 0 {
+            Err(StorageError::ProtectedCutover)
+        } else {
+            Ok(ProtectedIntent::FromV4 {
+                vault_id: id,
+                document_id,
+                generation,
+            })
+        }
+    } else {
+        Err(StorageError::ProtectedCutover)
+    };
+    plaintext.fill(0);
+    result
 }
 
 fn publish_protected_signal(
@@ -2345,6 +2741,29 @@ mod tests {
 
     static NEXT: AtomicU64 = AtomicU64::new(1);
     const TEST_VAULT_ID: [u8; VAULT_ID_LEN] = [7; VAULT_ID_LEN];
+
+    #[test]
+    fn hardware_hint_classifies_legacy_envelopes_and_bounds_v3_id() {
+        let directory = temp_dir();
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("envelope");
+        for magic in [b"SKRPENV1", b"SKRPENV2"] {
+            fs::write(&path, magic).unwrap();
+            assert!(read_hardware_hint(&path, TEST_VAULT_ID).unwrap().is_none());
+        }
+        let mut malformed = vec![0_u8; 229];
+        malformed[..8].copy_from_slice(b"SKRPENV3");
+        malformed[8..11].copy_from_slice(&[3, 1, 1]);
+        malformed[11..27].copy_from_slice(&TEST_VAULT_ID);
+        malformed[35] = 1;
+        malformed[36..38].copy_from_slice(&1025_u16.to_le_bytes());
+        fs::write(&path, malformed).unwrap();
+        assert!(matches!(
+            read_hardware_hint(&path, TEST_VAULT_ID),
+            Err(StorageError::InvalidFormat)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
 
     fn temp_dir() -> PathBuf {
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
@@ -3794,6 +4213,256 @@ mod tests {
             publish_v4_floor(&store.v4_floor, next.document_id, next.generation),
             Err(StorageError::ProtectedCutover)
         ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    fn v4_with_protected_memo(store: &PadStore) -> PadDocument {
+        let old = document(
+            1,
+            vec![
+                PadMemo::new(1, "hidden title", "hidden body", 1),
+                PadMemo::new(2, "other title", "other body", 2),
+            ],
+        );
+        store.write(&old).unwrap();
+        let plain = store
+            .migrate_to_v4(
+                &old,
+                |id, document| {
+                    let mut next = document.clone();
+                    next.document_id = id;
+                    Ok(next)
+                },
+                |_, _, _| Ok(()),
+            )
+            .unwrap();
+        let mut protected = plain.clone();
+        protected.generation += 1;
+        protected.memos[0]
+            .protect_with_envelope(b"independent memo ciphertext".to_vec())
+            .unwrap();
+        store.write_v4(&plain, &protected).unwrap();
+        protected
+    }
+
+    #[test]
+    fn v4_to_whole_protection_preserves_memo_scope_and_retires_v4_recovery() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let expected = v4_with_protected_memo(&store);
+        let old_v4 = fs::read(&store.path).unwrap();
+        store
+            .migrate_v4_to_protected(
+                &expected,
+                TEST_VAULT_ID,
+                b"new whole-pad ciphertext",
+                |path| {
+                    if fs::read(path)? != b"new whole-pad ciphertext" {
+                        return Err(StorageError::ProtectedVerification);
+                    }
+                    Ok((TEST_VAULT_ID, expected.clone()))
+                },
+            )
+            .unwrap();
+        assert!(!store.has_v4_cutover().unwrap());
+        assert!(store.has_v4_to_protected_intent().unwrap());
+        assert_eq!(store.protected_vault_id().unwrap(), TEST_VAULT_ID);
+        assert!(!store.v4_backup.exists());
+        assert!(!store.v4_marker.exists());
+        assert!(!store.backup.exists());
+        assert!(!store.temp.exists());
+        assert_eq!(
+            fs::read(&store.protected_backup).unwrap(),
+            b"new whole-pad ciphertext"
+        );
+        assert!(matches!(
+            read_document(&store.path),
+            Err(StorageError::UnsupportedVersion(PROTECTED_VERSION))
+        ));
+        assert!(matches!(
+            store.load_v4(),
+            Err(StorageError::ProtectedCutover)
+        ));
+        assert!(matches!(
+            store.recover_v4_cutover(),
+            Err(StorageError::ProtectedCutover)
+        ));
+        let loaded = store
+            .load_protected(|path| {
+                if fs::read(path)? != b"new whole-pad ciphertext" {
+                    return Err(StorageError::ProtectedVerification);
+                }
+                Ok((TEST_VAULT_ID, expected.clone()))
+            })
+            .unwrap();
+        assert_eq!(loaded.document, expected);
+        assert_eq!(loaded.document.document_id, expected.document_id);
+        assert_eq!(
+            loaded.document.memos[0].protected_envelope(),
+            expected.memos[0].protected_envelope()
+        );
+        // Even a replayed valid v4 DPAPI primary has no v4 fallback path.
+        fs::write(&store.path, old_v4).unwrap();
+        assert!(matches!(
+            store.load_v4(),
+            Err(StorageError::ProtectedCutover)
+        ));
+        assert!(matches!(
+            store.write_v4(&expected, &expected),
+            Err(StorageError::ProtectedCutover)
+        ));
+        store
+            .recover_v4_to_protected_cutover(|path| {
+                if fs::read(path)? != b"new whole-pad ciphertext" {
+                    return Err(StorageError::ProtectedVerification);
+                }
+                Ok((TEST_VAULT_ID, expected.clone()))
+            })
+            .unwrap();
+        assert!(matches!(
+            read_document(&store.path),
+            Err(StorageError::UnsupportedVersion(PROTECTED_VERSION))
+        ));
+        let mut next = expected.clone();
+        next.generation += 1;
+        next.memos[1]
+            .protect_with_envelope(b"second independent envelope".to_vec())
+            .unwrap();
+        store
+            .write_protected(&expected, &next, b"updated whole-pad ciphertext", |path| {
+                match fs::read(path)?.as_slice() {
+                    b"new whole-pad ciphertext" => Ok((TEST_VAULT_ID, expected.clone())),
+                    b"updated whole-pad ciphertext" => Ok((TEST_VAULT_ID, next.clone())),
+                    _ => Err(StorageError::ProtectedVerification),
+                }
+            })
+            .unwrap();
+        assert_eq!(next.document_id, expected.document_id);
+        assert_eq!(
+            fs::read(&store.protected_backup).unwrap(),
+            b"updated whole-pad ciphertext"
+        );
+        assert_eq!(
+            store
+                .load_protected(|path| {
+                    match fs::read(path)?.as_slice() {
+                        b"new whole-pad ciphertext" => Ok((TEST_VAULT_ID, expected.clone())),
+                        b"updated whole-pad ciphertext" => Ok((TEST_VAULT_ID, next.clone())),
+                        _ => Err(StorageError::ProtectedVerification),
+                    }
+                })
+                .unwrap()
+                .document,
+            next
+        );
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn v4_to_whole_protection_faults_have_one_way_cutover() {
+        let points = [
+            MigrationPoint::FirstProtectedCopy,
+            MigrationPoint::SecondProtectedCopy,
+            MigrationPoint::CopiesVerified,
+            MigrationPoint::IntentPublished,
+            MigrationPoint::LegacyRecoveryRetired,
+            MigrationPoint::LegacyTombstoned,
+            MigrationPoint::FinalMarkerPublished,
+        ];
+        for point in points {
+            let directory = temp_dir();
+            let store = PadStore::at(&directory);
+            let expected = v4_with_protected_memo(&store);
+            let result = store.migrate_v4_to_protected_with_hook(
+                &expected,
+                TEST_VAULT_ID,
+                b"new whole-pad ciphertext",
+                |path| {
+                    if fs::read(path)? != b"new whole-pad ciphertext" {
+                        return Err(StorageError::ProtectedVerification);
+                    }
+                    Ok((TEST_VAULT_ID, expected.clone()))
+                },
+                |reached| {
+                    if reached == point {
+                        Err(StorageError::Io(io::Error::other("injected interruption")))
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert!(result.is_err(), "{point:?}");
+            let before_intent = matches!(
+                point,
+                MigrationPoint::FirstProtectedCopy
+                    | MigrationPoint::SecondProtectedCopy
+                    | MigrationPoint::CopiesVerified
+            );
+            if before_intent {
+                assert_eq!(store.load_v4().unwrap().document, expected);
+                assert!(!store.has_v4_to_protected_intent().unwrap());
+                // A fresh recovery key has different sealed bytes. Abandoned
+                // uncommitted copies must not permanently block enrollment.
+                store
+                    .migrate_v4_to_protected(
+                        &expected,
+                        [8; VAULT_ID_LEN],
+                        b"fresh whole-pad ciphertext",
+                        |path| {
+                            if fs::read(path)? != b"fresh whole-pad ciphertext" {
+                                return Err(StorageError::ProtectedVerification);
+                            }
+                            Ok(([8; VAULT_ID_LEN], expected.clone()))
+                        },
+                    )
+                    .unwrap();
+                assert_eq!(store.protected_vault_id().unwrap(), [8; VAULT_ID_LEN]);
+            } else {
+                assert!(!store.has_v4_cutover().unwrap());
+                assert!(matches!(
+                    store.load_v4(),
+                    Err(StorageError::ProtectedCutover)
+                ));
+                assert!(matches!(
+                    store.recover_v4_cutover(),
+                    Err(StorageError::ProtectedCutover)
+                ));
+                assert_eq!(
+                    store
+                        .recover_v4_to_protected_cutover(|path| {
+                            if fs::read(path)? != b"new whole-pad ciphertext" {
+                                return Err(StorageError::ProtectedVerification);
+                            }
+                            Ok((TEST_VAULT_ID, expected.clone()))
+                        })
+                        .unwrap(),
+                    expected
+                );
+                assert!(!store.v4_backup.exists());
+                assert!(!store.backup.exists());
+                assert_eq!(store.protected_vault_id().unwrap(), TEST_VAULT_ID);
+            }
+            let _ = fs::remove_dir_all(directory);
+        }
+    }
+
+    #[test]
+    fn v4_to_whole_protection_rechecks_exact_state_and_generation_floor() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let expected = v4_with_protected_memo(&store);
+        let mut advanced = expected.clone();
+        advanced.generation += 1;
+        store.write_v4(&expected, &advanced).unwrap();
+        assert!(matches!(
+            store.migrate_v4_to_protected(&expected, TEST_VAULT_ID, b"ciphertext", |_| Ok((
+                TEST_VAULT_ID,
+                expected.clone()
+            )),),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        assert!(!store.protected_path.exists());
+        assert!(!store.intent.exists());
         let _ = fs::remove_dir_all(directory);
     }
 }

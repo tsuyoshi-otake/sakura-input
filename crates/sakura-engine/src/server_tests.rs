@@ -339,6 +339,7 @@ fn disconnected_output_cannot_replace_newer_ui_state() {
 fn configured_dark_appearance_reaches_the_ui_state() {
     let preferences = Preferences {
         appearance_theme: sakura_core::AppearanceTheme::Dark,
+        pad_idle_lock_timeout: sakura_core::PadIdleLockTimeout::OneMinute,
         ..Preferences::default()
     };
     let server = Server::build(false, None, None, preferences, Arc::from([])).expect("server");
@@ -346,6 +347,10 @@ fn configured_dark_appearance_reaches_the_ui_state() {
     assert_eq!(
         look(&server.shared.ui, 0).appearance_theme,
         sakura_core::AppearanceTheme::Dark
+    );
+    assert_eq!(
+        look(&server.shared.ui, 0).pad_idle_lock_timeout,
+        sakura_core::PadIdleLockTimeout::OneMinute
     );
 }
 
@@ -357,6 +362,7 @@ fn configuration_publisher_replaces_input_snapshot_and_repaints_theme() {
     let preferences = Preferences {
         appearance_theme: sakura_core::AppearanceTheme::Dark,
         pad_shortcut: sakura_core::PadShortcut::DoubleCtrl,
+        pad_idle_lock_timeout: sakura_core::PadIdleLockTimeout::ThirtyMinutes,
         association_enabled: false,
         prediction_enabled: false,
         ..Preferences::default()
@@ -373,6 +379,10 @@ fn configuration_publisher_replaces_input_snapshot_and_repaints_theme() {
     assert_eq!(
         look(&server.shared.ui, 0).pad_shortcut,
         preferences.pad_shortcut
+    );
+    assert_eq!(
+        look(&server.shared.ui, 0).pad_idle_lock_timeout,
+        preferences.pad_idle_lock_timeout
     );
 }
 
@@ -1141,6 +1151,7 @@ fn oversized_ui_response() -> Response {
         revision: 1,
         appearance_theme: sakura_proto::AppearanceTheme::Auto,
         pad_shortcut: sakura_proto::PadShortcut::Disabled,
+        pad_idle_lock_timeout: sakura_proto::PadIdleLockTimeout::default(),
         mode: None,
         candidates: Some(CandidateList {
             kind: CandidateKind::Conversion,

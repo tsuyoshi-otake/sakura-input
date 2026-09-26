@@ -310,7 +310,10 @@ mod tests {
         ))
         .unwrap();
         assert_eq!(
-            client.exchange(request(), Duration::from_secs(5)).err(),
+            // A cold PowerShell process can take several seconds to start on
+            // loaded CI hosts; this test is about malformed framing, not the
+            // response deadline.
+            client.exchange(request(), Duration::from_secs(20)).err(),
             Some(ClientError::Protocol)
         );
         assert!(reaped(&mut client));

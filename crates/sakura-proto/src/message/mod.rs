@@ -62,6 +62,7 @@ mod tests {
             revision: 1,
             appearance_theme: AppearanceTheme::Auto,
             pad_shortcut: PadShortcut::Disabled,
+            pad_idle_lock_timeout: crate::PadIdleLockTimeout::default(),
             mode: None,
             candidates: None,
             candidate_detail: Some(detail()),

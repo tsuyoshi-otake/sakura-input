@@ -55,8 +55,8 @@ pub use output::{
 };
 pub use sakura_values::{
     AiTextOperation, AiTextStatus, AppearanceTheme, FixedStr, FixedVec, InputScope, KeyCode,
-    KeyInput, Mode, Modifiers, Overflow, PadShortcut, CANDIDATE_PAGE_SIZE, MAX_CANDIDATES,
-    MAX_CANDIDATE_DETAIL_DEFINITION_BYTES, MAX_CANDIDATE_DETAIL_READING_BYTES,
+    KeyInput, Mode, Modifiers, Overflow, PadIdleLockTimeout, PadShortcut, CANDIDATE_PAGE_SIZE,
+    MAX_CANDIDATES, MAX_CANDIDATE_DETAIL_DEFINITION_BYTES, MAX_CANDIDATE_DETAIL_READING_BYTES,
     MAX_CANDIDATE_DETAIL_RELATIONS, MAX_CANDIDATE_DETAIL_RELATION_BYTES,
     MAX_CANDIDATE_DETAIL_RELATION_TEXT_BYTES, MAX_CANDIDATE_TEXT_BYTES, MAX_COMMIT_BYTES,
     MAX_PREEDIT_BYTES, MAX_SEGMENTS,
@@ -71,7 +71,7 @@ pub use wire_types::Wire;
 
 /// The protocol version this crate implements. Carried in every payload;
 /// a decoder rejects any other value with `Error::UnsupportedVersion`.
-pub const PROTOCOL_VERSION: u16 = 23;
+pub const PROTOCOL_VERSION: u16 = 24;
 
 /// The largest payload (the bytes after the 4-byte frame length prefix)
 /// this protocol allows. A frame whose declared length exceeds this is

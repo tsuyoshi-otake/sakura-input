@@ -39,9 +39,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 use sakura_core::{
     AppProfile, AppearanceTheme, BracketStyle, CommaMark, ConversionMethod, InputMethod,
-    InputSupport, NeuralRerankerScope, Normalizer, NotationStyle, PadShortcut, PeriodMark, Preset,
-    PunctuationStyle, ShiftSpaceBehavior, SpaceWidth, SuggestAccept, UserDictionary,
-    UserDictionaryEntry, UserPartOfSpeech, Width,
+    InputSupport, NeuralRerankerScope, Normalizer, NotationStyle, PadIdleLockTimeout, PadShortcut,
+    PeriodMark, Preset, PunctuationStyle, ShiftSpaceBehavior, SpaceWidth, SuggestAccept,
+    UserDictionary, UserDictionaryEntry, UserPartOfSpeech, Width,
 };
 use sakura_proto::Mode;
 use sakura_settings::configuration::ConfigurationDocument;
@@ -237,6 +237,7 @@ struct GeneralControls {
     input_method_kana: HWND,
     default_mode: HWND,
     pad_shortcut: HWND,
+    pad_idle_lock_timeout: HWND,
     input_assist_space_width: HWND,
     input_assist_shift_space: HWND,
     ai_text_key: HWND,
@@ -1481,6 +1482,10 @@ impl App {
             pad_shortcut_index(self.configuration.preferences.pad_shortcut),
         );
         select_combo(
+            self.general.pad_idle_lock_timeout,
+            pad_idle_lock_timeout_index(self.configuration.preferences.pad_idle_lock_timeout),
+        );
+        select_combo(
             self.general.conversion_assist_method,
             conversion_method_index(self.configuration.preferences.conversion_method),
         );
@@ -1623,6 +1628,8 @@ impl App {
             mode_from_index(combo_index(self.general.default_mode))?;
         configuration.preferences.pad_shortcut =
             pad_shortcut_from_index(combo_index(self.general.pad_shortcut))?;
+        configuration.preferences.pad_idle_lock_timeout =
+            pad_idle_lock_timeout_from_index(combo_index(self.general.pad_idle_lock_timeout))?;
         configuration.preferences.conversion_method =
             conversion_method_from_index(combo_index(self.general.conversion_assist_method))?;
         configuration.preferences.prediction_enabled = is_checked(self.general.prediction);
@@ -3975,6 +3982,28 @@ const fn pad_shortcut_label(value: PadShortcut) -> &'static str {
     match value {
         PadShortcut::Disabled => "使わない",
         PadShortcut::DoubleCtrl => "Ctrlを2回",
+    }
+}
+
+fn pad_idle_lock_timeout_index(value: PadIdleLockTimeout) -> usize {
+    PadIdleLockTimeout::ALL
+        .iter()
+        .position(|candidate| *candidate == value)
+        .unwrap_or(1)
+}
+
+fn pad_idle_lock_timeout_from_index(index: Option<usize>) -> Result<PadIdleLockTimeout, String> {
+    index
+        .and_then(|index| PadIdleLockTimeout::ALL.get(index).copied())
+        .ok_or_else(|| "Sakura Padの自動ロック時間を選択してください。".to_owned())
+}
+
+fn pad_idle_lock_timeout_label(value: PadIdleLockTimeout) -> &'static str {
+    match value {
+        PadIdleLockTimeout::OneMinute => "1分",
+        PadIdleLockTimeout::FiveMinutes => "5分（既定）",
+        PadIdleLockTimeout::FifteenMinutes => "15分",
+        PadIdleLockTimeout::ThirtyMinutes => "30分",
     }
 }
 
