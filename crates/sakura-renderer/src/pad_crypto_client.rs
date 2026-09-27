@@ -252,6 +252,7 @@ fn kill_and_reap(child: &mut Child) {
 mod tests {
     use super::*;
     use sakura_pad_session_proto::Operation;
+    use std::io::Read;
     use zeroize::Zeroizing;
 
     fn request() -> Request {
@@ -274,6 +275,51 @@ mod tests {
             .stderr(Stdio::null())
             .spawn()
             .unwrap()
+    }
+
+    fn ready_malformed_child() -> Child {
+        let script = r#"
+            $stderr = [Console]::OpenStandardError()
+            $stderr.WriteByte(82)
+            $stdin = [Console]::OpenStandardInput()
+            $header = New-Object byte[] 4
+            $offset = 0
+            while ($offset -lt 4) {
+                $count = $stdin.Read($header, $offset, 4 - $offset)
+                if ($count -le 0) { exit 2 }
+                $offset += $count
+            }
+            $length = [BitConverter]::ToInt32($header, 0)
+            if ($length -lt 1 -or $length -gt 65536) { exit 3 }
+            $body = New-Object byte[] $length
+            $offset = 0
+            while ($offset -lt $length) {
+                $count = $stdin.Read($body, $offset, $length - $offset)
+                if ($count -le 0) { exit 4 }
+                $offset += $count
+            }
+            [Console]::OpenStandardOutput().Write([byte[]]@(1,0,0,0),0,4)
+        "#;
+        let mut child = Command::new("powershell.exe")
+            .args(["-NoProfile", "-NonInteractive", "-Command", script])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut stderr = child.stderr.take().unwrap();
+        let (sender, received) = mpsc::channel();
+        let reader = thread::spawn(move || {
+            let mut marker = [0u8; 1];
+            let _ = sender.send(stderr.read_exact(&mut marker).map(|()| marker[0]));
+        });
+        let ready = matches!(received.recv_timeout(Duration::from_secs(60)), Ok(Ok(82)));
+        if !ready {
+            kill_and_reap(&mut child);
+        }
+        reader.join().unwrap();
+        assert!(ready, "malformed-response child did not become ready");
+        child
     }
 
     fn reaped(client: &mut PadCryptoClient) -> bool {
@@ -305,14 +351,10 @@ mod tests {
 
     #[test]
     fn malformed_response_is_terminal_and_child_is_reaped() {
-        let mut client = PadCryptoClient::from_child(child(
-            "[Console]::OpenStandardOutput().Write([byte[]]@(1,0,0,0),0,4)",
-        ))
-        .unwrap();
+        let mut client = PadCryptoClient::from_child(ready_malformed_child()).unwrap();
         assert_eq!(
-            // A cold PowerShell process can take several seconds to start on
-            // loaded CI hosts; this test is about malformed framing, not the
-            // response deadline.
+            // Child startup is complete, and the script consumes the full
+            // request before it sends deliberately malformed framing.
             client.exchange(request(), Duration::from_secs(20)).err(),
             Some(ClientError::Protocol)
         );
