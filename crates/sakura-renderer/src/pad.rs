@@ -34,9 +34,9 @@ use windows::Win32::Foundation::{COLORREF, HANDLE, HGLOBAL, HWND, LPARAM, LRESUL
 use windows::Win32::Graphics::Gdi::{
     BeginPaint, CreateCompatibleBitmap, CreateCompatibleDC, CreatePatternBrush, CreatePen,
     CreateSolidBrush, DeleteDC, DeleteObject, EndPaint, GetDC, InvalidateRect, RedrawWindow,
-    ReleaseDC, RoundRect, SelectObject, SetBkColor, SetBkMode, SetTextColor, DT_CENTER,
-    DT_END_ELLIPSIS, DT_LEFT, DT_RIGHT, HBRUSH, HDC, HFONT, OPAQUE, PAINTSTRUCT, PS_SOLID,
-    RDW_ALLCHILDREN, RDW_ERASE, RDW_INVALIDATE, RDW_UPDATENOW, TRANSPARENT,
+    ReleaseDC, RoundRect, SelectObject, SetBkColor, SetBkMode, SetTextColor, DT_END_ELLIPSIS,
+    DT_LEFT, DT_RIGHT, HBRUSH, HDC, HFONT, OPAQUE, PAINTSTRUCT, PS_SOLID, RDW_ALLCHILDREN,
+    RDW_ERASE, RDW_INVALIDATE, RDW_UPDATENOW, TRANSPARENT,
 };
 use windows::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, GetClipboardSequenceNumber, OpenClipboard,
@@ -3657,35 +3657,6 @@ fn draw_button(
     );
 }
 
-fn draw_protect_button(item: &DRAWITEMSTRUCT, colors: Palette, dpi: u32, label: &str) {
-    let pressed = item.itemState.0 & ODS_SELECTED.0 != 0;
-    let focused = item.itemState.0 & ODS_FOCUS.0 != 0;
-    fill_color(item.hDC, &item.rcItem, colors.surface);
-    rounded_box(
-        item.hDC,
-        item.rcItem,
-        if pressed {
-            colors.selected
-        } else {
-            colors.surface
-        },
-        Some(if focused { colors.rail } else { colors.border }),
-        scaled(BORDER_96, dpi).max(1),
-        scaled(CORNER_96, dpi).max(1),
-    );
-    text(
-        item.hDC,
-        label,
-        item.rcItem,
-        if pressed {
-            colors.selected_ink
-        } else {
-            colors.ink
-        },
-        DT_CENTER,
-    );
-}
-
 fn draw_row(item: &DRAWITEMSTRUCT, state: &PadState, colors: Palette, dpi: u32) {
     let Some(memo) = state
         .rows
@@ -3833,6 +3804,8 @@ fn button_face(id: u16, wide: bool) -> Option<ButtonFace> {
         SYNC_ID => PadIcon::Sync,
         COPY_ID => PadIcon::Copy,
         DELETE_ID => PadIcon::Trash,
+        PROTECT_ID => PadIcon::Shield,
+        MEMO_PROTECT_ID => PadIcon::Lock,
         _ => return None,
     };
     Some(ButtonFace {
@@ -4457,7 +4430,9 @@ impl PadState {
             let choice = unsafe {
                 MessageBoxW(
                     Some(window),
-                    windows::core::w!("はい: このメモをロック\nいいえ: このメモの確認コード設定\nキャンセル: 戻る"),
+                    windows::core::w!(
+                        "はい: このメモをロック\nいいえ: このメモの確認コード設定\nキャンセル: 戻る"
+                    ),
                     windows::core::w!("このメモの保護"),
                     MB_YESNOCANCEL,
                 )
@@ -8978,20 +8953,19 @@ extern "system" fn pad_procedure(window: HWND, message: u32, w: WPARAM, l: LPARA
                 let id = item.CtlID as u16;
                 let wide = is_wide(window);
                 if id == PROTECT_ID || id == MEMO_PROTECT_ID {
+                    let mut face = button_face(id, wide).expect("protection controls have icons");
+                    if id == PROTECT_ID && state.protected_session_seen && !state.v4_mode {
+                        face.icon = PadIcon::Settings;
+                    }
                     let previous = select_font(item.hDC, state.fonts.small);
-                    draw_protect_button(
+                    draw_button(
                         item,
+                        face,
+                        button_shape(id, wide),
+                        false,
+                        colors.surface,
                         colors,
                         dpi,
-                        if id == PROTECT_ID {
-                            if state.protected_session_seen && !state.v4_mode {
-                                "設定"
-                            } else {
-                                "保護"
-                            }
-                        } else {
-                            "鍵"
-                        },
                     );
                     if let Some(previous) = previous {
                         // SAFETY: previous was selected out of this same

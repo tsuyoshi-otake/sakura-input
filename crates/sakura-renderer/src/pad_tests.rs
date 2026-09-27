@@ -145,9 +145,9 @@ fn a_long_reading_widens_the_status_slot_but_never_starves_the_title() {
                 let widened = layout(area, dpi, pane, sentence);
                 let status = widened.status.expect("the slot does not disappear");
                 assert!(
-                        width_of(status) >= width_of(resting_status),
-                        "a measured reading never gets less than the resting width                          at {width} @ {dpi}"
-                    );
+                    width_of(status) >= width_of(resting_status),
+                    "a measured reading never gets less than the resting width                          at {width} @ {dpi}"
+                );
                 assert!(
                     width_of(status) <= sentence,
                     "and never more than it asked for at {width} @ {dpi}"
@@ -264,9 +264,9 @@ fn no_two_controls_overlap_at_any_dpi_or_width() {
                             );
                             for (other, other_rect) in &placed[index + 1..] {
                                 assert!(
-                                        !overlaps(*rect, *other_rect),
-                                        "{name} overlaps {other} at {width}x{height} @ {dpi} ({pane:?}/{want})"
-                                    );
+                                    !overlaps(*rect, *other_rect),
+                                    "{name} overlaps {other} at {width}x{height} @ {dpi} ({pane:?}/{want})"
+                                );
                             }
                         }
                     }
@@ -322,9 +322,9 @@ fn each_shape_shows_exactly_the_panes_it_promises() {
         assert!(narrow_editor.search.is_none() && narrow_editor.list.is_none());
         assert!(narrow_editor.title.is_some() && narrow_editor.body.is_some());
         assert!(
-                narrow_editor.header_title.is_none(),
-                "the open memo's own title takes the header, so the list name                  does not also claim it"
-            );
+            narrow_editor.header_title.is_none(),
+            "the open memo's own title takes the header, so the list name                  does not also claim it"
+        );
 
         assert!(
             layout(client(500, 520, dpi), dpi, PadPane::Editor, 1)
@@ -342,9 +342,9 @@ fn each_shape_shows_exactly_the_panes_it_promises() {
             let wide = layout(client(720, 520, dpi), dpi, pane, 0);
             assert!(wide.menu.is_none(), "a resident list needs no toggle");
             assert!(
-                    wide.header.is_none() && wide.header_title.is_none(),
-                    "reaching every memo from the list beside it leaves the                      window's own caption as the only chrome above the panes"
-                );
+                wide.header.is_none() && wide.header_title.is_none(),
+                "reaching every memo from the list beside it leaves the                      window's own caption as the only chrome above the panes"
+            );
             assert!(wide.search.is_some() && wide.list.is_some());
             assert!(wide.title.is_some() && wide.body.is_some());
             assert!(wide.meta.is_some(), "the editor carries its own first row");
@@ -357,7 +357,16 @@ fn each_shape_shows_exactly_the_panes_it_promises() {
 /// icon alone is exactly what the owner could not read.
 #[test]
 fn every_drawn_face_has_hover_text() {
-    for id in [MENU_ID, NEW_ID, SORT_ID, SYNC_ID, COPY_ID, DELETE_ID] {
+    for id in [
+        MENU_ID,
+        NEW_ID,
+        SORT_ID,
+        SYNC_ID,
+        COPY_ID,
+        DELETE_ID,
+        PROTECT_ID,
+        MEMO_PROTECT_ID,
+    ] {
         assert!(button_face(id, false).is_some(), "{id} has no face");
         let text = hint(id).unwrap_or_else(|| panic!("{id} has no hint"));
         // A tip repeating the button's own one-word name teaches nothing
@@ -379,6 +388,24 @@ fn the_copy_control_says_markdown() {
     assert_eq!(
         button_face(COPY_ID, false).map(|face| face.icon),
         Some(PadIcon::Copy)
+    );
+}
+
+#[test]
+fn protection_controls_use_distinct_icons_and_keep_action_hints() {
+    assert_eq!(
+        button_face(MEMO_PROTECT_ID, false).map(|face| face.icon),
+        Some(PadIcon::Lock)
+    );
+    assert_eq!(
+        button_face(PROTECT_ID, false).map(|face| face.icon),
+        Some(PadIcon::Shield)
+    );
+    assert_eq!(hint(MEMO_PROTECT_ID), Some("このメモだけを保護または解除"));
+    assert_eq!(hint(PROTECT_ID), Some("Pad 全体の保護と認証設定"));
+    assert_eq!(
+        button_face(PROTECT_ID, true).map(|face| face.label),
+        Some(None)
     );
 }
 
