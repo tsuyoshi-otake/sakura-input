@@ -12,6 +12,7 @@ use std::process::Command;
 use std::thread::sleep;
 use std::time::Duration;
 
+mod pad_action_icons;
 mod pages;
 mod presentation;
 mod save;
@@ -27,6 +28,7 @@ fn native_test_guard() -> std::sync::MutexGuard<'static, ()> {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
+use pad_action_icons::{draw_pad_action_icon, PadActionIcon};
 use pages::*;
 use presentation::{BoxRect, Presentation, TextRole};
 use windows::Win32::UI::Controls::{
@@ -60,7 +62,8 @@ use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_D
 use windows::Win32::Graphics::Gdi::{
     CreateSolidBrush, DeleteObject, DrawTextW, FillRect, FrameRect, GetStockObject,
     GetSysColorBrush, InvalidateRect, SetBkColor, SetBkMode, SetTextColor, UpdateWindow,
-    COLOR_WINDOW, DEFAULT_GUI_FONT, DT_CENTER, DT_SINGLELINE, DT_VCENTER, HBRUSH, HDC, TRANSPARENT,
+    COLOR_WINDOW, DEFAULT_GUI_FONT, DT_CALCRECT, DT_CENTER, DT_LEFT, DT_SINGLELINE, DT_VCENTER,
+    HBRUSH, HDC, TRANSPARENT,
 };
 use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
 use windows::Win32::System::Threading::CreateMutexW;
@@ -478,7 +481,13 @@ impl UiTheme {
         }
     }
 
-    fn draw_button(&self, item: &DRAWITEMSTRUCT, default: bool, selected_tab: bool) -> bool {
+    fn draw_button(
+        &self,
+        item: &DRAWITEMSTRUCT,
+        default: bool,
+        selected_tab: bool,
+        pad_icon: Option<PadActionIcon>,
+    ) -> bool {
         if self.high_contrast || item.CtlType != ODT_BUTTON {
             return false;
         }
@@ -529,20 +538,55 @@ impl UiTheme {
             let _ = FillRect(item.hDC, &item.rcItem, fill);
             let _ = FrameRect(item.hDC, &item.rcItem, frame);
             let _ = SetBkMode(item.hDC, TRANSPARENT);
-            let _ = SetTextColor(
-                item.hDC,
-                if disabled {
-                    self.disabled_ink()
-                } else {
-                    self.ink()
-                },
-            );
-            let _ = DrawTextW(
-                item.hDC,
-                &mut text,
-                &mut text_rect,
-                DT_CENTER | DT_VCENTER | DT_SINGLELINE,
-            );
+            let ink = if disabled {
+                self.disabled_ink()
+            } else {
+                self.ink()
+            };
+            let _ = SetTextColor(item.hDC, ink);
+            let mut text_format = DT_CENTER | DT_VCENTER | DT_SINGLELINE;
+            if let Some(kind) = pad_icon {
+                let dpi = GetDpiForWindow(item.hwndItem).clamp(96, 384) as i32;
+                let icon_size = (16 * dpi + 48) / 96;
+                let gap = (6 * dpi + 48) / 96;
+                let horizontal_inset = (8 * dpi + 48) / 96;
+                let vertical_inset = (3 * dpi + 48) / 96;
+                let mut measured = RECT::default();
+                let measured_height = DrawTextW(
+                    item.hDC,
+                    &mut text,
+                    &mut measured,
+                    DT_CALCRECT | DT_SINGLELINE,
+                );
+                let group_width = icon_size + gap + measured.right - measured.left;
+                if measured_height > 0
+                    && group_width <= item.rcItem.right - item.rcItem.left - 2 * horizontal_inset
+                    && icon_size <= item.rcItem.bottom - item.rcItem.top - 2 * vertical_inset
+                {
+                    let shift = i32::from(pressed);
+                    let icon_left = item.rcItem.left
+                        + (item.rcItem.right - item.rcItem.left - group_width) / 2
+                        + shift;
+                    let icon_top = item.rcItem.top
+                        + (item.rcItem.bottom - item.rcItem.top - icon_size) / 2
+                        + shift;
+                    draw_pad_action_icon(
+                        item.hDC,
+                        RECT {
+                            left: icon_left,
+                            top: icon_top,
+                            right: icon_left + icon_size,
+                            bottom: icon_top + icon_size,
+                        },
+                        kind,
+                        ink,
+                    );
+                    text_rect.left = icon_left + icon_size + gap;
+                    text_rect.right = text_rect.left + measured.right - measured.left;
+                    text_format = DT_LEFT | DT_VCENTER | DT_SINGLELINE;
+                }
+            }
+            let _ = DrawTextW(item.hDC, &mut text, &mut text_rect, text_format);
             if focused {
                 let mut focus_rect = item.rcItem;
                 focus_rect.left += 4;
@@ -2254,7 +2298,16 @@ impl App {
 
     fn draw_button(&self, item: &DRAWITEMSTRUCT) -> bool {
         let default = item.hwndItem == self.ok;
-        self.theme.draw_button(item, default, false)
+        let pad_icon = if item.hwndItem == self.general.pad_open {
+            Some(PadActionIcon::Open)
+        } else if item.hwndItem == self.general.pad_lock {
+            Some(PadActionIcon::Lock)
+        } else if item.hwndItem == self.general.pad_protection {
+            Some(PadActionIcon::Protection)
+        } else {
+            None
+        };
+        self.theme.draw_button(item, default, false, pad_icon)
     }
 
     fn select_profile(&self) {

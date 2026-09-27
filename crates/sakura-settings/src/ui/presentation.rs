@@ -748,6 +748,50 @@ mod tests {
     }
 
     #[test]
+    fn pad_action_names_and_two_row_layout_fit_without_scrolling() {
+        let mut fixture = NativeFixture::new();
+        let app = &mut fixture.app;
+        for dpi in [96, 120, 144, 192] {
+            let width = scale_dpi_value(WINDOW_WIDTH, 96, dpi).min(1366);
+            let height = scale_dpi_value(WINDOW_HEIGHT, 96, dpi).min(728);
+            app.apply_dpi_change(
+                dpi,
+                Some(RECT {
+                    left: 16,
+                    top: 16,
+                    right: 16 + width,
+                    bottom: 16 + height,
+                }),
+            );
+            app.show_panel(0);
+            app.show_topic_controls(INPUT_TOPIC_PAD);
+            let view = screen_rect(app.panels[0]);
+            let actions = [
+                (app.general.pad_open, "Sakura Padを開く"),
+                (app.general.pad_lock, "今すぐロック"),
+                (app.general.pad_protection, "保護の設定を開く"),
+            ];
+            for (window, name) in actions {
+                assert_eq!(window_text(window), name, "native/UIA name at {dpi} DPI");
+                let rect = screen_rect(window);
+                assert!(
+                    rect.left >= view.left
+                        && rect.right <= view.right
+                        && rect.top >= view.top
+                        && rect.bottom <= view.bottom,
+                    "Pad action {name} fits in the viewport at {dpi} DPI: {rect:?}, {view:?}"
+                );
+            }
+            let open = screen_rect(app.general.pad_open);
+            let lock = screen_rect(app.general.pad_lock);
+            let protection = screen_rect(app.general.pad_protection);
+            assert_eq!(open.top, lock.top);
+            assert!(open.right < lock.left);
+            assert!(open.bottom < protection.top);
+        }
+    }
+
+    #[test]
     fn every_native_form_keeps_actions_separate_and_reveals_keyboard_targets_at_supported_dpi() {
         let mut fixture = NativeFixture::new();
         let app = &mut fixture.app;
