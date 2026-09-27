@@ -20,6 +20,8 @@ use std::cell::Cell;
 use std::cell::RefCell;
 use std::ffi::c_void;
 use std::mem::size_of;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::Arc;
@@ -55,26 +57,27 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     VK_MENU, VK_RETURN,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    BeginDeferWindowPos, CallWindowProcW, CreateWindowExW, DefWindowProcW, DeferWindowPos,
-    DestroyWindow, EndDeferWindowPos, FlashWindowEx, GetAncestor, GetClassNameW, GetClientRect,
-    GetDlgCtrlID, GetParent, GetWindowLongPtrW, GetWindowTextLengthW, GetWindowTextW,
-    IsDialogMessageW, IsIconic, IsWindowVisible, KillTimer, LoadCursorW, MessageBoxW, PostMessageW,
-    RegisterClassW, SendMessageW, SetForegroundWindow, SetTimer, SetWindowLongPtrW, SetWindowPos,
-    SetWindowTextW, ShowWindow, BN_CLICKED, BS_OWNERDRAW, CREATESTRUCTW, EN_CHANGE, ES_AUTOHSCROLL,
+    AppendMenuW, BeginDeferWindowPos, CallWindowProcW, CreatePopupMenu, CreateWindowExW,
+    DefWindowProcW, DeferWindowPos, DestroyMenu, DestroyWindow, EndDeferWindowPos, FlashWindowEx,
+    GetAncestor, GetClassNameW, GetClientRect, GetDlgCtrlID, GetParent, GetWindowLongPtrW,
+    GetWindowRect, GetWindowTextLengthW, GetWindowTextW, IsDialogMessageW, IsIconic,
+    IsWindowVisible, KillTimer, LoadCursorW, MessageBoxW, PostMessageW, RegisterClassW,
+    SendMessageW, SetForegroundWindow, SetTimer, SetWindowLongPtrW, SetWindowPos, SetWindowTextW,
+    ShowWindow, TrackPopupMenu, BN_CLICKED, BS_OWNERDRAW, CREATESTRUCTW, EN_CHANGE, ES_AUTOHSCROLL,
     ES_AUTOVSCROLL, ES_LEFT, ES_MULTILINE, ES_NOHIDESEL, ES_PASSWORD, ES_WANTRETURN, FLASHWINFO,
     GA_ROOT, GWLP_USERDATA, GWLP_WNDPROC, HMENU, HWND_TOP, HWND_TOPMOST, IDC_ARROW, IDNO, IDYES,
     LBN_DBLCLK, LBN_SELCHANGE, LBS_HASSTRINGS, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY,
     LBS_OWNERDRAWFIXED, LB_ADDSTRING, LB_DELETESTRING, LB_GETTOPINDEX, LB_INSERTSTRING,
-    LB_RESETCONTENT, LB_SETCURSEL, LB_SETITEMHEIGHT, LB_SETTOPINDEX, MB_DEFBUTTON2, MB_YESNO,
-    MB_YESNOCANCEL, MSG, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
-    SWP_SHOWWINDOW, SW_HIDE, SW_RESTORE, SW_SHOW, WINDOW_EX_STYLE, WM_APP, WM_CHAR, WM_CLOSE,
-    WM_COMMAND, WM_CREATE, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC,
-    WM_DESTROY, WM_DPICHANGED, WM_DRAWITEM, WM_ERASEBKGND, WM_GETFONT, WM_GETMINMAXINFO,
-    WM_GETTEXTLENGTH, WM_KEYDOWN, WM_KILLFOCUS, WM_MEASUREITEM, WM_NCCREATE, WM_NCDESTROY,
-    WM_PAINT, WM_SETFOCUS, WM_SETFONT, WM_SETTEXT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSCHAR,
-    WM_SYSKEYDOWN, WM_THEMECHANGED, WM_TIMER, WM_WTSSESSION_CHANGE, WNDCLASSW, WNDPROC, WS_BORDER,
-    WS_CHILD, WS_CLIPCHILDREN, WS_EX_TOPMOST, WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE,
-    WTS_SESSION_LOCK,
+    LB_RESETCONTENT, LB_SETCURSEL, LB_SETITEMHEIGHT, LB_SETTOPINDEX, MB_DEFBUTTON2, MB_OK,
+    MB_YESNO, MB_YESNOCANCEL, MF_STRING, MSG, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE,
+    SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE, SW_RESTORE, SW_SHOW, TPM_RETURNCMD,
+    TPM_RIGHTALIGN, WINDOW_EX_STYLE, WM_APP, WM_CHAR, WM_CLOSE, WM_COMMAND, WM_CREATE,
+    WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC, WM_DESTROY,
+    WM_DPICHANGED, WM_DRAWITEM, WM_ERASEBKGND, WM_GETFONT, WM_GETMINMAXINFO, WM_GETTEXTLENGTH,
+    WM_KEYDOWN, WM_KILLFOCUS, WM_MEASUREITEM, WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WM_SETFOCUS,
+    WM_SETFONT, WM_SETTEXT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSCHAR, WM_SYSKEYDOWN, WM_THEMECHANGED,
+    WM_TIMER, WM_WTSSESSION_CHANGE, WNDCLASSW, WNDPROC, WS_BORDER, WS_CHILD, WS_CLIPCHILDREN,
+    WS_EX_TOPMOST, WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE, WTS_SESSION_LOCK,
 };
 use zeroize::{Zeroize, Zeroizing};
 
@@ -355,7 +358,7 @@ const TITLE_ID: u16 = 108;
 const BODY_ID: u16 = 109;
 const NEW_ID: u16 = 110;
 const SORT_ID: u16 = 111;
-const SYNC_ID: u16 = 112;
+const OVERFLOW_ID: u16 = 112;
 const COPY_ID: u16 = 113;
 const DELETE_ID: u16 = 114;
 const LIST_RAIL_ID: u16 = 115;
@@ -365,7 +368,34 @@ const LOCK_PASSWORD_ID: u16 = 118;
 const LOCK_UNLOCK_ID: u16 = 119;
 const LOCK_STATUS_ID: u16 = 120;
 const LOCK_PASSWORD_LABEL_ID: u16 = 121;
-const PROTECT_ID: u16 = 122;
+const SETTINGS_MENU_ID: u16 = 133;
+const GIT_SYNC_MENU_ID: u16 = 134;
+const SETTINGS_PAD_ARGUMENT: &str = "--pad";
+
+/// The installed renderer lives at `<root>/versions/<generation>/sakura_renderer.exe`.
+/// Accept only that layout before selecting the stable bootstrap in `<root>`.
+fn installed_settings_bootstrap(renderer: &Path) -> Option<PathBuf> {
+    if !renderer
+        .file_name()?
+        .to_str()?
+        .eq_ignore_ascii_case("sakura_renderer.exe")
+    {
+        return None;
+    }
+    let generation = renderer.parent()?;
+    if generation.file_name()?.is_empty() {
+        return None;
+    }
+    let versions = generation.parent()?;
+    if !versions
+        .file_name()?
+        .to_str()?
+        .eq_ignore_ascii_case("versions")
+    {
+        return None;
+    }
+    Some(versions.parent()?.join("sakura_settings.exe"))
+}
 const ENROLL_HEADLINE_ID: u16 = 123;
 const ENROLL_PASSWORD_LABEL_ID: u16 = 124;
 const ENROLL_PASSWORD_ID: u16 = 125;
@@ -751,7 +781,6 @@ pub(crate) struct PadLayout {
     pub(crate) count: Option<RECT>,
     pub(crate) copy: RECT,
     pub(crate) delete: RECT,
-    pub(crate) protect: RECT,
     pub(crate) memo_protect: RECT,
     pub(crate) search: Option<RECT>,
     pub(crate) list: Option<RECT>,
@@ -767,7 +796,7 @@ pub(crate) struct PadLayout {
     pub(crate) bottom: RECT,
     pub(crate) new: RECT,
     pub(crate) sort: RECT,
-    pub(crate) sync: RECT,
+    pub(crate) overflow: RECT,
 }
 
 /// Clamps a rectangle inside `bounds`, keeping its edges ordered.
@@ -893,8 +922,7 @@ pub(crate) fn layout(client: RECT, dpi: u32, pane: PadPane, status_want: i32) ->
     };
 
     // The editor's first row, which the folded shape does not have: there the
-    // header band carries the title and the sync state, and the bar carries
-    // the two controls that act on the memo.
+    // header band carries the title and the bottom bar carries memo actions.
     let meta = wide.then(|| {
         within(
             RECT {
@@ -948,7 +976,7 @@ pub(crate) fn layout(client: RECT, dpi: u32, pane: PadPane, status_want: i32) ->
     // Copying and deleting act on the memo, so they sit with the memo: in the
     // editor's own first row when there is an editor beside the list, and in
     // the bar when the bar is the only place the whole window has for them.
-    let (copy, delete, protect, memo_protect, title, status, count, new, sort, sync) =
+    let (copy, delete, memo_protect, title, status, count, new, sort, overflow) =
         if let Some(meta) = meta {
             let meta_glyph_top = centred(meta, glyph);
             let meta_glyph = |edge: i32| {
@@ -964,8 +992,7 @@ pub(crate) fn layout(client: RECT, dpi: u32, pane: PadPane, status_want: i32) ->
             };
             let delete = meta_glyph(meta.right.saturating_sub(pad));
             let copy = meta_glyph(delete.left.saturating_sub(gap));
-            let protect = meta_glyph(copy.left.saturating_sub(gap));
-            let memo_protect = meta_glyph(protect.left.saturating_sub(gap));
+            let memo_protect = meta_glyph(copy.left.saturating_sub(gap));
             // The title is the heading of the row and the two readings beside it
             // are supports. A narrow editor column drops the supports — the length
             // before the time, because when a memo last changed is the more useful
@@ -1021,8 +1048,11 @@ pub(crate) fn layout(client: RECT, dpi: u32, pane: PadPane, status_want: i32) ->
             );
 
             // Wide, the bar is the list's own and `＋ 新規メモ` says what it makes.
-            let sync = within(bar_glyph(bar.right.saturating_sub(pad + glyph), glyph), bar);
-            let sort = within(bar_glyph(sync.left.saturating_sub(gap + glyph), glyph), bar);
+            let overflow = within(bar_glyph(bar.right.saturating_sub(pad + glyph), glyph), bar);
+            let sort = within(
+                bar_glyph(overflow.left.saturating_sub(gap + glyph), glyph),
+                bar,
+            );
             let new_left = bar.left.saturating_add(pad);
             let new = within(
                 bar_glyph(
@@ -1037,21 +1067,38 @@ pub(crate) fn layout(client: RECT, dpi: u32, pane: PadPane, status_want: i32) ->
             (
                 copy,
                 delete,
-                protect,
                 memo_protect,
                 Some(title),
                 status,
                 count,
                 new,
                 sort,
-                sync,
+                overflow,
             )
         } else {
             let band = header.unwrap_or(content);
+            let memo_protect = if shows_editor {
+                let glyph_top = centred(band, glyph);
+                within(
+                    RECT {
+                        left: band.right.saturating_sub(pad + glyph),
+                        top: glyph_top,
+                        right: band.right.saturating_sub(pad),
+                        bottom: glyph_top.saturating_add(glyph),
+                    },
+                    band,
+                )
+            } else {
+                RECT::default()
+            };
             let text_left = menu.map_or(band.left.saturating_add(pad), |menu| {
                 menu.right.saturating_add(gap)
             });
-            let text_right = band.right.saturating_sub(pad);
+            let text_right = if shows_editor {
+                memo_protect.left.saturating_sub(gap)
+            } else {
+                band.right.saturating_sub(pad)
+            };
             let status_width = scaled(STATUS_WIDTH_96, dpi);
             let title_min = scaled(TITLE_MIN_96, dpi);
             let status_room = text_right
@@ -1100,30 +1147,37 @@ pub(crate) fn layout(client: RECT, dpi: u32, pane: PadPane, status_want: i32) ->
                 )
             });
 
-            // Folded, the bar carries everything: new at the near edge, delete at
-            // the far one, and the three that neither create nor destroy between.
+            // Folded, list actions and memo actions use this bar in their own
+            // panes. The inactive pane's controls get empty rectangles below.
             let new = within(bar_glyph(bar.left.saturating_add(pad), glyph), bar);
             let delete = within(bar_glyph(bar.right.saturating_sub(pad + glyph), glyph), bar);
-            let group = glyph * 5 + gap * 4;
-            let group_left = (bar.left + (bar.right - bar.left - group) / 2)
-                .min(delete.left.saturating_sub(gap).saturating_sub(group))
-                .max(new.right.saturating_add(gap));
-            let sort = within(bar_glyph(group_left, glyph), bar);
-            let sync = within(bar_glyph(sort.right.saturating_add(gap), glyph), bar);
-            let copy = within(bar_glyph(sync.right.saturating_add(gap), glyph), bar);
-            let protect = within(bar_glyph(copy.right.saturating_add(gap), glyph), bar);
-            let memo_protect = within(bar_glyph(protect.right.saturating_add(gap), glyph), bar);
+            let overflow = within(bar_glyph(bar.right.saturating_sub(pad + glyph), glyph), bar);
+            let sort = within(
+                bar_glyph(overflow.left.saturating_sub(gap + glyph), glyph),
+                bar,
+            );
+            let copy = within(
+                bar_glyph(delete.left.saturating_sub(gap + glyph), glyph),
+                bar,
+            );
             (
-                copy,
-                delete,
-                protect,
+                if shows_editor { copy } else { RECT::default() },
+                if shows_editor {
+                    delete
+                } else {
+                    RECT::default()
+                },
                 memo_protect,
                 title,
                 status,
                 None,
-                new,
-                sort,
-                sync,
+                if shows_list { new } else { RECT::default() },
+                if shows_list { sort } else { RECT::default() },
+                if shows_list {
+                    overflow
+                } else {
+                    RECT::default()
+                },
             )
         };
 
@@ -1235,7 +1289,6 @@ pub(crate) fn layout(client: RECT, dpi: u32, pane: PadPane, status_want: i32) ->
         count,
         copy,
         delete,
-        protect,
         memo_protect,
         search,
         list,
@@ -1247,7 +1300,7 @@ pub(crate) fn layout(client: RECT, dpi: u32, pane: PadPane, status_want: i32) ->
         bottom: bar,
         new,
         sort,
-        sync,
+        overflow,
     }
 }
 
@@ -1515,10 +1568,9 @@ struct PadState {
     body_rail: HWND,
     new: HWND,
     sort: HWND,
-    sync: HWND,
+    overflow: HWND,
     copy: HWND,
     delete: HWND,
-    protect: HWND,
     memo_protect: HWND,
     fonts: PadFonts,
     brushes: PadBrushes,
@@ -1744,10 +1796,9 @@ impl PadWindow {
             body_rail: HWND::default(),
             new: HWND::default(),
             sort: HWND::default(),
-            sync: HWND::default(),
+            overflow: HWND::default(),
             copy: HWND::default(),
             delete: HWND::default(),
-            protect: HWND::default(),
             memo_protect: HWND::default(),
             fonts: PadFonts::new(96),
             brushes: PadBrushes::default(),
@@ -2696,17 +2747,9 @@ fn create_controls(state: &mut PadState, parent: HWND) -> Result<()> {
     state.menu = button(windows::core::w!("メニュー"), MENU_ID)?;
     state.new = button(windows::core::w!("新規メモ"), NEW_ID)?;
     state.sort = button(windows::core::w!("並べ替え"), SORT_ID)?;
-    state.sync = button(windows::core::w!("同期"), SYNC_ID)?;
+    state.overflow = button(windows::core::w!("その他"), OVERFLOW_ID)?;
     state.copy = button(windows::core::w!("Markdown としてコピー"), COPY_ID)?;
     state.delete = button(windows::core::w!("削除"), DELETE_ID)?;
-    state.protect = button(
-        if state.protected_session_seen && !state.v4_mode {
-            windows::core::w!("Pad の認証設定を開く")
-        } else {
-            windows::core::w!("この Pad を保護")
-        },
-        PROTECT_ID,
-    )?;
     state.memo_protect = button(windows::core::w!("このメモの保護と解除"), MEMO_PROTECT_ID)?;
 
     // The pointer gets a sentence for each drawn face. The window text above
@@ -2716,10 +2759,9 @@ fn create_controls(state: &mut PadState, parent: HWND) -> Result<()> {
         (state.menu, MENU_ID),
         (state.new, NEW_ID),
         (state.sort, SORT_ID),
-        (state.sync, SYNC_ID),
+        (state.overflow, OVERFLOW_ID),
         (state.copy, COPY_ID),
         (state.delete, DELETE_ID),
-        (state.protect, PROTECT_ID),
         (state.memo_protect, MEMO_PROTECT_ID),
     ];
     state.tooltips = Tooltips::new(parent);
@@ -3148,14 +3190,13 @@ fn update_layout(state: &PadState, window: HWND) {
     state.status_slot.set(want);
     let plan = layout(client, dpi, state.pane, want);
     let field = |frame: Option<RECT>| frame.map(|frame| field_child(frame, dpi));
-    let placements: [(HWND, Option<RECT>); 17] = [
+    let placements: [(HWND, Option<RECT>); 16] = [
         (state.menu, plan.menu),
         (state.header_title, plan.header_title),
         (state.status, plan.status),
         (state.count, plan.count),
         (state.copy, Some(plan.copy)),
         (state.delete, Some(plan.delete)),
-        (state.protect, Some(plan.protect)),
         (state.memo_protect, Some(plan.memo_protect)),
         (state.search, field(plan.search)),
         (state.list, plan.list),
@@ -3165,7 +3206,7 @@ fn update_layout(state: &PadState, window: HWND) {
         (state.body_rail, plan.body_rail),
         (state.new, Some(plan.new)),
         (state.sort, Some(plan.sort)),
-        (state.sync, Some(plan.sync)),
+        (state.overflow, Some(plan.overflow)),
     ];
     // DeferWindowPos keeps a resize to one update and avoids the flicker of
     // moving eleven controls one at a time.
@@ -3801,10 +3842,9 @@ fn button_face(id: u16, wide: bool) -> Option<ButtonFace> {
         MENU_ID => PadIcon::Menu,
         NEW_ID => PadIcon::Plus,
         SORT_ID => PadIcon::Sort,
-        SYNC_ID => PadIcon::Sync,
+        OVERFLOW_ID => PadIcon::More,
         COPY_ID => PadIcon::Copy,
         DELETE_ID => PadIcon::Trash,
-        PROTECT_ID => PadIcon::Shield,
         MEMO_PROTECT_ID => PadIcon::Lock,
         _ => return None,
     };
@@ -3826,10 +3866,9 @@ fn hint(id: u16) -> Option<&'static str> {
         MENU_ID => "メモ一覧と編集を切り替え",
         NEW_ID => "新しいメモを作成",
         SORT_ID => "並べ替え順を変更",
-        SYNC_ID => "GitHub と同期",
+        OVERFLOW_ID => "GitHub 同期と Pad 全体の設定を開く",
         COPY_ID => "このメモを Markdown としてコピー",
         DELETE_ID => "このメモを削除",
-        PROTECT_ID => "Pad 全体の保護と認証設定",
         MEMO_PROTECT_ID => "このメモだけを保護または解除",
         _ => return None,
     })
@@ -3841,15 +3880,121 @@ fn button_shape(id: u16, wide: bool) -> ButtonShape {
         // Creating is the one thing the bar does that pressing again does not
         // undo, so it is the one control that is filled rather than framed.
         NEW_ID => ButtonShape::Filled,
-        // Folded, the bar is five controls in one row, and a frame around
-        // every one of them reads as a fence. Unfolded they are two and two,
-        // far enough apart that each needs an edge to be a control at all.
+        // Wide, the separate list and memo controls have room for frames.
+        // Folded, lighter faces keep each compact action row calm.
         _ if wide => ButtonShape::Framed,
         _ => ButtonShape::Chrome,
     }
 }
 
 impl PadState {
+    fn run_overflow_action(&mut self, action: u16) {
+        match action {
+            GIT_SYNC_MENU_ID => {
+                self.notify("GitHub 未設定".to_owned());
+                self.update_status();
+            }
+            SETTINGS_MENU_ID => self.open_settings(),
+            _ => {}
+        }
+    }
+
+    fn open_overflow_menu(&mut self, window: HWND) {
+        // The owner-drawn button is a tab stop; its native popup supplies
+        // arrow-key navigation, Enter activation, and Escape cancellation.
+        // SAFETY: this call takes no pointers; the returned menu is owned
+        // here and destroyed after native menu tracking finishes.
+        let Ok(menu) = (unsafe { CreatePopupMenu() }) else {
+            self.notify("その他の操作を開けません".to_owned());
+            self.update_status();
+            return;
+        };
+        // SAFETY: `menu` is live and owned here; both item labels have static
+        // NUL-terminated storage and their distinct IDs fit a menu command.
+        let items = unsafe {
+            AppendMenuW(
+                menu,
+                MF_STRING,
+                GIT_SYNC_MENU_ID as usize,
+                windows::core::w!("GitHub と同期"),
+            )
+            .and_then(|_| {
+                AppendMenuW(
+                    menu,
+                    MF_STRING,
+                    SETTINGS_MENU_ID as usize,
+                    windows::core::w!("設定"),
+                )
+            })
+        };
+        let mut anchor = RECT::default();
+        let anchor_ready = if items.is_ok() {
+            // SAFETY: `self.overflow` is a live child while the Pad is
+            // unlocked; `anchor` is writable for this call.
+            unsafe { GetWindowRect(self.overflow, &mut anchor) }.is_ok()
+        } else {
+            false
+        };
+        let choice = if anchor_ready {
+            // SAFETY: `window` owns this live popup. RETURNCMD keeps action
+            // dispatch in one place and returns zero for Escape/dismissal.
+            unsafe {
+                let _ = SetForegroundWindow(window);
+                TrackPopupMenu(
+                    menu,
+                    TPM_RETURNCMD | TPM_RIGHTALIGN,
+                    anchor.right,
+                    anchor.bottom,
+                    None,
+                    window,
+                    None,
+                )
+                .0 as u16
+            }
+        } else {
+            self.notify("その他の操作を開けません".to_owned());
+            self.update_status();
+            0
+        };
+        // SAFETY: this call owns the menu and no native menu loop remains.
+        unsafe {
+            let _ = DestroyMenu(menu);
+        }
+        self.run_overflow_action(choice);
+    }
+
+    fn open_settings(&mut self) {
+        let launched = std::env::current_exe()
+            .ok()
+            .and_then(|renderer| installed_settings_bootstrap(&renderer))
+            .filter(|bootstrap| bootstrap.is_file())
+            .is_some_and(|bootstrap| {
+                Command::new(bootstrap)
+                    .arg(SETTINGS_PAD_ARGUMENT)
+                    .spawn()
+                    .is_ok()
+            });
+        if !launched {
+            self.notify(
+                "Pad 設定を開けません。Sakura Input のインストールを確認してください".to_owned(),
+            );
+            self.update_status();
+            // The folded list has no editor status slot, so failure must be
+            // readable there as well as in the wide view.
+            // SAFETY: `self.window` is the live Pad window and both message
+            // strings are static NUL-terminated UTF-16.
+            unsafe {
+                let _ = MessageBoxW(
+                    Some(self.window),
+                    windows::core::w!(
+                        "Pad 設定を開けません。Sakura Input のインストールを確認してください。"
+                    ),
+                    windows::core::w!("Sakura Pad"),
+                    MB_OK,
+                );
+            }
+        }
+    }
     fn prompt_security_auth(&mut self, window: HWND, purpose: &str) -> Option<PadSettingAuth> {
         let hint = self.pad_hardware_hint.clone();
         let password = if hint.as_ref().is_none_or(|hint| hint.requires_password) {
@@ -6433,10 +6578,9 @@ impl PadState {
             self.body_rail,
             self.new,
             self.sort,
-            self.sync,
+            self.overflow,
             self.copy,
             self.delete,
-            self.protect,
             self.memo_protect,
         ] {
             if !child.is_invalid() {
@@ -7789,10 +7933,9 @@ impl PadState {
             self.body_rail,
             self.new,
             self.sort,
-            self.sync,
+            self.overflow,
             self.copy,
             self.delete,
-            self.protect,
             self.memo_protect,
         ] {
             if !child.is_invalid() {
@@ -7814,10 +7957,9 @@ impl PadState {
         self.body_rail = HWND::default();
         self.new = HWND::default();
         self.sort = HWND::default();
-        self.sync = HWND::default();
+        self.overflow = HWND::default();
         self.copy = HWND::default();
         self.delete = HWND::default();
-        self.protect = HWND::default();
         self.memo_protect = HWND::default();
     }
 
@@ -7994,10 +8136,9 @@ impl PadState {
             (self.body, self.fonts.body),
             (self.new, self.fonts.small),
             (self.sort, self.fonts.body),
-            (self.sync, self.fonts.body),
+            (self.overflow, self.fonts.body),
             (self.copy, self.fonts.body),
             (self.delete, self.fonts.body),
-            (self.protect, self.fonts.small),
             (self.memo_protect, self.fonts.small),
         ];
         // SAFETY: every handle is a live child and every font is owned here
@@ -8238,9 +8379,8 @@ impl PadState {
             for button in [
                 self.new,
                 self.sort,
-                self.sync,
+                self.overflow,
                 self.delete,
-                self.protect,
                 self.memo_protect,
             ] {
                 if !button.is_invalid() {
@@ -8262,9 +8402,8 @@ impl PadState {
             for button in [
                 self.new,
                 self.sort,
-                self.sync,
+                self.overflow,
                 self.delete,
-                self.protect,
                 self.memo_protect,
             ] {
                 if !button.is_invalid() {
@@ -8952,11 +9091,8 @@ extern "system" fn pad_procedure(window: HWND, message: u32, w: WPARAM, l: LPARA
             if item.CtlType == ODT_BUTTON {
                 let id = item.CtlID as u16;
                 let wide = is_wide(window);
-                if id == PROTECT_ID || id == MEMO_PROTECT_ID {
-                    let mut face = button_face(id, wide).expect("protection controls have icons");
-                    if id == PROTECT_ID && state.protected_session_seen && !state.v4_mode {
-                        face.icon = PadIcon::Settings;
-                    }
+                if id == MEMO_PROTECT_ID {
+                    let face = button_face(id, wide).expect("memo protection control has an icon");
                     let previous = select_font(item.hDC, state.fonts.small);
                     draw_button(
                         item,
@@ -9097,17 +9233,10 @@ extern "system" fn pad_procedure(window: HWND, message: u32, w: WPARAM, l: LPARA
                 (SORT_ID, value) if value == BN_CLICKED as u16 => state.cycle_sort(window),
                 (DELETE_ID, value) if value == BN_CLICKED as u16 => state.delete_memo(window),
                 (COPY_ID, value) if value == BN_CLICKED as u16 => state.copy_memo(window),
-                (SYNC_ID, value) if value == BN_CLICKED as u16 => {
-                    state.notify("GitHub 未設定".to_owned());
-                    state.update_status();
+                (OVERFLOW_ID, value) if value == BN_CLICKED as u16 => {
+                    state.open_overflow_menu(window)
                 }
-                (PROTECT_ID, value) if value == BN_CLICKED as u16 => {
-                    if state.protected_session_seen && !state.v4_mode {
-                        state.show_security_settings(window)
-                    } else {
-                        state.show_enroll_prompt(window)
-                    }
-                }
+                (GIT_SYNC_MENU_ID | SETTINGS_MENU_ID, 0) => state.run_overflow_action(id),
                 (MEMO_PROTECT_ID, value) if value == BN_CLICKED as u16 => {
                     state.show_memo_prompt(window)
                 }

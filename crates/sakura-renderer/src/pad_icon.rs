@@ -84,12 +84,10 @@ pub(crate) enum PadIcon {
     Search,
     Plus,
     Sort,
-    Sync,
+    More,
     Copy,
     Trash,
     Lock,
-    Shield,
-    Settings,
 }
 
 /// The side of an icon's box at this DPI.
@@ -453,23 +451,13 @@ fn figures(icon: PadIcon, ink: &Ink) {
             ink.stroke(&[(21.5, 7.0), (21.5, 24.5)]);
             ink.stroke(&[(17.0, 20.0), (21.5, 24.5), (26.0, 20.0)]);
         }
-        // A ring broken at the top right, travelling clockwise, with the head
-        // at the end of the sweep. Clockwise is the direction every refresh
-        // control on this desktop turns.
-        PadIcon::Sync => {
-            let center = (16.0, 16.5);
-            let radius = 9.0;
-            let mut ring = Vec::with_capacity(48);
-            arc(&mut ring, center, radius, 340.0, 625.0);
-            ink.stroke(&ring);
-            // At the top of the circle the clockwise tangent points right, so
-            // the head is a triangle straddling the ring and aimed that way.
-            let tip = (center.0, center.1 - radius);
-            ink.fill(&[
-                (tip.0 + 3.6, tip.1),
-                (tip.0 - 0.8, tip.1 - 3.3),
-                (tip.0 - 0.8, tip.1 + 3.3),
-            ]);
+        // Three dots indicate the list's extra actions.
+        PadIcon::More => {
+            for x in [7.0, 16.0, 25.0] {
+                let mut dot = Vec::with_capacity(20);
+                arc(&mut dot, (x, 16.0), 1.9, 0.0, 360.0);
+                ink.fill(&dot);
+            }
         }
         // Two sheets, the back one showing only the edges the front one does
         // not cover. This is the one control whose meaning the owner found
@@ -499,43 +487,6 @@ fn figures(icon: PadIcon, ink: &Ink) {
             ink.stroke(&shackle);
             ink.stroke(&rounded_rect(7.0, 13.0, 25.0, 27.0, 2.0));
             ink.stroke(&[(16.0, 18.0), (16.0, 22.0)]);
-        }
-        // Pad-wide settings use a shield so the broader scope reads apart
-        // from the per-memo lock.
-        PadIcon::Shield => {
-            ink.stroke(&[
-                (16.0, 4.5),
-                (26.0, 8.5),
-                (25.0, 18.0),
-                (21.0, 24.0),
-                (16.0, 28.0),
-                (11.0, 24.0),
-                (7.0, 18.0),
-                (6.0, 8.5),
-                (16.0, 4.5),
-            ]);
-            ink.stroke(&[(11.0, 16.0), (14.5, 19.5), (21.0, 12.5)]);
-        }
-        // A gear marks the legacy protected-session action as settings.
-        PadIcon::Settings => {
-            let mut ring = Vec::with_capacity(32);
-            arc(&mut ring, (16.0, 16.0), 7.0, 0.0, 360.0);
-            ink.stroke(&ring);
-            let mut hub = Vec::with_capacity(24);
-            arc(&mut hub, (16.0, 16.0), 2.5, 0.0, 360.0);
-            ink.stroke(&hub);
-            for (a, b) in [
-                ((16.0, 4.5), (16.0, 8.0)),
-                ((16.0, 24.0), (16.0, 27.5)),
-                ((4.5, 16.0), (8.0, 16.0)),
-                ((24.0, 16.0), (27.5, 16.0)),
-                ((7.9, 7.9), (10.4, 10.4)),
-                ((21.6, 21.6), (24.1, 24.1)),
-                ((24.1, 7.9), (21.6, 10.4)),
-                ((10.4, 21.6), (7.9, 24.1)),
-            ] {
-                ink.stroke(&[a, b]);
-            }
         }
     }
 }
