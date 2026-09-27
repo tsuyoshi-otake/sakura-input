@@ -808,7 +808,12 @@ impl PadProtectionEngine {
                 } else {
                     FailureReason::Storage
                 };
-                ProtectionError::new(FailurePhase::Save, reason)
+                let phase = if matches!(error, StorageError::DraftCleanupUncertain) {
+                    FailurePhase::Uncertain
+                } else {
+                    FailurePhase::Save
+                };
+                ProtectionError::new(phase, reason)
             });
         if result.is_err() {
             self.lock();
@@ -984,6 +989,51 @@ impl PadProtectionEngine {
         // Verify authenticates the envelope against a session whose scope was
         // established with `vault_id`; its result binds this ID to plaintext.
         Ok((vault_id, document))
+    }
+
+    /// Probe only after a successful credential unlock. The store compares
+    /// the exact committed base under its writer lock, and this session opens
+    /// the candidate before the UI may offer it for explicit restoration.
+    pub fn recoverable_draft(
+        &mut self,
+        store: &PadStore,
+        confirmed: &PadDocument,
+    ) -> Result<Option<PadDocument>, ProtectionError> {
+        let vault_id = self
+            .vault_id
+            .ok_or_else(|| ProtectionError::new(FailurePhase::Unlock, FailureReason::Locked))?;
+        store
+            .recoverable_protected_draft(confirmed, |path| self.verify_path(path, vault_id))
+            .map_err(|error| {
+                let reason = if matches!(error, StorageError::StaleProtectedDocument) {
+                    FailureReason::Stale
+                } else {
+                    FailureReason::Storage
+                };
+                ProtectionError::new(FailurePhase::Unlock, reason)
+            })
+    }
+
+    /// Call only after the user explicitly chooses to discard a recoverable
+    /// draft. The authenticated primary is rechecked under the writer lock.
+    pub fn discard_draft(
+        &mut self,
+        store: &PadStore,
+        confirmed: &PadDocument,
+    ) -> Result<bool, ProtectionError> {
+        let vault_id = self
+            .vault_id
+            .ok_or_else(|| ProtectionError::new(FailurePhase::Unlock, FailureReason::Locked))?;
+        store
+            .discard_protected_draft(confirmed, |path| self.verify_path(path, vault_id))
+            .map_err(|error| {
+                let reason = if matches!(error, StorageError::StaleProtectedDocument) {
+                    FailureReason::Stale
+                } else {
+                    FailureReason::Storage
+                };
+                ProtectionError::new(FailurePhase::Unlock, reason)
+            })
     }
 }
 
@@ -1386,7 +1436,12 @@ fn v4_save_loop(
                 StorageError::ProtectedVerification => FailureReason::Authentication,
                 _ => FailureReason::Storage,
             };
-            ProtectionError::new(FailurePhase::Save, reason)
+            let phase = if matches!(error, StorageError::DraftCleanupUncertain) {
+                FailurePhase::Uncertain
+            } else {
+                FailurePhase::Save
+            };
+            ProtectionError::new(phase, reason)
         })
     });
     let _ = done.send(());

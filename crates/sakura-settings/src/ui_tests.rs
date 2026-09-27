@@ -4,7 +4,6 @@ use super::*;
 fn pad_actions_use_distinct_registered_renderer_messages() {
     for (action, name) in [
         (PadAction::Open, windows::core::w!("SakuraInput.OpenPad.v1")),
-        (PadAction::Lock, windows::core::w!("SakuraInput.LockPad.v1")),
         (
             PadAction::OpenProtection,
             windows::core::w!("SakuraInput.OpenPadProtection.v1"),
@@ -18,8 +17,24 @@ fn pad_actions_use_distinct_registered_renderer_messages() {
         assert_ne!(expected, 0);
         assert_eq!(actual, expected, "{action:?}");
     }
-    assert_eq!(PadAction::Lock.label(), "Sakura Padをロックする");
+    // SAFETY: both names are static, process-independent message contracts.
+    assert_ne!(unsafe { RegisterWindowMessageW(PAD_LOCK_MESSAGE) }, 0);
+    // SAFETY: this is a second static, process-independent message contract.
+    assert_ne!(unsafe { RegisterWindowMessageW(PAD_STATUS_MESSAGE) }, 0);
     assert_eq!(PadAction::OpenProtection.label(), "保護の設定を開く");
+}
+
+#[test]
+fn pad_status_wire_values_have_explicit_user_readings() {
+    for value in 1..=9 {
+        let status = PadStatus::from_wire(value).expect("known renderer result");
+        assert!(status.label().starts_with("Pad全体:"));
+    }
+    assert_eq!(PadStatus::from_wire(0), None);
+    assert_eq!(PadStatus::from_wire(10), None);
+    assert!(PadStatus::Unavailable.label().contains("確認できません"));
+    assert!(PadStatus::PasswordLocked.label().contains("ロック中"));
+    assert!(PadStatus::PasswordUnlocked.label().contains("解除中"));
 }
 
 #[test]

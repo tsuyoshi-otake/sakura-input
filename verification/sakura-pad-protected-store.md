@@ -23,10 +23,13 @@ explicit deadlines. A native regression passed with both completion messages
 deliberately suppressed. A later physical native Pad UI retry passed the whole
 enrollment/recovery/unlock/exit path with the timer in place. This does not
 prove the earlier physical stall was a lost message.
-Whole-Pad password change is implemented for password-only v2 vaults. Changing
-a hardware-backed vault, adding/removing spare keys, and unprotecting a Pad
-remain open. TOTP is local confirmation backed by a current-user DPAPI
-sidecar; it is not independent cryptographic protection or online 2FA.
+Whole-Pad password change is implemented for password-backed v2 vaults,
+including those with local TOTP confirmation enabled. An enabled TOTP sidecar
+requires a fresh code before rewrap; cancellation and a wrong code leave the
+encrypted primary unchanged. Changing a hardware-backed vault, adding/removing
+spare keys, and unprotecting a Pad remain open. TOTP is local confirmation
+backed by a current-user DPAPI sidecar; it is not independent cryptographic
+protection or online 2FA.
 
 ## Rubric
 
@@ -42,7 +45,10 @@ sidecar; it is not independent cryptographic protection or online 2FA.
 | Enrollment completion does not depend on a posted message | Run `pad_ui::whole_pad_enrollment_polls_when_completion_posts_are_lost` with the debug fixture suppressing both completion messages | The Pad still presents the recovery confirmation and reaches a terminal enrollment result |
 | Session lock clears unconfirmed key | Run `pad_ui::windows_lock_clears_unconfirmed_whole_pad_recovery_key` against an isolated renderer | The key vanishes from native child text, no cutover intent is published, and the original editor reopens |
 | Password change is transactional | Run `pad_storage::tests::password_rewrap*`, `pad_protection::process_tests::real_worker_password_change_preserves_recovery_and_rejects_old_replay`, and `pad_ui::whole_pad_password_change_rejects_old_password_and_preserves_memo` | Wrong old password changes nothing; an interrupted rewrap has one explicit authoritative generation; a new password and the original recovery key open the same document; replaying the old primary alone does not restore the old password |
+| TOTP-gated password change | Run ignored `pad_ui::whole_pad_password_change_requires_fresh_totp_before_rewrap` against an isolated renderer and store | Cancellation and a wrong code leave the primary bytes unchanged; a fresh code permits rewrap; afterward the old password fails and the new password plus a later fresh code opens the unchanged memo |
+| Interrupted v3 save retains a protected draft | Run `pad_storage::tests::durable_v3_draft_survives_staging_kill_and_retry_cleans_it` and `pad_ui::v3_draft_requires_password_before_choice_and_restores_after_forced_exit` with isolated storage and renderer | A staged draft survives forced process exit without becoming the primary; no draft choice or plaintext appears before successful password authentication; accepting recovery publishes the new generation and removes the draft |
 | Suspend revokes the surface | Run `pad_ui::host_suspend_masks_unlocked_whole_pad_before_reopen` against an isolated renderer and session worker | A simulated host `PBT_APMSUSPEND` removes protected title/body/list HWNDs before the Pad can reopen, which requires authentication |
+| Settings observes and locks without document data | Run `pad_ui::settings_protection_and_lock_messages_route_to_isolated_pad` and Settings' `pad_status_wire_values_have_explicit_user_readings` | A status query on a closed Pad does not create its window; the lock reply confirms masking before Settings says complete; unknown state is shown as unavailable |
 | Repository checks and process lifetime | Wrapped Cargo tests, fmt, clippy, dependency/audit gates, and `ci/check-process-clean.ps1` | Required suites pass, no runner survives, no package is added younger than seven days |
 
 The storage transaction owns the durable protected cutover, version guard, and
@@ -59,10 +65,15 @@ legacy `hmac-secret` extension during credential registration enabled the
 tested YubiKey 5 NFC path. Microsoft documents that its `webauthn.h` maps PRF
 values to the HMAC-secret extension ([header](https://github.com/microsoft/webauthn/blob/master/webauthn.h));
 Yubico documents the firmware capability matrix in its [technical manual](https://docs.yubico.com/hardware/yubikey/yk-tech-manual/yk5-firmware-overview.html).
-The TOTP sidecar owns its local secret,
-replay floor, and failure state. Forced-process-exit recovery of an uncertain
-unsaved edit, spare-key management, broader TOTP rollback assurance, and migration of real user
-data remain separate acceptance criteria in
+The TOTP sidecar owns its local secret, replay floor, and failure state. The
+store owns `memo.draft.bin`: it stages a DPAPI-protected, verified candidate
+before v3 primary publication and binds recovery to the exact authenticated
+base document, generation, and envelope digest. A stale or corrupt draft blocks
+normal publication until it is recovered or explicitly discarded after
+authentication. The UI owns the restore/defer choice. An edit that has not
+reached the UI's 100 ms debounce or the actor's 300 ms mailbox is outside this
+durable-draft guarantee. Physical power-loss durability, spare-key management,
+broader TOTP rollback assurance, and migration of real user data remain separate acceptance criteria in
 `docs/plans/sakura-pad-protection.md`.
 
 ## Evidence recorded so far
@@ -95,6 +106,13 @@ data remain separate acceptance criteria in
   precommit abort and postcommit recovery. A native UI test drove the settings
   chooser and masked change dialog, then reopened the exact title/body with
   the new password after rejecting the old one. Both tests use isolated data.
+- The isolated native `pad_ui::whole_pad_password_change_requires_fresh_totp_before_rewrap`
+  passed 1 test in 41.77 seconds. Closing the code dialog and submitting an
+  invalid code each left the protected primary byte-identical; the invalid
+  code also kept the content masked. A fresh code then changed the primary,
+  invalidated the old password, and required the new password plus another
+  fresh code to reopen the original title/body. Process cleanup found no
+  surviving test runner.
 - Interrupted password change recovery passed a storage test with the memo
   generation floor present: unauthenticated recovery left the pending state
   untouched; authenticated recovery restored the old backup; the next normal
@@ -107,7 +125,9 @@ data remain separate acceptance criteria in
 - `pad_ui::long_pad_fixture_keeps_watch_feed_alive` passed: the isolated renderer stayed live for 18 seconds of otherwise idle Pad time with the three-second heartbeat, then exited cleanly on the deliberate engine stop. This bounds the test-fixture cause of the prior teardown failures, not the separate hardware registration timeout.
 - The isolated native whole-Pad TOTP setup/password/code gate test passed after a retry without concurrent desktop typing; it confirmed the protected title/body HWNDs remained absent between password entry and code acceptance.
 - The isolated native host-suspend test passed: a simulated `WM_POWERBROADCAST/PBT_APMSUSPEND` masked title/body/list controls before reopening, and the Pad reopened locked. This is a message-path check, not a physical sleep/resume measurement.
-- Settings' data-free registered protection and lock messages reached an isolated renderer. The former opened the Pad protection prompt; the latter hid it. The sender only reports successful queueing, not a completed lock.
+- The Settings-to-renderer contract now has a data-free scalar reply for whole-Pad protection method and locked/unlocked state. `pad_ui::settings_protection_and_lock_messages_route_to_isolated_pad` passed: querying an isolated closed Pad returned its state without constructing a Pad HWND; the synchronous lock reply confirmed masking, the window hid, and a later status query again reported its persisted unprotected state. Settings' label mapping passed its unit test. An unreadable or incomplete persisted state is reported as unavailable; a failed or uncertain lock reply is not shown as completion.
+- `pad_storage::tests` covered v3 drafts surviving interrupted publication, absent drafts, corrupt and wrong-scope drafts, advanced primaries, uncertain cleanup after primary publication, and credential rewrap blocking until an authenticated explicit discard. The complete renderer-library regression passed 249 tests with 15 ignored; a process check found no surviving test runner.
+- `pad_ui::v3_draft_requires_password_before_choice_and_restores_after_forced_exit` passed against an isolated renderer and store. The test stopped that renderer after the encrypted draft was staged and before primary publication, then proved startup and wrong-password attempts displayed neither plaintext controls nor a recovery choice. After correct password, accepting the draft published the new generation, removed `memo.draft.bin`, and reopened the restored title/body after another restart. The focused run passed 1 test in 13.10 seconds and its process check was clean. A pre-debounce or pre-mailbox edit and real power loss were not tested.
 - During WebAuthn calls the Pad parent releases its topmost z-order, restores it on completion, and rejects overlapping requests. A focused native-window test passed. The user confirmed seeing and completing both Windows Security PIN/touch prompts over the physical Pad UI test.
 - The internal Version 8-M TOTP QR encoder passed dependency policy. Independent ZXing-cpp 2.3.0 decoding recovered the exact dummy Pad otpauth URI and a maximum-length 152-byte payload; no real TOTP secret left the test process.
 - Password-entry labeling was improved so the field remains visibly identified while editing; this is a focused UX change, not completion of the planned visual/accessibility matrix.

@@ -65,15 +65,16 @@ use windows::Win32::UI::WindowsAndMessaging::{
     GA_ROOT, GWLP_USERDATA, GWLP_WNDPROC, HMENU, HWND_TOP, HWND_TOPMOST, IDC_ARROW, IDNO, IDYES,
     LBN_DBLCLK, LBN_SELCHANGE, LBS_HASSTRINGS, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY,
     LBS_OWNERDRAWFIXED, LB_ADDSTRING, LB_DELETESTRING, LB_GETTOPINDEX, LB_INSERTSTRING,
-    LB_RESETCONTENT, LB_SETCURSEL, LB_SETITEMHEIGHT, LB_SETTOPINDEX, MB_YESNOCANCEL, MSG,
-    SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SWP_SHOWWINDOW, SW_HIDE,
-    SW_RESTORE, SW_SHOW, WINDOW_EX_STYLE, WM_APP, WM_CHAR, WM_CLOSE, WM_COMMAND, WM_CREATE,
-    WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC, WM_DESTROY,
-    WM_DPICHANGED, WM_DRAWITEM, WM_ERASEBKGND, WM_GETFONT, WM_GETMINMAXINFO, WM_GETTEXTLENGTH,
-    WM_KEYDOWN, WM_KILLFOCUS, WM_MEASUREITEM, WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WM_SETFOCUS,
-    WM_SETFONT, WM_SETTEXT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSCHAR, WM_SYSKEYDOWN, WM_THEMECHANGED,
-    WM_TIMER, WM_WTSSESSION_CHANGE, WNDCLASSW, WNDPROC, WS_BORDER, WS_CHILD, WS_CLIPCHILDREN,
-    WS_EX_TOPMOST, WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE, WTS_SESSION_LOCK,
+    LB_RESETCONTENT, LB_SETCURSEL, LB_SETITEMHEIGHT, LB_SETTOPINDEX, MB_DEFBUTTON2, MB_YESNO,
+    MB_YESNOCANCEL, MSG, SWP_HIDEWINDOW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER,
+    SWP_SHOWWINDOW, SW_HIDE, SW_RESTORE, SW_SHOW, WINDOW_EX_STYLE, WM_APP, WM_CHAR, WM_CLOSE,
+    WM_COMMAND, WM_CREATE, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC,
+    WM_DESTROY, WM_DPICHANGED, WM_DRAWITEM, WM_ERASEBKGND, WM_GETFONT, WM_GETMINMAXINFO,
+    WM_GETTEXTLENGTH, WM_KEYDOWN, WM_KILLFOCUS, WM_MEASUREITEM, WM_NCCREATE, WM_NCDESTROY,
+    WM_PAINT, WM_SETFOCUS, WM_SETFONT, WM_SETTEXT, WM_SETTINGCHANGE, WM_SIZE, WM_SYSCHAR,
+    WM_SYSKEYDOWN, WM_THEMECHANGED, WM_TIMER, WM_WTSSESSION_CHANGE, WNDCLASSW, WNDPROC, WS_BORDER,
+    WS_CHILD, WS_CLIPCHILDREN, WS_EX_TOPMOST, WS_OVERLAPPEDWINDOW, WS_TABSTOP, WS_VISIBLE,
+    WTS_SESSION_LOCK,
 };
 use zeroize::{Zeroize, Zeroizing};
 
@@ -198,6 +199,33 @@ fn totp_unavailable() -> ProtectionError {
 fn pad_totp_store(store: &PadStore) -> std::result::Result<PadTotpStore, ProtectionError> {
     let id = store.protected_vault_id().map_err(|_| totp_unavailable())?;
     PadTotpStore::new(store.directory(), id, TotpScope::Pad).map_err(|_| totp_unavailable())
+}
+
+fn verify_password_change_totp(
+    store: &PadStore,
+    code: Option<&str>,
+) -> std::result::Result<(), ProtectionError> {
+    let unavailable = || ProtectionError {
+        phase: FailurePhase::Unlock,
+        reason: FailureReason::Unavailable,
+    };
+    let totp = pad_totp_store(store).map_err(|_| unavailable())?;
+    match totp.status().map_err(|_| unavailable())? {
+        EnrollmentStatus::Disabled if code.is_none() => Ok(()),
+        EnrollmentStatus::Enabled => {
+            let code = code.ok_or_else(unavailable)?;
+            let now = current_unix_seconds().map_err(|_| unavailable())?;
+            totp.verify(code, now).map_err(|error| ProtectionError {
+                phase: FailurePhase::Unlock,
+                reason: if matches!(error, crate::pad_totp_store::TotpStoreError::Verify(_)) {
+                    FailureReason::Authentication
+                } else {
+                    FailureReason::Unavailable
+                },
+            })
+        }
+        EnrollmentStatus::Disabled | EnrollmentStatus::Pending => Err(unavailable()),
+    }
 }
 
 fn memo_totp_store(
@@ -1290,9 +1318,71 @@ struct UnlockCompletion {
     epoch: u64,
     totp_attempt: bool,
     result: std::result::Result<
-        (crate::pad_storage::LoadOutcome, PadProtectionEngine, bool),
+        (
+            crate::pad_storage::LoadOutcome,
+            PadProtectionEngine,
+            bool,
+            DurableDraftProbe,
+        ),
         ProtectionError,
     >,
+}
+
+enum DurableDraftProbe {
+    NotChecked,
+    None,
+    Recoverable(PadDocument),
+    Unavailable,
+}
+
+impl DurableDraftProbe {
+    fn from_result<E>(result: std::result::Result<Option<PadDocument>, E>) -> Self {
+        match result {
+            Ok(Some(document)) => Self::Recoverable(document),
+            Ok(None) => Self::None,
+            Err(_) => Self::Unavailable,
+        }
+    }
+}
+
+enum DurableDraftChoice {
+    Restore,
+    Defer,
+    Cancel,
+}
+
+fn prompt_durable_draft(window: HWND) -> DurableDraftChoice {
+    // SAFETY: the Pad owns this window. A modal prompt keeps the authenticated
+    // draft out of editable controls until the user chooses its fate.
+    match unsafe {
+        MessageBoxW(
+            Some(window),
+            windows::core::w!(
+                "強制終了前の保護された未保存草稿があります。\n\nはい: 草稿を復元して保存\nいいえ: 確定済み内容を表示（保存を停止し、草稿を保持）\nキャンセル: 今は開かず、後で選ぶ"
+            ),
+            windows::core::w!("Sakura Pad の草稿を復元"),
+            MB_YESNOCANCEL,
+        )
+    } {
+        IDYES => DurableDraftChoice::Restore,
+        IDNO => DurableDraftChoice::Defer,
+        _ => DurableDraftChoice::Cancel,
+    }
+}
+
+fn confirm_discard_unreadable_draft(window: HWND) -> bool {
+    // SAFETY: this is the live Pad HWND. Declining retains the evidence and
+    // keeps all writes disabled.
+    unsafe {
+        MessageBoxW(
+            Some(window),
+            windows::core::w!(
+                "保護された未保存草稿を検証できません。\n\n草稿を破棄して保存を再開しますか？\n「いいえ」では草稿を保持し、保存を停止します。"
+            ),
+            windows::core::w!("Sakura Pad の草稿を確認"),
+            MB_YESNO | MB_DEFBUTTON2,
+        ) == IDYES
+    }
 }
 
 struct PadSettingAuth {
@@ -1307,6 +1397,7 @@ enum SecurityJob {
         expected: PadDocument,
         old_password: SecretBytes,
         new_password: SecretBytes,
+        totp_code: Option<Zeroizing<String>>,
     },
     Begin(PadSettingAuth),
     Confirm {
@@ -1442,6 +1533,11 @@ struct PadState {
     unsaved_recovery: Option<PadDocument>,
     recovery_base: Option<PadDocument>,
     recovery_conflict: bool,
+    /// Authenticated v4 force-exit draft, offered when the Pad first appears.
+    /// The committed document remains visible until the user accepts it.
+    v4_draft: Option<PadDocument>,
+    v4_draft_issue: bool,
+    v4_issue_prompted: bool,
     /// The full persisted document. Every save carries all of it.
     document: PadDocument,
     /// Which memo the editor is bound to. It need not be in `document`: an
@@ -1554,6 +1650,29 @@ impl PadWindow {
                     ),
                 }
             };
+        let mut v4_draft_issue = false;
+        let v4_draft = if v4_mode && !locked {
+            match DurableDraftProbe::from_result(store.recoverable_v4_draft(&document)) {
+                DurableDraftProbe::Recoverable(draft) => {
+                    save_blocked = true;
+                    load_status =
+                        Some("保護された未保存草稿があります。復元方法を選んでください".to_owned());
+                    Some(draft)
+                }
+                DurableDraftProbe::Unavailable => {
+                    v4_draft_issue = true;
+                    save_blocked = true;
+                    load_status = Some(
+                        "保護された草稿を確認できません。既存データを保持し、保存を止めています"
+                            .to_owned(),
+                    );
+                    None
+                }
+                DurableDraftProbe::None | DurableDraftProbe::NotChecked => None,
+            }
+        } else {
+            None
+        };
         let active = document
             .live()
             .next()
@@ -1643,6 +1762,9 @@ impl PadWindow {
             unsaved_recovery: None,
             recovery_base: None,
             recovery_conflict: false,
+            v4_draft,
+            v4_draft_issue,
+            v4_issue_prompted: false,
             document,
             active,
             rows: Vec::new(),
@@ -1700,6 +1822,9 @@ impl PadWindow {
             }
             return Err(error);
         }
+        if state.save_blocked && !state.locked && state.v4_draft.is_none() {
+            state.freeze_for_draft_review();
+        }
         Ok(Self { hwnd, state })
     }
 
@@ -1732,7 +1857,7 @@ impl PadWindow {
     /// Show and activate the normal window. If it is already visible, focus
     /// the pane on screen; if foreground activation is denied, flash the title
     /// bar as a non-destructive attention cue.
-    pub fn show_or_focus(&self) {
+    pub fn show_or_focus(&mut self) {
         // SAFETY: the window and its controls are live for this object.
         unsafe {
             if IsIconic(self.hwnd).as_bool() {
@@ -1827,6 +1952,101 @@ impl PadWindow {
                 flash(self.hwnd);
             }
         }
+        self.resolve_v4_draft();
+        self.resolve_v4_draft_issue();
+    }
+
+    fn resolve_v4_draft(&mut self) {
+        let Some(draft) = self.state.v4_draft.take() else {
+            return;
+        };
+        match prompt_durable_draft(self.hwnd) {
+            DurableDraftChoice::Cancel => {
+                self.state.v4_draft = Some(draft);
+                // SAFETY: this Pad remains owned by the renderer; the next
+                // explicit open gesture offers the same authenticated draft.
+                unsafe {
+                    let _ = ShowWindow(self.hwnd, SW_HIDE);
+                }
+            }
+            DurableDraftChoice::Defer => {
+                self.state.save_blocked = true;
+                self.state.freeze_for_draft_review();
+                self.state.set_status(
+                    "確定済みの内容を表示中です。保存を止め、未保存草稿を保持しています".to_owned(),
+                );
+                self.state.update_status();
+            }
+            DurableDraftChoice::Restore => {
+                let accepted = self
+                    .state
+                    .protected_worker
+                    .as_ref()
+                    .is_some_and(|actor| actor.submit(draft.clone()).is_ok());
+                if !accepted {
+                    self.state.unsaved_recovery = Some(draft.clone());
+                    self.state.recovery_base = Some(self.state.document.clone());
+                }
+                self.state.document = draft;
+                self.state.active = self
+                    .state
+                    .document
+                    .live()
+                    .next()
+                    .map(|memo| memo.id)
+                    .unwrap_or_else(|| self.state.document.next_id());
+                self.state.generation = self.state.document.generation;
+                self.state.latest_submitted = self.state.generation;
+                self.state.save_blocked = !accepted;
+                self.state.refresh_list();
+                self.state.refresh_editor();
+                if !accepted {
+                    self.state.freeze_for_draft_review();
+                }
+                self.state.set_status(if accepted {
+                    "保護された未保存草稿を復元し、保存しています…".to_owned()
+                } else {
+                    "草稿を表示しましたが保存できません。内容をコピーしてください".to_owned()
+                });
+                self.state.update_status();
+                if accepted {
+                    // SAFETY: the live Pad polls only its own protected actor.
+                    unsafe {
+                        let _ = SetTimer(Some(self.hwnd), PAD_COMPLETION_TIMER, 100, None);
+                    }
+                }
+            }
+        }
+    }
+
+    fn resolve_v4_draft_issue(&mut self) {
+        if !self.state.v4_draft_issue
+            || self.state.v4_issue_prompted
+            || self.state.protected_worker.is_none()
+        {
+            return;
+        }
+        self.state.v4_issue_prompted = true;
+        if !confirm_discard_unreadable_draft(self.hwnd) {
+            return;
+        }
+        let discarded =
+            PadStore::default().and_then(|store| store.discard_v4_draft(&self.state.document));
+        match discarded {
+            Ok(_) => {
+                self.state.v4_draft_issue = false;
+                self.state.save_blocked = false;
+                self.state.thaw_after_draft_discard();
+                self.state
+                    .set_status("検証できない草稿を破棄し、保存を再開しました".to_owned());
+            }
+            Err(_) => {
+                self.state.set_status(
+                    "草稿を破棄できません。既存データを保持し、保存を止めています".to_owned(),
+                );
+            }
+        }
+        self.state.update_status();
     }
 
     /// Returns false when protected edits remain unsaved and the window must
@@ -1841,10 +2061,63 @@ impl PadWindow {
 
     /// OS session lock must remove exposed memo HWNDs even when persistence
     /// is uncertain. The draft stays in this Pad process for reauthentication.
-    pub fn mask_for_session(&self) {
+    pub fn mask_for_session(&self) -> bool {
         // SAFETY: only the Pad's UI thread handles its own synchronous message.
-        unsafe {
-            let _ = SendMessageW(self.hwnd, WM_PAD_MASK_FOR_SESSION, None, None);
+        unsafe { SendMessageW(self.hwnd, WM_PAD_MASK_FOR_SESSION, None, None).0 != 0 }
+    }
+
+    /// Data-free status for the Settings page. The renderer owns the session
+    /// and only publishes method, lock state, or an unavailable result.
+    pub fn protection_status(&self) -> usize {
+        let state = &self.state;
+        let unavailable = (if state.locked {
+            !state.protected_session_seen || state.v4_mode
+        } else {
+            state.save_blocked
+        }) || state.unsaved_recovery.is_some()
+            || state.memo_recovery.is_some()
+            || state.memo_save_pending.is_some()
+            || state.recovery_conflict;
+        pad_status_code(
+            state.v4_mode,
+            state.protected_session_seen,
+            state.locked,
+            state
+                .pad_hardware_hint
+                .as_ref()
+                .map(|hint| hint.requires_password),
+            unavailable,
+        )
+    }
+
+    /// Inspect a closed Pad without constructing its window or starting a
+    /// storage/crypto actor. Storage validates the published format signals;
+    /// any incomplete or unreadable state is reported as unavailable.
+    pub fn closed_protection_status(store: &PadStore) -> usize {
+        match store.has_v4_cutover() {
+            Ok(true) => return if store.load_v4().is_ok() { 9 } else { 8 },
+            Ok(false) => {}
+            Err(_) => return 8,
+        }
+        match store.protected_vault_id() {
+            Ok(_) => match store.protected_hardware_hint() {
+                Ok(hint) => pad_status_code(
+                    false,
+                    true,
+                    true,
+                    hint.as_ref().map(|value| value.requires_password),
+                    false,
+                ),
+                Err(_) => 8,
+            },
+            Err(StorageError::ProtectedCutover) => {
+                if store.load().is_ok() {
+                    1
+                } else {
+                    8
+                }
+            }
+            Err(_) => 8,
         }
     }
 
@@ -1862,6 +2135,51 @@ impl PadWindow {
     pub fn is_visible(&self) -> bool {
         // SAFETY: the window is live for the lifetime of this object.
         unsafe { IsWindowVisible(self.hwnd).as_bool() }
+    }
+}
+
+fn pad_status_code(
+    v4_mode: bool,
+    protected_session_seen: bool,
+    locked: bool,
+    hint_requires_password: Option<bool>,
+    unavailable: bool,
+) -> usize {
+    if unavailable {
+        return 8;
+    }
+    if v4_mode {
+        return 9;
+    }
+    if !protected_session_seen {
+        return 1;
+    }
+    let base = match hint_requires_password {
+        Some(true) => 6,
+        Some(false) => 4,
+        None => 2,
+    };
+    base + usize::from(locked)
+}
+
+fn pad_mask_reply(
+    enrollment_finished: bool,
+    whole_pad_protected: bool,
+    locked: bool,
+    vault_actor_revoked: bool,
+    memo_session_revoked: bool,
+    hidden: bool,
+    save_settled: bool,
+) -> isize {
+    if enrollment_finished
+        && (!whole_pad_protected || (locked && vault_actor_revoked))
+        && memo_session_revoked
+        && hidden
+        && save_settled
+    {
+        1
+    } else {
+        3
     }
 }
 
@@ -3614,6 +3932,37 @@ impl PadState {
                     self.update_status();
                     return;
                 };
+                let totp_status = PadStore::default()
+                    .ok()
+                    .and_then(|store| pad_totp_store(&store).ok())
+                    .and_then(|totp| totp.status().ok());
+                let totp_code = match totp_status {
+                    Some(EnrollmentStatus::Enabled) => {
+                        let Some(code) =
+                            pad_totp_ui::prompt_code(window, "Pad 全体のパスワード変更")
+                        else {
+                            self.set_status("パスワード変更を中止しました".to_owned());
+                            self.update_status();
+                            return;
+                        };
+                        Some(code)
+                    }
+                    Some(EnrollmentStatus::Disabled) => None,
+                    Some(EnrollmentStatus::Pending) => {
+                        self.set_status(
+                            "確認コードの設定を完了または中止してから変更してください".to_owned(),
+                        );
+                        self.update_status();
+                        return;
+                    }
+                    None => {
+                        self.set_status(
+                            "認証設定を確認できません。変更は行われませんでした".to_owned(),
+                        );
+                        self.update_status();
+                        return;
+                    }
+                };
                 if self.locked || self.security_result.is_some() {
                     return;
                 }
@@ -3632,6 +3981,7 @@ impl PadState {
                         expected,
                         old_password,
                         new_password,
+                        totp_code,
                     },
                 );
             }
@@ -3663,6 +4013,7 @@ impl PadState {
                         expected,
                         old_password,
                         new_password,
+                        totp_code,
                     } => SecurityTaskResult::PasswordChanged(
                         PadStore::default()
                             .map_err(|_| ProtectionError {
@@ -3670,6 +4021,10 @@ impl PadState {
                                 reason: FailureReason::Storage,
                             })
                             .and_then(|store| {
+                                verify_password_change_totp(
+                                    &store,
+                                    totp_code.as_ref().map(|value| value.as_str()),
+                                )?;
                                 let mut engine = PadProtectionEngine::new(Duration::from_secs(15));
                                 engine.change_password_v2(
                                     &store,
@@ -3796,6 +4151,14 @@ impl PadState {
                         phase: FailurePhase::Uncertain,
                         ..
                     }) => "変更結果を確認できません。新旧パスワードか復旧キーで解除してください",
+                    Err(ProtectionError {
+                        phase: FailurePhase::Unlock,
+                        reason: FailureReason::Authentication,
+                    }) => "確認コードが正しくありません。変更は行われませんでした",
+                    Err(ProtectionError {
+                        phase: FailurePhase::Unlock,
+                        ..
+                    }) => "確認コードを検証できません。変更は行われませんでした",
                     Err(ProtectionError {
                         reason: FailureReason::Authentication,
                         ..
@@ -7028,7 +7391,14 @@ impl PadState {
                             .map(|status| status == EnrollmentStatus::Enabled)
                             .map_err(|_| totp_unavailable())?
                     };
-                    Ok((loaded, engine, needs_totp))
+                    let draft = if needs_totp {
+                        DurableDraftProbe::NotChecked
+                    } else {
+                        DurableDraftProbe::from_result(
+                            engine.recoverable_draft(&store, &loaded.document),
+                        )
+                    };
+                    Ok((loaded, engine, needs_totp, draft))
                 });
                 if sender
                     .send(UnlockCompletion {
@@ -7109,7 +7479,7 @@ impl PadState {
         self.unlock_result = None;
         self.unlock_in_flight = false;
         self.pad_hardware_cancel = None;
-        let (loaded, engine, needs_totp) = match completion.result {
+        let (loaded, mut engine, needs_totp, draft_probe) = match completion.result {
             Ok(success) => success,
             Err(error) => {
                 let status = match error.reason {
@@ -7185,7 +7555,11 @@ impl PadState {
                                 FailureReason::Unavailable
                             },
                         })?;
-                        Ok((loaded, engine, false))
+                        let mut engine = engine;
+                        let draft = DurableDraftProbe::from_result(
+                            engine.recoverable_draft(&store, &loaded.document),
+                        );
+                        Ok((loaded, engine, false, draft))
                     })();
                     if sender
                         .send(UnlockCompletion {
@@ -7233,6 +7607,62 @@ impl PadState {
                 return;
             }
         };
+        let mut draft_block_reason = None;
+        let mut draft_discarded = false;
+        match draft_probe {
+            DurableDraftProbe::Recoverable(draft) => {
+                if self
+                    .unsaved_recovery
+                    .as_ref()
+                    .is_some_and(|in_memory| in_memory != &draft)
+                {
+                    // A process-local draft and a durable draft are distinct
+                    // edits. Neither may silently replace the other.
+                    self.recovery_conflict = true;
+                    draft_block_reason = Some(
+                        "二つの未保存草稿があります。表示中の内容をコピーし、Padを再起動して保存済み草稿を確認してください",
+                    );
+                } else {
+                    match prompt_durable_draft(window) {
+                        DurableDraftChoice::Restore => {
+                            self.unsaved_recovery = Some(draft);
+                            self.recovery_base = Some(loaded.document.clone());
+                            self.recovery_conflict = false;
+                        }
+                        DurableDraftChoice::Defer => {
+                            draft_block_reason = Some(
+                                "確定済みの内容を表示中です。保存を止め、未保存草稿を保持しています",
+                            );
+                        }
+                        DurableDraftChoice::Cancel => {
+                            set_control_text(
+                                self.lock_status,
+                                "草稿の復元を中止しました。次の解除時に再び選べます",
+                            );
+                            // SAFETY: the locked child is still live.
+                            unsafe {
+                                let _ = EnableWindow(self.lock_unlock, true);
+                            }
+                            return;
+                        }
+                    }
+                }
+            }
+            DurableDraftProbe::Unavailable => {
+                if confirm_discard_unreadable_draft(window) {
+                    draft_discarded = engine.discard_draft(&store, &loaded.document).is_ok();
+                }
+                if !draft_discarded {
+                    if self.unsaved_recovery.is_some() {
+                        self.recovery_conflict = true;
+                    }
+                    draft_block_reason = Some(
+                        "保護された草稿を確認できません。既存データを保持し、保存を止めています",
+                    );
+                }
+            }
+            DurableDraftProbe::NotChecked | DurableDraftProbe::None => {}
+        }
         let Ok(actor) = ProtectedSaveActor::spawn_unlocked(store, engine, loaded.document.clone())
         else {
             set_control_text(self.lock_status, "保護された保存を開始できません");
@@ -7295,8 +7725,10 @@ impl PadState {
         self.generation = self.document.generation;
         self.latest_submitted = self.generation;
         self.locked = false;
-        self.save_blocked = recovery_rejected;
-        if restored_unsaved {
+        self.save_blocked = recovery_rejected || draft_block_reason.is_some();
+        if let Some(reason) = draft_block_reason {
+            self.set_status(reason.to_owned());
+        } else if restored_unsaved {
             self.set_status(if recovery_conflict {
                 "保存済みのメモが変更されました。未保存のメモをコピーしてください".to_owned()
             } else if recovery_rejected {
@@ -7311,6 +7743,8 @@ impl PadState {
                     let _ = SetTimer(Some(window), PAD_COMPLETION_TIMER, 100, None);
                 }
             }
+        } else if draft_discarded {
+            self.set_status("検証できない草稿を破棄し、保存を再開しました".to_owned());
         } else {
             self.set_status(String::new());
         }
@@ -7342,6 +7776,9 @@ impl PadState {
             self.document = PadDocument::default();
             let _ = create_controls(self, window);
             set_control_text(self.lock_status, "メモ画面を作成できません");
+        }
+        if self.save_blocked && !self.locked {
+            self.freeze_for_draft_review();
         }
         update_layout(self, window);
         // SAFETY: the Pad HWND remains live throughout this UI-thread change.
@@ -7809,6 +8246,58 @@ impl PadState {
                 let _ = KillTimer(Some(self.window), PAD_NOTICE_TIMER);
             }
         }
+    }
+
+    /// Keep confirmed content selectable and copyable while an unresolved
+    /// durable draft prevents writes. Row navigation never clears the edit
+    /// controls' read-only flag, so later selection cannot reopen mutation.
+    fn freeze_for_draft_review(&self) {
+        // SAFETY: these controls are children of the live unlocked Pad, and
+        // invalid handles are skipped while control construction fails closed.
+        unsafe {
+            for edit in [self.title, self.body] {
+                if !edit.is_invalid() {
+                    let _ = SendMessageW(edit, EM_SETREADONLY, Some(WPARAM(1)), None);
+                }
+            }
+            for button in [
+                self.new,
+                self.sort,
+                self.sync,
+                self.delete,
+                self.protect,
+                self.memo_protect,
+            ] {
+                if !button.is_invalid() {
+                    let _ = EnableWindow(button, false);
+                }
+            }
+        }
+    }
+
+    fn thaw_after_draft_discard(&mut self) {
+        // SAFETY: a discard choice is accepted only with an active protected
+        // actor and an exact authenticated current base.
+        unsafe {
+            for edit in [self.title, self.body] {
+                if !edit.is_invalid() {
+                    let _ = SendMessageW(edit, EM_SETREADONLY, Some(WPARAM(0)), None);
+                }
+            }
+            for button in [
+                self.new,
+                self.sort,
+                self.sync,
+                self.delete,
+                self.protect,
+                self.memo_protect,
+            ] {
+                if !button.is_invalid() {
+                    let _ = EnableWindow(button, true);
+                }
+            }
+        }
+        self.refresh_editor();
     }
 
     /// Reports something that just happened.
@@ -8845,7 +9334,24 @@ extern "system" fn pad_procedure(window: HWND, message: u32, w: WPARAM, l: LPARA
             unsafe {
                 let _ = ShowWindow(window, SW_HIDE);
             }
-            LRESULT(1)
+            // A hidden window alone does not prove the authenticated vault
+            // actor was retired. A failed or still-running lock is uncertain.
+            // SAFETY: the queried HWND is this live Pad window.
+            let hidden = !unsafe { IsWindowVisible(window).as_bool() };
+            LRESULT(pad_mask_reply(
+                state.enroll_phase == EnrollPhase::None,
+                state.protected_session_seen && !state.v4_mode,
+                state.locked,
+                state.protected_worker.is_none(),
+                state.memo_open.is_none(),
+                hidden,
+                !state.recovery_conflict
+                    && state.unsaved_recovery.is_none()
+                    && state.memo_recovery.is_none()
+                    && state.memo_save_pending.is_none()
+                    && state.memo_protect_pending.is_none()
+                    && (!state.save_blocked || state.locked),
+            ))
         }
         WM_PAD_OPEN_PROTECTION if !state_ptr.is_null() => {
             // SAFETY: this message is dispatched on the Pad's UI thread.

@@ -76,6 +76,10 @@ const PROTECTED_MAGIC: [u8; 8] = *b"SKRLPAD3";
 const PROTECTED_VERSION: u16 = 3;
 const VAULT_ID_LEN: usize = 16;
 const REWRAP_DIGEST_LEN: usize = 32;
+const DRAFT_MAGIC: [u8; 8] = *b"SKRDRFT1";
+const DRAFT_V3: u8 = 3;
+const DRAFT_V4: u8 = 4;
+const DRAFT_HEADER_LEN: usize = 8 + 1 + 16 + 16 + 16 + 8 + 32 + 8 + 4;
 
 /// A newer `SKRLPADn` magic in DPAPI plaintext identifies a future document
 /// format and must not be treated as corruption during recovery. This only
@@ -795,6 +799,8 @@ pub enum StorageError {
     ProtectedCutover,
     ProtectedVerification,
     StaleProtectedDocument,
+    DraftCleanupUncertain,
+    PendingDraft,
 }
 
 impl std::fmt::Display for StorageError {
@@ -822,6 +828,12 @@ impl std::fmt::Display for StorageError {
                 f.write_str("protected pad copy failed open verification")
             }
             Self::StaleProtectedDocument => f.write_str("protected pad changed before this save"),
+            Self::DraftCleanupUncertain => {
+                f.write_str("pad primary was published but draft cleanup is uncertain")
+            }
+            Self::PendingDraft => {
+                f.write_str("a recoverable pad draft must be restored or discarded first")
+            }
         }
     }
 }
@@ -862,6 +874,7 @@ pub struct PadStore {
     v4_intent: PathBuf,
     v4_marker: PathBuf,
     v4_floor: PathBuf,
+    draft: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -905,6 +918,7 @@ impl PadStore {
             v4_intent: directory.join("memo.v4.committing"),
             v4_marker: directory.join("memo.v4.marker"),
             v4_floor: directory.join("memo.v4.floor"),
+            draft: directory.join("memo.draft.bin"),
         }
     }
 
@@ -1325,6 +1339,10 @@ impl PadStore {
         {
             return Err(StorageError::StaleProtectedDocument);
         }
+        if self.draft.try_exists()? {
+            read_draft(&self.draft).map_err(|_| StorageError::ProtectedVerification)?;
+            return Err(StorageError::PendingDraft);
+        }
         let marker = self.read_rewrap_marker(vault_id)?;
         match marker {
             Some(RewrapMarker::Pending { old, new }) if old == old_digest && new == new_digest => {}
@@ -1594,7 +1612,24 @@ impl PadStore {
             return Err(StorageError::InvalidFormat);
         }
         if self.protected_temp.try_exists()? {
-            return Err(StorageError::TempConflict);
+            // A killed attempt may leave the ordinary staging file. It is
+            // disposable only after this unlocked session authenticates it
+            // as this vault and no newer than the candidate being saved.
+            match open_v3(&self.protected_temp) {
+                Ok((id, staged)) if id == vault_id && staged.generation <= next.generation => {
+                    remove_if_present(&self.protected_temp)?;
+                }
+                Err(_)
+                    if self
+                        .matching_draft(DRAFT_V3, vault_id, expected, &self.protected_path)?
+                        .is_some_and(|draft| draft.next_generation <= next.generation) =>
+                {
+                    // The authenticated primary and durable draft still bind
+                    // this attempt. The separate ordinary temp is disposable.
+                    remove_if_present(&self.protected_temp)?;
+                }
+                _ => return Err(StorageError::TempConflict),
+            }
         }
         write_flushed_temp(&self.protected_temp, encrypted_v3)?;
         hook(ProtectedWritePoint::Staged)?;
@@ -1604,6 +1639,17 @@ impl PadStore {
             return Err(StorageError::ProtectedVerification);
         }
         hook(ProtectedWritePoint::Verified)?;
+        self.stage_draft(
+            DRAFT_V3,
+            vault_id,
+            expected,
+            next,
+            encrypted_v3,
+            &self.protected_path,
+        )?;
+        hook(ProtectedWritePoint::DraftStaged)?;
+        #[cfg(debug_assertions)]
+        pause_after_draft_for_test("SAKURA_PAD_TEST_PAUSE_AFTER_V3_DRAFT")?;
         if self.rewrap_marker.try_exists()? {
             // After password rotation, every later write advances the exact
             // envelope gate. The new backup is durable before the marker;
@@ -1639,6 +1685,7 @@ impl PadStore {
             }
             replace_without_backup(&self.protected_path, &self.protected_temp)?;
             hook(ProtectedWritePoint::Published)?;
+            remove_if_present(&self.draft).map_err(|_| StorageError::DraftCleanupUncertain)?;
             return Ok(WriteOutcome::Replaced);
         }
         if protects_plain {
@@ -1671,6 +1718,7 @@ impl PadStore {
             )?;
         }
         hook(ProtectedWritePoint::Published)?;
+        remove_if_present(&self.draft).map_err(|_| StorageError::DraftCleanupUncertain)?;
         Ok(WriteOutcome::Replaced)
     }
 
@@ -2245,10 +2293,25 @@ impl PadStore {
                 protects_plain = true;
             }
         }
+        if self.v4_temp.try_exists()?
+            && read_v4_document(&self.v4_temp).is_err()
+            && self
+                .matching_draft(DRAFT_V4, id, expected, &self.path)?
+                .is_some_and(|draft| draft.next_generation <= next.generation)
+        {
+            remove_if_present(&self.v4_temp)?;
+        }
         let mut encoded = next.encode()?;
         let protected_result = protect(&encoded);
+        let staged_result = protected_result
+            .as_ref()
+            .map_err(|_| StorageError::ProtectedVerification)
+            .and_then(|_| self.stage_draft(DRAFT_V4, id, expected, next, &encoded, &self.path));
         encoded.fill(0);
+        staged_result?;
         let protected = protected_result?;
+        #[cfg(debug_assertions)]
+        pause_after_draft_for_test("SAKURA_PAD_TEST_PAUSE_AFTER_V4_DRAFT")?;
         prepare_temp(&self.v4_temp, next.generation)?;
         write_flushed_temp(&self.v4_temp, &protected)?;
         if read_v4_document(&self.v4_temp)? != *next {
@@ -2272,6 +2335,7 @@ impl PadStore {
         } else {
             replace_update(&self.path, &self.v4_temp, &self.v4_backup)?;
         }
+        remove_if_present(&self.draft).map_err(|_| StorageError::DraftCleanupUncertain)?;
         Ok(WriteOutcome::Replaced)
     }
 
@@ -2338,6 +2402,309 @@ impl PadStore {
             return Err(StorageError::ProtectedCutover);
         }
         Ok(generation)
+    }
+
+    /// Return a draft only while the exact authenticated primary used as its
+    /// base is still current. The callback must authenticate the v3 envelope
+    /// in an already unlocked worker session. No ordinary `.tmp` is promoted.
+    pub fn recoverable_protected_draft<F>(
+        &self,
+        confirmed: &PadDocument,
+        mut open_v3: F,
+    ) -> Result<Option<PadDocument>, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        if !self.draft.try_exists()? {
+            return Ok(None);
+        }
+        let _lock = self.exclusive_writer()?;
+        let vault_id = self.active_protected_intent()?.vault_id();
+        let loaded = self.load_protected_unlocked(&mut open_v3)?;
+        if loaded.recovered_from_backup || loaded.document != *confirmed {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        let Some(draft) =
+            self.matching_draft(DRAFT_V3, vault_id, confirmed, &self.protected_path)?
+        else {
+            return Err(StorageError::StaleProtectedDocument);
+        };
+        let scratch = self.draft.with_extension("open.tmp");
+        remove_if_present(&scratch)?;
+        write_flushed_temp(&scratch, &draft.payload)?;
+        let opened = open_v3(&scratch);
+        remove_if_present(&scratch)?;
+        match opened {
+            Ok((id, document))
+                if id == vault_id
+                    && document.document_id == draft.document_id
+                    && document.generation == draft.next_generation =>
+            {
+                Ok(Some(document))
+            }
+            _ => Err(StorageError::ProtectedVerification),
+        }
+    }
+
+    /// Explicitly discard recovery evidence only after the caller has opened
+    /// the current primary in an authenticated session and confirmed the
+    /// user's discard choice. A damaged draft may be discarded this way too.
+    pub fn discard_protected_draft<F>(
+        &self,
+        confirmed: &PadDocument,
+        mut open_v3: F,
+    ) -> Result<bool, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        let _lock = self.exclusive_writer()?;
+        let loaded = self.load_protected_unlocked(&mut open_v3)?;
+        if loaded.recovered_from_backup || loaded.document != *confirmed {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        let present = self.draft.try_exists()?;
+        if present {
+            remove_if_present(&self.draft)?;
+        }
+        Ok(present)
+    }
+
+    /// v4 drafts are DPAPI protected as a complete document. The caller must
+    /// have completed the normal v4 unlock/load before displaying this result.
+    pub fn recoverable_v4_draft(
+        &self,
+        confirmed: &PadDocument,
+    ) -> Result<Option<PadDocument>, StorageError> {
+        if !self.draft.try_exists()? {
+            return Ok(None);
+        }
+        let _lock = self.exclusive_writer()?;
+        let id = self.require_v4_intent()?;
+        let current = read_v4_document(&self.path)?;
+        if current != *confirmed || current.generation < self.v4_generation_floor(id)? {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        let Some(mut draft) = self.matching_draft(DRAFT_V4, id, confirmed, &self.path)? else {
+            return Err(StorageError::StaleProtectedDocument);
+        };
+        let decoded = PadDocument::decode(&draft.payload);
+        draft.payload.fill(0);
+        match decoded {
+            Ok(doc) if doc.document_id == id && doc.generation == draft.next_generation => {
+                Ok(Some(doc))
+            }
+            _ => Err(StorageError::ProtectedVerification),
+        }
+    }
+
+    /// The v4 editor calls this only for an explicit discard choice after
+    /// loading the exact current DPAPI document. It also removes corrupt
+    /// evidence, which normal recovery probes intentionally leave untouched.
+    pub fn discard_v4_draft(&self, confirmed: &PadDocument) -> Result<bool, StorageError> {
+        let _lock = self.exclusive_writer()?;
+        let id = self.require_v4_intent()?;
+        let current = read_v4_document(&self.path)?;
+        if current != *confirmed
+            || current.document_id != id
+            || current.generation < self.v4_generation_floor(id)?
+        {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        let present = self.draft.try_exists()?;
+        if present {
+            remove_if_present(&self.draft)?;
+        }
+        Ok(present)
+    }
+
+    fn matching_draft(
+        &self,
+        mode: u8,
+        vault_id: [u8; 16],
+        confirmed: &PadDocument,
+        primary: &Path,
+    ) -> Result<Option<DurableDraft>, StorageError> {
+        if !self.draft.try_exists()? {
+            return Ok(None);
+        }
+        let draft = read_draft(&self.draft).map_err(|_| StorageError::ProtectedVerification)?;
+        let current_digest = envelope_digest(primary)?;
+        Ok((draft.mode == mode
+            && draft.vault_id == vault_id
+            && draft.base_document_id == confirmed.document_id
+            && draft.base_generation == confirmed.generation
+            && draft.base_digest == current_digest
+            && draft.next_generation > confirmed.generation)
+            .then_some(draft))
+    }
+
+    fn stage_draft(
+        &self,
+        mode: u8,
+        vault_id: [u8; 16],
+        expected: &PadDocument,
+        next: &PadDocument,
+        payload: &[u8],
+        primary: &Path,
+    ) -> Result<(), StorageError> {
+        let draft = DurableDraft {
+            mode,
+            vault_id,
+            base_document_id: expected.document_id,
+            document_id: next.document_id,
+            base_generation: expected.generation,
+            base_digest: envelope_digest(primary)?,
+            next_generation: next.generation,
+            payload: payload.to_vec(),
+        };
+        let mut plain = draft.encode()?;
+        let protected_result = protect(&plain);
+        plain.fill(0);
+        let protected = protected_result?;
+        let temp = self.draft.with_extension("stage.tmp");
+        remove_if_present(&temp)?;
+        write_flushed_temp(&temp, &protected)?;
+        if read_draft(&temp)? != draft {
+            return Err(StorageError::ProtectedVerification);
+        }
+        if self.draft.try_exists()? {
+            replace_without_backup(&self.draft, &temp)?;
+        } else {
+            move_first_write(&temp, &self.draft)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct DurableDraft {
+    mode: u8,
+    vault_id: [u8; 16],
+    base_document_id: [u8; 16],
+    document_id: [u8; 16],
+    base_generation: u64,
+    base_digest: [u8; 32],
+    next_generation: u64,
+    payload: Vec<u8>,
+}
+
+impl Drop for DurableDraft {
+    fn drop(&mut self) {
+        self.payload.fill(0);
+    }
+}
+
+impl DurableDraft {
+    fn encode(&self) -> Result<Vec<u8>, StorageError> {
+        let length = u32::try_from(self.payload.len()).map_err(|_| StorageError::LimitExceeded)?;
+        if length == 0 || self.payload.len() + DRAFT_HEADER_LEN > MAX_PROTECTED_BYTES as usize {
+            return Err(StorageError::LimitExceeded);
+        }
+        let mut bytes = Vec::with_capacity(DRAFT_HEADER_LEN + self.payload.len());
+        bytes.extend_from_slice(&DRAFT_MAGIC);
+        bytes.push(self.mode);
+        bytes.extend_from_slice(&self.vault_id);
+        bytes.extend_from_slice(&self.base_document_id);
+        bytes.extend_from_slice(&self.document_id);
+        bytes.extend_from_slice(&self.base_generation.to_le_bytes());
+        bytes.extend_from_slice(&self.base_digest);
+        bytes.extend_from_slice(&self.next_generation.to_le_bytes());
+        bytes.extend_from_slice(&length.to_le_bytes());
+        bytes.extend_from_slice(&self.payload);
+        Ok(bytes)
+    }
+}
+
+fn read_draft(path: &Path) -> Result<DurableDraft, StorageError> {
+    let mut bytes = read_decrypted(path)?;
+    let result = (|| {
+        if bytes.len() < DRAFT_HEADER_LEN || !bytes.starts_with(&DRAFT_MAGIC) {
+            return Err(StorageError::InvalidFormat);
+        }
+        let mode = bytes[8];
+        if mode != DRAFT_V3 && mode != DRAFT_V4 {
+            return Err(StorageError::InvalidFormat);
+        }
+        let vault_id = bytes[9..25]
+            .try_into()
+            .map_err(|_| StorageError::InvalidFormat)?;
+        let base_document_id = bytes[25..41]
+            .try_into()
+            .map_err(|_| StorageError::InvalidFormat)?;
+        let document_id = bytes[41..57]
+            .try_into()
+            .map_err(|_| StorageError::InvalidFormat)?;
+        let base_generation = u64::from_le_bytes(bytes[57..65].try_into().unwrap());
+        let base_digest = bytes[65..97]
+            .try_into()
+            .map_err(|_| StorageError::InvalidFormat)?;
+        let next_generation = u64::from_le_bytes(bytes[97..105].try_into().unwrap());
+        let length = u32::from_le_bytes(bytes[105..109].try_into().unwrap()) as usize;
+        if length == 0
+            || bytes.len() != DRAFT_HEADER_LEN + length
+            || next_generation <= base_generation
+        {
+            return Err(StorageError::InvalidFormat);
+        }
+        Ok(DurableDraft {
+            mode,
+            vault_id,
+            base_document_id,
+            document_id,
+            base_generation,
+            base_digest,
+            next_generation,
+            payload: bytes[DRAFT_HEADER_LEN..].to_vec(),
+        })
+    })();
+    bytes.fill(0);
+    result
+}
+
+/// Debug-only native fault injection. The notification is emitted after the
+/// durable encrypted draft and before any v3/v4 primary publication. A bounded
+/// wait leaves a terminal save error if the test does not kill or release us.
+#[cfg(debug_assertions)]
+fn pause_after_draft_for_test(variable: &str) -> Result<(), StorageError> {
+    let Some(target) = std::env::var_os(variable) else {
+        return Ok(());
+    };
+    pause_after_draft_for_test_at(&PathBuf::from(target), Duration::from_secs(15))
+}
+
+#[cfg(debug_assertions)]
+fn pause_after_draft_for_test_at(path: &Path, budget: Duration) -> Result<(), StorageError> {
+    let user = std::env::var_os("USERPROFILE").ok_or(StorageError::InvalidFormat)?;
+    let allowed = PathBuf::from(user).join("tmp").canonicalize()?;
+    let parent = path.parent().ok_or(StorageError::InvalidFormat)?;
+    if !path.is_absolute()
+        || path.file_name().is_none()
+        || !parent.canonicalize()?.starts_with(&allowed)
+    {
+        return Err(StorageError::InvalidFormat);
+    }
+    let mut release_name = path.as_os_str().to_os_string();
+    release_name.push(".resume");
+    let release = PathBuf::from(release_name);
+    if path.try_exists()? || release.try_exists()? {
+        return Err(StorageError::TempConflict);
+    }
+    let mut ready = OpenOptions::new().create_new(true).write(true).open(path)?;
+    ready.write_all(b"ready")?;
+    ready.sync_all()?;
+    drop(ready);
+    let deadline = Instant::now() + budget;
+    loop {
+        if release.try_exists()? {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(StorageError::Io(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "pad draft test pause expired before primary publication",
+            )));
+        }
+        thread::sleep(Duration::from_millis(25));
     }
 }
 
@@ -2525,6 +2892,7 @@ enum MigrationPoint {
 enum ProtectedWritePoint {
     Staged,
     Verified,
+    DraftStaged,
     RecoveryStaged,
     FloorPublished,
     Published,
@@ -4029,6 +4397,246 @@ mod tests {
     }
 
     #[test]
+    fn durable_v3_draft_survives_staging_kill_and_retry_cleans_it() {
+        let (directory, store, old) = migrated_store();
+        let next = one("draft title", "draft body", 2);
+        let interrupted = store.write_protected_with_hook(
+            &old,
+            &next,
+            b"new encrypted payload",
+            |path| open_protected_test(&old, &next, path),
+            |point| {
+                if point == ProtectedWritePoint::DraftStaged {
+                    Err(StorageError::ProtectedVerification)
+                } else {
+                    Ok(())
+                }
+            },
+        );
+        assert!(interrupted.is_err());
+        assert_eq!(
+            store
+                .load_protected(|path| open_protected_test(&old, &next, path))
+                .unwrap()
+                .document,
+            old
+        );
+        assert_eq!(
+            store
+                .recoverable_protected_draft(&old, |path| open_protected_test(&old, &next, path))
+                .unwrap(),
+            Some(next.clone())
+        );
+        assert!(store.draft.exists());
+        let raw = fs::read(&store.draft).unwrap();
+        assert!(!raw
+            .windows(b"draft body".len())
+            .any(|part| part == b"draft body"));
+        // A torn ordinary temp is ignored only while the exact base-bound
+        // durable draft remains. The encrypted candidate is reverified.
+        fs::write(&store.protected_temp, b"torn ordinary temp").unwrap();
+        store
+            .write_protected(&old, &next, b"new encrypted payload", |path| {
+                open_protected_test(&old, &next, path)
+            })
+            .unwrap();
+        assert!(!store.draft.exists());
+        assert_eq!(
+            store
+                .recoverable_protected_draft(&next, |path| open_protected_test(&old, &next, path))
+                .unwrap(),
+            None
+        );
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn v3_absent_draft_skips_current_base_reverification() {
+        let (directory, store, confirmed) = migrated_store();
+        assert!(!store.draft.exists());
+        fs::write(&store.protected_path, b"temporarily unreadable primary").unwrap();
+        assert_eq!(
+            store
+                .recoverable_protected_draft(&confirmed, |_| {
+                    panic!("no draft must avoid opening the primary")
+                })
+                .unwrap(),
+            None
+        );
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn v3_draft_rejects_corruption_wrong_scope_and_advanced_primary() {
+        let (directory, store, old) = migrated_store();
+        let next = one("draft", "body", 2);
+        store
+            .stage_draft(
+                DRAFT_V3,
+                TEST_VAULT_ID,
+                &old,
+                &next,
+                b"new encrypted payload",
+                &store.protected_path,
+            )
+            .unwrap();
+        assert!(matches!(
+            store.recoverable_protected_draft(&old, |path| {
+                let (id, doc) = open_protected_test(&old, &next, path)?;
+                Ok((
+                    if path == store.protected_path.as_path() {
+                        id
+                    } else {
+                        [9; 16]
+                    },
+                    doc,
+                ))
+            }),
+            Err(StorageError::ProtectedVerification)
+        ));
+        fs::write(&store.draft, b"corrupt draft").unwrap();
+        assert!(matches!(
+            store.recoverable_protected_draft(&old, |path| open_protected_test(&old, &next, path)),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert_eq!(fs::read(&store.draft).unwrap(), b"corrupt draft");
+        store
+            .stage_draft(
+                DRAFT_V3,
+                TEST_VAULT_ID,
+                &old,
+                &next,
+                b"new encrypted payload",
+                &store.protected_path,
+            )
+            .unwrap();
+        fs::write(&store.protected_path, b"new encrypted payload").unwrap();
+        assert!(matches!(
+            store.recoverable_protected_draft(&next, |path| open_protected_test(&old, &next, path)),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn v3_published_primary_with_locked_draft_reports_uncertain_cleanup() {
+        let (directory, store, old) = migrated_store();
+        let next = one("next", "body", 2);
+        let mut held_draft = None;
+        let result = store.write_protected_with_hook(
+            &old,
+            &next,
+            b"new encrypted payload",
+            |path| open_protected_test(&old, &next, path),
+            |point| {
+                if point == ProtectedWritePoint::Published {
+                    held_draft = Some(
+                        OpenOptions::new()
+                            .read(true)
+                            .share_mode(0)
+                            .open(&store.draft)?,
+                    );
+                }
+                Ok(())
+            },
+        );
+        assert!(matches!(result, Err(StorageError::DraftCleanupUncertain)));
+        assert_eq!(
+            store
+                .load_protected(|path| open_protected_test(&old, &next, path))
+                .unwrap()
+                .document,
+            next
+        );
+        drop(held_draft);
+        assert!(matches!(
+            store.recoverable_protected_draft(&next, |path| open_protected_test(&old, &next, path)),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn credential_rewrap_preserves_pending_draft_until_explicit_discard() {
+        let (directory, store, confirmed) = migrated_store();
+        let next = one("unsaved", "must remain recoverable", 2);
+        store
+            .stage_draft(
+                DRAFT_V3,
+                TEST_VAULT_ID,
+                &confirmed,
+                &next,
+                b"new encrypted payload",
+                &store.protected_path,
+            )
+            .unwrap();
+        let original_draft = fs::read(&store.draft).unwrap();
+        assert!(matches!(
+            store.rewrap_protected(
+                b"future encrypted payload",
+                &confirmed,
+                b"rotated envelope",
+                |path| open_rewrapped(path, &confirmed),
+            ),
+            Err(StorageError::PendingDraft)
+        ));
+        assert_eq!(
+            fs::read(&store.protected_path).unwrap(),
+            b"future encrypted payload"
+        );
+        assert_eq!(fs::read(&store.draft).unwrap(), original_draft);
+        assert!(!store.rewrap_marker.exists());
+        let mut stale = confirmed.clone();
+        stale.generation += 1;
+        assert!(matches!(
+            store.discard_protected_draft(&stale, |path| open_rewrapped(path, &confirmed)),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        assert_eq!(fs::read(&store.draft).unwrap(), original_draft);
+        assert!(store
+            .discard_protected_draft(&confirmed, |path| open_rewrapped(path, &confirmed))
+            .unwrap());
+        assert!(!store.draft.exists());
+        store
+            .rewrap_protected(
+                b"future encrypted payload",
+                &confirmed,
+                b"rotated envelope",
+                |path| open_rewrapped(path, &confirmed),
+            )
+            .unwrap();
+        assert_eq!(
+            fs::read(&store.protected_path).unwrap(),
+            b"rotated envelope"
+        );
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn corrupt_draft_blocks_credential_rewrap_until_authenticated_discard() {
+        let (directory, store, confirmed) = migrated_store();
+        fs::write(&store.draft, b"corrupt recovery evidence").unwrap();
+        assert!(matches!(
+            store.rewrap_protected(
+                b"future encrypted payload",
+                &confirmed,
+                b"rotated envelope",
+                |path| open_rewrapped(path, &confirmed),
+            ),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert_eq!(
+            fs::read(&store.draft).unwrap(),
+            b"corrupt recovery evidence"
+        );
+        assert!(!store.rewrap_marker.exists());
+        assert!(store
+            .discard_protected_draft(&confirmed, |path| open_rewrapped(path, &confirmed))
+            .unwrap());
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
     fn protected_vault_identity_rejects_swapped_envelopes_and_old_signals() {
         let (directory, store, old) = migrated_store();
         let next = one("next", "body", 2);
@@ -4499,6 +5107,156 @@ mod tests {
         } else {
             Err(StorageError::ProtectedVerification)
         }
+    }
+
+    #[test]
+    fn v4_mixed_draft_requires_exact_base_and_normal_save_cleans_it() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let old = document(
+            1,
+            vec![
+                PadMemo::new(1, "private", "private body", 1),
+                PadMemo::new(2, "public", "public body", 1),
+            ],
+        );
+        store.write(&old).unwrap();
+        let confirmed = store
+            .migrate_to_v4(
+                &old,
+                |id, old| {
+                    let mut next = old.clone();
+                    next.document_id = id;
+                    next.find_mut(1)
+                        .unwrap()
+                        .protect_with_envelope(b"authenticated ciphertext".to_vec())?;
+                    Ok(next)
+                },
+                verify_test_envelope,
+            )
+            .unwrap();
+        let mut next = confirmed.clone();
+        next.generation = 2;
+        next.find_mut(2)
+            .unwrap()
+            .edit("new title", "new body", 2)
+            .unwrap();
+        let mut encoded = next.encode().unwrap();
+        store
+            .stage_draft(
+                DRAFT_V4,
+                confirmed.document_id,
+                &confirmed,
+                &next,
+                &encoded,
+                &store.path,
+            )
+            .unwrap();
+        encoded.fill(0);
+        assert_eq!(
+            store.recoverable_v4_draft(&confirmed).unwrap(),
+            Some(next.clone())
+        );
+        let mut newer = next.clone();
+        newer.generation += 1;
+        fs::write(&store.path, protect(&newer.encode().unwrap()).unwrap()).unwrap();
+        assert!(matches!(
+            store.recoverable_v4_draft(&newer),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        fs::write(&store.path, protect(&confirmed.encode().unwrap()).unwrap()).unwrap();
+        let raw = fs::read(&store.draft).unwrap();
+        assert!(!raw
+            .windows(b"new body".len())
+            .any(|part| part == b"new body"));
+        fs::write(&store.draft, b"corrupt").unwrap();
+        assert!(matches!(
+            store.recoverable_v4_draft(&confirmed),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert!(matches!(
+            store.discard_v4_draft(&next),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        assert_eq!(fs::read(&store.draft).unwrap(), b"corrupt");
+        assert!(store.discard_v4_draft(&confirmed).unwrap());
+        store
+            .stage_draft(
+                DRAFT_V4,
+                confirmed.document_id,
+                &confirmed,
+                &next,
+                &next.encode().unwrap(),
+                &store.path,
+            )
+            .unwrap();
+        fs::write(&store.v4_temp, b"torn ordinary temp").unwrap();
+        store.write_v4(&confirmed, &next).unwrap();
+        assert!(!store.draft.exists());
+        assert_eq!(store.recoverable_v4_draft(&next).unwrap(), None);
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn v4_absent_draft_does_not_require_readable_primary() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let old = one("title", "body", 1);
+        store.write(&old).unwrap();
+        let confirmed = store
+            .migrate_to_v4(
+                &old,
+                |id, old| {
+                    let mut next = old.clone();
+                    next.document_id = id;
+                    Ok(next)
+                },
+                |_, _, _| Ok(()),
+            )
+            .unwrap();
+        assert!(!store.draft.exists());
+        fs::write(&store.path, b"unreadable primary before backup recovery").unwrap();
+        assert_eq!(store.recoverable_v4_draft(&confirmed).unwrap(), None);
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn v4_draft_pause_hook_validates_path_and_has_bounded_terminal_wait() {
+        let user = PathBuf::from(std::env::var_os("USERPROFILE").unwrap());
+        let root = user.join("tmp").join(format!(
+            "sakura-pad-draft-pause-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        assert!(pause_after_draft_for_test_at(
+            Path::new("relative-ready"),
+            Duration::from_millis(50)
+        )
+        .is_err());
+        let ready = root.join("ready");
+        let started = Instant::now();
+        assert!(matches!(
+            pause_after_draft_for_test_at(&ready, Duration::from_millis(75)),
+            Err(StorageError::Io(ref error)) if error.kind() == io::ErrorKind::TimedOut
+        ));
+        assert!(started.elapsed() < Duration::from_secs(2));
+        assert_eq!(fs::read(&ready).unwrap(), b"ready");
+        let resumed = root.join("resumed");
+        let resume = PathBuf::from(format!("{}.resume", resumed.display()));
+        let watched = resumed.clone();
+        let notifier = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(2);
+            while !watched.exists() && Instant::now() < deadline {
+                thread::sleep(Duration::from_millis(10));
+            }
+            assert_eq!(fs::read(&watched).unwrap(), b"ready");
+            fs::write(&resume, b"continue").unwrap();
+        });
+        pause_after_draft_for_test_at(&resumed, Duration::from_secs(2)).unwrap();
+        notifier.join().unwrap();
+        let _ = fs::remove_dir_all(root);
     }
 
     #[test]
