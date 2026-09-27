@@ -36,33 +36,35 @@ pub(super) fn create_general_controls(
         parent,
         "Sakura Pad",
         "保護状態と起動キー、自動ロック時間を確認・設定します。変更は［適用］を押すと保存されます。",
-        610,
+        656,
     )?;
     let pad_panel = p.window();
     p.section("現在の保護状態", 100)?;
     let pad_status = p.helper("状態を確認中…", 140)?;
-    let pad_open = p.button("Sakura Padを開く", R::new(0, 196, 172, 34))?;
-    let pad_lock = p.button("今すぐロック", R::new(184, 196, 140, 34))?;
-    let pad_protection = p.button("保護の設定を開く", R::new(336, 196, 216, 34))?;
+    // Keep the full action names readable beside their icons in the compact
+    // 640px window. All three actions remain visible without scrolling.
+    let pad_open = p.button("Sakura Padを開く", R::new(0, 196, 268, 34))?;
+    let pad_lock = p.button("今すぐロック", R::new(284, 196, 268, 34))?;
+    let pad_protection = p.button("保護の設定を開く", R::new(0, 242, 552, 34))?;
     p.helper(
         "ロックはPadを隠し、保護中なら解除状態を破棄します。保護方法の変更はPad内で行います。",
-        245,
+        291,
     )?;
-    p.section("起動キー", 302)?;
-    let pad_shortcut = p.row_combo("ショートカット", 348)?;
+    p.section("起動キー", 348)?;
+    let pad_shortcut = p.row_combo("ショートカット", 394)?;
     for value in PadShortcut::ALL {
         add_combo(pad_shortcut, pad_shortcut_label(value));
     }
     p.helper(
         "Sakura Padは開くと最前面に表示されます。ショートカットを無効にすると、キーからは起動しません。",
-        398,
+        444,
     )?;
-    p.section("保護中の自動ロック", 452)?;
-    let pad_idle_lock_timeout = p.row_combo("操作がないとき", 500)?;
+    p.section("保護中の自動ロック", 498)?;
+    let pad_idle_lock_timeout = p.row_combo("操作がないとき", 546)?;
     for value in PadIdleLockTimeout::ALL {
         add_combo(pad_idle_lock_timeout, pad_idle_lock_timeout_label(value));
     }
-    p.helper("保護したPadやメモを開いている間に適用します。", 554)?;
+    p.helper("保護したPadやメモを開いている間に適用します。", 600)?;
 
     let mut p = layout.page(
         parent,
