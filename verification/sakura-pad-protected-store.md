@@ -16,9 +16,16 @@ the Pad correctly vetoed that premature shutdown during registration. A
 three-second fixture heartbeat now has an 18-second native regression test.
 An earlier heartbeat-enabled physical registration did not complete within
 180 seconds even though both Windows Security prompts were completed. Stage-only
-diagnostics remain for recurrence; the intermittent stop is unexplained.
-Spare-key management remains
-open. TOTP is local confirmation backed by a current-user DPAPI
+diagnostics remain for recurrence; the intermittent stop is unexplained. The
+enrollment UI now polls the worker result if a completion window message is
+lost and gives preparation, confirmation, cancellation, and postapproval work
+explicit deadlines. A native regression passed with both completion messages
+deliberately suppressed. A later physical native Pad UI retry passed the whole
+enrollment/recovery/unlock/exit path with the timer in place. This does not
+prove the earlier physical stall was a lost message.
+Whole-Pad password change is implemented for password-only v2 vaults. Changing
+a hardware-backed vault, adding/removing spare keys, and unprotecting a Pad
+remain open. TOTP is local confirmation backed by a current-user DPAPI
 sidecar; it is not independent cryptographic protection or online 2FA.
 
 ## Rubric
@@ -32,11 +39,17 @@ sidecar; it is not independent cryptographic protection or online 2FA.
 | Password-free reseal within a session | Worker envelope tests unlock once, modify content, reseal repeatedly, and reopen from password | Fresh nonces, authenticated scope, no raw password reuse for each save, wrong credential/tamper yields no session/plaintext |
 | Native lock never exposes memo controls | Run `pad_ui::migrated_protected_pad_starts_and_reopens_without_legacy_text` and `pad_ui::session_lock_removes_unlocked_protected_memo_hwnds` with isolated storage and the real session worker | Locked startup and Windows session lock have no title/body/list HWNDs; reopening stays locked and topmost |
 | Enrollment is a distinct transaction | Run `pad_ui::enrollment_prompt_can_cancel_without_cutover`, `pad_ui::whole_pad_recovery_key_is_confirmed_before_cutover_and_unlocks_after_reopen`, and the real-worker recovery test | The key is displayed before durable intent; confirmation cuts over; cancellation keeps legacy storage and restores its writer; both password and recovery unlock survive reopening |
+| Enrollment completion does not depend on a posted message | Run `pad_ui::whole_pad_enrollment_polls_when_completion_posts_are_lost` with the debug fixture suppressing both completion messages | The Pad still presents the recovery confirmation and reaches a terminal enrollment result |
 | Session lock clears unconfirmed key | Run `pad_ui::windows_lock_clears_unconfirmed_whole_pad_recovery_key` against an isolated renderer | The key vanishes from native child text, no cutover intent is published, and the original editor reopens |
+| Password change is transactional | Run `pad_storage::tests::password_rewrap*`, `pad_protection::process_tests::real_worker_password_change_preserves_recovery_and_rejects_old_replay`, and `pad_ui::whole_pad_password_change_rejects_old_password_and_preserves_memo` | Wrong old password changes nothing; an interrupted rewrap has one explicit authoritative generation; a new password and the original recovery key open the same document; replaying the old primary alone does not restore the old password |
 | Suspend revokes the surface | Run `pad_ui::host_suspend_masks_unlocked_whole_pad_before_reopen` against an isolated renderer and session worker | A simulated host `PBT_APMSUSPEND` removes protected title/body/list HWNDs before the Pad can reopen, which requires authentication |
 | Repository checks and process lifetime | Wrapped Cargo tests, fmt, clippy, dependency/audit gates, and `ci/check-process-clean.ps1` | Required suites pass, no runner survives, no package is added younger than seven days |
 
-The storage transaction owns the durable protected cutover and version guard.
+The storage transaction owns the durable protected cutover, version guard, and
+password-change digest marker. The marker is DPAPI-protected and qualifies the
+authoritative encrypted primary or backup after rewrap. A same-user adversary
+who can roll back the complete Pad directory, including that marker, can still
+restore an old password; this local format has no trusted monotonic counter.
 The worker owns password KDF, authenticated encryption, and the unlocked
 session. The renderer owns UI state, save epochs, confirmation before cutover,
 and the native locked surface. The WebAuthn adapter requests user verification
@@ -47,9 +60,8 @@ tested YubiKey 5 NFC path. Microsoft documents that its `webauthn.h` maps PRF
 values to the HMAC-secret extension ([header](https://github.com/microsoft/webauthn/blob/master/webauthn.h));
 Yubico documents the firmware capability matrix in its [technical manual](https://docs.yubico.com/hardware/yubikey/yk-tech-manual/yk5-firmware-overview.html).
 The TOTP sidecar owns its local secret,
-replay floor, and failure state. UI Automation client traversal,
-forced-process-exit recovery of an uncertain unsaved edit, full Pad UI key
-flow, spare-key management, broader TOTP rollback assurance, and migration of real user
+replay floor, and failure state. Forced-process-exit recovery of an uncertain
+unsaved edit, spare-key management, broader TOTP rollback assurance, and migration of real user
 data remain separate acceptance criteria in
 `docs/plans/sakura-pad-protection.md`.
 
@@ -76,7 +88,22 @@ data remain separate acceptance criteria in
   The isolated native UI passed key display/confirmation before cutover,
   recovery unlock, password unlock after reopening, cancellation with legacy
   writer restoration, and key erasure on a simulated Windows session lock.
+- Password change passed an isolated real-worker test: incorrect old password
+  left the primary unchanged; a successful change rejected the old password,
+  preserved the original recovery key, repaired a replayed old primary from
+  the new backup, and allowed a later save. Storage fault/retry tests cover
+  precommit abort and postcommit recovery. A native UI test drove the settings
+  chooser and masked change dialog, then reopened the exact title/body with
+  the new password after rejecting the old one. Both tests use isolated data.
+- Interrupted password change recovery passed a storage test with the memo
+  generation floor present: unauthenticated recovery left the pending state
+  untouched; authenticated recovery restored the old backup; the next normal
+  protected save succeeded without resurrecting an older memo generation.
+- The native enrollment fixture passed with both recovery and final completion
+  window messages deliberately suppressed. The timer consumed the waiting
+  worker results and reached the same terminal state without duplicate cutover.
 - Physical YubiKey 5 NFC, firmware 5.4.3: the PRF adapter and isolated whole-Pad worker seal/reopen tests passed after requesting Windows' legacy `hmac-secret` extension at registration. The native UI test `pad_ui::physical_yubikey5_whole_pad_ui_enroll_and_unlock` later passed through two Windows Security PIN/touch prompts, recovery-key confirmation, exact title/body reappearance, and isolated renderer exit; a process check found no survivor. Earlier attempts reached the same UI content but could not exit because the fixture's 15-second watch deadline fired mid-authentication. Another heartbeat-enabled attempt stayed at registration for 180 seconds despite both prompts being completed. Stage-only diagnostics now report future stalls; that intermittent stop is not yet explained. No device serial is recorded.
+- With the enrollment timer in place, a fresh isolated `pad_ui::physical_yubikey5_whole_pad_ui_enroll_and_unlock` run passed again (1 test, 36.12 seconds). The complete workspace CI-feature regression also passed, and process checks found no survivor. The previous 180-second stop was not reproduced, so its exact cause remains unknown.
 - `pad_ui::long_pad_fixture_keeps_watch_feed_alive` passed: the isolated renderer stayed live for 18 seconds of otherwise idle Pad time with the three-second heartbeat, then exited cleanly on the deliberate engine stop. This bounds the test-fixture cause of the prior teardown failures, not the separate hardware registration timeout.
 - The isolated native whole-Pad TOTP setup/password/code gate test passed after a retry without concurrent desktop typing; it confirmed the protected title/body HWNDs remained absent between password entry and code acceptance.
 - The isolated native host-suspend test passed: a simulated `WM_POWERBROADCAST/PBT_APMSUSPEND` masked title/body/list controls before reopening, and the Pad reopened locked. This is a message-path check, not a physical sleep/resume measurement.

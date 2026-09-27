@@ -35,6 +35,7 @@ mod pad_hardware;
 mod pad_icon;
 mod pad_list;
 mod pad_protection;
+mod pad_protection_settings_ui;
 mod pad_rail;
 mod pad_storage;
 mod pad_tooltip;
