@@ -77,7 +77,9 @@ fn is_update_apply(arguments: &[OsString]) -> bool {
 }
 
 fn is_gui_or_update_launch(arguments: &[OsString]) -> bool {
-    arguments.is_empty() || is_update_apply(arguments)
+    arguments.is_empty()
+        || (arguments.len() == 1 && arguments[0] == "--pad")
+        || is_update_apply(arguments)
 }
 
 fn active_payload() -> Result<std::path::PathBuf, String> {
@@ -102,6 +104,7 @@ mod tests {
     #[test]
     fn gui_and_update_payloads_are_console_free_but_cli_keeps_console_io() {
         assert!(is_gui_or_update_launch(&[]));
+        assert!(is_gui_or_update_launch(&[OsString::from("--pad")]));
         assert!(is_gui_or_update_launch(&[
             OsString::from("update"),
             OsString::from("apply"),
@@ -109,6 +112,10 @@ mod tests {
         assert!(!is_gui_or_update_launch(&[
             OsString::from("config"),
             OsString::from("show"),
+        ]));
+        assert!(!is_gui_or_update_launch(&[
+            OsString::from("--pad"),
+            OsString::from("extra"),
         ]));
     }
 }

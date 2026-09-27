@@ -9,6 +9,7 @@ use std::mem::size_of;
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
 use std::thread::sleep;
 use std::time::Duration;
 
@@ -131,6 +132,14 @@ const PANEL_CLASS: PCWSTR = windows::core::w!("SakuraInputSettingsPanel");
 // `Local\\` keeps separate interactive sessions independent while making all
 // versions of the settings UI share one slot for the current session.
 const SINGLE_INSTANCE_NAME: PCWSTR = windows::core::w!("Local\\SakuraInputSettings");
+const OPEN_PAD_SETTINGS_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.OpenPadSettings.v1");
+static OPEN_PAD_SETTINGS_ID: OnceLock<u32> = OnceLock::new();
+
+fn open_pad_settings_message() -> u32 {
+    // SAFETY: Windows copies this static, NUL-terminated registered-message name.
+    *OPEN_PAD_SETTINGS_ID
+        .get_or_init(|| unsafe { RegisterWindowMessageW(OPEN_PAD_SETTINGS_MESSAGE) })
+}
 const PANEL_COUNT: usize = 5;
 const WM_UPDATE_COMPLETE: u32 = WM_APP + 17;
 const DARK_SURFACE: COLORREF = rgb(0x35, 0x35, 0x35);
@@ -710,6 +719,7 @@ struct App {
     tabs: HWND,
     page_topics: HWND,
     input_tree: HWND,
+    pad_tree_item: HTREEITEM,
     status: HWND,
     ok: HWND,
     cancel: HWND,
@@ -771,14 +781,54 @@ impl Drop for SettingsInstance {
     }
 }
 
-fn activate_existing_window() -> bool {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Destination {
+    Default,
+    Pad,
+}
+
+fn activate_existing_window(destination: Destination) -> bool {
     const ACTIVATION_ATTEMPTS: usize = 50;
     const ACTIVATION_WAIT: Duration = Duration::from_millis(10);
+
+    let message = if destination == Destination::Pad {
+        let message = open_pad_settings_message();
+        if message == 0 {
+            return false;
+        }
+        Some(message)
+    } else {
+        None
+    };
 
     for _ in 0..ACTIVATION_ATTEMPTS {
         // SAFETY: both class and title pointers are static; a successful HWND
         // remains valid for the synchronous activation calls below.
         if let Ok(window) = unsafe { FindWindowW(WINDOW_CLASS, PCWSTR::null()) } {
+            if let Some(message) = message {
+                let mut result = 0usize;
+                // SAFETY: no pointers cross the process boundary. A zero result
+                // means the first instance has not installed its App yet (or
+                // cannot service the request); only an acknowledgement succeeds.
+                let delivered = unsafe {
+                    SendMessageTimeoutW(
+                        window,
+                        message,
+                        WPARAM(0),
+                        LPARAM(0),
+                        SMTO_ABORTIFHUNG,
+                        2_500,
+                        Some(&mut result),
+                    )
+                };
+                if delivered.0 == 0 {
+                    return false;
+                }
+                if result != 1 {
+                    sleep(ACTIVATION_WAIT);
+                    continue;
+                }
+            }
             // SAFETY: the HWND was returned by User32 and all operations are
             // scalar window-manager calls on that live top-level window.
             unsafe {
@@ -923,14 +973,16 @@ fn query_pad_status() -> Result<PadStatus, String> {
     PadStatus::from_wire(value).ok_or_else(|| "Padの状態を読み取れません".to_owned())
 }
 
-pub fn run() -> Result<(), String> {
+pub fn run(destination: Destination) -> Result<(), String> {
     let Some(_instance) = SettingsInstance::acquire().map_err(display)? else {
         // A second launch is an activation request, not a second settings
         // document. The first process may still be between mutex creation and
         // window creation, so give its UI thread a short bounded hand-off
         // window before returning.
-        let _ = activate_existing_window();
-        return Ok(());
+        if activate_existing_window(destination) || destination == Destination::Default {
+            return Ok(());
+        }
+        return Err("既存の設定画面でSakura Pad設定を開けませんでした。".to_owned());
     };
     // SAFETY: process DPI awareness is selected before creating any window.
     unsafe {
@@ -952,6 +1004,9 @@ pub fn run() -> Result<(), String> {
     // this UI thread reads the pointer stored on its own window.
     unsafe {
         SetWindowLongPtrW(window, GWLP_USERDATA, app as isize);
+        if destination == Destination::Pad {
+            (*app).show_pad_settings();
+        }
         if (*app).update_preferences.enabled {
             if let Err(error) = (*app).start_update(UpdateOperation::AutomaticCheck) {
                 let message = format!("自動更新の確認を開始できませんでした: {error}");
@@ -1046,6 +1101,7 @@ impl App {
             tabs,
             page_topics,
             input_tree,
+            pad_tree_item: HTREEITEM::default(),
             status,
             ok,
             cancel,
@@ -1072,7 +1128,7 @@ impl App {
             theme_apply_in_progress: false,
         };
         app.apply_theme();
-        app.populate_input_tree();
+        app.pad_tree_item = app.populate_input_tree();
         app.show_page_controls(0);
         app.populate_general();
         app.populate_dictionary();
@@ -1252,6 +1308,17 @@ impl App {
         }
     }
 
+    fn show_pad_settings(&mut self) {
+        self.show_panel(0);
+        // A previous Pad selection remains selected when another tab was
+        // visited, so TreeView need not send a new selection notification.
+        if selected_input_tree_item(self.input_tree) == self.pad_tree_item {
+            self.show_topic_controls(INPUT_TOPIC_PAD);
+        } else {
+            select_input_tree_item(self.input_tree, self.pad_tree_item);
+        }
+    }
+
     /// Synchronize the first frame and later tab changes through one visibility
     /// boundary. This avoids relying on a theme change or first user selection
     /// to reveal controls that are already part of the selected page.
@@ -1299,7 +1366,7 @@ impl App {
         select_list(self.page_topics, 0);
     }
 
-    fn populate_input_tree(&self) {
+    fn populate_input_tree(&self) -> HTREEITEM {
         let basics = insert_input_tree_item(
             self.input_tree,
             Default::default(),
@@ -1391,7 +1458,7 @@ impl App {
             INPUT_TOPIC_PROFILE,
             false,
         );
-        let _ = insert_input_tree_item(
+        let pad = insert_input_tree_item(
             self.input_tree,
             Default::default(),
             INPUT_TREE_LABELS[13],
@@ -1401,6 +1468,7 @@ impl App {
         expand_input_tree_item(self.input_tree, conversion_assist);
         expand_input_tree_item(self.input_tree, input_support);
         select_input_tree_item(self.input_tree, basics);
+        pad
     }
 
     /// The settings tree is a real navigation control, not a decorative index:
@@ -3497,6 +3565,21 @@ fn select_input_tree_item(tree: HWND, item: HTREEITEM) {
     }
 }
 
+fn selected_input_tree_item(tree: HWND) -> HTREEITEM {
+    // SAFETY: the query reads a scalar selection handle from the live tree.
+    HTREEITEM(
+        unsafe {
+            SendMessageW(
+                tree,
+                TVM_GETNEXTITEM,
+                Some(WPARAM(TVGN_CARET as usize)),
+                None,
+            )
+        }
+        .0,
+    )
+}
+
 fn first_input_tree_child(tree: HWND, parent: HTREEITEM) -> Option<HTREEITEM> {
     // SAFETY: `parent` belongs to the live TreeView.  The query carries only
     // scalar item handles and returns the first direct child, if it exists.
@@ -4533,6 +4616,19 @@ unsafe extern "system" fn window_procedure(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    if message >= 0xC000 && message == open_pad_settings_message() {
+        // SAFETY: only the UI thread accesses the App pointer; a second launch
+        // can arrive while the first is still constructing, so zero is a
+        // retryable, explicit response until the pointer is installed.
+        let pointer = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut App;
+        if pointer.is_null() {
+            return LRESULT(0);
+        }
+        // SAFETY: the pointer belongs to this window and this UI thread;
+        // it stays live until GWLP_USERDATA is cleared during teardown.
+        unsafe { &mut *pointer }.show_pad_settings();
+        return LRESULT(1);
+    }
     match message {
         windows::Win32::UI::WindowsAndMessaging::WM_ACTIVATE if wparam.0 & 0xffff != 0 => {
             // SAFETY: this window stores its live App pointer in GWLP_USERDATA

@@ -448,6 +448,49 @@ fn light_initial_frame_shows_only_the_selected_input_topic() {
 }
 
 #[test]
+fn pad_deep_link_selects_existing_page_and_preserves_pending_controls() {
+    let _desktop = native_test_guard();
+    register_window_class().expect("settings window class registers");
+    let window = create_main_window().expect("settings root window creates");
+    let app = Box::into_raw(Box::new(
+        App::new(window).expect("settings controls create"),
+    ));
+    // This fixture owns its HWND directly and does not acquire the production
+    // singleton or search for another user's Settings window.
+    // SAFETY: the test owns both the HWND and App for the entire message call.
+    unsafe {
+        SetWindowLongPtrW(window, GWLP_USERDATA, app as isize);
+        (*app).show_pad_settings();
+        assert_eq!((*app).selected_panel, 0);
+        assert_eq!(
+            selected_input_tree_item((*app).input_tree),
+            (*app).pad_tree_item
+        );
+        assert!(has_visible_style((*app).general.pad_panel));
+        assert!(!has_visible_style((*app).general.basic_panel));
+
+        select_combo((*app).general.keymap, 1);
+        (*app).show_panel(2);
+        assert_eq!((*app).selected_panel, 2);
+        let message = open_pad_settings_message();
+        assert_ne!(message, 0);
+        assert_eq!(SendMessageW(window, message, None, None), LRESULT(1));
+        assert_eq!((*app).selected_panel, 0);
+        assert_eq!(
+            selected_input_tree_item((*app).input_tree),
+            (*app).pad_tree_item
+        );
+        assert!(has_visible_style((*app).general.pad_panel));
+        assert!(!has_visible_style((*app).general.basic_panel));
+        assert_eq!(combo_index((*app).general.keymap), Some(1));
+
+        SetWindowLongPtrW(window, GWLP_USERDATA, 0);
+        let _ = DestroyWindow(window);
+        drop(Box::from_raw(app));
+    }
+}
+
+#[test]
 fn settings_window_uses_the_sakura_input_icon() {
     let _desktop = native_test_guard();
     register_window_class().expect("settings window class registers");

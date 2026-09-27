@@ -209,7 +209,8 @@ const TITLE_ID: i32 = 108;
 const BODY_ID: i32 = 109;
 const NEW_ID: i32 = 110;
 const SORT_ID: i32 = 111;
-const SYNC_ID: i32 = 112;
+const OVERFLOW_ID: i32 = 112;
+const GIT_SYNC_MENU_ID: i32 = 134;
 const SHARE_ID: i32 = 113;
 const DELETE_ID: i32 = 114;
 const LIST_RAIL_ID: i32 = 115;
@@ -220,7 +221,10 @@ const LOCK_UNLOCK_ID: i32 = 119;
 const LOCK_STATUS_ID: i32 = 120;
 const LOCK_PASSWORD_LABEL_ID: i32 = 121;
 const LOCK_METHOD_ID: i32 = LOCK_PASSWORD_LABEL_ID;
-const PROTECT_ID: i32 = 122;
+// Synthetic test action: Settings sends this UI-thread message to start the
+// existing Pad protection flow. There is no longer a Pad toolbar button.
+const OPEN_PAD_PROTECTION: i32 = -1;
+const WM_PAD_OPEN_PROTECTION: u32 = WM_APP + 12;
 const ENROLL_METHOD_ID: i32 = 124;
 const ENROLL_PASSWORD_ID: i32 = 125;
 const ENROLL_HEADLINE_ID: i32 = 123;
@@ -475,7 +479,7 @@ fn host_suspend_masks_unlocked_whole_pad_before_reopen() {
         assert!(Instant::now() < deadline, "plain memo did not save");
         sleep(Duration::from_millis(30));
     }
-    click_until_control(pad, PROTECT_ID, ENROLL_PASSWORD_ID);
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
     set_text(pad, ENROLL_PASSWORD_ID, PASSWORD);
     set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PASSWORD);
     click(pad, ENROLL_SUBMIT_ID);
@@ -923,7 +927,7 @@ fn v3_draft_requires_password_before_choice_and_restores_after_forced_exit() {
         );
         sleep(Duration::from_millis(30));
     }
-    click_until_control(pad, PROTECT_ID, ENROLL_PASSWORD_ID);
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
     set_text(pad, ENROLL_PASSWORD_ID, PASSWORD);
     set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PASSWORD);
     click(pad, ENROLL_SUBMIT_ID);
@@ -1333,7 +1337,7 @@ fn whole_pad_recovery_key_is_confirmed_before_cutover_and_unlocks_after_reopen()
         assert!(Instant::now() < deadline, "legacy memo did not save");
         sleep(Duration::from_millis(30));
     }
-    click_until_control(pad, PROTECT_ID, ENROLL_PASSWORD_ID);
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
     set_text(pad, ENROLL_PASSWORD_ID, PASSWORD);
     set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PASSWORD);
     click(pad, ENROLL_SUBMIT_ID);
@@ -1421,7 +1425,7 @@ fn whole_pad_enrollment_polls_when_completion_posts_are_lost() {
     set_text(pad, BODY_ID, BODY);
     notify(pad, TITLE_ID, EN_CHANGE as u16);
     notify(pad, BODY_ID, EN_CHANGE as u16);
-    click_until_control(pad, PROTECT_ID, ENROLL_PASSWORD_ID);
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
     set_text(pad, ENROLL_PASSWORD_ID, PASSWORD);
     set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PASSWORD);
     click(pad, ENROLL_SUBMIT_ID);
@@ -1479,7 +1483,7 @@ fn whole_pad_password_change_rejects_old_password_and_preserves_memo() {
         assert!(Instant::now() < deadline, "legacy memo did not save");
         sleep(Duration::from_millis(30));
     }
-    click_until_control(pad, PROTECT_ID, ENROLL_PASSWORD_ID);
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
     set_text(pad, ENROLL_PASSWORD_ID, OLD_PASSWORD);
     set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, OLD_PASSWORD);
     click(pad, ENROLL_SUBMIT_ID);
@@ -1552,7 +1556,7 @@ fn whole_pad_password_change_rejects_old_password_and_preserves_memo() {
 }
 
 fn submit_whole_pad_password_change(pad: HWND, renderer_pid: u32, old: &str, new: &str) {
-    click(pad, PROTECT_ID);
+    click(pad, OPEN_PAD_PROTECTION);
     let chooser = wait_for_renderer_window(renderer_pid, PROTECTION_SETTINGS_CLASS, true);
     click(chooser, CHOOSE_PASSWORD_CHANGE_ID);
     let dialog = wait_for_renderer_window(renderer_pid, PASSWORD_CHANGE_CLASS, true);
@@ -1590,7 +1594,7 @@ fn whole_pad_totp_setup_gates_password_unlock_until_code() {
         assert!(Instant::now() < deadline, "legacy memo did not save");
         sleep(Duration::from_millis(30));
     }
-    click_until_control(pad, PROTECT_ID, ENROLL_PASSWORD_ID);
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
     set_text(pad, ENROLL_PASSWORD_ID, PASSWORD);
     set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PASSWORD);
     click(pad, ENROLL_SUBMIT_ID);
@@ -1673,7 +1677,7 @@ fn whole_pad_totp_setup_gates_password_unlock_until_code() {
 }
 
 fn open_whole_pad_totp_settings(pad: HWND, renderer_pid: u32) {
-    click(pad, PROTECT_ID);
+    click(pad, OPEN_PAD_PROTECTION);
     let chooser = wait_for_renderer_window(renderer_pid, PROTECTION_SETTINGS_CLASS, true);
     click(chooser, CHOOSE_TOTP_ID);
 }
@@ -1709,7 +1713,7 @@ fn whole_pad_password_change_requires_fresh_totp_before_rewrap() {
         assert!(Instant::now() < deadline, "legacy memo did not save");
         sleep(Duration::from_millis(30));
     }
-    click_until_control(pad, PROTECT_ID, ENROLL_PASSWORD_ID);
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
     set_text(pad, ENROLL_PASSWORD_ID, OLD_PASSWORD);
     set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, OLD_PASSWORD);
     click(pad, ENROLL_SUBMIT_ID);
@@ -2081,7 +2085,7 @@ fn physical_yubikey5_whole_pad_ui_enroll_and_unlock() {
         assert!(Instant::now() < deadline, "isolated memo did not save");
         sleep(Duration::from_millis(30));
     }
-    click_until_control(pad, PROTECT_ID, ENROLL_METHOD_ID);
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_METHOD_ID);
     click(pad, ENROLL_METHOD_ID);
     wait_for_text(
         control(pad, ENROLL_METHOD_ID),
@@ -2185,14 +2189,14 @@ fn pad_and_memo_protection_methods_hide_unused_password_fields() {
         sleep(Duration::from_millis(30));
     }
 
-    for protect_id in [PROTECT_ID, MEMO_PROTECT_ID] {
+    for protect_id in [OPEN_PAD_PROTECTION, MEMO_PROTECT_ID] {
         click(pad, protect_id);
         wait_for_child_text(pad, ENROLL_METHOD_ID, "password method", |value| {
             value == "保護方法: パスワード（変更）"
         });
         capture(
             pad,
-            if protect_id == PROTECT_ID {
+            if protect_id == OPEN_PAD_PROTECTION {
                 "pad-method"
             } else {
                 "memo-method"
@@ -2264,9 +2268,9 @@ fn v4_memo_can_add_whole_pad_protection_after_cancelled_attempt() {
         .protected_envelope()
         .unwrap()
         .to_vec();
-    assert!(visible(wait_for_control(pad, PROTECT_ID)));
+    assert!(visible(wait_for_control(pad, OVERFLOW_ID)));
 
-    click_until_control(pad, PROTECT_ID, ENROLL_PASSWORD_ID);
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
     set_text(pad, ENROLL_PASSWORD_ID, PAD_PASSWORD);
     set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PAD_PASSWORD);
     click(pad, ENROLL_SUBMIT_ID);
@@ -2305,7 +2309,7 @@ fn v4_memo_can_add_whole_pad_protection_after_cancelled_attempt() {
         sleep(Duration::from_millis(30));
     }
     let expected = store.load_v4().unwrap().document;
-    click_until_control(pad, PROTECT_ID, ENROLL_PASSWORD_ID);
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
     set_text(pad, ENROLL_PASSWORD_ID, PAD_PASSWORD);
     set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PAD_PASSWORD);
     click(pad, ENROLL_SUBMIT_ID);
@@ -2363,7 +2367,7 @@ fn cancelling_whole_pad_recovery_key_display_restores_legacy_writer() {
     let (mut renderer, pad) = open_test_pad(&engine, &app_data);
     set_text(pad, TITLE_ID, "whole recovery cancelled title");
     notify(pad, TITLE_ID, EN_CHANGE as u16);
-    click(pad, PROTECT_ID);
+    click(pad, OPEN_PAD_PROTECTION);
     wait_for_control(pad, ENROLL_PASSWORD_ID);
     set_text(pad, ENROLL_PASSWORD_ID, "whole recovery cancel 34a5");
     set_text(
@@ -2424,7 +2428,7 @@ fn windows_lock_clears_unconfirmed_whole_pad_recovery_key() {
     let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
     set_text(pad, TITLE_ID, "session-lock recovery title");
     notify(pad, TITLE_ID, EN_CHANGE as u16);
-    click(pad, PROTECT_ID);
+    click(pad, OPEN_PAD_PROTECTION);
     wait_for_control(pad, ENROLL_PASSWORD_ID);
     set_text(pad, ENROLL_PASSWORD_ID, "session lock recovery 03ac");
     set_text(
@@ -2483,7 +2487,7 @@ fn enrollment_prompt_can_cancel_without_cutover() {
     let mut engine = FixtureEngine::new(initial_state());
     let (mut renderer, pad) = open_test_pad(&engine, &app_data);
     set_text(pad, TITLE_ID, "enrollment cancellation sentinel");
-    click(pad, PROTECT_ID);
+    click(pad, OPEN_PAD_PROTECTION);
     let first = wait_for_control(pad, ENROLL_PASSWORD_ID);
     let again = wait_for_control(pad, ENROLL_CONFIRM_PASSWORD_ID);
     for child in [first, again] {
@@ -2597,10 +2601,10 @@ const ALL_CONTROLS: [(&str, i32); 16] = [
     ("body", BODY_ID),
     ("new", NEW_ID),
     ("sort", SORT_ID),
-    ("sync", SYNC_ID),
+    ("overflow", OVERFLOW_ID),
     ("share", SHARE_ID),
     ("delete", DELETE_ID),
-    ("protect", PROTECT_ID),
+    ("memo-lock", MEMO_PROTECT_ID),
     ("list-rail", LIST_RAIL_ID),
     ("body-rail", BODY_RAIL_ID),
 ];
@@ -2731,9 +2735,14 @@ fn the_pad_splits_above_the_breakpoint_and_folds_below_it() {
         !wide.visible("menu"),
         "the two-pane shape shows both panes at once, so nothing needs a pane toggle: {wide:?}"
     );
-    for name in ["list", "search", "title", "body", "share", "delete"] {
+    for name in [
+        "list", "search", "title", "body", "share", "delete", "overflow",
+    ] {
         assert!(wide.visible(name), "the two-pane shape must show {name}");
     }
+    assert_eq!(text_of(control(pad, OVERFLOW_ID)), "その他");
+    assert!(visible(control(pad, MEMO_PROTECT_ID)));
+    assert!(wide.rect("overflow").top >= wide.rect("list").bottom);
     let list = wide.rect("list");
     let body = wide.rect("body");
     assert!(
@@ -2747,14 +2756,14 @@ fn the_pad_splits_above_the_breakpoint_and_folds_below_it() {
     // The column is the list and the rail that reads it, so the edge every
     // control below is measured against is the rail's.
     let column = wide.rect("list-rail").right;
-    for name in ["new", "sort", "sync"] {
+    for name in ["new", "sort", "overflow"] {
         assert!(
             wide.rect(name).right <= column,
             "in the two-pane shape the bottom bar is the list column's own bar, so {name} may not \
              reach under the editor"
         );
     }
-    for name in ["share", "delete"] {
+    for name in ["share", "delete", "memo-lock"] {
         assert!(
             wide.rect(name).left >= column,
             "{name} acts on the open memo, so in the two-pane shape it belongs to the editor"
@@ -2843,7 +2852,7 @@ fn the_pad_splits_above_the_breakpoint_and_folds_below_it() {
     // Seed edits save asynchronously. Let that older completion finish before
     // asserting a notice's lifetime, otherwise it can replace the notice.
     wait_for_text(status_control, "seed storage completion", str::is_empty);
-    click(pad, SYNC_ID);
+    notify(pad, GIT_SYNC_MENU_ID, 0);
     let notice = wait_for_text(status_control, "a notice", |value| value.contains("GitHub"));
     let slot = client_rect(status_control);
     assert!(
@@ -2898,20 +2907,22 @@ fn the_pad_splits_above_the_breakpoint_and_folds_below_it() {
             "the list pane must not leave the editor's {name} on screen"
         );
     }
-    for name in ["share", "delete", "new", "sort", "sync"] {
-        assert!(
-            list_pane.visible(name),
-            "the one-pane bottom bar carries every action, including {name}"
-        );
+    for name in ["new", "sort", "overflow"] {
+        assert!(list_pane.visible(name), "the one-pane list carries {name}");
         assert!(
             list_pane.rect(name).top >= list_pane.rect("list").bottom,
             "{name} belongs to the bottom bar, below the list"
         );
     }
+    assert!(list_pane.rect("sort").right <= list_pane.rect("overflow").left);
     assert!(
-        list_pane.rect("delete").right >= list_pane.rect("share").right,
-        "delete is the destructive action and sits at the far end of the bar"
+        list_pane.client.right - list_pane.rect("overflow").right <= 24 * dpi / 96,
+        "overflow belongs at the right edge of the folded list bar"
     );
+    for name in ["share", "delete", "memo-lock"] {
+        assert!(!list_pane.visible(name), "{name} belongs to the editor");
+    }
+    assert!(!visible(control(pad, MEMO_PROTECT_ID)));
     list_pane.assert_disjoint_and_inside();
 
     // --- One pane, editor ------------------------------------------------
@@ -2935,6 +2946,15 @@ fn the_pad_splits_above_the_breakpoint_and_folds_below_it() {
         editor_pane.visible("title") && editor_pane.visible("body"),
         "the editor pane shows the memo it opened"
     );
+    for name in ["share", "delete", "memo-lock"] {
+        assert!(editor_pane.visible(name), "the editor carries {name}");
+    }
+    assert!(editor_pane.rect("memo-lock").bottom <= editor_pane.rect("body").top);
+    assert!(editor_pane.rect("memo-lock").right > editor_pane.rect("title").right);
+    assert!(visible(control(pad, MEMO_PROTECT_ID)));
+    for name in ["new", "sort", "overflow"] {
+        assert!(!editor_pane.visible(name), "{name} belongs to the list");
+    }
     editor_pane.assert_disjoint_and_inside();
 
     // And back again, so the toggle is proven to be a toggle rather than a
@@ -3572,7 +3592,17 @@ fn seed_memos(pad: HWND) {
 }
 
 fn click(pad: HWND, id: i32) {
-    notify(pad, id, BN_CLICKED as u16);
+    if id == OPEN_PAD_PROTECTION {
+        // SAFETY: the isolated renderer owns this live Pad HWND. Settings
+        // uses this same message to enter the protection flow. Post it so
+        // modal protection dialogs do not block the fixture thread.
+        unsafe {
+            PostMessageW(Some(pad), WM_PAD_OPEN_PROTECTION, WPARAM(0), LPARAM(0))
+                .expect("post Pad protection action");
+        }
+    } else {
+        notify(pad, id, BN_CLICKED as u16);
+    }
 }
 
 fn click_synchronously(pad: HWND, id: i32) {
