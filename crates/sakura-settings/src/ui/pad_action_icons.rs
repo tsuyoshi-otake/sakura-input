@@ -67,7 +67,8 @@ pub(super) fn draw_pad_action_icon(dc: HDC, rect: RECT, kind: PadActionIcon, col
                 ],
                 &[(8, 10), (8, 12)],
             ],
-            // Shield contour with a centered check mark.
+            // An empty shield denotes protection settings without implying
+            // that the Pad is already protected.
             PadActionIcon::Protection => &[
                 &[
                     (8, 1),
@@ -82,7 +83,6 @@ pub(super) fn draw_pad_action_icon(dc: HDC, rect: RECT, kind: PadActionIcon, col
                     (2, 3),
                     (8, 1),
                 ],
-                &[(5, 8), (7, 10), (11, 6)],
             ],
         };
 
