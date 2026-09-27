@@ -14,6 +14,7 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::os::windows::ffi::OsStrExt;
+use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
@@ -21,7 +22,12 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use windows::Win32::Foundation::{LocalFree, HLOCAL};
 use windows::Win32::Security::Cryptography::{
-    CryptProtectData, CryptUnprotectData, CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
+    BCryptCloseAlgorithmProvider, BCryptCreateHash, BCryptDestroyHash, BCryptFinishHash,
+    BCryptGenRandom, BCryptGetProperty, BCryptHashData, BCryptOpenAlgorithmProvider,
+    CryptProtectData, CryptUnprotectData, BCRYPT_ALG_HANDLE, BCRYPT_HASH_HANDLE,
+    BCRYPT_HASH_LENGTH, BCRYPT_OBJECT_LENGTH, BCRYPT_OPEN_ALGORITHM_PROVIDER_FLAGS,
+    BCRYPT_SHA256_ALGORITHM, BCRYPT_USE_SYSTEM_PREFERRED_RNG, CRYPTPROTECT_UI_FORBIDDEN,
+    CRYPT_INTEGER_BLOB,
 };
 use windows::Win32::Storage::FileSystem::{
     MoveFileExW, ReplaceFileW, MOVEFILE_WRITE_THROUGH, REPLACE_FILE_FLAGS,
@@ -50,6 +56,13 @@ const VERSION: u16 = 2;
 const DOCUMENT_HEADER_LEN: usize = 8 + 2 + 2 + 8 + 4 + 4;
 const MEMO_HEADER_LEN: usize = 8 + 8 + 8 + 4 + 4 + 4 + 4 + 4;
 const MEMO_TOMBSTONE: u32 = 0x0000_0001;
+const V4_MAGIC: [u8; 8] = *b"SKRLPAD4";
+const V4_VERSION: u16 = 4;
+const V4_DOCUMENT_HEADER_LEN: usize = DOCUMENT_HEADER_LEN + 16;
+const V4_MEMO_HEADER_LEN: usize = MEMO_HEADER_LEN + 8;
+pub const MAX_MEMO_ENVELOPE_BYTES: usize = 256 * 1024;
+const CONTENT_PLAIN: u32 = 0;
+const CONTENT_PROTECTED: u32 = 1;
 
 /// Issue #91's single-memo document.  Read-only: this build never writes it.
 const LEGACY_MAGIC: [u8; 8] = *b"SKRLPAD\0";
@@ -59,6 +72,29 @@ const LEGACY_HEADER_LEN: usize = 8 + 2 + 2 + 8 + 4 + 4;
 const LEGACY_MEMO_ID: u64 = 1;
 
 const MAX_PROTECTED_BYTES: u64 = 24 * 1024 * 1024;
+const PROTECTED_MAGIC: [u8; 8] = *b"SKRLPAD3";
+const PROTECTED_VERSION: u16 = 3;
+const VAULT_ID_LEN: usize = 16;
+const REWRAP_DIGEST_LEN: usize = 32;
+const DRAFT_MAGIC: [u8; 8] = *b"SKRDRFT1";
+const DRAFT_V3: u8 = 3;
+const DRAFT_V4: u8 = 4;
+const DRAFT_HEADER_LEN: usize = 8 + 1 + 16 + 16 + 16 + 8 + 32 + 8 + 4;
+
+/// A newer `SKRLPADn` magic in DPAPI plaintext identifies a future document
+/// format and must not be treated as corruption during recovery. This only
+/// detects visible versioned plaintext; raw protected v3 needs a separate
+/// durable marker or versioned path because older builds cannot inspect it.
+fn newer_document_magic_version(bytes: &[u8]) -> Option<u16> {
+    let prefix = b"SKRLPAD";
+    let version = *bytes.get(prefix.len())?;
+    if bytes.starts_with(prefix) && version.is_ascii_digit() {
+        let version = u16::from(version - b'0');
+        (version > VERSION).then_some(version)
+    } else {
+        None
+    }
+}
 
 /// Wall-clock milliseconds since the Unix epoch, used only for the memo's own
 /// created/updated stamps.  A clock before the epoch reports 0, which the UI
@@ -126,8 +162,7 @@ pub struct PadMemo {
     /// Stable within this document, and the key the GitHub file path is built
     /// from.  Never 0, and never reused while a tombstone still holds it.
     pub id: u64,
-    pub title: String,
-    pub body: String,
+    pub content: PadMemoContent,
     pub created_ms: u64,
     pub updated_ms: u64,
     /// Explicit user arrangement; ties fall back to the sort in effect.
@@ -138,12 +173,22 @@ pub struct PadMemo {
     pub remote_sha: String,
 }
 
+/// Persisted content has one representation. A protected memo cannot carry
+/// a parallel plaintext title or body into the serialized document.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PadMemoContent {
+    Plain { title: String, body: String },
+    Protected { envelope: Vec<u8> },
+}
+
 impl PadMemo {
     pub fn new(id: u64, title: impl AsRef<str>, body: impl AsRef<str>, now_ms: u64) -> Self {
         Self {
             id,
-            title: truncate_utf16(title.as_ref(), MAX_TITLE_UTF16_UNITS),
-            body: truncate_utf16(body.as_ref(), MAX_BODY_UTF16_UNITS),
+            content: PadMemoContent::Plain {
+                title: truncate_utf16(title.as_ref(), MAX_TITLE_UTF16_UNITS),
+                body: truncate_utf16(body.as_ref(), MAX_BODY_UTF16_UNITS),
+            },
             created_ms: now_ms,
             updated_ms: now_ms,
             order: 0,
@@ -153,19 +198,114 @@ impl PadMemo {
     }
 
     /// Replace the content and stamp the update, keeping identity and history.
-    pub fn edit(&mut self, title: impl AsRef<str>, body: impl AsRef<str>, now_ms: u64) {
-        self.title = truncate_utf16(title.as_ref(), MAX_TITLE_UTF16_UNITS);
-        self.body = truncate_utf16(body.as_ref(), MAX_BODY_UTF16_UNITS);
+    pub fn edit(
+        &mut self,
+        title: impl AsRef<str>,
+        body: impl AsRef<str>,
+        now_ms: u64,
+    ) -> Result<(), StorageError> {
+        if self.protected_envelope().is_some() {
+            return Err(StorageError::ProtectedVerification);
+        }
+        self.content = PadMemoContent::Plain {
+            title: truncate_utf16(title.as_ref(), MAX_TITLE_UTF16_UNITS),
+            body: truncate_utf16(body.as_ref(), MAX_BODY_UTF16_UNITS),
+        };
         self.tombstone = false;
         self.updated_ms = now_ms;
+        Ok(())
     }
 
     /// Clear the content in place, keeping identity so the delete can sync.
     pub fn retire(&mut self, now_ms: u64) {
-        self.title.clear();
-        self.body.clear();
+        self.content = PadMemoContent::Plain {
+            title: String::new(),
+            body: String::new(),
+        };
         self.tombstone = true;
         self.updated_ms = now_ms;
+    }
+
+    pub fn plain_content(&self) -> Option<(&str, &str)> {
+        match &self.content {
+            PadMemoContent::Plain { title, body } => Some((title, body)),
+            PadMemoContent::Protected { .. } => None,
+        }
+    }
+
+    pub fn protected_envelope(&self) -> Option<&[u8]> {
+        match &self.content {
+            PadMemoContent::Protected { envelope } => Some(envelope),
+            PadMemoContent::Plain { .. } => None,
+        }
+    }
+
+    pub fn protect_with_envelope(&mut self, envelope: Vec<u8>) -> Result<(), StorageError> {
+        if self.tombstone || self.protected_envelope().is_some() {
+            return Err(StorageError::InvalidFormat);
+        }
+        validate_envelope(&envelope)?;
+        self.content = PadMemoContent::Protected { envelope };
+        Ok(())
+    }
+
+    pub fn replace_protected_envelope(&mut self, envelope: Vec<u8>) -> Result<(), StorageError> {
+        if self.tombstone || self.protected_envelope().is_none() {
+            return Err(StorageError::InvalidFormat);
+        }
+        validate_envelope(&envelope)?;
+        self.content = PadMemoContent::Protected { envelope };
+        Ok(())
+    }
+}
+
+fn validate_envelope(envelope: &[u8]) -> Result<(), StorageError> {
+    if envelope.is_empty() || envelope.len() > MAX_MEMO_ENVELOPE_BYTES {
+        return Err(StorageError::LimitExceeded);
+    }
+    Ok(())
+}
+
+/// Strict plaintext framing inside a memo's authenticated envelope.
+pub struct MemoPayloadV1;
+
+impl MemoPayloadV1 {
+    const MAGIC: [u8; 8] = *b"SKRPMEM1";
+
+    pub fn encode(title: &str, body: &str) -> Result<Vec<u8>, StorageError> {
+        let title = title.encode_utf16().collect::<Vec<_>>();
+        let body = body.encode_utf16().collect::<Vec<_>>();
+        if title.len() > MAX_TITLE_UTF16_UNITS || body.len() > MAX_BODY_UTF16_UNITS {
+            return Err(StorageError::LimitExceeded);
+        }
+        let mut out = Vec::with_capacity(16 + (title.len() + body.len()) * 2);
+        out.extend_from_slice(&Self::MAGIC);
+        out.extend_from_slice(&(title.len() as u32).to_le_bytes());
+        out.extend_from_slice(&(body.len() as u32).to_le_bytes());
+        for unit in title.into_iter().chain(body) {
+            out.extend_from_slice(&unit.to_le_bytes());
+        }
+        Ok(out)
+    }
+
+    pub fn decode(bytes: &[u8]) -> Result<(String, String), StorageError> {
+        if bytes.len() < 16 || !bytes.starts_with(&Self::MAGIC) {
+            return Err(StorageError::InvalidFormat);
+        }
+        let title_units = read_u32(bytes, 8)? as usize;
+        let body_units = read_u32(bytes, 12)? as usize;
+        if title_units > MAX_TITLE_UTF16_UNITS || body_units > MAX_BODY_UTF16_UNITS {
+            return Err(StorageError::LimitExceeded);
+        }
+        let title_end = 16 + title_units * 2;
+        let body_end = title_end + body_units * 2;
+        if body_end != bytes.len() {
+            return Err(StorageError::InvalidFormat);
+        }
+        Ok((
+            decode_utf16_units(&bytes[16..title_end])?,
+            decode_utf16_units(&bytes[title_end..body_end])?,
+        ))
     }
 }
 
@@ -173,6 +313,8 @@ impl PadMemo {
 /// order, carried by one monotonically increasing generation.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct PadDocument {
+    /// Zero denotes a v1/v2 document awaiting explicit v4 migration.
+    pub document_id: [u8; 16],
     pub generation: u64,
     pub sort: PadSort,
     pub memos: Vec<PadMemo>,
@@ -215,6 +357,9 @@ impl PadDocument {
     }
 
     pub fn encode(&self) -> Result<Vec<u8>, StorageError> {
+        if self.document_id != [0; 16] {
+            return self.encode_v4();
+        }
         // Validation before encoding keeps every u32 length cast below exact.
         self.validate()?;
         let mut output = Vec::new();
@@ -225,8 +370,10 @@ impl PadDocument {
         output.extend_from_slice(&(self.memos.len() as u32).to_le_bytes());
         output.extend_from_slice(&self.sort.code().to_le_bytes());
         for memo in &self.memos {
-            let title = memo.title.encode_utf16().collect::<Vec<_>>();
-            let body = memo.body.encode_utf16().collect::<Vec<_>>();
+            let (plain_title, plain_body) =
+                memo.plain_content().ok_or(StorageError::InvalidFormat)?;
+            let title = plain_title.encode_utf16().collect::<Vec<_>>();
+            let body = plain_body.encode_utf16().collect::<Vec<_>>();
             let sha = memo.remote_sha.as_bytes();
             let flags = if memo.tombstone { MEMO_TOMBSTONE } else { 0 };
             output.extend_from_slice(&memo.id.to_le_bytes());
@@ -248,6 +395,9 @@ impl PadDocument {
     pub fn decode(bytes: &[u8]) -> Result<Self, StorageError> {
         if bytes.len() >= LEGACY_MAGIC.len() && bytes[..LEGACY_MAGIC.len()] == LEGACY_MAGIC {
             return decode_legacy(bytes);
+        }
+        if bytes.starts_with(&V4_MAGIC) {
+            return Self::decode_v4(bytes);
         }
         if bytes.len() < DOCUMENT_HEADER_LEN || bytes[..MAGIC.len()] != MAGIC {
             return Err(StorageError::InvalidFormat);
@@ -306,8 +456,7 @@ impl PadDocument {
                 .to_owned();
             memos.push(PadMemo {
                 id,
-                title,
-                body,
+                content: PadMemoContent::Plain { title, body },
                 created_ms,
                 updated_ms,
                 order,
@@ -320,6 +469,155 @@ impl PadDocument {
             return Err(StorageError::InvalidFormat);
         }
         let document = Self {
+            document_id: [0; 16],
+            generation,
+            sort,
+            memos,
+        };
+        document.validate()?;
+        Ok(document)
+    }
+
+    fn encode_v4(&self) -> Result<Vec<u8>, StorageError> {
+        self.validate()?;
+        let mut output = Vec::new();
+        output.extend_from_slice(&V4_MAGIC);
+        output.extend_from_slice(&V4_VERSION.to_le_bytes());
+        output.extend_from_slice(&0u16.to_le_bytes());
+        output.extend_from_slice(&self.generation.to_le_bytes());
+        output.extend_from_slice(&(self.memos.len() as u32).to_le_bytes());
+        output.extend_from_slice(&self.sort.code().to_le_bytes());
+        output.extend_from_slice(&self.document_id);
+        for memo in &self.memos {
+            let (tag, title, body, envelope) = match &memo.content {
+                PadMemoContent::Plain { title, body } => (
+                    CONTENT_PLAIN,
+                    title.encode_utf16().collect::<Vec<_>>(),
+                    body.encode_utf16().collect::<Vec<_>>(),
+                    &[][..],
+                ),
+                PadMemoContent::Protected { envelope } => (
+                    CONTENT_PROTECTED,
+                    Vec::new(),
+                    Vec::new(),
+                    envelope.as_slice(),
+                ),
+            };
+            let flags = if memo.tombstone { MEMO_TOMBSTONE } else { 0 };
+            let sha = memo.remote_sha.as_bytes();
+            output.extend_from_slice(&memo.id.to_le_bytes());
+            output.extend_from_slice(&memo.created_ms.to_le_bytes());
+            output.extend_from_slice(&memo.updated_ms.to_le_bytes());
+            output.extend_from_slice(&memo.order.to_le_bytes());
+            output.extend_from_slice(&flags.to_le_bytes());
+            output.extend_from_slice(&(title.len() as u32).to_le_bytes());
+            output.extend_from_slice(&(body.len() as u32).to_le_bytes());
+            output.extend_from_slice(&(sha.len() as u32).to_le_bytes());
+            output.extend_from_slice(&tag.to_le_bytes());
+            output.extend_from_slice(&(envelope.len() as u32).to_le_bytes());
+            for unit in title.into_iter().chain(body) {
+                output.extend_from_slice(&unit.to_le_bytes());
+            }
+            output.extend_from_slice(sha);
+            output.extend_from_slice(envelope);
+        }
+        Ok(output)
+    }
+
+    fn decode_v4(bytes: &[u8]) -> Result<Self, StorageError> {
+        if bytes.len() < V4_DOCUMENT_HEADER_LEN {
+            return Err(StorageError::InvalidFormat);
+        }
+        if read_u16(bytes, 8)? != V4_VERSION {
+            return Err(StorageError::UnsupportedVersion(read_u16(bytes, 8)?));
+        }
+        if read_u16(bytes, 10)? != 0 {
+            return Err(StorageError::InvalidFormat);
+        }
+        let generation = read_u64(bytes, 12)?;
+        let count = read_u32(bytes, 20)? as usize;
+        if count > MAX_MEMOS {
+            return Err(StorageError::LimitExceeded);
+        }
+        let sort = PadSort::from_code(read_u32(bytes, 24)?)?;
+        let document_id: [u8; 16] = bytes[28..44]
+            .try_into()
+            .map_err(|_| StorageError::InvalidFormat)?;
+        if document_id == [0; 16] {
+            return Err(StorageError::InvalidFormat);
+        }
+        let mut memos = Vec::with_capacity(count);
+        let mut offset = V4_DOCUMENT_HEADER_LEN;
+        for _ in 0..count {
+            let end = offset
+                .checked_add(V4_MEMO_HEADER_LEN)
+                .ok_or(StorageError::InvalidFormat)?;
+            if end > bytes.len() {
+                return Err(StorageError::InvalidFormat);
+            }
+            let id = read_u64(bytes, offset)?;
+            let created_ms = read_u64(bytes, offset + 8)?;
+            let updated_ms = read_u64(bytes, offset + 16)?;
+            let order = read_u32(bytes, offset + 24)?;
+            let flags = read_u32(bytes, offset + 28)?;
+            let title_units = read_u32(bytes, offset + 32)? as usize;
+            let body_units = read_u32(bytes, offset + 36)? as usize;
+            let sha_len = read_u32(bytes, offset + 40)? as usize;
+            let tag = read_u32(bytes, offset + 44)?;
+            let envelope_len = read_u32(bytes, offset + 48)? as usize;
+            if flags & !MEMO_TOMBSTONE != 0 {
+                return Err(StorageError::InvalidFormat);
+            }
+            if title_units > MAX_TITLE_UTF16_UNITS
+                || body_units > MAX_BODY_UTF16_UNITS
+                || sha_len > MAX_REMOTE_SHA_LEN
+                || envelope_len > MAX_MEMO_ENVELOPE_BYTES
+            {
+                return Err(StorageError::LimitExceeded);
+            }
+            if (tag == CONTENT_PLAIN && envelope_len != 0)
+                || (tag == CONTENT_PROTECTED
+                    && (title_units != 0 || body_units != 0 || envelope_len == 0))
+                || (tag != CONTENT_PLAIN && tag != CONTENT_PROTECTED)
+            {
+                return Err(StorageError::InvalidFormat);
+            }
+            let title_end = end + title_units * 2;
+            let body_end = title_end + body_units * 2;
+            let sha_end = body_end + sha_len;
+            let payload_end = sha_end + envelope_len;
+            if payload_end > bytes.len() {
+                return Err(StorageError::InvalidFormat);
+            }
+            let content = if tag == CONTENT_PLAIN {
+                PadMemoContent::Plain {
+                    title: decode_utf16_units(&bytes[end..title_end])?,
+                    body: decode_utf16_units(&bytes[title_end..body_end])?,
+                }
+            } else {
+                PadMemoContent::Protected {
+                    envelope: bytes[sha_end..payload_end].to_vec(),
+                }
+            };
+            let remote_sha = std::str::from_utf8(&bytes[body_end..sha_end])
+                .map_err(|_| StorageError::InvalidFormat)?
+                .to_owned();
+            memos.push(PadMemo {
+                id,
+                content,
+                created_ms,
+                updated_ms,
+                order,
+                tombstone: flags & MEMO_TOMBSTONE != 0,
+                remote_sha,
+            });
+            offset = payload_end;
+        }
+        if offset != bytes.len() {
+            return Err(StorageError::InvalidFormat);
+        }
+        let document = Self {
+            document_id,
             generation,
             sort,
             memos,
@@ -346,18 +644,31 @@ impl PadDocument {
             {
                 return Err(StorageError::InvalidFormat);
             }
-            if memo.tombstone && (!memo.title.is_empty() || !memo.body.is_empty()) {
-                return Err(StorageError::InvalidFormat);
+            match &memo.content {
+                PadMemoContent::Plain { title, body } => {
+                    if memo.tombstone && (!title.is_empty() || !body.is_empty()) {
+                        return Err(StorageError::InvalidFormat);
+                    }
+                    let title = title.encode_utf16().count();
+                    let body = body.encode_utf16().count();
+                    if title > MAX_TITLE_UTF16_UNITS || body > MAX_BODY_UTF16_UNITS {
+                        return Err(StorageError::LimitExceeded);
+                    }
+                    total = total
+                        .checked_add(title)
+                        .and_then(|used| used.checked_add(body))
+                        .ok_or(StorageError::InvalidFormat)?;
+                }
+                PadMemoContent::Protected { envelope } => {
+                    if self.document_id == [0; 16] || memo.tombstone {
+                        return Err(StorageError::InvalidFormat);
+                    }
+                    validate_envelope(envelope)?;
+                    total = total
+                        .checked_add(envelope.len().div_ceil(2))
+                        .ok_or(StorageError::InvalidFormat)?;
+                }
             }
-            let title = memo.title.encode_utf16().count();
-            let body = memo.body.encode_utf16().count();
-            if title > MAX_TITLE_UTF16_UNITS || body > MAX_BODY_UTF16_UNITS {
-                return Err(StorageError::LimitExceeded);
-            }
-            total = total
-                .checked_add(title)
-                .and_then(|used| used.checked_add(body))
-                .ok_or(StorageError::InvalidFormat)?;
             if total > MAX_DOCUMENT_UTF16_UNITS {
                 return Err(StorageError::LimitExceeded);
             }
@@ -405,8 +716,7 @@ fn decode_legacy(bytes: &[u8]) -> Result<PadDocument, StorageError> {
     } else {
         vec![PadMemo {
             id: LEGACY_MEMO_ID,
-            title,
-            body,
+            content: PadMemoContent::Plain { title, body },
             created_ms: 0,
             updated_ms: 0,
             order: 0,
@@ -415,6 +725,7 @@ fn decode_legacy(bytes: &[u8]) -> Result<PadDocument, StorageError> {
         }]
     };
     Ok(PadDocument {
+        document_id: [0; 16],
         generation,
         sort: PadSort::default(),
         memos,
@@ -484,6 +795,12 @@ pub enum StorageError {
     MissingLocalAppData,
     CryptoBufferTooLarge,
     TempConflict,
+    LegacyChanged,
+    ProtectedCutover,
+    ProtectedVerification,
+    StaleProtectedDocument,
+    DraftCleanupUncertain,
+    PendingDraft,
 }
 
 impl std::fmt::Display for StorageError {
@@ -500,6 +817,22 @@ impl std::fmt::Display for StorageError {
             Self::CryptoBufferTooLarge => f.write_str("DPAPI buffer is too large"),
             Self::TempConflict => {
                 f.write_str("a newer or unreadable pad recovery file is already present")
+            }
+            Self::LegacyChanged => {
+                f.write_str("pad changed while protected migration was prepared")
+            }
+            Self::ProtectedCutover => {
+                f.write_str("pad protected cutover requires protected recovery")
+            }
+            Self::ProtectedVerification => {
+                f.write_str("protected pad copy failed open verification")
+            }
+            Self::StaleProtectedDocument => f.write_str("protected pad changed before this save"),
+            Self::DraftCleanupUncertain => {
+                f.write_str("pad primary was published but draft cleanup is uncertain")
+            }
+            Self::PendingDraft => {
+                f.write_str("a recoverable pad draft must be restored or discarded first")
             }
         }
     }
@@ -528,12 +861,36 @@ pub struct PadStore {
     path: PathBuf,
     backup: PathBuf,
     temp: PathBuf,
+    lock: PathBuf,
+    protected_path: PathBuf,
+    protected_backup: PathBuf,
+    protected_temp: PathBuf,
+    intent: PathBuf,
+    marker: PathBuf,
+    protected_memo_floor: PathBuf,
+    rewrap_marker: PathBuf,
+    v4_backup: PathBuf,
+    v4_temp: PathBuf,
+    v4_intent: PathBuf,
+    v4_marker: PathBuf,
+    v4_floor: PathBuf,
+    draft: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoadOutcome {
     pub document: PadDocument,
     pub recovered_from_backup: bool,
+}
+
+/// Bounded, unauthenticated v3 header data for selecting the external key.
+/// It grants no access to Pad content; unlock must authenticate the complete
+/// envelope against the durable vault ID before using any document bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PadHardwareHint {
+    pub vault_id: [u8; 16],
+    pub credential_id: Vec<u8>,
+    pub requires_password: bool,
 }
 
 impl PadStore {
@@ -548,6 +905,20 @@ impl PadStore {
             path: directory.join("memo.bin"),
             backup: directory.join("memo.bin.bak"),
             temp: directory.join("memo.bin.tmp"),
+            lock: directory.join("memo.bin.lock"),
+            protected_path: directory.join("memo.v3.bin"),
+            protected_backup: directory.join("memo.v3.bin.bak"),
+            protected_temp: directory.join("memo.v3.bin.tmp"),
+            intent: directory.join("memo.v3.committing"),
+            marker: directory.join("memo.v3.marker"),
+            protected_memo_floor: directory.join("memo.v3.memo-floor"),
+            rewrap_marker: directory.join("memo.v3.rewrap"),
+            v4_backup: directory.join("memo.v4.bin.bak"),
+            v4_temp: directory.join("memo.v4.bin.tmp"),
+            v4_intent: directory.join("memo.v4.committing"),
+            v4_marker: directory.join("memo.v4.marker"),
+            v4_floor: directory.join("memo.v4.floor"),
+            draft: directory.join("memo.draft.bin"),
         }
     }
 
@@ -556,29 +927,67 @@ impl PadStore {
         &self.path
     }
 
+    /// Directory shared with Pad's scope-bound protection metadata.
+    pub fn directory(&self) -> &Path {
+        self.path.parent().expect("PadStore paths have a parent")
+    }
+
+    pub fn protected_primary_path(&self) -> &Path {
+        &self.protected_path
+    }
+
+    /// Presence alone claims v4 ownership, including a damaged signal. The
+    /// caller must use v4 recovery or report failure rather than open v3/v2.
+    /// A published whole-Pad intent supersedes retained v4 source evidence.
+    pub fn has_v4_cutover(&self) -> Result<bool, StorageError> {
+        Ok(!self.intent.try_exists()?
+            && !self.marker.try_exists()?
+            && (self.v4_intent.try_exists()?
+                || self.v4_marker.try_exists()?
+                || self.v4_floor.try_exists()?))
+    }
+
     pub fn load(&self) -> Result<LoadOutcome, StorageError> {
-        if let Ok(document) = read_document(&self.path) {
-            return Ok(LoadOutcome {
-                document,
-                recovered_from_backup: false,
-            });
+        let _lock = self.exclusive_writer()?;
+        self.load_unlocked()
+    }
+
+    fn load_unlocked(&self) -> Result<LoadOutcome, StorageError> {
+        self.require_legacy_mode()?;
+        match read_document(&self.path) {
+            Ok(document) => {
+                return Ok(LoadOutcome {
+                    document,
+                    recovered_from_backup: false,
+                });
+            }
+            Err(error @ StorageError::UnsupportedVersion(_)) => return Err(error),
+            Err(_) => {}
         }
-        if let Ok(document) = read_document(&self.backup) {
-            return Ok(LoadOutcome {
-                document,
-                recovered_from_backup: true,
-            });
+        match read_document(&self.backup) {
+            Ok(document) => {
+                return Ok(LoadOutcome {
+                    document,
+                    recovered_from_backup: true,
+                });
+            }
+            Err(error @ StorageError::UnsupportedVersion(_)) => return Err(error),
+            Err(_) => {}
         }
         // A flushed temp is considered only after both published copies have
         // failed. A valid primary (including an empty list) always wins, so an
         // unpublished older edit can never resurrect deleted content.
-        if let Ok(document) = read_document(&self.temp) {
-            return Ok(LoadOutcome {
-                document,
-                recovered_from_backup: true,
-            });
+        match read_document(&self.temp) {
+            Ok(document) => {
+                return Ok(LoadOutcome {
+                    document,
+                    recovered_from_backup: true,
+                });
+            }
+            Err(error @ StorageError::UnsupportedVersion(_)) => return Err(error),
+            Err(_) => {}
         }
-        if self.path.exists() || self.backup.exists() || self.temp.exists() {
+        if self.path.try_exists()? || self.backup.try_exists()? || self.temp.try_exists()? {
             // Existing but unreadable data is a partial failure, not an empty
             // document.  The UI may still start empty, but the worker's caller
             // can display the error/recovery state and must not save over it.
@@ -591,6 +1000,11 @@ impl PadStore {
     }
 
     pub fn write(&self, document: &PadDocument) -> Result<WriteOutcome, StorageError> {
+        let _lock = self.exclusive_writer()?;
+        self.require_legacy_mode()?;
+        if document.document_id != [0; 16] {
+            return Err(StorageError::ProtectedCutover);
+        }
         let mut encoded = document.encode()?;
         let protected_result = protect(&encoded);
         encoded.fill(0);
@@ -600,7 +1014,7 @@ impl PadStore {
         }
         prepare_temp(&self.temp, document.generation)?;
         write_flushed_temp(&self.temp, &protected)?;
-        if !self.path.exists() {
+        if !self.path.try_exists()? {
             // First write: the target does not exist, so MoveFileExW is the
             // only operation and it gets WRITE_THROUGH for the directory
             // entry.  If a concurrent writer wins, leave the temp file for
@@ -615,6 +1029,2249 @@ impl PadStore {
             Ok(WriteOutcome::Replaced)
         }
     }
+
+    fn exclusive_writer(&self) -> Result<File, StorageError> {
+        if let Some(parent) = self.path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        // A persistent lock pathname is harmless. The exclusive Windows handle
+        // is released on process death, unlike a create_new lockfile.
+        Ok(OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .share_mode(0)
+            .open(&self.lock)?)
+    }
+
+    fn require_legacy_mode(&self) -> Result<(), StorageError> {
+        // Presence is authoritative, including a damaged marker. A tombstone
+        // also blocks fallback if both independent markers are lost.
+        if self.intent.try_exists()?
+            || self.marker.try_exists()?
+            || self.protected_memo_floor.try_exists()?
+            || self.v4_intent.try_exists()?
+            || self.v4_marker.try_exists()?
+            || self.v4_floor.try_exists()?
+        {
+            return Err(StorageError::ProtectedCutover);
+        }
+        for path in [&self.path, &self.backup, &self.temp] {
+            if path.try_exists()? {
+                if let Err(error @ StorageError::UnsupportedVersion(_)) = read_document(path) {
+                    return Err(error);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    fn require_active_protected(&self) -> Result<[u8; VAULT_ID_LEN], StorageError> {
+        Ok(self.active_protected_intent()?.vault_id())
+    }
+
+    fn active_protected_intent(&self) -> Result<ProtectedIntent, StorageError> {
+        // Both independently protected signals are required. Their presence
+        // blocks legacy readers even if either signal is damaged.
+        if !self.intent.try_exists()? || !self.marker.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let intent = read_protected_intent(&self.intent)?;
+        let marker_id = read_protected_signal(&self.marker, b"committed")?;
+        if intent.vault_id() != marker_id {
+            return Err(StorageError::ProtectedCutover);
+        }
+        Ok(intent)
+    }
+
+    pub fn protected_vault_id(&self) -> Result<[u8; VAULT_ID_LEN], StorageError> {
+        let _lock = self.exclusive_writer()?;
+        self.require_active_protected()
+    }
+
+    /// Read only the durable cutover intent's identity. This is a recovery
+    /// hint, never authorization to display content: the caller must still
+    /// authenticate both protected copies before publishing a final marker.
+    pub fn pending_vault_id(&self) -> Result<[u8; VAULT_ID_LEN], StorageError> {
+        let _lock = self.exclusive_writer()?;
+        if !self.intent.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        Ok(read_protected_intent(&self.intent)?.vault_id())
+    }
+
+    /// Read at most the fixed v3 header and one bounded credential ID from
+    /// the published primary (or a missing primary's backup). This is only a
+    /// key-selection hint; the worker still authenticates all envelope bytes.
+    pub fn protected_hardware_hint(&self) -> Result<Option<PadHardwareHint>, StorageError> {
+        let _lock = self.exclusive_writer()?;
+        if !self.intent.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let vault_id = if self.marker.try_exists()? {
+            self.require_active_protected()?
+        } else {
+            read_protected_intent(&self.intent)?.vault_id()
+        };
+        if let Some(marker) = self.read_rewrap_marker(vault_id)? {
+            match marker {
+                RewrapMarker::Pending { old, .. } => {
+                    if envelope_digest(&self.protected_path)? != old {
+                        return Err(StorageError::ProtectedVerification);
+                    }
+                }
+                RewrapMarker::Committed { digest } => {
+                    let path = if envelope_digest(&self.protected_path).ok() == Some(digest) {
+                        &self.protected_path
+                    } else if envelope_digest(&self.protected_backup).ok() == Some(digest) {
+                        &self.protected_backup
+                    } else {
+                        return Err(StorageError::ProtectedVerification);
+                    };
+                    return read_hardware_hint(path, vault_id);
+                }
+            }
+        }
+        match read_hardware_hint(&self.protected_path, vault_id) {
+            Ok(hint) => Ok(hint),
+            Err(StorageError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {
+                read_hardware_hint(&self.protected_backup, vault_id)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    /// A v4 source and a v3 intent identify the pending v4-to-v3 transaction.
+    /// Source evidence remains after cutover to bind the original memo scope.
+    pub fn has_v4_to_protected_intent(&self) -> Result<bool, StorageError> {
+        let _lock = self.exclusive_writer()?;
+        if !self.intent.try_exists()? {
+            return Ok(false);
+        }
+        Ok(matches!(
+            read_protected_intent(&self.intent)?,
+            ProtectedIntent::FromV4 { .. }
+        ))
+    }
+
+    /// A present floor claims per-memo v3 recovery even when damaged.
+    pub fn has_protected_memo_cutover(&self) -> Result<bool, StorageError> {
+        self.protected_memo_floor.try_exists().map_err(Into::into)
+    }
+
+    fn protected_memo_generation_floor(&self, vault_id: [u8; 16]) -> Result<u64, StorageError> {
+        if !self.protected_memo_floor.try_exists()? {
+            return Ok(0);
+        }
+        let (floor_id, generation) = read_protected_memo_floor(&self.protected_memo_floor)?;
+        if floor_id != vault_id {
+            return Err(StorageError::ProtectedCutover);
+        }
+        Ok(generation)
+    }
+
+    /// Open authenticated v3 primary first, then its published backup. The
+    /// callback must return the vault ID authenticated by that envelope, not
+    /// an ID supplied separately by the caller. No legacy or unpublished temp
+    /// bytes are consulted in protected mode.
+    pub fn load_protected<F>(&self, mut open_v3: F) -> Result<LoadOutcome, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        let _lock = self.exclusive_writer()?;
+        self.load_protected_unlocked(&mut open_v3)
+    }
+
+    fn load_protected_unlocked<F>(&self, open_v3: &mut F) -> Result<LoadOutcome, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        let intent = self.active_protected_intent()?;
+        let vault_id = intent.vault_id();
+        let floor = self.protected_memo_generation_floor(vault_id)?;
+        let rewrap = self.read_rewrap_marker(vault_id)?;
+        if let Some(RewrapMarker::Pending { old, .. }) = rewrap {
+            // No fallback while the old primary is the only authorized copy.
+            if envelope_digest(&self.protected_path)? != old {
+                return Err(StorageError::ProtectedVerification);
+            }
+            let (opened_id, document) =
+                open_v3(&self.protected_path).map_err(|_| StorageError::ProtectedVerification)?;
+            if opened_id != vault_id || !intent.accepts(&document, floor) {
+                return Err(StorageError::ProtectedVerification);
+            }
+            return Ok(LoadOutcome {
+                document,
+                recovered_from_backup: false,
+            });
+        }
+        let committed = match rewrap {
+            Some(RewrapMarker::Committed { digest }) => Some(digest),
+            _ => None,
+        };
+        if let Some(digest) = committed {
+            // A replayed old envelope may authenticate, but cannot be read.
+            if envelope_digest(&self.protected_path).ok() != Some(digest) {
+                return self.load_rewrap_backup(open_v3, intent, floor, digest);
+            }
+        }
+        match open_v3(&self.protected_path) {
+            Ok((opened_id, _document)) if opened_id != vault_id => {
+                return Err(StorageError::ProtectedVerification)
+            }
+            Ok((_, document)) if intent.accepts(&document, floor) => {
+                return Ok(LoadOutcome {
+                    document,
+                    recovered_from_backup: false,
+                })
+            }
+            Err(error @ StorageError::UnsupportedVersion(_)) => return Err(error),
+            _ => {}
+        }
+        match open_v3(&self.protected_backup) {
+            Ok((opened_id, document))
+                if opened_id == vault_id
+                    && intent.accepts(&document, floor)
+                    && committed.is_none_or(|digest| {
+                        envelope_digest(&self.protected_backup).ok() == Some(digest)
+                    }) =>
+            {
+                Ok(LoadOutcome {
+                    document,
+                    recovered_from_backup: true,
+                })
+            }
+            Err(error @ StorageError::UnsupportedVersion(_)) => Err(error),
+            _ => Err(StorageError::ProtectedVerification),
+        }
+    }
+
+    fn load_rewrap_backup<F>(
+        &self,
+        open_v3: &mut F,
+        intent: ProtectedIntent,
+        floor: u64,
+        digest: [u8; REWRAP_DIGEST_LEN],
+    ) -> Result<LoadOutcome, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        if envelope_digest(&self.protected_backup).ok() != Some(digest) {
+            return Err(StorageError::ProtectedVerification);
+        }
+        let (id, document) =
+            open_v3(&self.protected_backup).map_err(|_| StorageError::ProtectedVerification)?;
+        if id != intent.vault_id() || !intent.accepts(&document, floor) {
+            return Err(StorageError::ProtectedVerification);
+        }
+        Ok(LoadOutcome {
+            document,
+            recovered_from_backup: true,
+        })
+    }
+
+    fn read_rewrap_marker(
+        &self,
+        vault_id: [u8; VAULT_ID_LEN],
+    ) -> Result<Option<RewrapMarker>, StorageError> {
+        if !self.rewrap_marker.try_exists()? {
+            return Ok(None);
+        }
+        let (id, marker) = read_rewrap_marker(&self.rewrap_marker)?;
+        if id != vault_id {
+            return Err(StorageError::ProtectedCutover);
+        }
+        Ok(Some(marker))
+    }
+
+    /// Rotate a whole-Pad password without changing the authenticated document
+    /// or vault identity. The caller supplies a previously authenticated
+    /// document and its exact old envelope; the old bytes are compared under
+    /// the writer lock after the worker has changed its password session.
+    pub fn rewrap_protected<N>(
+        &self,
+        expected_envelope: &[u8],
+        expected_document: &PadDocument,
+        replacement_envelope: &[u8],
+        open_new: N,
+    ) -> Result<(), StorageError>
+    where
+        N: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        self.rewrap_protected_with_hook(
+            expected_envelope,
+            expected_document,
+            replacement_envelope,
+            open_new,
+            |_| Ok(()),
+        )
+    }
+
+    fn rewrap_protected_with_hook<N, H>(
+        &self,
+        expected_envelope: &[u8],
+        expected_document: &PadDocument,
+        replacement_envelope: &[u8],
+        mut open_new: N,
+        mut hook: H,
+    ) -> Result<(), StorageError>
+    where
+        N: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+        H: FnMut(RewrapPoint) -> Result<(), StorageError>,
+    {
+        if expected_envelope.is_empty()
+            || replacement_envelope.is_empty()
+            || expected_envelope.len() as u64 > MAX_PROTECTED_BYTES
+            || replacement_envelope.len() as u64 > MAX_PROTECTED_BYTES
+            || expected_envelope == replacement_envelope
+        {
+            return Err(StorageError::InvalidFormat);
+        }
+        let old_digest = digest_bytes(expected_envelope)?;
+        let new_digest = digest_bytes(replacement_envelope)?;
+        let _lock = self.exclusive_writer()?;
+        let intent = self.active_protected_intent()?;
+        let vault_id = intent.vault_id();
+        let floor = self.protected_memo_generation_floor(vault_id)?;
+        if !intent.accepts(expected_document, floor)
+            || fs::read(&self.protected_path)? != expected_envelope
+        {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        if self.draft.try_exists()? {
+            read_draft(&self.draft).map_err(|_| StorageError::ProtectedVerification)?;
+            return Err(StorageError::PendingDraft);
+        }
+        let marker = self.read_rewrap_marker(vault_id)?;
+        match marker {
+            Some(RewrapMarker::Pending { old, new }) if old == old_digest && new == new_digest => {}
+            Some(RewrapMarker::Pending { .. }) => return Err(StorageError::TempConflict),
+            Some(RewrapMarker::Committed { digest }) if digest != old_digest => {
+                return Err(StorageError::StaleProtectedDocument);
+            }
+            _ => {}
+        }
+        if self.protected_temp.try_exists()?
+            && fs::read(&self.protected_temp)? != replacement_envelope
+        {
+            return Err(StorageError::TempConflict);
+        }
+        if marker
+            != Some(RewrapMarker::Pending {
+                old: old_digest,
+                new: new_digest,
+            })
+        {
+            publish_rewrap_marker(
+                &self.rewrap_marker,
+                vault_id,
+                RewrapMarker::Pending {
+                    old: old_digest,
+                    new: new_digest,
+                },
+            )?;
+        }
+        hook(RewrapPoint::PendingPublished)?;
+        if !self.protected_temp.try_exists()? {
+            write_flushed_temp(&self.protected_temp, replacement_envelope)?;
+        }
+        hook(RewrapPoint::Staged)?;
+        let (new_id, new_document) =
+            open_new(&self.protected_temp).map_err(|_| StorageError::ProtectedVerification)?;
+        if new_id != vault_id || new_document != *expected_document {
+            return Err(StorageError::ProtectedVerification);
+        }
+        hook(RewrapPoint::Verified)?;
+        let backup_temp = self.protected_backup.with_extension("rewrap-stage.tmp");
+        remove_if_present(&backup_temp)?;
+        write_flushed_temp(&backup_temp, replacement_envelope)?;
+        if self.protected_backup.try_exists()? {
+            replace_without_backup(&self.protected_backup, &backup_temp)?;
+        } else {
+            move_first_write(&backup_temp, &self.protected_backup)?;
+        }
+        let (backup_id, backup_document) =
+            open_new(&self.protected_backup).map_err(|_| StorageError::ProtectedVerification)?;
+        if backup_id != vault_id
+            || backup_document != *expected_document
+            || envelope_digest(&self.protected_backup)? != new_digest
+        {
+            return Err(StorageError::ProtectedVerification);
+        }
+        hook(RewrapPoint::BackupPublished)?;
+        publish_rewrap_marker(
+            &self.rewrap_marker,
+            vault_id,
+            RewrapMarker::Committed { digest: new_digest },
+        )?;
+        hook(RewrapPoint::Committed)?;
+        replace_without_backup(&self.protected_path, &self.protected_temp)?;
+        hook(RewrapPoint::PrimaryPublished)?;
+        Ok(())
+    }
+
+    /// Abort a pre-commit rotation so a retry may use freshly randomized
+    /// ciphertext. The caller supplies the old authenticated snapshot; the
+    /// exact old primary is checked under lock before changing recovery data.
+    /// A committed rotation can never be rolled back through this method.
+    pub fn abort_pending_protected_rewrap(
+        &self,
+        expected_envelope: &[u8],
+        expected_document: &PadDocument,
+    ) -> Result<(), StorageError> {
+        let _lock = self.exclusive_writer()?;
+        if !self.rewrap_marker.try_exists()? {
+            return Ok(());
+        }
+        let intent = self.active_protected_intent()?;
+        let vault_id = intent.vault_id();
+        let Some(RewrapMarker::Pending { old, .. }) = self.read_rewrap_marker(vault_id)? else {
+            return Err(StorageError::ProtectedCutover);
+        };
+        let floor = self.protected_memo_generation_floor(vault_id)?;
+        if !intent.accepts(expected_document, floor)
+            || fs::read(&self.protected_path)? != expected_envelope
+        {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        let old_digest = digest_bytes(expected_envelope)?;
+        if old != old_digest {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        self.restore_old_rewrap_copy(expected_envelope)
+    }
+
+    /// Complete recovery after an interrupted pre-commit password rotation.
+    /// No marker means no work: a normal writer's temp is never touched.
+    /// On Pending, authenticate the exact old primary before restoring its
+    /// backup and clearing the marker, all under one writer lock.
+    pub fn recover_pending_protected_rewrap<F>(
+        &self,
+        mut open_old: F,
+    ) -> Result<Option<PadDocument>, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        let _lock = self.exclusive_writer()?;
+        if !self.rewrap_marker.try_exists()? {
+            return Ok(None);
+        }
+        let intent = self.active_protected_intent()?;
+        let vault_id = intent.vault_id();
+        let Some(RewrapMarker::Pending { old, .. }) = self.read_rewrap_marker(vault_id)? else {
+            return Ok(None);
+        };
+        let primary = fs::read(&self.protected_path)?;
+        if primary.is_empty()
+            || primary.len() as u64 > MAX_PROTECTED_BYTES
+            || digest_bytes(&primary)? != old
+        {
+            return Err(StorageError::ProtectedVerification);
+        }
+        let (opened_id, document) =
+            open_old(&self.protected_path).map_err(|_| StorageError::ProtectedVerification)?;
+        let floor = self.protected_memo_generation_floor(vault_id)?;
+        if opened_id != vault_id || !intent.accepts(&document, floor) {
+            return Err(StorageError::ProtectedVerification);
+        }
+        self.restore_old_rewrap_copy(&primary)?;
+        Ok(Some(document))
+    }
+
+    fn restore_old_rewrap_copy(&self, old_envelope: &[u8]) -> Result<(), StorageError> {
+        let restore = self.protected_backup.with_extension("rewrap-abort.tmp");
+        remove_if_present(&restore)?;
+        write_flushed_temp(&restore, old_envelope)?;
+        if self.protected_backup.try_exists()? {
+            replace_without_backup(&self.protected_backup, &restore)?;
+        } else {
+            move_first_write(&restore, &self.protected_backup)?;
+        }
+        if fs::read(&self.protected_backup)? != old_envelope {
+            return Err(StorageError::ProtectedVerification);
+        }
+        remove_if_present(&self.rewrap_marker)?;
+        remove_if_present(&signal_temp_path(&self.rewrap_marker))?;
+        remove_if_present(&self.protected_temp)?;
+        Ok(())
+    }
+
+    /// After a committed marker, repair an interrupted primary publication
+    /// using only the exact marker-qualified authenticated backup.
+    pub fn recover_protected_rewrap<F>(&self, mut open_new: F) -> Result<PadDocument, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        let _lock = self.exclusive_writer()?;
+        let intent = self.active_protected_intent()?;
+        let Some(RewrapMarker::Committed { digest }) =
+            self.read_rewrap_marker(intent.vault_id())?
+        else {
+            return Err(StorageError::ProtectedCutover);
+        };
+        let floor = self.protected_memo_generation_floor(intent.vault_id())?;
+        let outcome = self.load_rewrap_backup(&mut open_new, intent, floor, digest)?;
+        if envelope_digest(&self.protected_path).ok() != Some(digest) {
+            let temp = self.protected_path.with_extension("rewrap-recover.tmp");
+            remove_if_present(&temp)?;
+            write_flushed_temp(&temp, &fs::read(&self.protected_backup)?)?;
+            if self.protected_path.try_exists()? {
+                replace_without_backup(&self.protected_path, &temp)?;
+            } else {
+                move_first_write(&temp, &self.protected_path)?;
+            }
+        }
+        remove_if_present(&self.protected_temp)?;
+        Ok(outcome.document)
+    }
+
+    /// Compare the authenticated published document with the caller's exact
+    /// expected value, verify the staged ciphertext opens as `next`, then
+    /// atomically publish it while retaining one protected recovery copy.
+    pub fn write_protected<F>(
+        &self,
+        expected: &PadDocument,
+        next: &PadDocument,
+        encrypted_v3: &[u8],
+        open_v3: F,
+    ) -> Result<WriteOutcome, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        self.write_protected_with_hook(expected, next, encrypted_v3, open_v3, |_| Ok(()))
+    }
+
+    fn write_protected_with_hook<F, H>(
+        &self,
+        expected: &PadDocument,
+        next: &PadDocument,
+        encrypted_v3: &[u8],
+        mut open_v3: F,
+        mut hook: H,
+    ) -> Result<WriteOutcome, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+        H: FnMut(ProtectedWritePoint) -> Result<(), StorageError>,
+    {
+        if next.generation <= expected.generation
+            || encrypted_v3.is_empty()
+            || encrypted_v3.len() as u64 > MAX_PROTECTED_BYTES
+        {
+            return Err(StorageError::InvalidFormat);
+        }
+        let mut validated = next.encode()?;
+        validated.fill(0);
+        let _lock = self.exclusive_writer()?;
+        let intent = self.active_protected_intent()?;
+        let vault_id = intent.vault_id();
+        if matches!(
+            self.read_rewrap_marker(vault_id)?,
+            Some(RewrapMarker::Pending { .. })
+        ) {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let loaded = self.load_protected_unlocked(&mut open_v3)?;
+        if loaded.recovered_from_backup {
+            return Err(StorageError::ProtectedVerification);
+        }
+        if loaded.document != *expected {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        let mut protects_plain = false;
+        for before in &expected.memos {
+            let after = next.find(before.id).ok_or(StorageError::InvalidFormat)?;
+            if before.tombstone && !after.tombstone {
+                return Err(StorageError::InvalidFormat);
+            }
+            if before.protected_envelope().is_some()
+                && !after.tombstone
+                && after.protected_envelope().is_none()
+            {
+                return Err(StorageError::InvalidFormat);
+            }
+            if before.plain_content().is_some() && after.protected_envelope().is_some() {
+                protects_plain = true;
+            }
+        }
+        if next
+            .memos
+            .iter()
+            .any(|memo| memo.protected_envelope().is_some() && expected.find(memo.id).is_none())
+        {
+            protects_plain = true;
+        }
+        if protects_plain {
+            let document_id = intent.document_id_for_new_protection();
+            if next.document_id != document_id
+                || (expected.document_id != [0; 16] && expected.document_id != document_id)
+            {
+                return Err(StorageError::InvalidFormat);
+            }
+        } else if next.document_id != expected.document_id {
+            return Err(StorageError::InvalidFormat);
+        }
+        if self.protected_temp.try_exists()? {
+            // A killed attempt may leave the ordinary staging file. It is
+            // disposable only after this unlocked session authenticates it
+            // as this vault and no newer than the candidate being saved.
+            match open_v3(&self.protected_temp) {
+                Ok((id, staged)) if id == vault_id && staged.generation <= next.generation => {
+                    remove_if_present(&self.protected_temp)?;
+                }
+                Err(_)
+                    if self
+                        .matching_draft(DRAFT_V3, vault_id, expected, &self.protected_path)?
+                        .is_some_and(|draft| draft.next_generation <= next.generation) =>
+                {
+                    // The authenticated primary and durable draft still bind
+                    // this attempt. The separate ordinary temp is disposable.
+                    remove_if_present(&self.protected_temp)?;
+                }
+                _ => return Err(StorageError::TempConflict),
+            }
+        }
+        write_flushed_temp(&self.protected_temp, encrypted_v3)?;
+        hook(ProtectedWritePoint::Staged)?;
+        let (opened_id, opened) =
+            open_v3(&self.protected_temp).map_err(|_| StorageError::ProtectedVerification)?;
+        if opened_id != vault_id || opened != *next {
+            return Err(StorageError::ProtectedVerification);
+        }
+        hook(ProtectedWritePoint::Verified)?;
+        self.stage_draft(
+            DRAFT_V3,
+            vault_id,
+            expected,
+            next,
+            encrypted_v3,
+            &self.protected_path,
+        )?;
+        hook(ProtectedWritePoint::DraftStaged)?;
+        #[cfg(debug_assertions)]
+        pause_after_draft_for_test("SAKURA_PAD_TEST_PAUSE_AFTER_V3_DRAFT")?;
+        if self.rewrap_marker.try_exists()? {
+            // After password rotation, every later write advances the exact
+            // envelope gate. The new backup is durable before the marker;
+            // the old primary remains authorized until that marker changes.
+            let backup_temp = self.protected_backup.with_extension("rewrap-stage.tmp");
+            remove_if_present(&backup_temp)?;
+            write_flushed_temp(&backup_temp, encrypted_v3)?;
+            if self.protected_backup.try_exists()? {
+                replace_without_backup(&self.protected_backup, &backup_temp)?;
+            } else {
+                move_first_write(&backup_temp, &self.protected_backup)?;
+            }
+            let (backup_id, backup) =
+                open_v3(&self.protected_backup).map_err(|_| StorageError::ProtectedVerification)?;
+            if backup_id != vault_id || backup != *next {
+                return Err(StorageError::ProtectedVerification);
+            }
+            hook(ProtectedWritePoint::RecoveryStaged)?;
+            publish_rewrap_marker(
+                &self.rewrap_marker,
+                vault_id,
+                RewrapMarker::Committed {
+                    digest: envelope_digest(&self.protected_temp)?,
+                },
+            )?;
+            if protects_plain {
+                publish_protected_memo_floor(
+                    &self.protected_memo_floor,
+                    vault_id,
+                    next.generation,
+                )?;
+                hook(ProtectedWritePoint::FloorPublished)?;
+            }
+            replace_without_backup(&self.protected_path, &self.protected_temp)?;
+            hook(ProtectedWritePoint::Published)?;
+            remove_if_present(&self.draft).map_err(|_| StorageError::DraftCleanupUncertain)?;
+            return Ok(WriteOutcome::Replaced);
+        }
+        if protects_plain {
+            // Keep a recovery image that already contains the newly sealed
+            // memo; never let ReplaceFileW preserve the plaintext generation.
+            remove_if_present(&self.protected_backup)?;
+            let backup_temp = self.protected_backup.with_extension("stage.tmp");
+            remove_if_present(&backup_temp)?;
+            write_flushed_temp(&backup_temp, encrypted_v3)?;
+            move_first_write(&backup_temp, &self.protected_backup)?;
+            let (backup_id, backup) =
+                open_v3(&self.protected_backup).map_err(|_| StorageError::ProtectedVerification)?;
+            if backup_id != vault_id || backup != *next {
+                return Err(StorageError::ProtectedVerification);
+            }
+            hook(ProtectedWritePoint::RecoveryStaged)?;
+            publish_protected_memo_floor(&self.protected_memo_floor, vault_id, next.generation)?;
+            hook(ProtectedWritePoint::FloorPublished)?;
+            replace_without_backup(&self.protected_path, &self.protected_temp)?;
+            let (published_id, published) =
+                open_v3(&self.protected_path).map_err(|_| StorageError::ProtectedVerification)?;
+            if published_id != vault_id || published != *next {
+                return Err(StorageError::ProtectedVerification);
+            }
+        } else {
+            replace_update(
+                &self.protected_path,
+                &self.protected_temp,
+                &self.protected_backup,
+            )?;
+        }
+        hook(ProtectedWritePoint::Published)?;
+        remove_if_present(&self.draft).map_err(|_| StorageError::DraftCleanupUncertain)?;
+        Ok(WriteOutcome::Replaced)
+    }
+
+    /// Stage already-encrypted v3 bytes, open *both* durable copies through the
+    /// caller's future-format reader, and cut over only if the exact legacy
+    /// document and generation still match. The caller owns future-format
+    /// encryption and recovery; this store never decrypts the staged bytes.
+    /// An error after publishing `intent` is terminal for legacy load/write.
+    pub fn migrate_to_protected<F>(
+        &self,
+        expected_legacy: &PadDocument,
+        expected_generation: u64,
+        vault_id: [u8; VAULT_ID_LEN],
+        encrypted_v3: &[u8],
+        open_v3: F,
+    ) -> Result<(), StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        self.migrate_to_protected_with_hook(
+            expected_legacy,
+            expected_generation,
+            vault_id,
+            encrypted_v3,
+            open_v3,
+            |_| Ok(()),
+        )
+    }
+
+    fn migrate_to_protected_with_hook<F, H>(
+        &self,
+        expected_legacy: &PadDocument,
+        expected_generation: u64,
+        vault_id: [u8; VAULT_ID_LEN],
+        encrypted_v3: &[u8],
+        mut open_v3: F,
+        mut hook: H,
+    ) -> Result<(), StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+        H: FnMut(MigrationPoint) -> Result<(), StorageError>,
+    {
+        if vault_id == [0; VAULT_ID_LEN]
+            || expected_legacy.generation != expected_generation
+            || encrypted_v3.is_empty()
+            || encrypted_v3.len() as u64 > MAX_PROTECTED_BYTES
+        {
+            return Err(StorageError::InvalidFormat);
+        }
+        let _lock = self.exclusive_writer()?;
+        self.require_legacy_mode()?;
+        self.require_expected_legacy(expected_legacy)?;
+        // An interrupted pre-intent attempt can reuse only byte-identical
+        // staged copies. Unknown protected evidence is never overwritten.
+        stage_protected_copy(&self.protected_temp, &self.protected_path, encrypted_v3)?;
+        hook(MigrationPoint::FirstProtectedCopy)?;
+        stage_protected_copy(&self.protected_temp, &self.protected_backup, encrypted_v3)?;
+        if self.protected_temp.try_exists()? {
+            return Err(StorageError::TempConflict);
+        }
+        hook(MigrationPoint::SecondProtectedCopy)?;
+        for path in [&self.protected_path, &self.protected_backup] {
+            let (opened_id, opened) =
+                open_v3(path).map_err(|_| StorageError::ProtectedVerification)?;
+            if opened_id != vault_id || opened != *expected_legacy {
+                return Err(StorageError::ProtectedVerification);
+            }
+        }
+        hook(MigrationPoint::CopiesVerified)?;
+        // The exclusive writer handle makes this the final legacy comparison.
+        // Before intent exists, any failure leaves legacy publication intact.
+        self.require_expected_legacy(expected_legacy)?;
+        remove_if_present(&signal_temp_path(&self.intent))?;
+        publish_protected_signal(&self.intent, b"committing", vault_id)?;
+        hook(MigrationPoint::IntentPublished)?;
+        // Retirement starts only after durable intent. Every subsequent error
+        // leaves new-build load/write closed to v1/v2, with v3 copies intact.
+        remove_if_present(&self.backup)?;
+        remove_if_present(&self.temp)?;
+        hook(MigrationPoint::LegacyRecoveryRetired)?;
+        let mut tombstone = Vec::from(PROTECTED_MAGIC);
+        tombstone.extend_from_slice(&PROTECTED_VERSION.to_le_bytes());
+        let protected_tombstone = protect(&tombstone)?;
+        let retire_temp = self.path.with_extension("bin.retire.tmp");
+        write_flushed_temp(&retire_temp, &protected_tombstone)?;
+        if self.path.try_exists()? {
+            replace_without_backup(&self.path, &retire_temp)?;
+        } else {
+            // A never-saved empty Pad has no legacy primary to replace.
+            // Intent is already durable, so first publication cannot expose
+            // a v2 document or leave an old backup behind.
+            move_first_write(&retire_temp, &self.path)?;
+        }
+        hook(MigrationPoint::LegacyTombstoned)?;
+        publish_protected_signal(&self.marker, b"committed", vault_id)?;
+        hook(MigrationPoint::FinalMarkerPublished)?;
+        Ok(())
+    }
+
+    fn require_expected_legacy(&self, expected: &PadDocument) -> Result<(), StorageError> {
+        let primary_exists = self.path.try_exists()?;
+        let loaded = self.load_unlocked()?;
+        if loaded.recovered_from_backup
+            || loaded.document != *expected
+            || (!primary_exists && *expected != PadDocument::default())
+        {
+            return Err(StorageError::LegacyChanged);
+        }
+        Ok(())
+    }
+
+    /// Move an already-published v4 document into a whole-Pad vault. The
+    /// authenticated v4 document is sealed byte-for-byte: individual memo
+    /// envelopes retain their original document scope and ciphertext. The
+    /// v3 intent binds that scope and generation before v4 can be retired.
+    pub fn migrate_v4_to_protected<F>(
+        &self,
+        expected_v4: &PadDocument,
+        vault_id: [u8; VAULT_ID_LEN],
+        encrypted_v3: &[u8],
+        open_v3: F,
+    ) -> Result<(), StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        self.migrate_v4_to_protected_with_hook(expected_v4, vault_id, encrypted_v3, open_v3, |_| {
+            Ok(())
+        })
+    }
+
+    fn migrate_v4_to_protected_with_hook<F, H>(
+        &self,
+        expected_v4: &PadDocument,
+        vault_id: [u8; VAULT_ID_LEN],
+        encrypted_v3: &[u8],
+        mut open_v3: F,
+        mut hook: H,
+    ) -> Result<(), StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+        H: FnMut(MigrationPoint) -> Result<(), StorageError>,
+    {
+        if vault_id == [0; VAULT_ID_LEN]
+            || expected_v4.document_id == [0; 16]
+            || expected_v4.generation == 0
+            || encrypted_v3.is_empty()
+            || encrypted_v3.len() as u64 > MAX_PROTECTED_BYTES
+        {
+            return Err(StorageError::InvalidFormat);
+        }
+        let _lock = self.exclusive_writer()?;
+        if self.protected_memo_floor.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        self.require_expected_v4(expected_v4)?;
+        // No v3 intent exists and the exact v4 primary is authoritative.
+        // Retire an abandoned pre-intent attempt so a new one-time recovery
+        // key can be prepared after process death or a staging failure.
+        let mut stale_copy = false;
+        for path in [&self.protected_path, &self.protected_backup] {
+            if path.try_exists()? && fs::read(path)? != encrypted_v3 {
+                stale_copy = true;
+            }
+        }
+        if stale_copy || self.protected_temp.try_exists()? {
+            remove_if_present(&self.protected_temp)?;
+            remove_if_present(&self.protected_path)?;
+            remove_if_present(&self.protected_backup)?;
+        }
+        stage_protected_copy(&self.protected_temp, &self.protected_path, encrypted_v3)?;
+        hook(MigrationPoint::FirstProtectedCopy)?;
+        stage_protected_copy(&self.protected_temp, &self.protected_backup, encrypted_v3)?;
+        if self.protected_temp.try_exists()? {
+            return Err(StorageError::TempConflict);
+        }
+        hook(MigrationPoint::SecondProtectedCopy)?;
+        for path in [&self.protected_path, &self.protected_backup] {
+            let (opened_id, opened) =
+                open_v3(path).map_err(|_| StorageError::ProtectedVerification)?;
+            if opened_id != vault_id || opened != *expected_v4 {
+                return Err(StorageError::ProtectedVerification);
+            }
+        }
+        hook(MigrationPoint::CopiesVerified)?;
+        self.require_expected_v4(expected_v4)?;
+        remove_if_present(&signal_temp_path(&self.intent))?;
+        publish_protected_v4_intent(
+            &self.intent,
+            vault_id,
+            expected_v4.document_id,
+            expected_v4.generation,
+        )?;
+        hook(MigrationPoint::IntentPublished)?;
+        self.retire_v4_source()?;
+        hook(MigrationPoint::LegacyRecoveryRetired)?;
+        self.tombstone_v4_primary()?;
+        hook(MigrationPoint::LegacyTombstoned)?;
+        publish_protected_signal(&self.marker, b"committed", vault_id)?;
+        hook(MigrationPoint::FinalMarkerPublished)?;
+        Ok(())
+    }
+
+    fn require_expected_v4(&self, expected: &PadDocument) -> Result<(), StorageError> {
+        let id = self.require_v4_intent()?;
+        if !self.v4_marker.try_exists()? || expected.document_id != id {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let current =
+            read_v4_document(&self.path).map_err(|_| StorageError::ProtectedVerification)?;
+        if current.document_id != id || current.generation < self.v4_generation_floor(id)? {
+            return Err(StorageError::ProtectedVerification);
+        }
+        if current != *expected {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        Ok(())
+    }
+
+    fn retire_v4_source(&self) -> Result<(), StorageError> {
+        // The marker is retired first so an older v4 reader cannot reopen the
+        // DPAPI primary once whole-Pad intent has been published.
+        remove_if_present(&self.v4_marker)?;
+        remove_if_present(&self.v4_backup)?;
+        remove_if_present(&self.v4_temp)?;
+        remove_if_present(&self.backup)?;
+        remove_if_present(&self.temp)?;
+        Ok(())
+    }
+
+    fn tombstone_v4_primary(&self) -> Result<(), StorageError> {
+        let already_tombstoned = match read_document(&self.path) {
+            Err(StorageError::UnsupportedVersion(PROTECTED_VERSION)) => true,
+            Err(StorageError::UnsupportedVersion(V4_VERSION)) => false,
+            Err(error @ StorageError::UnsupportedVersion(_)) => return Err(error),
+            _ => false,
+        };
+        if already_tombstoned {
+            return Ok(());
+        }
+        let mut tombstone = Vec::from(PROTECTED_MAGIC);
+        tombstone.extend_from_slice(&PROTECTED_VERSION.to_le_bytes());
+        let protected_tombstone = protect(&tombstone)?;
+        tombstone.fill(0);
+        let retire_temp = self.path.with_extension("bin.retire.tmp");
+        remove_if_present(&retire_temp)?;
+        write_flushed_temp(&retire_temp, &protected_tombstone)?;
+        if self.path.try_exists()? {
+            replace_without_backup(&self.path, &retire_temp)
+        } else {
+            move_first_write(&retire_temp, &self.path)
+        }
+    }
+
+    /// Resume a committed v4-to-v3 intent using the two authenticated v3
+    /// copies. The v4 primary and backups never authorize recovery.
+    pub fn recover_v4_to_protected_cutover<F>(
+        &self,
+        mut open_v3: F,
+    ) -> Result<PadDocument, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        let _lock = self.exclusive_writer()?;
+        if self.rewrap_marker.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let ProtectedIntent::FromV4 {
+            vault_id,
+            document_id,
+            generation,
+        } = read_protected_intent(&self.intent)?
+        else {
+            return Err(StorageError::ProtectedCutover);
+        };
+        if self.protected_memo_floor.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        if read_v4_signal(&self.v4_intent, b"committing")? != document_id
+            || generation < self.v4_generation_floor(document_id)?
+        {
+            return Err(StorageError::ProtectedCutover);
+        }
+        if self.marker.try_exists()?
+            && read_protected_signal(&self.marker, b"committed")? != vault_id
+        {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let (primary_id, primary) =
+            open_v3(&self.protected_path).map_err(|_| StorageError::ProtectedVerification)?;
+        let (backup_id, backup) =
+            open_v3(&self.protected_backup).map_err(|_| StorageError::ProtectedVerification)?;
+        if primary_id != vault_id
+            || backup_id != vault_id
+            || primary != backup
+            || primary.document_id != document_id
+            || primary.generation != generation
+        {
+            return Err(StorageError::ProtectedVerification);
+        }
+        self.retire_v4_source()?;
+        self.tombstone_v4_primary()?;
+        if !self.marker.try_exists()? {
+            remove_if_present(&signal_temp_path(&self.marker))?;
+            publish_protected_signal(&self.marker, b"committed", vault_id)?;
+        }
+        Ok(primary)
+    }
+
+    /// Resume only an interrupted protected cutover. Recovery consults v3
+    /// copies exclusively; no legacy document can authorize the transition.
+    pub fn recover_protected_cutover<F>(&self, mut open_v3: F) -> Result<PadDocument, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        let _lock = self.exclusive_writer()?;
+        if self.rewrap_marker.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        if self.protected_memo_floor.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        if !self.intent.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let vault_id = read_protected_signal(&self.intent, b"committing")?;
+        if self.marker.try_exists()?
+            && read_protected_signal(&self.marker, b"committed")? != vault_id
+        {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let (primary_id, primary) =
+            open_v3(&self.protected_path).map_err(|_| StorageError::ProtectedVerification)?;
+        let (backup_id, backup) =
+            open_v3(&self.protected_backup).map_err(|_| StorageError::ProtectedVerification)?;
+        if primary_id != vault_id || backup_id != vault_id || primary != backup {
+            return Err(StorageError::ProtectedVerification);
+        }
+        remove_if_present(&self.backup)?;
+        remove_if_present(&self.temp)?;
+        let mut tombstone = Vec::from(PROTECTED_MAGIC);
+        tombstone.extend_from_slice(&PROTECTED_VERSION.to_le_bytes());
+        let protected_tombstone = protect(&tombstone)?;
+        let retire_temp = self.path.with_extension("bin.retire.tmp");
+        // A previous replacement may already have completed. Do not create a
+        // legacy backup or touch the tombstone on that path.
+        let already_tombstoned = match read_document(&self.path) {
+            Err(StorageError::UnsupportedVersion(PROTECTED_VERSION)) => true,
+            Err(error @ StorageError::UnsupportedVersion(_)) => return Err(error),
+            _ => false,
+        };
+        if !already_tombstoned {
+            remove_if_present(&retire_temp)?;
+            write_flushed_temp(&retire_temp, &protected_tombstone)?;
+            if self.path.try_exists()? {
+                replace_without_backup(&self.path, &retire_temp)?;
+            } else {
+                move_first_write(&retire_temp, &self.path)?;
+            }
+        }
+        if !self.marker.try_exists()? {
+            // A crash during final marker creation may leave only its flushed
+            // temp. Intent already commits this path to v3-only recovery.
+            remove_if_present(&signal_temp_path(&self.marker))?;
+            publish_protected_signal(&self.marker, b"committed", vault_id)?;
+        }
+        Ok(primary)
+    }
+
+    /// Complete an interrupted per-memo protection inside an existing v3
+    /// vault. Only a floor-qualified authenticated v3 backup may replace an
+    /// older primary, and no pre-protection primary is retained as backup.
+    pub fn recover_protected_memo_cutover<F>(
+        &self,
+        mut open_v3: F,
+    ) -> Result<PadDocument, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        let _lock = self.exclusive_writer()?;
+        let intent = self.active_protected_intent()?;
+        let vault_id = intent.vault_id();
+        if !self.protected_memo_floor.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let floor = self.protected_memo_generation_floor(vault_id)?;
+        let rewrap = self.read_rewrap_marker(vault_id)?;
+        let digest = match rewrap {
+            Some(RewrapMarker::Pending { .. }) => return Err(StorageError::ProtectedCutover),
+            Some(RewrapMarker::Committed { digest }) => Some(digest),
+            None => None,
+        };
+        if let Ok((opened_id, document)) = open_v3(&self.protected_path) {
+            if opened_id == vault_id
+                && intent.accepts(&document, floor)
+                && digest
+                    .is_none_or(|value| envelope_digest(&self.protected_path).ok() == Some(value))
+            {
+                return Ok(document);
+            }
+        }
+        let (backup_id, backup) =
+            open_v3(&self.protected_backup).map_err(|_| StorageError::ProtectedVerification)?;
+        if backup_id != vault_id
+            || !intent.accepts(&backup, floor)
+            || digest
+                .is_some_and(|value| envelope_digest(&self.protected_backup).ok() != Some(value))
+        {
+            return Err(StorageError::ProtectedVerification);
+        }
+        remove_if_present(&self.protected_temp)?;
+        write_flushed_temp(&self.protected_temp, &fs::read(&self.protected_backup)?)?;
+        if self.protected_path.try_exists()? {
+            replace_without_backup(&self.protected_path, &self.protected_temp)?;
+        } else {
+            move_first_write(&self.protected_temp, &self.protected_path)?;
+        }
+        let (published_id, published) =
+            open_v3(&self.protected_path).map_err(|_| StorageError::ProtectedVerification)?;
+        if published_id != vault_id || published != backup {
+            return Err(StorageError::ProtectedVerification);
+        }
+        Ok(backup)
+    }
+
+    /// Turn a v1/v2 Pad into a v4 Pad. `prepare` receives a fresh random scope
+    /// before sealing any memo; `verify` must authenticate every sealed memo.
+    /// The legacy backup and temp are retired before v4 replaces the primary,
+    /// so an older reader cannot downgrade through its fallback copies.
+    pub fn migrate_to_v4<P, V>(
+        &self,
+        expected: &PadDocument,
+        prepare: P,
+        mut verify: V,
+    ) -> Result<PadDocument, StorageError>
+    where
+        P: FnOnce([u8; 16], &PadDocument) -> Result<PadDocument, StorageError>,
+        V: FnMut([u8; 16], u64, &[u8]) -> Result<(), StorageError>,
+    {
+        self.migrate_to_v4_with_hook(expected, prepare, &mut verify, |_| Ok(()))
+    }
+
+    fn migrate_to_v4_with_hook<P, V, H>(
+        &self,
+        expected: &PadDocument,
+        prepare: P,
+        verify: &mut V,
+        mut hook: H,
+    ) -> Result<PadDocument, StorageError>
+    where
+        P: FnOnce([u8; 16], &PadDocument) -> Result<PadDocument, StorageError>,
+        V: FnMut([u8; 16], u64, &[u8]) -> Result<(), StorageError>,
+        H: FnMut(V4MigrationPoint) -> Result<(), StorageError>,
+    {
+        let _lock = self.exclusive_writer()?;
+        self.require_legacy_mode()?;
+        if expected.document_id != [0; 16] {
+            return Err(StorageError::LegacyChanged);
+        }
+        self.require_expected_legacy(expected)?;
+        let mut id = [0u8; 16];
+        // SAFETY: BCryptGenRandom fills this fixed-size stack buffer.
+        let status = unsafe { BCryptGenRandom(None, &mut id, BCRYPT_USE_SYSTEM_PREFERRED_RNG) };
+        if status.is_err() || id == [0; 16] {
+            return Err(StorageError::ProtectedVerification);
+        }
+        let next = prepare(id, expected)?;
+        if next.document_id != id
+            || next.generation != expected.generation
+            || next.sort != expected.sort
+            || next.memos.len() != expected.memos.len()
+            || next.memos.iter().zip(&expected.memos).any(|(a, b)| {
+                a.id != b.id
+                    || a.created_ms != b.created_ms
+                    || a.updated_ms != b.updated_ms
+                    || a.order != b.order
+                    || a.tombstone != b.tombstone
+                    || a.remote_sha != b.remote_sha
+            })
+        {
+            return Err(StorageError::LegacyChanged);
+        }
+        verify_v4(&next, verify)?;
+        let mut encoded = next.encode()?;
+        let protected_result = protect(&encoded);
+        encoded.fill(0);
+        let protected = protected_result?;
+        // Leftover pre-intent staging from an earlier attempt is disposable.
+        remove_if_present(&self.v4_backup)?;
+        remove_if_present(&self.v4_temp)?;
+        write_flushed_temp(&self.v4_backup, &protected)?;
+        hook(V4MigrationPoint::BackupStaged)?;
+        write_flushed_temp(&self.v4_temp, &protected)?;
+        hook(V4MigrationPoint::PrimaryStaged)?;
+        let backup = read_v4_document(&self.v4_backup)?;
+        let staged = read_v4_document(&self.v4_temp)?;
+        if backup != next || staged != next {
+            return Err(StorageError::ProtectedVerification);
+        }
+        hook(V4MigrationPoint::CopiesVerified)?;
+        publish_v4_signal(&self.v4_intent, b"committing", id)?;
+        hook(V4MigrationPoint::IntentPublished)?;
+        remove_if_present(&self.backup)?;
+        remove_if_present(&self.temp)?;
+        hook(V4MigrationPoint::LegacyRecoveryRetired)?;
+        if self.path.try_exists()? {
+            replace_without_backup(&self.path, &self.v4_temp)?;
+        } else {
+            move_first_write(&self.v4_temp, &self.path)?;
+        }
+        hook(V4MigrationPoint::PrimaryPublished)?;
+        publish_v4_signal(&self.v4_marker, b"committed", id)?;
+        hook(V4MigrationPoint::MarkerPublished)?;
+        Ok(next)
+    }
+
+    pub fn load_v4(&self) -> Result<LoadOutcome, StorageError> {
+        let _lock = self.exclusive_writer()?;
+        let id = self.require_v4_intent()?;
+        if !self.v4_marker.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let floor = self.v4_generation_floor(id)?;
+        let document =
+            read_v4_document(&self.path).map_err(|_| StorageError::ProtectedVerification)?;
+        if document.document_id != id || document.generation < floor {
+            return Err(StorageError::ProtectedVerification);
+        }
+        Ok(LoadOutcome {
+            document,
+            recovered_from_backup: false,
+        })
+    }
+
+    /// Publish one v4 generation after checking the exact previous primary and
+    /// v4/DPAPI structure. A memo's AEAD is authenticated by its unlocked
+    /// session when sealing, not by this password-independent store.
+    pub fn write_v4(
+        &self,
+        expected: &PadDocument,
+        next: &PadDocument,
+    ) -> Result<WriteOutcome, StorageError> {
+        let _lock = self.exclusive_writer()?;
+        let id = self.require_v4_intent()?;
+        if !self.v4_marker.try_exists()?
+            || expected.document_id != id
+            || next.document_id != id
+            || next.generation <= expected.generation
+        {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        let current =
+            read_v4_document(&self.path).map_err(|_| StorageError::ProtectedVerification)?;
+        if current.generation < self.v4_generation_floor(id)? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        if current != *expected {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        let mut protects_plain = false;
+        for before in &expected.memos {
+            let after = next.find(before.id).ok_or(StorageError::InvalidFormat)?;
+            if before.tombstone && !after.tombstone {
+                return Err(StorageError::InvalidFormat);
+            }
+            if before.protected_envelope().is_some()
+                && !after.tombstone
+                && after.protected_envelope().is_none()
+            {
+                return Err(StorageError::InvalidFormat);
+            }
+            if before.plain_content().is_some() && after.protected_envelope().is_some() {
+                protects_plain = true;
+            }
+        }
+        if self.v4_temp.try_exists()?
+            && read_v4_document(&self.v4_temp).is_err()
+            && self
+                .matching_draft(DRAFT_V4, id, expected, &self.path)?
+                .is_some_and(|draft| draft.next_generation <= next.generation)
+        {
+            remove_if_present(&self.v4_temp)?;
+        }
+        let mut encoded = next.encode()?;
+        let protected_result = protect(&encoded);
+        let staged_result = protected_result
+            .as_ref()
+            .map_err(|_| StorageError::ProtectedVerification)
+            .and_then(|_| self.stage_draft(DRAFT_V4, id, expected, next, &encoded, &self.path));
+        encoded.fill(0);
+        staged_result?;
+        let protected = protected_result?;
+        #[cfg(debug_assertions)]
+        pause_after_draft_for_test("SAKURA_PAD_TEST_PAUSE_AFTER_V4_DRAFT")?;
+        prepare_temp(&self.v4_temp, next.generation)?;
+        write_flushed_temp(&self.v4_temp, &protected)?;
+        if read_v4_document(&self.v4_temp)? != *next {
+            return Err(StorageError::ProtectedVerification);
+        }
+        if protects_plain {
+            // An ordinary ReplaceFileW backup would retain the old plaintext
+            // memo after this protection transition. Retire it first, publish
+            // the new protected image as recovery, then replace primary with
+            // no old-primary backup.
+            remove_if_present(&self.v4_backup)?;
+            let backup_temp = self.v4_backup.with_extension("stage.tmp");
+            remove_if_present(&backup_temp)?;
+            write_flushed_temp(&backup_temp, &protected)?;
+            move_first_write(&backup_temp, &self.v4_backup)?;
+            if read_v4_document(&self.v4_backup)? != *next {
+                return Err(StorageError::ProtectedVerification);
+            }
+            publish_v4_floor(&self.v4_floor, id, next.generation)?;
+            replace_without_backup(&self.path, &self.v4_temp)?;
+        } else {
+            replace_update(&self.path, &self.v4_temp, &self.v4_backup)?;
+        }
+        remove_if_present(&self.draft).map_err(|_| StorageError::DraftCleanupUncertain)?;
+        Ok(WriteOutcome::Replaced)
+    }
+
+    pub fn recover_v4_cutover(&self) -> Result<PadDocument, StorageError> {
+        let _lock = self.exclusive_writer()?;
+        let id = self.require_v4_intent()?;
+        let marker_exists = self.v4_marker.try_exists()?;
+        let floor = self.v4_generation_floor(id)?;
+        let primary = read_v4_document(&self.path)
+            .ok()
+            .filter(|doc| doc.document_id == id);
+        if marker_exists {
+            if let Some(document) = primary.as_ref().filter(|doc| doc.generation >= floor) {
+                return Ok(document.clone());
+            }
+        }
+        let document =
+            read_v4_document(&self.v4_backup).map_err(|_| StorageError::ProtectedVerification)?;
+        if document.document_id != id || document.generation < floor {
+            return Err(StorageError::ProtectedVerification);
+        }
+        if !marker_exists && primary.as_ref().is_some_and(|doc| doc != &document) {
+            return Err(StorageError::ProtectedVerification);
+        }
+        remove_if_present(&self.backup)?;
+        remove_if_present(&self.temp)?;
+        if primary.as_ref() != Some(&document) {
+            remove_if_present(&self.v4_temp)?;
+            write_flushed_temp(&self.v4_temp, &fs::read(&self.v4_backup)?)?;
+            if self.path.try_exists()? {
+                replace_without_backup(&self.path, &self.v4_temp)?;
+            } else {
+                move_first_write(&self.v4_temp, &self.path)?;
+            }
+        }
+        if !marker_exists {
+            publish_v4_signal(&self.v4_marker, b"committed", id)?;
+        }
+        Ok(document)
+    }
+
+    fn require_v4_intent(&self) -> Result<[u8; 16], StorageError> {
+        // Once v3 intent is durable, even a valid v4 primary or backup is no
+        // longer an authorized fallback. Presence wins over signal validity.
+        if self.intent.try_exists()? || self.marker.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        if !self.v4_intent.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let id = read_v4_signal(&self.v4_intent, b"committing")?;
+        if self.v4_marker.try_exists()? && read_v4_signal(&self.v4_marker, b"committed")? != id {
+            return Err(StorageError::ProtectedCutover);
+        }
+        Ok(id)
+    }
+
+    fn v4_generation_floor(&self, id: [u8; 16]) -> Result<u64, StorageError> {
+        if !self.v4_floor.try_exists()? {
+            return Ok(0);
+        }
+        let (floor_id, generation) = read_v4_floor(&self.v4_floor)?;
+        if floor_id != id {
+            return Err(StorageError::ProtectedCutover);
+        }
+        Ok(generation)
+    }
+
+    /// Return a draft only while the exact authenticated primary used as its
+    /// base is still current. The callback must authenticate the v3 envelope
+    /// in an already unlocked worker session. No ordinary `.tmp` is promoted.
+    pub fn recoverable_protected_draft<F>(
+        &self,
+        confirmed: &PadDocument,
+        mut open_v3: F,
+    ) -> Result<Option<PadDocument>, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        if !self.draft.try_exists()? {
+            return Ok(None);
+        }
+        let _lock = self.exclusive_writer()?;
+        let vault_id = self.active_protected_intent()?.vault_id();
+        let loaded = self.load_protected_unlocked(&mut open_v3)?;
+        if loaded.recovered_from_backup || loaded.document != *confirmed {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        let Some(draft) =
+            self.matching_draft(DRAFT_V3, vault_id, confirmed, &self.protected_path)?
+        else {
+            return Err(StorageError::StaleProtectedDocument);
+        };
+        let scratch = self.draft.with_extension("open.tmp");
+        remove_if_present(&scratch)?;
+        write_flushed_temp(&scratch, &draft.payload)?;
+        let opened = open_v3(&scratch);
+        remove_if_present(&scratch)?;
+        match opened {
+            Ok((id, document))
+                if id == vault_id
+                    && document.document_id == draft.document_id
+                    && document.generation == draft.next_generation =>
+            {
+                Ok(Some(document))
+            }
+            _ => Err(StorageError::ProtectedVerification),
+        }
+    }
+
+    /// Explicitly discard recovery evidence only after the caller has opened
+    /// the current primary in an authenticated session and confirmed the
+    /// user's discard choice. A damaged draft may be discarded this way too.
+    pub fn discard_protected_draft<F>(
+        &self,
+        confirmed: &PadDocument,
+        mut open_v3: F,
+    ) -> Result<bool, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        let _lock = self.exclusive_writer()?;
+        let loaded = self.load_protected_unlocked(&mut open_v3)?;
+        if loaded.recovered_from_backup || loaded.document != *confirmed {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        let present = self.draft.try_exists()?;
+        if present {
+            remove_if_present(&self.draft)?;
+        }
+        Ok(present)
+    }
+
+    /// v4 drafts are DPAPI protected as a complete document. The caller must
+    /// have completed the normal v4 unlock/load before displaying this result.
+    pub fn recoverable_v4_draft(
+        &self,
+        confirmed: &PadDocument,
+    ) -> Result<Option<PadDocument>, StorageError> {
+        if !self.draft.try_exists()? {
+            return Ok(None);
+        }
+        let _lock = self.exclusive_writer()?;
+        let id = self.require_v4_intent()?;
+        let current = read_v4_document(&self.path)?;
+        if current != *confirmed || current.generation < self.v4_generation_floor(id)? {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        let Some(mut draft) = self.matching_draft(DRAFT_V4, id, confirmed, &self.path)? else {
+            return Err(StorageError::StaleProtectedDocument);
+        };
+        let decoded = PadDocument::decode(&draft.payload);
+        draft.payload.fill(0);
+        match decoded {
+            Ok(doc) if doc.document_id == id && doc.generation == draft.next_generation => {
+                Ok(Some(doc))
+            }
+            _ => Err(StorageError::ProtectedVerification),
+        }
+    }
+
+    /// The v4 editor calls this only for an explicit discard choice after
+    /// loading the exact current DPAPI document. It also removes corrupt
+    /// evidence, which normal recovery probes intentionally leave untouched.
+    pub fn discard_v4_draft(&self, confirmed: &PadDocument) -> Result<bool, StorageError> {
+        let _lock = self.exclusive_writer()?;
+        let id = self.require_v4_intent()?;
+        let current = read_v4_document(&self.path)?;
+        if current != *confirmed
+            || current.document_id != id
+            || current.generation < self.v4_generation_floor(id)?
+        {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        let present = self.draft.try_exists()?;
+        if present {
+            remove_if_present(&self.draft)?;
+        }
+        Ok(present)
+    }
+
+    fn matching_draft(
+        &self,
+        mode: u8,
+        vault_id: [u8; 16],
+        confirmed: &PadDocument,
+        primary: &Path,
+    ) -> Result<Option<DurableDraft>, StorageError> {
+        if !self.draft.try_exists()? {
+            return Ok(None);
+        }
+        let draft = read_draft(&self.draft).map_err(|_| StorageError::ProtectedVerification)?;
+        let current_digest = envelope_digest(primary)?;
+        Ok((draft.mode == mode
+            && draft.vault_id == vault_id
+            && draft.base_document_id == confirmed.document_id
+            && draft.base_generation == confirmed.generation
+            && draft.base_digest == current_digest
+            && draft.next_generation > confirmed.generation)
+            .then_some(draft))
+    }
+
+    fn stage_draft(
+        &self,
+        mode: u8,
+        vault_id: [u8; 16],
+        expected: &PadDocument,
+        next: &PadDocument,
+        payload: &[u8],
+        primary: &Path,
+    ) -> Result<(), StorageError> {
+        let draft = DurableDraft {
+            mode,
+            vault_id,
+            base_document_id: expected.document_id,
+            document_id: next.document_id,
+            base_generation: expected.generation,
+            base_digest: envelope_digest(primary)?,
+            next_generation: next.generation,
+            payload: payload.to_vec(),
+        };
+        let mut plain = draft.encode()?;
+        let protected_result = protect(&plain);
+        plain.fill(0);
+        let protected = protected_result?;
+        let temp = self.draft.with_extension("stage.tmp");
+        remove_if_present(&temp)?;
+        write_flushed_temp(&temp, &protected)?;
+        if read_draft(&temp)? != draft {
+            return Err(StorageError::ProtectedVerification);
+        }
+        if self.draft.try_exists()? {
+            replace_without_backup(&self.draft, &temp)?;
+        } else {
+            move_first_write(&temp, &self.draft)?;
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct DurableDraft {
+    mode: u8,
+    vault_id: [u8; 16],
+    base_document_id: [u8; 16],
+    document_id: [u8; 16],
+    base_generation: u64,
+    base_digest: [u8; 32],
+    next_generation: u64,
+    payload: Vec<u8>,
+}
+
+impl Drop for DurableDraft {
+    fn drop(&mut self) {
+        self.payload.fill(0);
+    }
+}
+
+impl DurableDraft {
+    fn encode(&self) -> Result<Vec<u8>, StorageError> {
+        let length = u32::try_from(self.payload.len()).map_err(|_| StorageError::LimitExceeded)?;
+        if length == 0 || self.payload.len() + DRAFT_HEADER_LEN > MAX_PROTECTED_BYTES as usize {
+            return Err(StorageError::LimitExceeded);
+        }
+        let mut bytes = Vec::with_capacity(DRAFT_HEADER_LEN + self.payload.len());
+        bytes.extend_from_slice(&DRAFT_MAGIC);
+        bytes.push(self.mode);
+        bytes.extend_from_slice(&self.vault_id);
+        bytes.extend_from_slice(&self.base_document_id);
+        bytes.extend_from_slice(&self.document_id);
+        bytes.extend_from_slice(&self.base_generation.to_le_bytes());
+        bytes.extend_from_slice(&self.base_digest);
+        bytes.extend_from_slice(&self.next_generation.to_le_bytes());
+        bytes.extend_from_slice(&length.to_le_bytes());
+        bytes.extend_from_slice(&self.payload);
+        Ok(bytes)
+    }
+}
+
+fn read_draft(path: &Path) -> Result<DurableDraft, StorageError> {
+    let mut bytes = read_decrypted(path)?;
+    let result = (|| {
+        if bytes.len() < DRAFT_HEADER_LEN || !bytes.starts_with(&DRAFT_MAGIC) {
+            return Err(StorageError::InvalidFormat);
+        }
+        let mode = bytes[8];
+        if mode != DRAFT_V3 && mode != DRAFT_V4 {
+            return Err(StorageError::InvalidFormat);
+        }
+        let vault_id = bytes[9..25]
+            .try_into()
+            .map_err(|_| StorageError::InvalidFormat)?;
+        let base_document_id = bytes[25..41]
+            .try_into()
+            .map_err(|_| StorageError::InvalidFormat)?;
+        let document_id = bytes[41..57]
+            .try_into()
+            .map_err(|_| StorageError::InvalidFormat)?;
+        let base_generation = u64::from_le_bytes(bytes[57..65].try_into().unwrap());
+        let base_digest = bytes[65..97]
+            .try_into()
+            .map_err(|_| StorageError::InvalidFormat)?;
+        let next_generation = u64::from_le_bytes(bytes[97..105].try_into().unwrap());
+        let length = u32::from_le_bytes(bytes[105..109].try_into().unwrap()) as usize;
+        if length == 0
+            || bytes.len() != DRAFT_HEADER_LEN + length
+            || next_generation <= base_generation
+        {
+            return Err(StorageError::InvalidFormat);
+        }
+        Ok(DurableDraft {
+            mode,
+            vault_id,
+            base_document_id,
+            document_id,
+            base_generation,
+            base_digest,
+            next_generation,
+            payload: bytes[DRAFT_HEADER_LEN..].to_vec(),
+        })
+    })();
+    bytes.fill(0);
+    result
+}
+
+/// Debug-only native fault injection. The notification is emitted after the
+/// durable encrypted draft and before any v3/v4 primary publication. A bounded
+/// wait leaves a terminal save error if the test does not kill or release us.
+#[cfg(debug_assertions)]
+fn pause_after_draft_for_test(variable: &str) -> Result<(), StorageError> {
+    let Some(target) = std::env::var_os(variable) else {
+        return Ok(());
+    };
+    pause_after_draft_for_test_at(&PathBuf::from(target), Duration::from_secs(15))
+}
+
+#[cfg(debug_assertions)]
+fn pause_after_draft_for_test_at(path: &Path, budget: Duration) -> Result<(), StorageError> {
+    let user = std::env::var_os("USERPROFILE").ok_or(StorageError::InvalidFormat)?;
+    let allowed = PathBuf::from(user).join("tmp").canonicalize()?;
+    let parent = path.parent().ok_or(StorageError::InvalidFormat)?;
+    if !path.is_absolute()
+        || path.file_name().is_none()
+        || !parent.canonicalize()?.starts_with(&allowed)
+    {
+        return Err(StorageError::InvalidFormat);
+    }
+    let mut release_name = path.as_os_str().to_os_string();
+    release_name.push(".resume");
+    let release = PathBuf::from(release_name);
+    if path.try_exists()? || release.try_exists()? {
+        return Err(StorageError::TempConflict);
+    }
+    let mut ready = OpenOptions::new().create_new(true).write(true).open(path)?;
+    ready.write_all(b"ready")?;
+    ready.sync_all()?;
+    drop(ready);
+    let deadline = Instant::now() + budget;
+    loop {
+        if release.try_exists()? {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err(StorageError::Io(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "pad draft test pause expired before primary publication",
+            )));
+        }
+        thread::sleep(Duration::from_millis(25));
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum V4MigrationPoint {
+    BackupStaged,
+    PrimaryStaged,
+    CopiesVerified,
+    IntentPublished,
+    LegacyRecoveryRetired,
+    PrimaryPublished,
+    MarkerPublished,
+}
+
+fn verify_v4<V>(document: &PadDocument, verify: &mut V) -> Result<(), StorageError>
+where
+    V: FnMut([u8; 16], u64, &[u8]) -> Result<(), StorageError>,
+{
+    for memo in &document.memos {
+        if let Some(envelope) = memo.protected_envelope() {
+            verify(document.document_id, memo.id, envelope)?;
+        }
+    }
+    Ok(())
+}
+
+fn read_v4_document(path: &Path) -> Result<PadDocument, StorageError> {
+    let mut plaintext = read_decrypted(path)?;
+    let result = PadDocument::decode(&plaintext).and_then(|document| {
+        if document.document_id == [0; 16] {
+            return Err(StorageError::InvalidFormat);
+        }
+        Ok(document)
+    });
+    plaintext.fill(0);
+    result
+}
+
+fn publish_v4_signal(path: &Path, state: &[u8], id: [u8; 16]) -> Result<(), StorageError> {
+    let mut plaintext = Vec::from(V4_MAGIC);
+    plaintext.extend_from_slice(&V4_VERSION.to_le_bytes());
+    plaintext.extend_from_slice(state);
+    plaintext.extend_from_slice(&id);
+    let protected = protect(&plaintext)?;
+    plaintext.fill(0);
+    let temp = signal_temp_path(path);
+    remove_if_present(&temp)?;
+    write_flushed_temp(&temp, &protected)?;
+    move_first_write(&temp, path)
+}
+
+fn read_v4_signal(path: &Path, state: &[u8]) -> Result<[u8; 16], StorageError> {
+    let mut plaintext = read_decrypted(path)?;
+    let prefix_len = V4_MAGIC.len() + 2 + state.len();
+    let result = if plaintext.len() != prefix_len + 16
+        || !plaintext.starts_with(&V4_MAGIC)
+        || plaintext[V4_MAGIC.len()..V4_MAGIC.len() + 2] != V4_VERSION.to_le_bytes()
+        || &plaintext[V4_MAGIC.len() + 2..prefix_len] != state
+    {
+        Err(StorageError::ProtectedCutover)
+    } else {
+        let id: [u8; 16] = plaintext[prefix_len..]
+            .try_into()
+            .map_err(|_| StorageError::ProtectedCutover)?;
+        if id == [0; 16] {
+            Err(StorageError::ProtectedCutover)
+        } else {
+            Ok(id)
+        }
+    };
+    plaintext.fill(0);
+    result
+}
+
+fn publish_v4_floor(path: &Path, id: [u8; 16], generation: u64) -> Result<(), StorageError> {
+    if path.try_exists()? {
+        let (old_id, old_generation) = read_v4_floor(path)?;
+        if old_id != id || generation <= old_generation {
+            return Err(StorageError::ProtectedCutover);
+        }
+    }
+    let mut plaintext = Vec::from(V4_MAGIC);
+    plaintext.extend_from_slice(&V4_VERSION.to_le_bytes());
+    plaintext.extend_from_slice(b"floor");
+    plaintext.extend_from_slice(&id);
+    plaintext.extend_from_slice(&generation.to_le_bytes());
+    let protected = protect(&plaintext)?;
+    plaintext.fill(0);
+    let temp = signal_temp_path(path);
+    remove_if_present(&temp)?;
+    write_flushed_temp(&temp, &protected)?;
+    if path.try_exists()? {
+        replace_without_backup(path, &temp)
+    } else {
+        move_first_write(&temp, path)
+    }
+}
+
+fn read_v4_floor(path: &Path) -> Result<([u8; 16], u64), StorageError> {
+    let mut plaintext = read_decrypted(path)?;
+    let result = if plaintext.len() != 8 + 2 + 5 + 16 + 8
+        || !plaintext.starts_with(&V4_MAGIC)
+        || plaintext[8..10] != V4_VERSION.to_le_bytes()
+        || &plaintext[10..15] != b"floor"
+    {
+        Err(StorageError::ProtectedCutover)
+    } else {
+        let id: [u8; 16] = plaintext[15..31]
+            .try_into()
+            .map_err(|_| StorageError::ProtectedCutover)?;
+        let generation = read_u64(&plaintext, 31)?;
+        if id == [0; 16] || generation == 0 {
+            Err(StorageError::ProtectedCutover)
+        } else {
+            Ok((id, generation))
+        }
+    };
+    plaintext.fill(0);
+    result
+}
+
+fn publish_protected_memo_floor(
+    path: &Path,
+    id: [u8; 16],
+    generation: u64,
+) -> Result<(), StorageError> {
+    if path.try_exists()? {
+        let (old_id, old_generation) = read_protected_memo_floor(path)?;
+        if old_id != id || generation <= old_generation {
+            return Err(StorageError::ProtectedCutover);
+        }
+    }
+    let mut plaintext = Vec::from(PROTECTED_MAGIC);
+    plaintext.extend_from_slice(&PROTECTED_VERSION.to_le_bytes());
+    plaintext.extend_from_slice(b"memo-floor");
+    plaintext.extend_from_slice(&id);
+    plaintext.extend_from_slice(&generation.to_le_bytes());
+    let protected = protect(&plaintext)?;
+    plaintext.fill(0);
+    let temp = signal_temp_path(path);
+    remove_if_present(&temp)?;
+    write_flushed_temp(&temp, &protected)?;
+    if path.try_exists()? {
+        replace_without_backup(path, &temp)
+    } else {
+        move_first_write(&temp, path)
+    }
+}
+
+fn read_protected_memo_floor(path: &Path) -> Result<([u8; 16], u64), StorageError> {
+    let mut plaintext = read_decrypted(path)?;
+    let result = if plaintext.len() != 8 + 2 + 10 + 16 + 8
+        || !plaintext.starts_with(&PROTECTED_MAGIC)
+        || plaintext[8..10] != PROTECTED_VERSION.to_le_bytes()
+        || &plaintext[10..20] != b"memo-floor"
+    {
+        Err(StorageError::ProtectedCutover)
+    } else {
+        let id: [u8; 16] = plaintext[20..36]
+            .try_into()
+            .map_err(|_| StorageError::ProtectedCutover)?;
+        let generation = read_u64(&plaintext, 36)?;
+        if id == [0; 16] || generation == 0 {
+            Err(StorageError::ProtectedCutover)
+        } else {
+            Ok((id, generation))
+        }
+    };
+    plaintext.fill(0);
+    result
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum MigrationPoint {
+    FirstProtectedCopy,
+    SecondProtectedCopy,
+    CopiesVerified,
+    IntentPublished,
+    LegacyRecoveryRetired,
+    LegacyTombstoned,
+    FinalMarkerPublished,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProtectedWritePoint {
+    Staged,
+    Verified,
+    DraftStaged,
+    RecoveryStaged,
+    FloorPublished,
+    Published,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RewrapPoint {
+    Staged,
+    Verified,
+    PendingPublished,
+    BackupPublished,
+    Committed,
+    PrimaryPublished,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RewrapMarker {
+    Pending { old: [u8; 32], new: [u8; 32] },
+    Committed { digest: [u8; 32] },
+}
+
+fn publish_rewrap_marker(
+    path: &Path,
+    vault_id: [u8; VAULT_ID_LEN],
+    marker: RewrapMarker,
+) -> Result<(), StorageError> {
+    let mut plain = Vec::from(PROTECTED_MAGIC);
+    plain.extend_from_slice(&PROTECTED_VERSION.to_le_bytes());
+    plain.extend_from_slice(b"rewrap");
+    plain.extend_from_slice(&vault_id);
+    match marker {
+        RewrapMarker::Pending { old, new } => {
+            plain.push(0);
+            plain.extend_from_slice(&old);
+            plain.extend_from_slice(&new);
+        }
+        RewrapMarker::Committed { digest } => {
+            plain.push(1);
+            plain.extend_from_slice(&digest);
+        }
+    }
+    let protected = protect(&plain)?;
+    plain.fill(0);
+    let temp = signal_temp_path(path);
+    remove_if_present(&temp)?;
+    write_flushed_temp(&temp, &protected)?;
+    if path.try_exists()? {
+        replace_without_backup(path, &temp)
+    } else {
+        move_first_write(&temp, path)
+    }
+}
+
+fn read_rewrap_marker(path: &Path) -> Result<([u8; VAULT_ID_LEN], RewrapMarker), StorageError> {
+    let mut plain = read_decrypted(path).map_err(|_| StorageError::ProtectedCutover)?;
+    let result = (|| {
+        if !plain.starts_with(&PROTECTED_MAGIC)
+            || plain.get(8..10) != Some(PROTECTED_VERSION.to_le_bytes().as_slice())
+            || plain.get(10..16) != Some(b"rewrap".as_slice())
+        {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let id: [u8; VAULT_ID_LEN] = plain
+            .get(16..32)
+            .ok_or(StorageError::ProtectedCutover)?
+            .try_into()
+            .map_err(|_| StorageError::ProtectedCutover)?;
+        if id == [0; VAULT_ID_LEN] {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let marker = match (plain.get(32), plain.len()) {
+            (Some(&0), 97) => RewrapMarker::Pending {
+                old: plain[33..65]
+                    .try_into()
+                    .map_err(|_| StorageError::ProtectedCutover)?,
+                new: plain[65..97]
+                    .try_into()
+                    .map_err(|_| StorageError::ProtectedCutover)?,
+            },
+            (Some(&1), 65) => RewrapMarker::Committed {
+                digest: plain[33..65]
+                    .try_into()
+                    .map_err(|_| StorageError::ProtectedCutover)?,
+            },
+            _ => return Err(StorageError::ProtectedCutover),
+        };
+        Ok((id, marker))
+    })();
+    plain.fill(0);
+    result
+}
+
+fn envelope_digest(path: &Path) -> Result<[u8; REWRAP_DIGEST_LEN], StorageError> {
+    let bytes = fs::read(path)?;
+    if bytes.is_empty() || bytes.len() as u64 > MAX_PROTECTED_BYTES {
+        return Err(StorageError::ProtectedVerification);
+    }
+    digest_bytes(&bytes)
+}
+
+fn digest_bytes(bytes: &[u8]) -> Result<[u8; REWRAP_DIGEST_LEN], StorageError> {
+    let mut algorithm = BCRYPT_ALG_HANDLE::default();
+    // SAFETY: static algorithm name and initialized handle.
+    let status = unsafe {
+        BCryptOpenAlgorithmProvider(
+            &mut algorithm,
+            BCRYPT_SHA256_ALGORITHM,
+            windows::core::PCWSTR::null(),
+            BCRYPT_OPEN_ALGORITHM_PROVIDER_FLAGS(0),
+        )
+    };
+    if status.0 < 0 {
+        return Err(StorageError::ProtectedVerification);
+    }
+    let result = (|| {
+        let mut object_len = [0_u8; 4];
+        let mut hash_len = [0_u8; 4];
+        for (property, value) in [
+            (BCRYPT_OBJECT_LENGTH, &mut object_len),
+            (BCRYPT_HASH_LENGTH, &mut hash_len),
+        ] {
+            let mut written = 0;
+            // SAFETY: provider and four-byte result buffer are live.
+            if unsafe {
+                BCryptGetProperty(algorithm.into(), property, Some(value), &mut written, 0)
+            }
+            .0 < 0
+                || written != 4
+            {
+                return Err(StorageError::ProtectedVerification);
+            }
+        }
+        let object_size = u32::from_le_bytes(object_len) as usize;
+        if object_size == 0
+            || object_size > 1024 * 1024
+            || u32::from_le_bytes(hash_len) as usize != REWRAP_DIGEST_LEN
+        {
+            return Err(StorageError::ProtectedVerification);
+        }
+        let mut object = vec![0_u8; object_size];
+        let mut hash = BCRYPT_HASH_HANDLE::default();
+        // SAFETY: object is owned until hash destruction.
+        if unsafe { BCryptCreateHash(algorithm, &mut hash, Some(&mut object), None, 0) }.0 < 0 {
+            return Err(StorageError::ProtectedVerification);
+        }
+        let result = (|| {
+            // SAFETY: hash and byte slice are live for this synchronous call.
+            if unsafe { BCryptHashData(hash, bytes, 0) }.0 < 0 {
+                return Err(StorageError::ProtectedVerification);
+            }
+            let mut digest = [0_u8; REWRAP_DIGEST_LEN];
+            // SAFETY: SHA-256 output is exactly 32 bytes.
+            if unsafe { BCryptFinishHash(hash, &mut digest, 0) }.0 < 0 {
+                return Err(StorageError::ProtectedVerification);
+            }
+            Ok(digest)
+        })();
+        // SAFETY: this scope owns the successfully created hash handle.
+        unsafe {
+            let _ = BCryptDestroyHash(hash);
+        }
+        object.fill(0);
+        result
+    })();
+    // SAFETY: this scope owns the successfully opened algorithm provider.
+    unsafe {
+        let _ = BCryptCloseAlgorithmProvider(algorithm, 0);
+    }
+    result
+}
+
+fn remove_if_present(path: &Path) -> Result<(), StorageError> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn stage_protected_copy(temp: &Path, target: &Path, bytes: &[u8]) -> Result<(), StorageError> {
+    if target.try_exists()? {
+        if fs::metadata(target)?.len() != bytes.len() as u64 || fs::read(target)? != bytes {
+            return Err(StorageError::TempConflict);
+        }
+        return Ok(());
+    }
+    if temp.try_exists()? {
+        return Err(StorageError::TempConflict);
+    }
+    write_flushed_temp(temp, bytes)?;
+    move_first_write(temp, target)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ProtectedIntent {
+    Legacy([u8; VAULT_ID_LEN]),
+    FromV4 {
+        vault_id: [u8; VAULT_ID_LEN],
+        document_id: [u8; 16],
+        generation: u64,
+    },
+}
+
+impl ProtectedIntent {
+    fn vault_id(self) -> [u8; VAULT_ID_LEN] {
+        match self {
+            Self::Legacy(id) | Self::FromV4 { vault_id: id, .. } => id,
+        }
+    }
+
+    fn document_id_for_new_protection(self) -> [u8; 16] {
+        match self {
+            Self::Legacy(id) => id,
+            Self::FromV4 { document_id, .. } => document_id,
+        }
+    }
+
+    fn accepts(self, document: &PadDocument, memo_floor: u64) -> bool {
+        match self {
+            Self::Legacy(id) => {
+                document.generation >= memo_floor && (memo_floor == 0 || document.document_id == id)
+            }
+            Self::FromV4 {
+                document_id,
+                generation,
+                ..
+            } => {
+                document.document_id == document_id
+                    && document.generation >= generation.max(memo_floor)
+            }
+        }
+    }
+}
+
+fn publish_protected_v4_intent(
+    path: &Path,
+    vault_id: [u8; VAULT_ID_LEN],
+    document_id: [u8; 16],
+    generation: u64,
+) -> Result<(), StorageError> {
+    if vault_id == [0; VAULT_ID_LEN] || document_id == [0; 16] || generation == 0 {
+        return Err(StorageError::InvalidFormat);
+    }
+    let mut plaintext = Vec::from(PROTECTED_MAGIC);
+    plaintext.extend_from_slice(&PROTECTED_VERSION.to_le_bytes());
+    plaintext.extend_from_slice(b"from-v4");
+    plaintext.extend_from_slice(&vault_id);
+    plaintext.extend_from_slice(&document_id);
+    plaintext.extend_from_slice(&generation.to_le_bytes());
+    let protected = protect(&plaintext)?;
+    plaintext.fill(0);
+    let temp = signal_temp_path(path);
+    write_flushed_temp(&temp, &protected)?;
+    move_first_write(&temp, path)
+}
+
+fn read_hardware_hint(
+    path: &Path,
+    expected_vault_id: [u8; 16],
+) -> Result<Option<PadHardwareHint>, StorageError> {
+    let mut file = File::open(path)?;
+    let length = file.metadata()?.len();
+    if !(8..=MAX_PROTECTED_BYTES).contains(&length) {
+        return Err(StorageError::InvalidFormat);
+    }
+    let mut magic = [0_u8; 8];
+    file.read_exact(&mut magic)?;
+    if &magic == b"SKRPENV1" || &magic == b"SKRPENV2" {
+        return Ok(None);
+    }
+    if &magic != b"SKRPENV3" || length < 229 {
+        return Err(StorageError::InvalidFormat);
+    }
+    let mut prefix = [0_u8; 38];
+    prefix[..8].copy_from_slice(&magic);
+    file.read_exact(&mut prefix[8..])?;
+    if prefix[8] != 3
+        || prefix[9] != 1
+        || prefix[10] != 1
+        || prefix[11..27] != expected_vault_id
+        || prefix[27..35] != [0_u8; 8]
+    {
+        return Err(StorageError::InvalidFormat);
+    }
+    let requires_password = match prefix[35] {
+        1 => false,
+        2 => true,
+        _ => return Err(StorageError::InvalidFormat),
+    };
+    let credential_len = u16::from_le_bytes([prefix[36], prefix[37]]) as usize;
+    if !(1..=1024).contains(&credential_len) || length < (38 + credential_len) as u64 {
+        return Err(StorageError::InvalidFormat);
+    }
+    let mut credential_id = vec![0_u8; credential_len];
+    file.read_exact(&mut credential_id)?;
+    Ok(Some(PadHardwareHint {
+        vault_id: expected_vault_id,
+        credential_id,
+        requires_password,
+    }))
+}
+
+fn read_protected_intent(path: &Path) -> Result<ProtectedIntent, StorageError> {
+    let mut plaintext = read_decrypted(path).map_err(|_| StorageError::ProtectedCutover)?;
+    let result = if plaintext.starts_with(&PROTECTED_MAGIC)
+        && plaintext.get(8..10) == Some(PROTECTED_VERSION.to_le_bytes().as_slice())
+        && plaintext.get(10..20) == Some(b"committing".as_slice())
+        && plaintext.len() == 20 + VAULT_ID_LEN
+    {
+        let id: [u8; VAULT_ID_LEN] = plaintext[20..].try_into().unwrap();
+        (id != [0; VAULT_ID_LEN])
+            .then_some(ProtectedIntent::Legacy(id))
+            .ok_or(StorageError::ProtectedCutover)
+    } else if plaintext.starts_with(&PROTECTED_MAGIC)
+        && plaintext.get(8..10) == Some(PROTECTED_VERSION.to_le_bytes().as_slice())
+        && plaintext.get(10..17) == Some(b"from-v4".as_slice())
+        && plaintext.len() == 17 + VAULT_ID_LEN + 16 + 8
+    {
+        let id: [u8; VAULT_ID_LEN] = plaintext[17..33].try_into().unwrap();
+        let document_id: [u8; 16] = plaintext[33..49].try_into().unwrap();
+        let generation = u64::from_le_bytes(plaintext[49..57].try_into().unwrap());
+        if id == [0; VAULT_ID_LEN] || document_id == [0; 16] || generation == 0 {
+            Err(StorageError::ProtectedCutover)
+        } else {
+            Ok(ProtectedIntent::FromV4 {
+                vault_id: id,
+                document_id,
+                generation,
+            })
+        }
+    } else {
+        Err(StorageError::ProtectedCutover)
+    };
+    plaintext.fill(0);
+    result
+}
+
+fn publish_protected_signal(
+    path: &Path,
+    state: &[u8],
+    vault_id: [u8; VAULT_ID_LEN],
+) -> Result<(), StorageError> {
+    if vault_id == [0; VAULT_ID_LEN] {
+        return Err(StorageError::InvalidFormat);
+    }
+    let mut plaintext = Vec::from(PROTECTED_MAGIC);
+    plaintext.extend_from_slice(&PROTECTED_VERSION.to_le_bytes());
+    plaintext.extend_from_slice(state);
+    plaintext.extend_from_slice(&vault_id);
+    let protected = protect(&plaintext)?;
+    let temp = signal_temp_path(path);
+    write_flushed_temp(&temp, &protected)?;
+    move_first_write(&temp, path)
+}
+
+fn read_protected_signal(path: &Path, state: &[u8]) -> Result<[u8; VAULT_ID_LEN], StorageError> {
+    let plaintext = read_decrypted(path).map_err(|_| StorageError::ProtectedCutover)?;
+    let prefix_len = PROTECTED_MAGIC.len() + 2 + state.len();
+    if plaintext.len() != prefix_len + VAULT_ID_LEN
+        || plaintext[..PROTECTED_MAGIC.len()] != PROTECTED_MAGIC
+        || plaintext[PROTECTED_MAGIC.len()..PROTECTED_MAGIC.len() + 2]
+            != PROTECTED_VERSION.to_le_bytes()
+        || &plaintext[PROTECTED_MAGIC.len() + 2..prefix_len] != state
+    {
+        return Err(StorageError::ProtectedCutover);
+    }
+    let vault_id: [u8; VAULT_ID_LEN] = plaintext[prefix_len..]
+        .try_into()
+        .map_err(|_| StorageError::ProtectedCutover)?;
+    if vault_id == [0; VAULT_ID_LEN] {
+        return Err(StorageError::ProtectedCutover);
+    }
+    Ok(vault_id)
+}
+
+fn signal_temp_path(path: &Path) -> PathBuf {
+    let mut name = path.as_os_str().to_os_string();
+    name.push(".tmp");
+    PathBuf::from(name)
 }
 
 fn write_flushed_temp(path: &Path, bytes: &[u8]) -> Result<(), StorageError> {
@@ -679,6 +3336,24 @@ fn replace_update(target: &Path, temp: &Path, backup: &Path) -> Result<(), Stora
     Ok(())
 }
 
+fn replace_without_backup(target: &Path, temp: &Path) -> Result<(), StorageError> {
+    let target_wide = path_wide(target);
+    let temp_wide = path_wide(temp);
+    // SAFETY: both NUL-terminated buffers live for the synchronous call.
+    // Null backup deliberately prevents publishing readable legacy bytes.
+    unsafe {
+        ReplaceFileW(
+            windows::core::PCWSTR(target_wide.as_ptr()),
+            windows::core::PCWSTR(temp_wide.as_ptr()),
+            windows::core::PCWSTR::null(),
+            REPLACE_FILE_FLAGS(0),
+            None,
+            None,
+        )?
+    }
+    Ok(())
+}
+
 fn read_decrypted(path: &Path) -> Result<Vec<u8>, StorageError> {
     let mut file = File::open(path)?;
     let metadata = file.metadata()?;
@@ -692,7 +3367,10 @@ fn read_decrypted(path: &Path) -> Result<Vec<u8>, StorageError> {
 
 fn read_document(path: &Path) -> Result<PadDocument, StorageError> {
     let mut plaintext = read_decrypted(path)?;
-    let decoded = PadDocument::decode(&plaintext);
+    let decoded = match newer_document_magic_version(&plaintext) {
+        Some(version) => Err(StorageError::UnsupportedVersion(version)),
+        None => PadDocument::decode(&plaintext),
+    };
     plaintext.fill(0);
     decoded
 }
@@ -991,8 +3669,33 @@ fn worker_loop(
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::Barrier;
 
     static NEXT: AtomicU64 = AtomicU64::new(1);
+    const TEST_VAULT_ID: [u8; VAULT_ID_LEN] = [7; VAULT_ID_LEN];
+
+    #[test]
+    fn hardware_hint_classifies_legacy_envelopes_and_bounds_v3_id() {
+        let directory = temp_dir();
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("envelope");
+        for magic in [b"SKRPENV1", b"SKRPENV2"] {
+            fs::write(&path, magic).unwrap();
+            assert!(read_hardware_hint(&path, TEST_VAULT_ID).unwrap().is_none());
+        }
+        let mut malformed = vec![0_u8; 229];
+        malformed[..8].copy_from_slice(b"SKRPENV3");
+        malformed[8..11].copy_from_slice(&[3, 1, 1]);
+        malformed[11..27].copy_from_slice(&TEST_VAULT_ID);
+        malformed[35] = 1;
+        malformed[36..38].copy_from_slice(&1025_u16.to_le_bytes());
+        fs::write(&path, malformed).unwrap();
+        assert!(matches!(
+            read_hardware_hint(&path, TEST_VAULT_ID),
+            Err(StorageError::InvalidFormat)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
 
     fn temp_dir() -> PathBuf {
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
@@ -1004,6 +3707,7 @@ mod tests {
 
     fn document(generation: u64, memos: Vec<PadMemo>) -> PadDocument {
         PadDocument {
+            document_id: [0; 16],
             generation,
             sort: PadSort::default(),
             memos,
@@ -1041,6 +3745,7 @@ mod tests {
         deleted.retire(1_700_000_002);
         deleted.order = 3;
         let source = PadDocument {
+            document_id: [0; 16],
             generation: 42,
             sort: PadSort::Title,
             memos: vec![PadMemo::new(1, "題名", "本文🙂", 1_700_000_000), deleted],
@@ -1161,8 +3866,7 @@ mod tests {
         assert_eq!(migrated.memos.len(), 1);
         let memo = &migrated.memos[0];
         assert_eq!(memo.id, LEGACY_MEMO_ID);
-        assert_eq!(memo.title, "旧題名");
-        assert_eq!(memo.body, "旧本文🙂");
+        assert_eq!(memo.plain_content(), Some(("旧題名", "旧本文🙂")));
         assert!(!memo.tombstone);
         // Version 1 had no timestamps; unknown is recorded as unknown.
         assert_eq!((memo.created_ms, memo.updated_ms), (0, 0));
@@ -1196,7 +3900,10 @@ mod tests {
         let loaded = store.load().unwrap();
         assert!(!loaded.recovered_from_backup);
         assert_eq!(loaded.document.memos.len(), 1);
-        assert_eq!(loaded.document.memos[0].title, "引き継ぎ");
+        assert_eq!(
+            loaded.document.memos[0].plain_content().unwrap().0,
+            "引き継ぎ"
+        );
 
         let mut next = loaded.document.clone();
         next.generation = 6;
@@ -1220,6 +3927,60 @@ mod tests {
         let recovered = store.load().unwrap();
         assert!(recovered.recovered_from_backup);
         assert_eq!(recovered.document, first);
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn newer_primary_refuses_fallback_to_valid_v2_backup() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(&store.path, protect(b"SKRLPAD3future").unwrap()).unwrap();
+        fs::write(
+            &store.backup,
+            protect(&one("old", "backup", 2).encode().unwrap()).unwrap(),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            store.load(),
+            Err(StorageError::UnsupportedVersion(3))
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn newer_backup_refuses_fallback_to_valid_v2_temp() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(&store.path, b"corrupt primary").unwrap();
+        fs::write(&store.backup, protect(b"SKRLPAD3future").unwrap()).unwrap();
+        fs::write(
+            &store.temp,
+            protect(&one("old", "temp", 2).encode().unwrap()).unwrap(),
+        )
+        .unwrap();
+
+        assert!(matches!(
+            store.load(),
+            Err(StorageError::UnsupportedVersion(3))
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn corrupt_primary_still_recovers_from_valid_v2_backup() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let backup = one("recover", "valid v2 backup", 2);
+        fs::create_dir_all(&directory).unwrap();
+        fs::write(&store.path, b"corrupt primary").unwrap();
+        fs::write(&store.backup, protect(&backup.encode().unwrap()).unwrap()).unwrap();
+
+        let loaded = store.load().unwrap();
+        assert!(loaded.recovered_from_backup);
+        assert_eq!(loaded.document, backup);
         let _ = fs::remove_dir_all(directory);
     }
 
@@ -1306,5 +4067,2020 @@ mod tests {
         source.entry(next, 1_700_000_006).unwrap();
         assert_eq!(source.next_id(), 3);
         assert_eq!(source.live().count(), 1);
+    }
+
+    fn open_staged(
+        expected: &PadDocument,
+        path: &Path,
+    ) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError> {
+        if fs::read(path)? != b"future encrypted payload" {
+            return Err(StorageError::ProtectedVerification);
+        }
+        Ok((TEST_VAULT_ID, expected.clone()))
+    }
+
+    #[test]
+    fn a_never_saved_empty_pad_can_cut_over_without_publishing_v2() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let empty = PadDocument::default();
+        assert_eq!(store.load().unwrap().document, empty);
+        assert!(!store.path.exists());
+        store
+            .migrate_to_protected(
+                &empty,
+                empty.generation,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| open_staged(&empty, path),
+            )
+            .unwrap();
+        assert!(!store.backup.exists());
+        assert!(!store.temp.exists());
+        assert_eq!(read_decrypted(&store.path).unwrap()[..8], PROTECTED_MAGIC);
+        assert_eq!(store.protected_vault_id().unwrap(), TEST_VAULT_ID);
+        assert_eq!(
+            store
+                .load_protected(|path| open_staged(&empty, path))
+                .unwrap()
+                .document,
+            empty
+        );
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn protected_migration_verifies_both_copies_and_retires_legacy_recovery() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let old = one("legacy", "private", 5);
+        store.write(&old).unwrap();
+        store.write(&one("legacy", "private", 6)).unwrap();
+        let expected = one("legacy", "private", 6);
+        fs::write(&store.temp, protect(&old.encode().unwrap()).unwrap()).unwrap();
+        store
+            .migrate_to_protected(
+                &expected,
+                6,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| open_staged(&expected, path),
+            )
+            .unwrap();
+        assert!(!store.backup.exists());
+        assert!(!store.temp.exists());
+        assert!(store.intent.exists());
+        assert!(store.marker.exists());
+        assert_eq!(read_decrypted(&store.path).unwrap()[..8], PROTECTED_MAGIC);
+        assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+        assert!(matches!(
+            store.write(&expected),
+            Err(StorageError::ProtectedCutover)
+        ));
+        fs::write(&store.marker, b"corrupt marker").unwrap();
+        fs::remove_file(&store.protected_path).unwrap();
+        fs::remove_file(&store.protected_backup).unwrap();
+        assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+        fs::remove_file(&store.intent).unwrap();
+        fs::remove_file(&store.marker).unwrap();
+        assert!(matches!(
+            store.load(),
+            Err(StorageError::UnsupportedVersion(3))
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn protected_migration_refuses_changed_legacy_and_backup_recovery() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let expected = one("original", "body", 1);
+        store.write(&expected).unwrap();
+        let next = one("edit", "body", 2);
+        assert!(matches!(
+            store.migrate_to_protected(
+                &expected,
+                1,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| {
+                    let _ = fs::read(path)?;
+                    fs::write(&store.path, protect(&next.encode().unwrap()).unwrap())?;
+                    Ok((TEST_VAULT_ID, expected.clone()))
+                }
+            ),
+            Err(StorageError::LegacyChanged)
+        ));
+        assert_eq!(store.load().unwrap().document, next);
+        assert!(!store.intent.exists());
+        assert!(!store.marker.exists());
+        let _ = fs::remove_dir_all(&directory);
+
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        store.write(&expected).unwrap();
+        store.write(&next).unwrap();
+        fs::write(&store.path, b"corrupt primary").unwrap();
+        assert!(matches!(
+            store.migrate_to_protected(
+                &expected,
+                1,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |_| { Ok((TEST_VAULT_ID, expected.clone())) }
+            ),
+            Err(StorageError::LegacyChanged)
+        ));
+        assert!(!store.intent.exists());
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn failed_open_of_second_protected_copy_preserves_legacy_publication() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let expected = one("legacy", "body", 1);
+        store.write(&expected).unwrap();
+        let mut opened = Vec::new();
+        let result = store.migrate_to_protected(
+            &expected,
+            1,
+            TEST_VAULT_ID,
+            b"future encrypted payload",
+            |path| {
+                opened.push(path.to_path_buf());
+                if path == store.protected_backup.as_path() {
+                    Err(StorageError::ProtectedVerification)
+                } else {
+                    open_staged(&expected, path)
+                }
+            },
+        );
+        assert!(matches!(result, Err(StorageError::ProtectedVerification)));
+        assert_eq!(
+            opened,
+            vec![store.protected_path.clone(), store.protected_backup.clone()]
+        );
+        assert_eq!(store.load().unwrap().document, expected);
+        assert!(!store.intent.exists());
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn interruption_boundaries_keep_legacy_before_intent_and_recover_only_v3_after() {
+        let points = [
+            MigrationPoint::FirstProtectedCopy,
+            MigrationPoint::SecondProtectedCopy,
+            MigrationPoint::CopiesVerified,
+            MigrationPoint::IntentPublished,
+            MigrationPoint::LegacyRecoveryRetired,
+            MigrationPoint::LegacyTombstoned,
+            MigrationPoint::FinalMarkerPublished,
+        ];
+        for point in points {
+            let directory = temp_dir();
+            let store = PadStore::at(&directory);
+            let previous = one("previous", "backup", 1);
+            let expected = one("current", "body", 2);
+            store.write(&previous).unwrap();
+            store.write(&expected).unwrap();
+            let result = store.migrate_to_protected_with_hook(
+                &expected,
+                2,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| open_staged(&expected, path),
+                |reached| {
+                    if reached == point {
+                        Err(StorageError::Io(io::Error::other("injected interruption")))
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert!(result.is_err(), "{point:?}");
+            let before_intent = matches!(
+                point,
+                MigrationPoint::FirstProtectedCopy
+                    | MigrationPoint::SecondProtectedCopy
+                    | MigrationPoint::CopiesVerified
+            );
+            if before_intent {
+                assert!(matches!(
+                    store.pending_vault_id(),
+                    Err(StorageError::ProtectedCutover)
+                ));
+                assert_eq!(store.load().unwrap().document, expected, "{point:?}");
+                assert!(store.backup.exists(), "{point:?}");
+                store
+                    .migrate_to_protected(
+                        &expected,
+                        2,
+                        TEST_VAULT_ID,
+                        b"future encrypted payload",
+                        |path| open_staged(&expected, path),
+                    )
+                    .unwrap();
+                assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+            } else {
+                assert_eq!(store.pending_vault_id().unwrap(), TEST_VAULT_ID);
+                assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+                assert!(matches!(
+                    store.write(&expected),
+                    Err(StorageError::ProtectedCutover)
+                ));
+                assert!(matches!(
+                    store.recover_protected_cutover(|path| {
+                        let (_, document) = open_staged(&expected, path)?;
+                        Ok(([9; VAULT_ID_LEN], document))
+                    }),
+                    Err(StorageError::ProtectedVerification)
+                ));
+                assert_eq!(
+                    store
+                        .recover_protected_cutover(|path| open_staged(&expected, path))
+                        .unwrap(),
+                    expected,
+                    "{point:?}"
+                );
+                assert!(!store.backup.exists(), "{point:?}");
+                assert!(!store.temp.exists(), "{point:?}");
+                assert!(store.marker.exists(), "{point:?}");
+            }
+            let _ = fs::remove_dir_all(directory);
+        }
+    }
+
+    #[test]
+    fn load_and_write_cannot_observe_legacy_across_migration_cutover() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let expected = one("before", "private", 1);
+        store.write(&expected).unwrap();
+        let at_verification = Arc::new(Barrier::new(2));
+        let finish_verification = Arc::new(Barrier::new(2));
+        let thread_store = store.clone();
+        let thread_expected = expected.clone();
+        let arrived = Arc::clone(&at_verification);
+        let release = Arc::clone(&finish_verification);
+        let migration = thread::spawn(move || {
+            thread_store.migrate_to_protected_with_hook(
+                &thread_expected,
+                1,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| open_staged(&thread_expected, path),
+                |point| {
+                    if point == MigrationPoint::CopiesVerified {
+                        arrived.wait();
+                        release.wait();
+                    }
+                    Ok(())
+                },
+            )
+        });
+        at_verification.wait();
+        // While migration owns the writer handle, neither operation may
+        // return a legacy document or publish a legacy save.
+        assert!(store.load().is_err());
+        assert!(store.write(&expected).is_err());
+        finish_verification.wait();
+        migration.join().unwrap().unwrap();
+        assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+        assert!(matches!(
+            store.write(&expected),
+            Err(StorageError::ProtectedCutover)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn protected_signal_temp_paths_do_not_overlap() {
+        let store = PadStore::at(temp_dir());
+        assert_ne!(
+            signal_temp_path(&store.intent),
+            signal_temp_path(&store.marker)
+        );
+        assert_ne!(signal_temp_path(&store.intent), store.protected_temp);
+    }
+
+    fn open_protected_test(
+        old: &PadDocument,
+        next: &PadDocument,
+        path: &Path,
+    ) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError> {
+        let encrypted = fs::read(path)?;
+        if encrypted == b"future encrypted payload" {
+            Ok((TEST_VAULT_ID, old.clone()))
+        } else if encrypted == b"new encrypted payload" {
+            Ok((TEST_VAULT_ID, next.clone()))
+        } else {
+            Err(StorageError::ProtectedVerification)
+        }
+    }
+
+    fn migrated_store() -> (PathBuf, PadStore, PadDocument) {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let old = one("protected", "first", 1);
+        store.write(&old).unwrap();
+        store
+            .migrate_to_protected(
+                &old,
+                1,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| open_staged(&old, path),
+            )
+            .unwrap();
+        (directory, store, old)
+    }
+
+    #[test]
+    fn durable_v3_draft_survives_staging_kill_and_retry_cleans_it() {
+        let (directory, store, old) = migrated_store();
+        let next = one("draft title", "draft body", 2);
+        let interrupted = store.write_protected_with_hook(
+            &old,
+            &next,
+            b"new encrypted payload",
+            |path| open_protected_test(&old, &next, path),
+            |point| {
+                if point == ProtectedWritePoint::DraftStaged {
+                    Err(StorageError::ProtectedVerification)
+                } else {
+                    Ok(())
+                }
+            },
+        );
+        assert!(interrupted.is_err());
+        assert_eq!(
+            store
+                .load_protected(|path| open_protected_test(&old, &next, path))
+                .unwrap()
+                .document,
+            old
+        );
+        assert_eq!(
+            store
+                .recoverable_protected_draft(&old, |path| open_protected_test(&old, &next, path))
+                .unwrap(),
+            Some(next.clone())
+        );
+        assert!(store.draft.exists());
+        let raw = fs::read(&store.draft).unwrap();
+        assert!(!raw
+            .windows(b"draft body".len())
+            .any(|part| part == b"draft body"));
+        // A torn ordinary temp is ignored only while the exact base-bound
+        // durable draft remains. The encrypted candidate is reverified.
+        fs::write(&store.protected_temp, b"torn ordinary temp").unwrap();
+        store
+            .write_protected(&old, &next, b"new encrypted payload", |path| {
+                open_protected_test(&old, &next, path)
+            })
+            .unwrap();
+        assert!(!store.draft.exists());
+        assert_eq!(
+            store
+                .recoverable_protected_draft(&next, |path| open_protected_test(&old, &next, path))
+                .unwrap(),
+            None
+        );
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn v3_absent_draft_skips_current_base_reverification() {
+        let (directory, store, confirmed) = migrated_store();
+        assert!(!store.draft.exists());
+        fs::write(&store.protected_path, b"temporarily unreadable primary").unwrap();
+        assert_eq!(
+            store
+                .recoverable_protected_draft(&confirmed, |_| {
+                    panic!("no draft must avoid opening the primary")
+                })
+                .unwrap(),
+            None
+        );
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn v3_draft_rejects_corruption_wrong_scope_and_advanced_primary() {
+        let (directory, store, old) = migrated_store();
+        let next = one("draft", "body", 2);
+        store
+            .stage_draft(
+                DRAFT_V3,
+                TEST_VAULT_ID,
+                &old,
+                &next,
+                b"new encrypted payload",
+                &store.protected_path,
+            )
+            .unwrap();
+        assert!(matches!(
+            store.recoverable_protected_draft(&old, |path| {
+                let (id, doc) = open_protected_test(&old, &next, path)?;
+                Ok((
+                    if path == store.protected_path.as_path() {
+                        id
+                    } else {
+                        [9; 16]
+                    },
+                    doc,
+                ))
+            }),
+            Err(StorageError::ProtectedVerification)
+        ));
+        fs::write(&store.draft, b"corrupt draft").unwrap();
+        assert!(matches!(
+            store.recoverable_protected_draft(&old, |path| open_protected_test(&old, &next, path)),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert_eq!(fs::read(&store.draft).unwrap(), b"corrupt draft");
+        store
+            .stage_draft(
+                DRAFT_V3,
+                TEST_VAULT_ID,
+                &old,
+                &next,
+                b"new encrypted payload",
+                &store.protected_path,
+            )
+            .unwrap();
+        fs::write(&store.protected_path, b"new encrypted payload").unwrap();
+        assert!(matches!(
+            store.recoverable_protected_draft(&next, |path| open_protected_test(&old, &next, path)),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn v3_published_primary_with_locked_draft_reports_uncertain_cleanup() {
+        let (directory, store, old) = migrated_store();
+        let next = one("next", "body", 2);
+        let mut held_draft = None;
+        let result = store.write_protected_with_hook(
+            &old,
+            &next,
+            b"new encrypted payload",
+            |path| open_protected_test(&old, &next, path),
+            |point| {
+                if point == ProtectedWritePoint::Published {
+                    held_draft = Some(
+                        OpenOptions::new()
+                            .read(true)
+                            .share_mode(0)
+                            .open(&store.draft)?,
+                    );
+                }
+                Ok(())
+            },
+        );
+        assert!(matches!(result, Err(StorageError::DraftCleanupUncertain)));
+        assert_eq!(
+            store
+                .load_protected(|path| open_protected_test(&old, &next, path))
+                .unwrap()
+                .document,
+            next
+        );
+        drop(held_draft);
+        assert!(matches!(
+            store.recoverable_protected_draft(&next, |path| open_protected_test(&old, &next, path)),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn credential_rewrap_preserves_pending_draft_until_explicit_discard() {
+        let (directory, store, confirmed) = migrated_store();
+        let next = one("unsaved", "must remain recoverable", 2);
+        store
+            .stage_draft(
+                DRAFT_V3,
+                TEST_VAULT_ID,
+                &confirmed,
+                &next,
+                b"new encrypted payload",
+                &store.protected_path,
+            )
+            .unwrap();
+        let original_draft = fs::read(&store.draft).unwrap();
+        assert!(matches!(
+            store.rewrap_protected(
+                b"future encrypted payload",
+                &confirmed,
+                b"rotated envelope",
+                |path| open_rewrapped(path, &confirmed),
+            ),
+            Err(StorageError::PendingDraft)
+        ));
+        assert_eq!(
+            fs::read(&store.protected_path).unwrap(),
+            b"future encrypted payload"
+        );
+        assert_eq!(fs::read(&store.draft).unwrap(), original_draft);
+        assert!(!store.rewrap_marker.exists());
+        let mut stale = confirmed.clone();
+        stale.generation += 1;
+        assert!(matches!(
+            store.discard_protected_draft(&stale, |path| open_rewrapped(path, &confirmed)),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        assert_eq!(fs::read(&store.draft).unwrap(), original_draft);
+        assert!(store
+            .discard_protected_draft(&confirmed, |path| open_rewrapped(path, &confirmed))
+            .unwrap());
+        assert!(!store.draft.exists());
+        store
+            .rewrap_protected(
+                b"future encrypted payload",
+                &confirmed,
+                b"rotated envelope",
+                |path| open_rewrapped(path, &confirmed),
+            )
+            .unwrap();
+        assert_eq!(
+            fs::read(&store.protected_path).unwrap(),
+            b"rotated envelope"
+        );
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn corrupt_draft_blocks_credential_rewrap_until_authenticated_discard() {
+        let (directory, store, confirmed) = migrated_store();
+        fs::write(&store.draft, b"corrupt recovery evidence").unwrap();
+        assert!(matches!(
+            store.rewrap_protected(
+                b"future encrypted payload",
+                &confirmed,
+                b"rotated envelope",
+                |path| open_rewrapped(path, &confirmed),
+            ),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert_eq!(
+            fs::read(&store.draft).unwrap(),
+            b"corrupt recovery evidence"
+        );
+        assert!(!store.rewrap_marker.exists());
+        assert!(store
+            .discard_protected_draft(&confirmed, |path| open_rewrapped(path, &confirmed))
+            .unwrap());
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn protected_vault_identity_rejects_swapped_envelopes_and_old_signals() {
+        let (directory, store, old) = migrated_store();
+        let next = one("next", "body", 2);
+        assert_eq!(store.protected_vault_id().unwrap(), TEST_VAULT_ID);
+        // A valid envelope from another vault is not backup-recoverable.
+        assert!(matches!(
+            store.load_protected(|path| {
+                let (_, document) = open_protected_test(&old, &next, path)?;
+                Ok(([9; VAULT_ID_LEN], document))
+            }),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert!(matches!(
+            store.write_protected(&old, &next, b"new encrypted payload", |path| {
+                let (_, document) = open_protected_test(&old, &next, path)?;
+                Ok(([9; VAULT_ID_LEN], document))
+            }),
+            Err(StorageError::ProtectedVerification)
+        ));
+        // The interim marker shape lacked an identity. Presence still blocks
+        // legacy load, but it can no longer authorize a protected open.
+        let mut old_signal = Vec::from(PROTECTED_MAGIC);
+        old_signal.extend_from_slice(&PROTECTED_VERSION.to_le_bytes());
+        old_signal.extend_from_slice(b"committed");
+        fs::write(&store.marker, protect(&old_signal).unwrap()).unwrap();
+        assert!(matches!(
+            store.protected_vault_id(),
+            Err(StorageError::ProtectedCutover)
+        ));
+        assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+        assert!(matches!(
+            store.load_protected(|path| open_protected_test(&old, &next, path)),
+            Err(StorageError::ProtectedCutover)
+        ));
+        let mut other_signal = old_signal;
+        other_signal.extend_from_slice(&[9; VAULT_ID_LEN]);
+        fs::write(&store.marker, protect(&other_signal).unwrap()).unwrap();
+        assert!(matches!(
+            store.protected_vault_id(),
+            Err(StorageError::ProtectedCutover)
+        ));
+        assert!(matches!(
+            store.recover_protected_cutover(|path| open_staged(&old, path)),
+            Err(StorageError::ProtectedCutover)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn migration_requires_nonzero_and_matching_authenticated_vault_id() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let old = one("legacy", "body", 1);
+        store.write(&old).unwrap();
+        assert!(matches!(
+            store.migrate_to_protected(
+                &old,
+                1,
+                [0; VAULT_ID_LEN],
+                b"future encrypted payload",
+                |path| { open_staged(&old, path) }
+            ),
+            Err(StorageError::InvalidFormat)
+        ));
+        assert!(matches!(
+            store.migrate_to_protected(
+                &old,
+                1,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| {
+                    let (_, document) = open_staged(&old, path)?;
+                    Ok(([9; VAULT_ID_LEN], document))
+                }
+            ),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert_eq!(store.load().unwrap().document, old);
+        assert!(!store.intent.exists());
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn protected_load_uses_primary_then_authenticated_backup_only() {
+        let (directory, store, old) = migrated_store();
+        let next = one("later", "second", 2);
+        assert_eq!(
+            store
+                .load_protected(|path| open_protected_test(&old, &next, path))
+                .unwrap(),
+            LoadOutcome {
+                document: old.clone(),
+                recovered_from_backup: false,
+            }
+        );
+        fs::write(&store.protected_path, b"corrupt primary").unwrap();
+        assert_eq!(
+            store
+                .load_protected(|path| open_protected_test(&old, &next, path))
+                .unwrap(),
+            LoadOutcome {
+                document: old.clone(),
+                recovered_from_backup: true,
+            }
+        );
+        fs::write(&store.protected_backup, b"corrupt backup").unwrap();
+        fs::write(&store.protected_temp, b"future encrypted payload").unwrap();
+        assert!(matches!(
+            store.load_protected(|path| open_protected_test(&old, &next, path)),
+            Err(StorageError::ProtectedVerification)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn protected_write_rejects_stale_and_recovery_then_keeps_protected_backup() {
+        let (directory, store, old) = migrated_store();
+        let next = one("later", "second", 2);
+        let stale = one("stale", "first", 1);
+        assert!(matches!(
+            store.write_protected(&stale, &next, b"new encrypted payload", |path| {
+                open_protected_test(&old, &next, path)
+            }),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        assert!(!store.protected_temp.exists());
+        assert!(matches!(
+            store.write_protected(&old, &next, b"new encrypted payload", |path| {
+                let (id, document) = open_protected_test(&old, &next, path)?;
+                Ok((
+                    if path == store.protected_temp.as_path() {
+                        [9; VAULT_ID_LEN]
+                    } else {
+                        id
+                    },
+                    document,
+                ))
+            }),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert_eq!(
+            store
+                .load_protected(|path| open_protected_test(&old, &next, path))
+                .unwrap()
+                .document,
+            old
+        );
+        fs::remove_file(&store.protected_temp).unwrap();
+        assert_eq!(
+            store
+                .write_protected(&old, &next, b"new encrypted payload", |path| {
+                    open_protected_test(&old, &next, path)
+                })
+                .unwrap(),
+            WriteOutcome::Replaced
+        );
+        assert_eq!(
+            store
+                .load_protected(|path| open_protected_test(&old, &next, path))
+                .unwrap()
+                .document,
+            next
+        );
+        assert_eq!(
+            fs::read(&store.protected_backup).unwrap(),
+            b"future encrypted payload"
+        );
+        assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+        fs::write(&store.protected_path, b"corrupt primary").unwrap();
+        assert!(matches!(
+            store.write_protected(&old, &next, b"new encrypted payload", |path| {
+                open_protected_test(&old, &next, path)
+            }),
+            Err(StorageError::ProtectedVerification)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn protected_write_faults_have_explicit_before_and_after_publication_states() {
+        for point in [
+            ProtectedWritePoint::Staged,
+            ProtectedWritePoint::Verified,
+            ProtectedWritePoint::Published,
+        ] {
+            let (directory, store, old) = migrated_store();
+            let next = one("later", "second", 2);
+            let result = store.write_protected_with_hook(
+                &old,
+                &next,
+                b"new encrypted payload",
+                |path| open_protected_test(&old, &next, path),
+                |reached| {
+                    if reached == point {
+                        Err(StorageError::Io(io::Error::other("injected interruption")))
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert!(result.is_err(), "{point:?}");
+            let loaded = store
+                .load_protected(|path| open_protected_test(&old, &next, path))
+                .unwrap();
+            if point == ProtectedWritePoint::Published {
+                assert_eq!(loaded.document, next);
+                assert_eq!(
+                    fs::read(&store.protected_backup).unwrap(),
+                    b"future encrypted payload"
+                );
+            } else {
+                assert_eq!(loaded.document, old);
+                assert_eq!(
+                    fs::read(&store.protected_temp).unwrap(),
+                    b"new encrypted payload"
+                );
+            }
+            assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+            let _ = fs::remove_dir_all(directory);
+        }
+    }
+
+    #[test]
+    fn protected_write_serializes_reads_and_other_writes() {
+        let (directory, store, old) = migrated_store();
+        let next = one("later", "second", 2);
+        let at_verified = Arc::new(Barrier::new(2));
+        let release = Arc::new(Barrier::new(2));
+        let thread_store = store.clone();
+        let thread_old = old.clone();
+        let thread_next = next.clone();
+        let arrived = Arc::clone(&at_verified);
+        let finish = Arc::clone(&release);
+        let writer = thread::spawn(move || {
+            thread_store.write_protected_with_hook(
+                &thread_old,
+                &thread_next,
+                b"new encrypted payload",
+                |path| open_protected_test(&thread_old, &thread_next, path),
+                |point| {
+                    if point == ProtectedWritePoint::Verified {
+                        arrived.wait();
+                        finish.wait();
+                    }
+                    Ok(())
+                },
+            )
+        });
+        at_verified.wait();
+        assert!(store
+            .load_protected(|path| open_protected_test(&old, &next, path))
+            .is_err());
+        assert!(store
+            .write_protected(&old, &next, b"new encrypted payload", |path| {
+                open_protected_test(&old, &next, path)
+            })
+            .is_err());
+        release.wait();
+        writer.join().unwrap().unwrap();
+        assert_eq!(
+            store
+                .load_protected(|path| open_protected_test(&old, &next, path))
+                .unwrap()
+                .document,
+            next
+        );
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn v3_memo_protection_retires_plain_backup_and_enforces_floor() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let old = document(
+            1,
+            vec![
+                PadMemo::new(1, "plain one", "body", 1),
+                PadMemo::new(2, "plain two", "body", 1),
+            ],
+        );
+        store.write(&old).unwrap();
+        store
+            .migrate_to_protected(
+                &old,
+                1,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| {
+                    if fs::read(path)? == b"future encrypted payload" {
+                        Ok((TEST_VAULT_ID, old.clone()))
+                    } else {
+                        Err(StorageError::ProtectedVerification)
+                    }
+                },
+            )
+            .unwrap();
+        let mut first = old.clone();
+        first.document_id = TEST_VAULT_ID;
+        first.generation = 2;
+        first.memos[0].protect_with_envelope(vec![1; 32]).unwrap();
+        let open_first = |path: &Path| -> Result<_, StorageError> {
+            match fs::read(path)?.as_slice() {
+                b"future encrypted payload" => Ok((TEST_VAULT_ID, old.clone())),
+                b"new encrypted payload" => Ok((TEST_VAULT_ID, first.clone())),
+                _ => Err(StorageError::ProtectedVerification),
+            }
+        };
+        store
+            .write_protected(&old, &first, b"new encrypted payload", open_first)
+            .unwrap();
+        assert_eq!(
+            read_protected_memo_floor(&store.protected_memo_floor).unwrap(),
+            (TEST_VAULT_ID, 2)
+        );
+        assert_eq!(
+            fs::read(&store.protected_backup).unwrap(),
+            b"new encrypted payload"
+        );
+        // Replayed v3 plaintext primary must lose to the floor-qualified copy.
+        fs::write(&store.protected_path, b"future encrypted payload").unwrap();
+        let loaded = store
+            .load_protected(|path| match fs::read(path)?.as_slice() {
+                b"future encrypted payload" => Ok((TEST_VAULT_ID, old.clone())),
+                b"new encrypted payload" => Ok((TEST_VAULT_ID, first.clone())),
+                _ => Err(StorageError::ProtectedVerification),
+            })
+            .unwrap();
+        assert_eq!(loaded.document, first);
+        assert!(loaded.recovered_from_backup);
+        assert_eq!(
+            store
+                .recover_protected_memo_cutover(|path| match fs::read(path)?.as_slice() {
+                    b"future encrypted payload" => Ok((TEST_VAULT_ID, old.clone())),
+                    b"new encrypted payload" => Ok((TEST_VAULT_ID, first.clone())),
+                    _ => Err(StorageError::ProtectedVerification),
+                })
+                .unwrap(),
+            first
+        );
+        let mut second = first.clone();
+        second.generation = 3;
+        second.memos[1].protect_with_envelope(vec![2; 32]).unwrap();
+        store
+            .write_protected(
+                &first,
+                &second,
+                b"third encrypted payload",
+                |path| match fs::read(path)?.as_slice() {
+                    b"new encrypted payload" => Ok((TEST_VAULT_ID, first.clone())),
+                    b"third encrypted payload" => Ok((TEST_VAULT_ID, second.clone())),
+                    _ => Err(StorageError::ProtectedVerification),
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            read_protected_memo_floor(&store.protected_memo_floor).unwrap(),
+            (TEST_VAULT_ID, 3)
+        );
+        assert_eq!(
+            fs::read(&store.protected_backup).unwrap(),
+            b"third encrypted payload"
+        );
+        let mut later = second.clone();
+        later.generation = 4;
+        later.sort = PadSort::Created;
+        store
+            .write_protected(
+                &second,
+                &later,
+                b"fourth encrypted payload",
+                |path| match fs::read(path)?.as_slice() {
+                    b"third encrypted payload" => Ok((TEST_VAULT_ID, second.clone())),
+                    b"fourth encrypted payload" => Ok((TEST_VAULT_ID, later.clone())),
+                    _ => Err(StorageError::ProtectedVerification),
+                },
+            )
+            .unwrap();
+        assert_eq!(
+            store
+                .recover_protected_memo_cutover(|path| match fs::read(path)?.as_slice() {
+                    b"third encrypted payload" => Ok((TEST_VAULT_ID, second.clone())),
+                    b"fourth encrypted payload" => Ok((TEST_VAULT_ID, later.clone())),
+                    _ => Err(StorageError::ProtectedVerification),
+                })
+                .unwrap(),
+            later
+        );
+        assert_eq!(
+            fs::read(&store.protected_path).unwrap(),
+            b"fourth encrypted payload"
+        );
+        assert!(matches!(
+            store.recover_protected_cutover(|_| Ok((TEST_VAULT_ID, old.clone()))),
+            Err(StorageError::ProtectedCutover)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn v3_memo_protection_interruption_after_floor_recovers_only_new_copy() {
+        for point in [
+            ProtectedWritePoint::RecoveryStaged,
+            ProtectedWritePoint::FloorPublished,
+            ProtectedWritePoint::Published,
+        ] {
+            let (directory, store, old) = migrated_store();
+            let mut next = old.clone();
+            next.document_id = TEST_VAULT_ID;
+            next.generation += 1;
+            next.memos[0].protect_with_envelope(vec![4; 32]).unwrap();
+            let result = store.write_protected_with_hook(
+                &old,
+                &next,
+                b"new encrypted payload",
+                |path| match fs::read(path)?.as_slice() {
+                    b"future encrypted payload" => Ok((TEST_VAULT_ID, old.clone())),
+                    b"new encrypted payload" => Ok((TEST_VAULT_ID, next.clone())),
+                    _ => Err(StorageError::ProtectedVerification),
+                },
+                |reached| {
+                    if reached == point {
+                        Err(StorageError::Io(io::Error::other("injected")))
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert!(result.is_err(), "{point:?}");
+            if point == ProtectedWritePoint::RecoveryStaged {
+                assert!(!store.protected_memo_floor.exists());
+                assert_eq!(
+                    fs::read(&store.protected_path).unwrap(),
+                    b"future encrypted payload"
+                );
+            } else {
+                assert!(store.protected_memo_floor.exists());
+                let recovered = store
+                    .recover_protected_memo_cutover(|path| match fs::read(path)?.as_slice() {
+                        b"future encrypted payload" => Ok((TEST_VAULT_ID, old.clone())),
+                        b"new encrypted payload" => Ok((TEST_VAULT_ID, next.clone())),
+                        _ => Err(StorageError::ProtectedVerification),
+                    })
+                    .unwrap();
+                assert_eq!(recovered, next);
+                assert_eq!(
+                    fs::read(&store.protected_path).unwrap(),
+                    b"new encrypted payload"
+                );
+            }
+            let _ = fs::remove_dir_all(directory);
+        }
+    }
+
+    fn v4_memo(id: [u8; 16], old: &PadDocument) -> Result<PadDocument, StorageError> {
+        let mut next = old.clone();
+        next.document_id = id;
+        next.memos[0].protect_with_envelope(b"authenticated ciphertext".to_vec())?;
+        Ok(next)
+    }
+
+    fn verify_test_envelope(
+        _: [u8; 16],
+        memo_id: u64,
+        envelope: &[u8],
+    ) -> Result<(), StorageError> {
+        if memo_id == 1 && envelope == b"authenticated ciphertext" {
+            Ok(())
+        } else {
+            Err(StorageError::ProtectedVerification)
+        }
+    }
+
+    #[test]
+    fn v4_mixed_draft_requires_exact_base_and_normal_save_cleans_it() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let old = document(
+            1,
+            vec![
+                PadMemo::new(1, "private", "private body", 1),
+                PadMemo::new(2, "public", "public body", 1),
+            ],
+        );
+        store.write(&old).unwrap();
+        let confirmed = store
+            .migrate_to_v4(
+                &old,
+                |id, old| {
+                    let mut next = old.clone();
+                    next.document_id = id;
+                    next.find_mut(1)
+                        .unwrap()
+                        .protect_with_envelope(b"authenticated ciphertext".to_vec())?;
+                    Ok(next)
+                },
+                verify_test_envelope,
+            )
+            .unwrap();
+        let mut next = confirmed.clone();
+        next.generation = 2;
+        next.find_mut(2)
+            .unwrap()
+            .edit("new title", "new body", 2)
+            .unwrap();
+        let mut encoded = next.encode().unwrap();
+        store
+            .stage_draft(
+                DRAFT_V4,
+                confirmed.document_id,
+                &confirmed,
+                &next,
+                &encoded,
+                &store.path,
+            )
+            .unwrap();
+        encoded.fill(0);
+        assert_eq!(
+            store.recoverable_v4_draft(&confirmed).unwrap(),
+            Some(next.clone())
+        );
+        let mut newer = next.clone();
+        newer.generation += 1;
+        fs::write(&store.path, protect(&newer.encode().unwrap()).unwrap()).unwrap();
+        assert!(matches!(
+            store.recoverable_v4_draft(&newer),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        fs::write(&store.path, protect(&confirmed.encode().unwrap()).unwrap()).unwrap();
+        let raw = fs::read(&store.draft).unwrap();
+        assert!(!raw
+            .windows(b"new body".len())
+            .any(|part| part == b"new body"));
+        fs::write(&store.draft, b"corrupt").unwrap();
+        assert!(matches!(
+            store.recoverable_v4_draft(&confirmed),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert!(matches!(
+            store.discard_v4_draft(&next),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        assert_eq!(fs::read(&store.draft).unwrap(), b"corrupt");
+        assert!(store.discard_v4_draft(&confirmed).unwrap());
+        store
+            .stage_draft(
+                DRAFT_V4,
+                confirmed.document_id,
+                &confirmed,
+                &next,
+                &next.encode().unwrap(),
+                &store.path,
+            )
+            .unwrap();
+        fs::write(&store.v4_temp, b"torn ordinary temp").unwrap();
+        store.write_v4(&confirmed, &next).unwrap();
+        assert!(!store.draft.exists());
+        assert_eq!(store.recoverable_v4_draft(&next).unwrap(), None);
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn v4_absent_draft_does_not_require_readable_primary() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let old = one("title", "body", 1);
+        store.write(&old).unwrap();
+        let confirmed = store
+            .migrate_to_v4(
+                &old,
+                |id, old| {
+                    let mut next = old.clone();
+                    next.document_id = id;
+                    Ok(next)
+                },
+                |_, _, _| Ok(()),
+            )
+            .unwrap();
+        assert!(!store.draft.exists());
+        fs::write(&store.path, b"unreadable primary before backup recovery").unwrap();
+        assert_eq!(store.recoverable_v4_draft(&confirmed).unwrap(), None);
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn v4_draft_pause_hook_validates_path_and_has_bounded_terminal_wait() {
+        let user = PathBuf::from(std::env::var_os("USERPROFILE").unwrap());
+        let root = user.join("tmp").join(format!(
+            "sakura-pad-draft-pause-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&root).unwrap();
+        assert!(pause_after_draft_for_test_at(
+            Path::new("relative-ready"),
+            Duration::from_millis(50)
+        )
+        .is_err());
+        let ready = root.join("ready");
+        let started = Instant::now();
+        assert!(matches!(
+            pause_after_draft_for_test_at(&ready, Duration::from_millis(75)),
+            Err(StorageError::Io(ref error)) if error.kind() == io::ErrorKind::TimedOut
+        ));
+        assert!(started.elapsed() < Duration::from_secs(2));
+        assert_eq!(fs::read(&ready).unwrap(), b"ready");
+        let resumed = root.join("resumed");
+        let resume = PathBuf::from(format!("{}.resume", resumed.display()));
+        let watched = resumed.clone();
+        let notifier = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(2);
+            while !watched.exists() && Instant::now() < deadline {
+                thread::sleep(Duration::from_millis(10));
+            }
+            assert_eq!(fs::read(&watched).unwrap(), b"ready");
+            fs::write(&resume, b"continue").unwrap();
+        });
+        pause_after_draft_for_test_at(&resumed, Duration::from_secs(2)).unwrap();
+        notifier.join().unwrap();
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn v4_tagged_content_and_payload_reject_malformed_input() {
+        let mut document = one("secret title", "secret body", 1);
+        document.document_id = [3; 16];
+        document.memos[0]
+            .protect_with_envelope(b"authenticated ciphertext".to_vec())
+            .unwrap();
+        assert!(document.memos[0].plain_content().is_none());
+        assert!(document.memos[0].edit("leak", "leak", 2).is_err());
+        let encoded = document.encode().unwrap();
+        assert_eq!(&encoded[..8], &V4_MAGIC);
+        assert!(!encoded
+            .windows(b"secret title".len())
+            .any(|part| part == b"secret title"));
+        assert_eq!(PadDocument::decode(&encoded).unwrap(), document);
+        let mut bad = encoded.clone();
+        bad[V4_DOCUMENT_HEADER_LEN + 44..V4_DOCUMENT_HEADER_LEN + 48]
+            .copy_from_slice(&9u32.to_le_bytes());
+        assert!(matches!(
+            PadDocument::decode(&bad),
+            Err(StorageError::InvalidFormat)
+        ));
+        let mut bad = encoded.clone();
+        bad[V4_DOCUMENT_HEADER_LEN + 32..V4_DOCUMENT_HEADER_LEN + 36]
+            .copy_from_slice(&1u32.to_le_bytes());
+        assert!(matches!(
+            PadDocument::decode(&bad),
+            Err(StorageError::InvalidFormat)
+        ));
+        let mut bad = encoded;
+        bad[8..10].copy_from_slice(&5u16.to_le_bytes());
+        assert!(matches!(
+            PadDocument::decode(&bad),
+            Err(StorageError::UnsupportedVersion(5))
+        ));
+        let payload = MemoPayloadV1::encode("題名", "本文🙂").unwrap();
+        assert_eq!(
+            MemoPayloadV1::decode(&payload).unwrap(),
+            ("題名".into(), "本文🙂".into())
+        );
+        let mut bad = payload.clone();
+        bad.push(0);
+        assert!(MemoPayloadV1::decode(&bad).is_err());
+        let mut bad = payload;
+        bad[8..12].copy_from_slice(&u32::MAX.to_le_bytes());
+        assert!(MemoPayloadV1::decode(&bad).is_err());
+    }
+
+    #[test]
+    fn v4_cutover_retains_scope_and_blocks_legacy_reader_downgrade() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let old = one("private title", "private body", 1);
+        store.write(&old).unwrap();
+        store
+            .write(&one("private title", "private body", 2))
+            .unwrap();
+        let old = store.load().unwrap().document;
+        fs::write(&store.temp, protect(&old.encode().unwrap()).unwrap()).unwrap();
+        let migrated = store
+            .migrate_to_v4(&old, v4_memo, verify_test_envelope)
+            .unwrap();
+        assert_ne!(migrated.document_id, [0; 16]);
+        assert_eq!(store.load_v4().unwrap().document, migrated);
+        assert!(!store.backup.exists());
+        assert!(!store.temp.exists());
+        assert!(matches!(store.load(), Err(StorageError::ProtectedCutover)));
+        assert!(matches!(
+            read_document(&store.path),
+            Err(StorageError::UnsupportedVersion(4))
+        ));
+        let mut next = migrated.clone();
+        next.generation += 1;
+        assert_eq!(
+            store.write_v4(&migrated, &next).unwrap(),
+            WriteOutcome::Replaced
+        );
+        assert_eq!(
+            store.load_v4().unwrap().document.document_id,
+            migrated.document_id
+        );
+        assert_eq!(store.recover_v4_cutover().unwrap(), next);
+        fs::write(&store.path, b"corrupt primary").unwrap();
+        assert!(matches!(
+            store.load_v4(),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert_eq!(store.recover_v4_cutover().unwrap(), migrated);
+        assert_eq!(store.load_v4().unwrap().document, migrated);
+        assert!(matches!(
+            store.write(&old),
+            Err(StorageError::ProtectedCutover)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn v4_migration_faults_recover_only_after_durable_intent() {
+        let points = [
+            V4MigrationPoint::BackupStaged,
+            V4MigrationPoint::PrimaryStaged,
+            V4MigrationPoint::CopiesVerified,
+            V4MigrationPoint::IntentPublished,
+            V4MigrationPoint::LegacyRecoveryRetired,
+            V4MigrationPoint::PrimaryPublished,
+            V4MigrationPoint::MarkerPublished,
+        ];
+        for point in points {
+            let directory = temp_dir();
+            let store = PadStore::at(&directory);
+            let old = one("old title", "old body", 1);
+            store.write(&old).unwrap();
+            store.write(&old).unwrap();
+            let result = store.migrate_to_v4_with_hook(
+                &old,
+                v4_memo,
+                &mut verify_test_envelope,
+                |reached| {
+                    if reached == point {
+                        Err(StorageError::Io(io::Error::other("injected")))
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert!(result.is_err(), "{point:?}");
+            if matches!(
+                point,
+                V4MigrationPoint::BackupStaged
+                    | V4MigrationPoint::PrimaryStaged
+                    | V4MigrationPoint::CopiesVerified
+            ) {
+                assert_eq!(store.load().unwrap().document, old, "{point:?}");
+                assert!(matches!(
+                    store.load_v4(),
+                    Err(StorageError::ProtectedCutover)
+                ));
+            } else {
+                assert!(
+                    matches!(store.load(), Err(StorageError::ProtectedCutover)),
+                    "{point:?}"
+                );
+                let recovered = store.recover_v4_cutover().unwrap();
+                assert_ne!(recovered.document_id, [0; 16]);
+                assert_eq!(store.load_v4().unwrap().document, recovered);
+                assert!(!store.backup.exists());
+                assert!(!store.temp.exists());
+            }
+            let _ = fs::remove_dir_all(directory);
+        }
+    }
+
+    #[test]
+    fn protecting_plain_memo_in_existing_v4_retires_plain_backup() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let old = one("old secret", "old body", 1);
+        store.write(&old).unwrap();
+        let plain = store
+            .migrate_to_v4(
+                &old,
+                |id, document| {
+                    let mut next = document.clone();
+                    next.document_id = id;
+                    Ok(next)
+                },
+                verify_test_envelope,
+            )
+            .unwrap();
+        let mut protected = plain.clone();
+        protected.generation += 1;
+        protected.memos[0]
+            .protect_with_envelope(b"authenticated ciphertext".to_vec())
+            .unwrap();
+        verify_test_envelope(
+            protected.document_id,
+            1,
+            protected.memos[0].protected_envelope().unwrap(),
+        )
+        .unwrap();
+        store.write_v4(&plain, &protected).unwrap();
+        let backup = read_v4_document(&store.v4_backup).unwrap();
+        assert_eq!(backup, protected);
+        assert!(backup.memos[0].plain_content().is_none());
+        assert_eq!(store.load_v4().unwrap().document, protected);
+        // Replaying a pre-protection v4 primary is rejected by the durable
+        // generation floor, then repaired from the protected recovery copy.
+        let old_primary = protect(&plain.encode().unwrap()).unwrap();
+        fs::write(&store.path, old_primary).unwrap();
+        assert!(matches!(
+            store.load_v4(),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert_eq!(store.recover_v4_cutover().unwrap(), protected);
+        assert_eq!(store.load_v4().unwrap().document, protected);
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn second_and_third_memo_protection_advance_floor_without_plain_backup() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let old = document(
+            1,
+            (1..=3)
+                .map(|id| PadMemo::new(id, format!("title{id}"), "body", 1))
+                .collect(),
+        );
+        store.write(&old).unwrap();
+        let mut current = store
+            .migrate_to_v4(
+                &old,
+                |id, document| {
+                    let mut next = document.clone();
+                    next.document_id = id;
+                    Ok(next)
+                },
+                |_, _, _| Ok(()),
+            )
+            .unwrap();
+        for memo_id in 1..=3 {
+            let mut next = current.clone();
+            next.generation += 1;
+            next.find_mut(memo_id)
+                .unwrap()
+                .protect_with_envelope(vec![memo_id as u8; 32])
+                .unwrap();
+            store.write_v4(&current, &next).unwrap();
+            assert_eq!(
+                read_v4_floor(&store.v4_floor).unwrap(),
+                (next.document_id, next.generation)
+            );
+            assert_eq!(read_v4_document(&store.v4_backup).unwrap(), next);
+            assert_eq!(store.load_v4().unwrap().document, next);
+            current = next;
+        }
+        assert!(current
+            .memos
+            .iter()
+            .all(|memo| memo.plain_content().is_none()));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn interrupted_protection_floor_rejects_old_primary_and_recovers_new_backup() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let old = one("private", "text", 1);
+        store.write(&old).unwrap();
+        let plain = store
+            .migrate_to_v4(
+                &old,
+                |id, document| {
+                    let mut next = document.clone();
+                    next.document_id = id;
+                    Ok(next)
+                },
+                |_, _, _| Ok(()),
+            )
+            .unwrap();
+        let mut next = plain.clone();
+        next.generation += 1;
+        next.memos[0].protect_with_envelope(vec![8; 32]).unwrap();
+        remove_if_present(&store.v4_backup).unwrap();
+        write_flushed_temp(&store.v4_backup, &protect(&next.encode().unwrap()).unwrap()).unwrap();
+        publish_v4_floor(&store.v4_floor, next.document_id, next.generation).unwrap();
+        assert!(matches!(
+            store.load_v4(),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert_eq!(store.recover_v4_cutover().unwrap(), next);
+        assert_eq!(store.load_v4().unwrap().document, next);
+        assert!(matches!(
+            publish_v4_floor(&store.v4_floor, next.document_id, next.generation),
+            Err(StorageError::ProtectedCutover)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    fn v4_with_protected_memo(store: &PadStore) -> PadDocument {
+        let old = document(
+            1,
+            vec![
+                PadMemo::new(1, "hidden title", "hidden body", 1),
+                PadMemo::new(2, "other title", "other body", 2),
+            ],
+        );
+        store.write(&old).unwrap();
+        let plain = store
+            .migrate_to_v4(
+                &old,
+                |id, document| {
+                    let mut next = document.clone();
+                    next.document_id = id;
+                    Ok(next)
+                },
+                |_, _, _| Ok(()),
+            )
+            .unwrap();
+        let mut protected = plain.clone();
+        protected.generation += 1;
+        protected.memos[0]
+            .protect_with_envelope(b"independent memo ciphertext".to_vec())
+            .unwrap();
+        store.write_v4(&plain, &protected).unwrap();
+        protected
+    }
+
+    #[test]
+    fn v4_to_whole_protection_preserves_memo_scope_and_retires_v4_recovery() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let expected = v4_with_protected_memo(&store);
+        let old_v4 = fs::read(&store.path).unwrap();
+        store
+            .migrate_v4_to_protected(
+                &expected,
+                TEST_VAULT_ID,
+                b"new whole-pad ciphertext",
+                |path| {
+                    if fs::read(path)? != b"new whole-pad ciphertext" {
+                        return Err(StorageError::ProtectedVerification);
+                    }
+                    Ok((TEST_VAULT_ID, expected.clone()))
+                },
+            )
+            .unwrap();
+        assert!(!store.has_v4_cutover().unwrap());
+        assert!(store.has_v4_to_protected_intent().unwrap());
+        assert_eq!(store.protected_vault_id().unwrap(), TEST_VAULT_ID);
+        assert!(!store.v4_backup.exists());
+        assert!(!store.v4_marker.exists());
+        assert!(!store.backup.exists());
+        assert!(!store.temp.exists());
+        assert_eq!(
+            fs::read(&store.protected_backup).unwrap(),
+            b"new whole-pad ciphertext"
+        );
+        assert!(matches!(
+            read_document(&store.path),
+            Err(StorageError::UnsupportedVersion(PROTECTED_VERSION))
+        ));
+        assert!(matches!(
+            store.load_v4(),
+            Err(StorageError::ProtectedCutover)
+        ));
+        assert!(matches!(
+            store.recover_v4_cutover(),
+            Err(StorageError::ProtectedCutover)
+        ));
+        let loaded = store
+            .load_protected(|path| {
+                if fs::read(path)? != b"new whole-pad ciphertext" {
+                    return Err(StorageError::ProtectedVerification);
+                }
+                Ok((TEST_VAULT_ID, expected.clone()))
+            })
+            .unwrap();
+        assert_eq!(loaded.document, expected);
+        assert_eq!(loaded.document.document_id, expected.document_id);
+        assert_eq!(
+            loaded.document.memos[0].protected_envelope(),
+            expected.memos[0].protected_envelope()
+        );
+        // Even a replayed valid v4 DPAPI primary has no v4 fallback path.
+        fs::write(&store.path, old_v4).unwrap();
+        assert!(matches!(
+            store.load_v4(),
+            Err(StorageError::ProtectedCutover)
+        ));
+        assert!(matches!(
+            store.write_v4(&expected, &expected),
+            Err(StorageError::ProtectedCutover)
+        ));
+        store
+            .recover_v4_to_protected_cutover(|path| {
+                if fs::read(path)? != b"new whole-pad ciphertext" {
+                    return Err(StorageError::ProtectedVerification);
+                }
+                Ok((TEST_VAULT_ID, expected.clone()))
+            })
+            .unwrap();
+        assert!(matches!(
+            read_document(&store.path),
+            Err(StorageError::UnsupportedVersion(PROTECTED_VERSION))
+        ));
+        let mut next = expected.clone();
+        next.generation += 1;
+        next.memos[1]
+            .protect_with_envelope(b"second independent envelope".to_vec())
+            .unwrap();
+        store
+            .write_protected(&expected, &next, b"updated whole-pad ciphertext", |path| {
+                match fs::read(path)?.as_slice() {
+                    b"new whole-pad ciphertext" => Ok((TEST_VAULT_ID, expected.clone())),
+                    b"updated whole-pad ciphertext" => Ok((TEST_VAULT_ID, next.clone())),
+                    _ => Err(StorageError::ProtectedVerification),
+                }
+            })
+            .unwrap();
+        assert_eq!(next.document_id, expected.document_id);
+        assert_eq!(
+            fs::read(&store.protected_backup).unwrap(),
+            b"updated whole-pad ciphertext"
+        );
+        assert_eq!(
+            store
+                .load_protected(|path| {
+                    match fs::read(path)?.as_slice() {
+                        b"new whole-pad ciphertext" => Ok((TEST_VAULT_ID, expected.clone())),
+                        b"updated whole-pad ciphertext" => Ok((TEST_VAULT_ID, next.clone())),
+                        _ => Err(StorageError::ProtectedVerification),
+                    }
+                })
+                .unwrap()
+                .document,
+            next
+        );
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn v4_to_whole_protection_faults_have_one_way_cutover() {
+        let points = [
+            MigrationPoint::FirstProtectedCopy,
+            MigrationPoint::SecondProtectedCopy,
+            MigrationPoint::CopiesVerified,
+            MigrationPoint::IntentPublished,
+            MigrationPoint::LegacyRecoveryRetired,
+            MigrationPoint::LegacyTombstoned,
+            MigrationPoint::FinalMarkerPublished,
+        ];
+        for point in points {
+            let directory = temp_dir();
+            let store = PadStore::at(&directory);
+            let expected = v4_with_protected_memo(&store);
+            let result = store.migrate_v4_to_protected_with_hook(
+                &expected,
+                TEST_VAULT_ID,
+                b"new whole-pad ciphertext",
+                |path| {
+                    if fs::read(path)? != b"new whole-pad ciphertext" {
+                        return Err(StorageError::ProtectedVerification);
+                    }
+                    Ok((TEST_VAULT_ID, expected.clone()))
+                },
+                |reached| {
+                    if reached == point {
+                        Err(StorageError::Io(io::Error::other("injected interruption")))
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert!(result.is_err(), "{point:?}");
+            let before_intent = matches!(
+                point,
+                MigrationPoint::FirstProtectedCopy
+                    | MigrationPoint::SecondProtectedCopy
+                    | MigrationPoint::CopiesVerified
+            );
+            if before_intent {
+                assert_eq!(store.load_v4().unwrap().document, expected);
+                assert!(!store.has_v4_to_protected_intent().unwrap());
+                // A fresh recovery key has different sealed bytes. Abandoned
+                // uncommitted copies must not permanently block enrollment.
+                store
+                    .migrate_v4_to_protected(
+                        &expected,
+                        [8; VAULT_ID_LEN],
+                        b"fresh whole-pad ciphertext",
+                        |path| {
+                            if fs::read(path)? != b"fresh whole-pad ciphertext" {
+                                return Err(StorageError::ProtectedVerification);
+                            }
+                            Ok(([8; VAULT_ID_LEN], expected.clone()))
+                        },
+                    )
+                    .unwrap();
+                assert_eq!(store.protected_vault_id().unwrap(), [8; VAULT_ID_LEN]);
+            } else {
+                assert!(!store.has_v4_cutover().unwrap());
+                assert!(matches!(
+                    store.load_v4(),
+                    Err(StorageError::ProtectedCutover)
+                ));
+                assert!(matches!(
+                    store.recover_v4_cutover(),
+                    Err(StorageError::ProtectedCutover)
+                ));
+                assert_eq!(
+                    store
+                        .recover_v4_to_protected_cutover(|path| {
+                            if fs::read(path)? != b"new whole-pad ciphertext" {
+                                return Err(StorageError::ProtectedVerification);
+                            }
+                            Ok((TEST_VAULT_ID, expected.clone()))
+                        })
+                        .unwrap(),
+                    expected
+                );
+                assert!(!store.v4_backup.exists());
+                assert!(!store.backup.exists());
+                assert_eq!(store.protected_vault_id().unwrap(), TEST_VAULT_ID);
+            }
+            let _ = fs::remove_dir_all(directory);
+        }
+    }
+
+    #[test]
+    fn v4_to_whole_protection_rechecks_exact_state_and_generation_floor() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let expected = v4_with_protected_memo(&store);
+        let mut advanced = expected.clone();
+        advanced.generation += 1;
+        store.write_v4(&expected, &advanced).unwrap();
+        assert!(matches!(
+            store.migrate_v4_to_protected(&expected, TEST_VAULT_ID, b"ciphertext", |_| Ok((
+                TEST_VAULT_ID,
+                expected.clone()
+            )),),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        assert!(!store.protected_path.exists());
+        assert!(!store.intent.exists());
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    fn open_rewrapped(
+        path: &Path,
+        document: &PadDocument,
+    ) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError> {
+        match fs::read(path)?.as_slice() {
+            b"future encrypted payload" | b"rotated envelope" => {
+                Ok((TEST_VAULT_ID, document.clone()))
+            }
+            _ => Err(StorageError::ProtectedVerification),
+        }
+    }
+
+    #[test]
+    fn password_rewrap_cut_points_gate_old_and_new_copies() {
+        for point in [
+            RewrapPoint::Staged,
+            RewrapPoint::Verified,
+            RewrapPoint::PendingPublished,
+            RewrapPoint::BackupPublished,
+            RewrapPoint::Committed,
+            RewrapPoint::PrimaryPublished,
+        ] {
+            let (directory, store, document) = migrated_store();
+            let result = store.rewrap_protected_with_hook(
+                b"future encrypted payload",
+                &document,
+                b"rotated envelope",
+                |path| open_rewrapped(path, &document),
+                |at| {
+                    if at == point {
+                        Err(StorageError::ProtectedVerification)
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert!(
+                matches!(result, Err(StorageError::ProtectedVerification)),
+                "{point:?}"
+            );
+            let loaded = store
+                .load_protected(|path| open_rewrapped(path, &document))
+                .unwrap();
+            let committed = matches!(
+                point,
+                RewrapPoint::Committed | RewrapPoint::PrimaryPublished
+            );
+            assert_eq!(
+                loaded.recovered_from_backup,
+                point == RewrapPoint::Committed,
+                "{point:?}"
+            );
+            if committed {
+                assert_eq!(
+                    fs::read(&store.protected_backup).unwrap(),
+                    b"rotated envelope"
+                );
+                store
+                    .recover_protected_rewrap(|path| open_rewrapped(path, &document))
+                    .unwrap();
+                assert_eq!(
+                    fs::read(&store.protected_path).unwrap(),
+                    b"rotated envelope"
+                );
+                fs::write(&store.protected_path, b"future encrypted payload").unwrap();
+                assert!(
+                    store
+                        .load_protected(|path| {
+                            if fs::read(path)?.as_slice() == b"future encrypted payload" {
+                                Ok((TEST_VAULT_ID, document.clone()))
+                            } else {
+                                Err(StorageError::ProtectedVerification)
+                            }
+                        })
+                        .is_err(),
+                    "old password opened after {point:?}"
+                );
+            } else {
+                assert_eq!(
+                    fs::read(&store.protected_path).unwrap(),
+                    b"future encrypted payload"
+                );
+                assert!(!loaded.recovered_from_backup);
+            }
+            let _ = fs::remove_dir_all(directory);
+        }
+    }
+
+    #[test]
+    fn password_rewrap_rejects_stale_bytes_and_wrong_new_document() {
+        let (directory, store, document) = migrated_store();
+        let mut wrong = document.clone();
+        wrong.generation += 1;
+        assert!(matches!(
+            store.rewrap_protected(
+                b"other old envelope",
+                &document,
+                b"rotated envelope",
+                |path| open_rewrapped(path, &document),
+            ),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        assert!(matches!(
+            store.rewrap_protected(
+                b"future encrypted payload",
+                &document,
+                b"rotated envelope",
+                |_| Ok((TEST_VAULT_ID, wrong.clone())),
+            ),
+            Err(StorageError::ProtectedVerification)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn password_rewrap_gate_advances_on_later_document_write() {
+        let (directory, store, document) = migrated_store();
+        store
+            .rewrap_protected(
+                b"future encrypted payload",
+                &document,
+                b"rotated envelope",
+                |path| open_rewrapped(path, &document),
+            )
+            .unwrap();
+        let next = one("new", "saved after password change", 2);
+        store
+            .write_protected(
+                &document,
+                &next,
+                b"updated rotated envelope",
+                |path| match fs::read(path)?.as_slice() {
+                    b"rotated envelope" => Ok((TEST_VAULT_ID, document.clone())),
+                    b"updated rotated envelope" => Ok((TEST_VAULT_ID, next.clone())),
+                    _ => Err(StorageError::ProtectedVerification),
+                },
+            )
+            .unwrap();
+        fs::write(&store.protected_backup, b"future encrypted payload").unwrap();
+        fs::write(&store.protected_path, b"rotated envelope").unwrap();
+        assert!(store
+            .load_protected(|path| open_rewrapped(path, &document))
+            .is_err());
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn interrupted_precommit_rewrap_can_abort_and_retry_with_fresh_ciphertext() {
+        for point in [
+            RewrapPoint::Staged,
+            RewrapPoint::Verified,
+            RewrapPoint::PendingPublished,
+            RewrapPoint::BackupPublished,
+        ] {
+            let (directory, store, document) = migrated_store();
+            assert!(store
+                .rewrap_protected_with_hook(
+                    b"future encrypted payload",
+                    &document,
+                    b"first random candidate",
+                    |_| Ok((TEST_VAULT_ID, document.clone())),
+                    |at| if at == point {
+                        Err(StorageError::ProtectedVerification)
+                    } else {
+                        Ok(())
+                    },
+                )
+                .is_err());
+            store
+                .abort_pending_protected_rewrap(b"future encrypted payload", &document)
+                .unwrap();
+            assert!(!store.rewrap_marker.exists(), "{point:?}");
+            assert!(!store.protected_temp.exists(), "{point:?}");
+            assert_eq!(
+                fs::read(&store.protected_backup).unwrap(),
+                b"future encrypted payload"
+            );
+            store
+                .rewrap_protected(
+                    b"future encrypted payload",
+                    &document,
+                    b"second random candidate",
+                    |_| Ok((TEST_VAULT_ID, document.clone())),
+                )
+                .unwrap();
+            assert_eq!(
+                fs::read(&store.protected_path).unwrap(),
+                b"second random candidate"
+            );
+            assert_eq!(
+                fs::read(&store.protected_backup).unwrap(),
+                b"second random candidate"
+            );
+            assert!(matches!(
+                store.abort_pending_protected_rewrap(b"future encrypted payload", &document),
+                Err(StorageError::StaleProtectedDocument | StorageError::ProtectedCutover)
+            ));
+            let _ = fs::remove_dir_all(directory);
+        }
+    }
+
+    #[test]
+    fn authenticated_pending_recovery_restores_old_backup_and_allows_normal_save() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let document = v4_with_protected_memo(&store);
+        store
+            .migrate_v4_to_protected(
+                &document,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| open_staged(&document, path),
+            )
+            .unwrap();
+        publish_protected_memo_floor(
+            &store.protected_memo_floor,
+            TEST_VAULT_ID,
+            document.generation,
+        )
+        .unwrap();
+        assert!(store
+            .rewrap_protected_with_hook(
+                b"future encrypted payload",
+                &document,
+                b"lost random candidate",
+                |_| Ok((TEST_VAULT_ID, document.clone())),
+                |point| if point == RewrapPoint::BackupPublished {
+                    Err(StorageError::ProtectedVerification)
+                } else {
+                    Ok(())
+                },
+            )
+            .is_err());
+        let old_primary = fs::read(&store.protected_path).unwrap();
+        let new_backup = fs::read(&store.protected_backup).unwrap();
+        assert!(matches!(
+            store.recover_pending_protected_rewrap(|_| Err(StorageError::ProtectedVerification)),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert_eq!(fs::read(&store.protected_path).unwrap(), old_primary);
+        assert_eq!(fs::read(&store.protected_backup).unwrap(), new_backup);
+        assert!(store.rewrap_marker.exists());
+        assert!(matches!(
+            store.abort_pending_protected_rewrap(b"wrong old bytes", &document),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        assert_eq!(fs::read(&store.protected_backup).unwrap(), new_backup);
+        assert_eq!(
+            store
+                .recover_pending_protected_rewrap(|path| open_rewrapped(path, &document))
+                .unwrap(),
+            Some(document.clone())
+        );
+        assert!(!store.rewrap_marker.exists());
+        assert!(!store.protected_temp.exists());
+        assert_eq!(fs::read(&store.protected_backup).unwrap(), old_primary);
+        let mut next = document.clone();
+        next.generation += 1;
+        next.memos[1]
+            .edit("after recovery", "old password remains active", 3)
+            .unwrap();
+        store
+            .write_protected(&document, &next, b"new encrypted payload", |path| {
+                open_protected_test(&document, &next, path)
+            })
+            .unwrap();
+        assert_eq!(
+            store
+                .load_protected(|path| open_protected_test(&document, &next, path))
+                .unwrap()
+                .document,
+            next
+        );
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn no_pending_rewrap_leaves_normal_writer_temp_untouched() {
+        let (directory, store, document) = migrated_store();
+        fs::write(&store.protected_temp, b"normal writer staged bytes").unwrap();
+        assert_eq!(
+            store
+                .recover_pending_protected_rewrap(|_| panic!("must not open without Pending"))
+                .unwrap(),
+            None
+        );
+        store
+            .abort_pending_protected_rewrap(b"wrong", &document)
+            .unwrap();
+        assert_eq!(
+            fs::read(&store.protected_temp).unwrap(),
+            b"normal writer staged bytes"
+        );
+        let _ = fs::remove_dir_all(directory);
     }
 }

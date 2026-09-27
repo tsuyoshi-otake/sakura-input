@@ -1,6 +1,43 @@
 use super::*;
 
 #[test]
+fn pad_actions_use_distinct_registered_renderer_messages() {
+    for (action, name) in [
+        (PadAction::Open, windows::core::w!("SakuraInput.OpenPad.v1")),
+        (
+            PadAction::OpenProtection,
+            windows::core::w!("SakuraInput.OpenPadProtection.v1"),
+        ),
+    ] {
+        // SAFETY: the test registers process-independent constant names only.
+        let expected = unsafe { RegisterWindowMessageW(name) };
+        // SAFETY: this is another process-independent constant name from the
+        // action's static message contract.
+        let actual = unsafe { RegisterWindowMessageW(action.message()) };
+        assert_ne!(expected, 0);
+        assert_eq!(actual, expected, "{action:?}");
+    }
+    // SAFETY: both names are static, process-independent message contracts.
+    assert_ne!(unsafe { RegisterWindowMessageW(PAD_LOCK_MESSAGE) }, 0);
+    // SAFETY: this is a second static, process-independent message contract.
+    assert_ne!(unsafe { RegisterWindowMessageW(PAD_STATUS_MESSAGE) }, 0);
+    assert_eq!(PadAction::OpenProtection.label(), "保護の設定を開く");
+}
+
+#[test]
+fn pad_status_wire_values_have_explicit_user_readings() {
+    for value in 1..=9 {
+        let status = PadStatus::from_wire(value).expect("known renderer result");
+        assert!(status.label().starts_with("Pad全体:"));
+    }
+    assert_eq!(PadStatus::from_wire(0), None);
+    assert_eq!(PadStatus::from_wire(10), None);
+    assert!(PadStatus::Unavailable.label().contains("確認できません"));
+    assert!(PadStatus::PasswordLocked.label().contains("ロック中"));
+    assert!(PadStatus::PasswordUnlocked.label().contains("解除中"));
+}
+
+#[test]
 fn combo_mappings_cover_every_mode_suggest_binding_and_dictionary_format() {
     for mode in Mode::ALL {
         assert_eq!(mode_from_index(Some(mode_index(mode))), Ok(mode));
@@ -207,6 +244,22 @@ fn pad_shortcut_mapping_is_bounded_and_japanese() {
 }
 
 #[test]
+fn pad_idle_lock_timeout_mapping_rejects_invalid_selection() {
+    for timeout in PadIdleLockTimeout::ALL {
+        assert_eq!(
+            pad_idle_lock_timeout_from_index(Some(pad_idle_lock_timeout_index(timeout))),
+            Ok(timeout)
+        );
+    }
+    assert!(pad_idle_lock_timeout_from_index(None).is_err());
+    assert!(pad_idle_lock_timeout_from_index(Some(PadIdleLockTimeout::ALL.len())).is_err());
+    assert_eq!(
+        PadIdleLockTimeout::ALL.map(pad_idle_lock_timeout_label),
+        ["1分", "5分（既定）", "15分", "30分"]
+    );
+}
+
+#[test]
 fn update_status_is_japanese_at_the_settings_presentation_boundary() {
     assert_eq!(
         App::describe_update_check(&updater::UpdateCheckOutcome::Disabled),
@@ -395,6 +448,49 @@ fn light_initial_frame_shows_only_the_selected_input_topic() {
 }
 
 #[test]
+fn pad_deep_link_selects_existing_page_and_preserves_pending_controls() {
+    let _desktop = native_test_guard();
+    register_window_class().expect("settings window class registers");
+    let window = create_main_window().expect("settings root window creates");
+    let app = Box::into_raw(Box::new(
+        App::new(window).expect("settings controls create"),
+    ));
+    // This fixture owns its HWND directly and does not acquire the production
+    // singleton or search for another user's Settings window.
+    // SAFETY: the test owns both the HWND and App for the entire message call.
+    unsafe {
+        SetWindowLongPtrW(window, GWLP_USERDATA, app as isize);
+        (*app).show_pad_settings();
+        assert_eq!((*app).selected_panel, 0);
+        assert_eq!(
+            selected_input_tree_item((*app).input_tree),
+            (*app).pad_tree_item
+        );
+        assert!(has_visible_style((*app).general.pad_panel));
+        assert!(!has_visible_style((*app).general.basic_panel));
+
+        select_combo((*app).general.keymap, 1);
+        (*app).show_panel(2);
+        assert_eq!((*app).selected_panel, 2);
+        let message = open_pad_settings_message();
+        assert_ne!(message, 0);
+        assert_eq!(SendMessageW(window, message, None, None), LRESULT(1));
+        assert_eq!((*app).selected_panel, 0);
+        assert_eq!(
+            selected_input_tree_item((*app).input_tree),
+            (*app).pad_tree_item
+        );
+        assert!(has_visible_style((*app).general.pad_panel));
+        assert!(!has_visible_style((*app).general.basic_panel));
+        assert_eq!(combo_index((*app).general.keymap), Some(1));
+
+        SetWindowLongPtrW(window, GWLP_USERDATA, 0);
+        let _ = DestroyWindow(window);
+        drop(Box::from_raw(app));
+    }
+}
+
+#[test]
 fn settings_window_uses_the_sakura_input_icon() {
     let _desktop = native_test_guard();
     register_window_class().expect("settings window class registers");
@@ -450,6 +546,7 @@ fn input_tree_lists_only_real_sakura_topics_through_association() {
             "推測変換",
             "連想変換",
             "アプリ別の設定",
+            "Sakura Pad",
         ]
     );
     assert!(

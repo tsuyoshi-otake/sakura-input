@@ -12,43 +12,187 @@
 //! at the target temp directory. The installed IME, the production pipe, and
 //! the user's own memos are never touched.
 
+use std::mem::size_of;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command};
-use std::sync::{Arc, Condvar, Mutex};
+use std::process::{Child, Command, Stdio};
+use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread::{self, sleep, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sakura_ipc::{security::Descriptor, Client, PipeInstance};
+use sakura_pad_session_proto::{
+    self as session, Operation, Request as SessionRequest, SecretBytes, Status as SessionStatus,
+};
 use sakura_proto::{
     decode_request, encode_response, AppearanceTheme, PadShortcut, Request, Response, UiState,
     PROTOCOL_VERSION,
 };
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{HWND, LPARAM, RECT, WPARAM};
+use windows::Win32::Foundation::{
+    CloseHandle, HANDLE, HWND, LPARAM, RECT, RPC_E_CHANGED_MODE, WAIT_OBJECT_0, WPARAM,
+};
 use windows::Win32::Graphics::Gdi::{
     BitBlt, ClientToScreen, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject,
     DrawTextW, GetDC, GetDIBits, GetWindowDC, ReleaseDC, SelectObject, BITMAPINFO,
     BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, DT_CALCRECT, DT_NOPREFIX, DT_SINGLELINE, HFONT,
     SRCCOPY,
 };
+use windows::Win32::System::Com::{
+    CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
+    COINIT_APARTMENTTHREADED,
+};
+use windows::Win32::System::Diagnostics::ToolHelp::{
+    CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W, TH32CS_SNAPPROCESS,
+};
+use windows::Win32::System::Threading::{
+    OpenProcess, TerminateProcess, WaitForSingleObject, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
+};
+use windows::Win32::UI::Accessibility::{
+    CUIAutomation, IUIAutomation, IUIAutomationValuePattern, TreeScope_Descendants,
+    UIA_ValuePatternId,
+};
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
+use windows::Win32::UI::Input::KeyboardAndMouse::IsWindowEnabled;
 use windows::Win32::UI::WindowsAndMessaging::{
     FindWindowExW, GetClientRect, GetDlgItem, GetSystemMetrics, GetWindow, GetWindowLongPtrW,
-    GetWindowRect, GetWindowThreadProcessId, IsWindowVisible, PostMessageW, SendMessageW,
-    SetForegroundWindow, SetWindowPos, BN_CLICKED, EN_CHANGE, GWL_EXSTYLE, GW_OWNER, ICON_BIG,
-    ICON_SMALL, LB_GETCOUNT, SM_CXVSCROLL, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOZORDER, WM_APP,
-    WM_COMMAND, WM_GETFONT, WM_GETICON, WM_GETTEXT, WM_GETTEXTLENGTH, WM_SETTEXT, WS_EX_APPWINDOW,
-    WS_EX_DLGMODALFRAME, WS_EX_TOOLWINDOW,
+    GetWindowRect, GetWindowThreadProcessId, IsWindow, IsWindowVisible, PostMessageW,
+    RegisterWindowMessageW, SendMessageTimeoutW, SendMessageW, SetForegroundWindow, SetWindowPos,
+    BN_CLICKED, EN_CHANGE, GWL_EXSTYLE, GWL_STYLE, GW_OWNER, HWND_NOTOPMOST, ICON_BIG, ICON_SMALL,
+    IDNO, IDYES, LBN_SELCHANGE, LB_GETCOUNT, LB_GETCURSEL, LB_GETTEXT, LB_GETTEXTLEN,
+    LB_GETTOPINDEX, LB_SETCURSEL, LB_SETTOPINDEX, PBT_APMSUSPEND, SMTO_ABORTIFHUNG, SM_CXVSCROLL,
+    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, WM_APP, WM_CLOSE, WM_COMMAND, WM_GETFONT,
+    WM_GETICON, WM_GETTEXT, WM_GETTEXTLENGTH, WM_POWERBROADCAST, WM_SETTEXT, WM_WTSSESSION_CHANGE,
+    WS_EX_APPWINDOW, WS_EX_DLGMODALFRAME, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WTS_SESSION_LOCK,
 };
+use zeroize::Zeroizing;
 
 const PATIENT: Duration = Duration::from_secs(5);
 const TEST_PIPE_PREFIX: &str = r"\\.\pipe\SakuraInputRendererTest-";
 const HOST_CLASS: PCWSTR = windows::core::w!("SakuraInputRenderer");
 const PAD_CLASS: PCWSTR = windows::core::w!("SakuraInputPad");
+const TOTP_CLASS: PCWSTR = windows::core::w!("SakuraPadTotpPrompt");
+const PROTECTION_SETTINGS_CLASS: PCWSTR = windows::core::w!("SakuraPadProtectionSettingsPrompt");
+const PASSWORD_CHANGE_CLASS: PCWSTR = windows::core::w!("SakuraPadPasswordChangePrompt");
+const CHOOSE_PASSWORD_CHANGE_ID: i32 = 411;
+const CHOOSE_TOTP_ID: i32 = 412;
+const CURRENT_PASSWORD_ID: i32 = 401;
+const NEW_PASSWORD_ID: i32 = 402;
+const CONFIRM_NEW_PASSWORD_ID: i32 = 403;
+const SUBMIT_PASSWORD_CHANGE_ID: i32 = 404;
+const TOTP_CODE_ID: i32 = 301;
+const TOTP_ACCEPT_ID: i32 = 302;
+const TOTP_SECRET_ID: i32 = 304;
+
+#[allow(dead_code)] // The UI fixture only needs HOTP from the renderer's local TOTP primitive.
+#[path = "../src/pad_totp.rs"]
+mod pad_totp;
 /// `WM_PAD_TRIGGER` in `main.rs`. The gesture that normally sends it is a
 /// Ctrl double tap, which a test cannot deliver without typing into whatever
 /// the user has in front.
 const WM_PAD_TRIGGER: u32 = WM_APP + 6;
+
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn settings_registered_message_opens_pad_in_isolated_renderer() {
+    let app_data = IsolatedAppData::new("pad-settings-activation");
+    let mut engine = FixtureEngine::new(initial_state());
+    let child = Command::new(PathBuf::from(env!("CARGO_BIN_EXE_sakura_renderer")))
+        .arg("--test-pipe")
+        .arg(engine.pipe_name())
+        .env("LOCALAPPDATA", app_data.path())
+        .spawn()
+        .expect("spawn test-owned renderer");
+    let mut renderer = OwnedChild::new(child, "renderer");
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    // SAFETY: the static registered-message name is shared with Settings;
+    // the only recipient is this test-owned renderer host HWND.
+    unsafe {
+        let message = RegisterWindowMessageW(windows::core::w!("SakuraInput.OpenPad.v1"));
+        assert_ne!(message, 0);
+        PostMessageW(Some(host), message, WPARAM(0), LPARAM(0))
+            .expect("queue Settings Pad activation");
+    }
+    let pad = wait_for_renderer_window(renderer.pid(), PAD_CLASS, true);
+    // SAFETY: the discovered Pad HWND remains owned by the live renderer.
+    assert_ne!(
+        // SAFETY: pad is a live window owned by this test renderer; the call
+        // reads only its extended style bits.
+        unsafe { GetWindowLongPtrW(pad, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST.0,
+        0
+    );
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn settings_protection_and_lock_messages_route_to_isolated_pad() {
+    let app_data = IsolatedAppData::new("pad-settings-protection-actions");
+    let mut engine = FixtureEngine::new(initial_state());
+    let child = Command::new(PathBuf::from(env!("CARGO_BIN_EXE_sakura_renderer")))
+        .arg("--test-pipe")
+        .arg(engine.pipe_name())
+        .env("LOCALAPPDATA", app_data.path())
+        .spawn()
+        .expect("spawn test-owned renderer");
+    let mut renderer = OwnedChild::new(child, "renderer");
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    assert_eq!(
+        request_pad_scalar(host, windows::core::w!("SakuraInput.PadStatus.v1")),
+        1
+    );
+    assert!(
+        find_renderer_window(renderer.pid(), PAD_CLASS, false).is_none(),
+        "status query must not construct the Pad"
+    );
+    // SAFETY: this private host belongs to the renderer process spawned
+    // above. Both registered messages are data-free and process-independent.
+    unsafe {
+        let message = RegisterWindowMessageW(windows::core::w!("SakuraInput.OpenPadProtection.v1"));
+        assert_ne!(message, 0);
+        PostMessageW(Some(host), message, WPARAM(0), LPARAM(0))
+            .expect("queue Settings protection entry");
+    }
+    let pad = wait_for_renderer_window(renderer.pid(), PAD_CLASS, true);
+    wait_for_control(pad, ENROLL_METHOD_ID);
+    assert_eq!(
+        request_pad_scalar(host, windows::core::w!("SakuraInput.LockPad.v1")),
+        1,
+        "synchronous lock reply must confirm session masking"
+    );
+    let deadline = Instant::now() + PATIENT;
+    while visible(pad) {
+        assert!(Instant::now() < deadline, "Settings lock did not hide Pad");
+        sleep(Duration::from_millis(20));
+    }
+    assert_eq!(
+        request_pad_scalar(host, windows::core::w!("SakuraInput.PadStatus.v1")),
+        1
+    );
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+fn request_pad_scalar(host: HWND, name: PCWSTR) -> usize {
+    // SAFETY: the registered names and zero parameters are the same data-free
+    // cross-process contract used by Settings. The result is one scalar.
+    unsafe {
+        let message = RegisterWindowMessageW(name);
+        assert_ne!(message, 0);
+        let mut result = 0usize;
+        let delivered = SendMessageTimeoutW(
+            host,
+            message,
+            WPARAM(0),
+            LPARAM(0),
+            SMTO_ABORTIFHUNG,
+            2_000,
+            Some(&mut result),
+        );
+        assert_ne!(delivered.0, 0, "renderer did not answer Pad scalar request");
+        result
+    }
+}
 
 /// Control identifiers, mirrored from `pad.rs`.
 ///
@@ -65,13 +209,2388 @@ const TITLE_ID: i32 = 108;
 const BODY_ID: i32 = 109;
 const NEW_ID: i32 = 110;
 const SORT_ID: i32 = 111;
-const SYNC_ID: i32 = 112;
+const OVERFLOW_ID: i32 = 112;
+const GIT_SYNC_MENU_ID: i32 = 134;
 const SHARE_ID: i32 = 113;
 const DELETE_ID: i32 = 114;
 const LIST_RAIL_ID: i32 = 115;
 const BODY_RAIL_ID: i32 = 116;
+const LOCK_HEADLINE_ID: i32 = 117;
+const LOCK_PASSWORD_ID: i32 = 118;
+const LOCK_UNLOCK_ID: i32 = 119;
+const LOCK_STATUS_ID: i32 = 120;
+const LOCK_PASSWORD_LABEL_ID: i32 = 121;
+const LOCK_METHOD_ID: i32 = LOCK_PASSWORD_LABEL_ID;
+// Synthetic test action: Settings sends this UI-thread message to start the
+// existing Pad protection flow. There is no longer a Pad toolbar button.
+const OPEN_PAD_PROTECTION: i32 = -1;
+const WM_PAD_OPEN_PROTECTION: u32 = WM_APP + 12;
+const ENROLL_METHOD_ID: i32 = 124;
+const ENROLL_PASSWORD_ID: i32 = 125;
+const ENROLL_HEADLINE_ID: i32 = 123;
+const ENROLL_CONFIRM_LABEL_ID: i32 = 126;
+const ENROLL_CONFIRM_PASSWORD_ID: i32 = 127;
+const ENROLL_SUBMIT_ID: i32 = 128;
+const ENROLL_CANCEL_ID: i32 = 129;
+const ENROLL_STATUS_ID: i32 = 130;
+const MEMO_PROTECT_ID: i32 = 131;
+const ENROLL_INPUT_LABEL_ID: i32 = 132;
 
-const ALL_CONTROLS: [(&str, i32); 15] = [
+// The renderer is a binary crate. Include its storage contract to construct
+// an actual migrated fixture, rather than forging a marker that merely looks
+// like one to the legacy loader.
+#[allow(dead_code)] // The fixture uses only the storage APIs needed for migration.
+#[path = "../src/pad_storage.rs"]
+mod pad_storage;
+
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn migrated_protected_pad_starts_and_reopens_without_legacy_text() {
+    const SECRET_TITLE: &str = "protected title sentinel 7f4c";
+    const SECRET_BODY: &str = "protected body sentinel 93ab";
+    let app_data = IsolatedAppData::new("pad-protected-ui");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut document = pad_storage::PadDocument {
+        generation: 1,
+        ..Default::default()
+    };
+    document
+        .memos
+        .push(pad_storage::PadMemo::new(1, SECRET_TITLE, SECRET_BODY, 1));
+    store.write(&document).expect("seed legacy memo");
+    let vault_id = [0x42; 16];
+    let protected_bytes = b"synthetic authenticated v3 fixture";
+    store
+        .migrate_to_protected(
+            &document,
+            document.generation,
+            vault_id,
+            protected_bytes,
+            |path| {
+                assert_eq!(
+                    std::fs::read(path).expect("read protected copy"),
+                    protected_bytes
+                );
+                Ok((vault_id, document.clone()))
+            },
+        )
+        .expect("migrate synthetic protected vault");
+    assert!(matches!(
+        store.load(),
+        Err(pad_storage::StorageError::ProtectedCutover)
+    ));
+
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    for pass in 0..2 {
+        let headline = control(pad, LOCK_HEADLINE_ID);
+        let password = control(pad, LOCK_PASSWORD_ID);
+        let unlock = control(pad, LOCK_UNLOCK_ID);
+        let status = control(pad, LOCK_STATUS_ID);
+        let label = control(pad, LOCK_PASSWORD_LABEL_ID);
+        assert_eq!(text_of(headline), "Sakura Pad はロックされています");
+        assert_eq!(text_of(status), "パスワードを入力して解除してください");
+        assert_eq!(text_of(label), "パスワードで解除 · 復旧キーに切替");
+        assert_eq!(text_of(unlock), "解除");
+        assert!(
+            // SAFETY: unlock is a live child of the test-owned Pad HWND.
+            unsafe { IsWindowEnabled(unlock) }.as_bool()
+        );
+        assert_ne!(
+            // SAFETY: password is a live Pad child and this reads style bits.
+            unsafe { GetWindowLongPtrW(password, GWL_STYLE) } as u32 & 0x20,
+            0,
+            "password edit must retain ES_PASSWORD"
+        );
+        for (_, id) in ALL_CONTROLS {
+            assert!(
+                // SAFETY: pad remains live; GetDlgItem only probes an ID.
+                unsafe { GetDlgItem(Some(pad), id) }.is_err(),
+                "legacy control {id} exists on locked pass {pass}"
+            );
+        }
+        // Native child window text is the accessible label exposed by these
+        // standard controls. Inspect every child, including unseen ones.
+        let mut previous = None;
+        loop {
+            // SAFETY: pad is live and previous is either None or a child
+            // returned by this same enumeration in the prior iteration.
+            let child =
+                unsafe { FindWindowExW(Some(pad), previous, PCWSTR::null(), PCWSTR::null()) };
+            let Ok(child) = child else {
+                break;
+            };
+            let label = text_of(child);
+            assert!(
+                !label.contains(SECRET_TITLE) && !label.contains(SECRET_BODY),
+                "protected memo leaked through child text: {label}"
+            );
+            previous = Some(child);
+        }
+        assert_eq!(
+            // SAFETY: pad remains live; this only reads its extended style.
+            unsafe { GetWindowLongPtrW(pad, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST.0,
+            WS_EX_TOPMOST.0
+        );
+        if pass == 0 {
+            // SAFETY: pad and host are live HWNDs owned by this fixture;
+            // these messages have no caller-owned pointer parameters.
+            unsafe {
+                SendMessageW(pad, WM_CLOSE, None, None);
+                assert!(!IsWindowVisible(pad).as_bool());
+                PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+                    .expect("reopen locked pad");
+            }
+            assert_eq!(
+                wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+                pad
+            );
+        }
+    }
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires SAKURA_PAD_SESSION_TEST_EXE and an interactive Windows desktop"]
+fn session_lock_removes_unlocked_protected_memo_hwnds() {
+    const PASSWORD: &str = "Pad fixture password 7f93";
+    const SECRET_TITLE: &str = "protected title after unlock 2c7b";
+    const SECRET_BODY: &str = "protected body after unlock 6a19";
+    let image = PathBuf::from(
+        std::env::var_os("SAKURA_PAD_SESSION_TEST_EXE")
+            .expect("SAKURA_PAD_SESSION_TEST_EXE is required for real protected HWND test"),
+    );
+    assert!(
+        image.is_absolute() && image.is_file(),
+        "Pad session image must be an absolute existing file"
+    );
+    let app_data = IsolatedAppData::new("pad-protected-session-lock");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut document = pad_storage::PadDocument {
+        generation: 1,
+        ..Default::default()
+    };
+    document
+        .memos
+        .push(pad_storage::PadMemo::new(1, SECRET_TITLE, SECRET_BODY, 1));
+    store.write(&document).expect("seed legacy Pad document");
+    let vault_id = [0x5b; 16];
+    let envelope = create_test_envelope(&image, vault_id, PASSWORD, &document);
+    store
+        .migrate_to_protected(
+            &document,
+            document.generation,
+            vault_id,
+            &envelope,
+            |path| {
+                assert_eq!(std::fs::read(path).expect("read staged envelope"), envelope);
+                Ok((vault_id, document.clone()))
+            },
+        )
+        .expect("migrate authenticated fixture");
+
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    set_text(pad, LOCK_PASSWORD_ID, PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        // SAFETY: pad is a live fixture HWND; this checks whether the native
+        // editor child was created after authentication.
+        if let Ok(title) = unsafe { GetDlgItem(Some(pad), TITLE_ID) } {
+            if text_of(title) == SECRET_TITLE {
+                break;
+            }
+        }
+        assert!(Instant::now() < deadline, "protected Pad did not unlock");
+        sleep(Duration::from_millis(20));
+    }
+    assert_eq!(text_of(control(pad, BODY_ID)), SECRET_BODY);
+    // SAFETY: pad is a live, registered session-notification HWND. This
+    // synthetic message carries an integer event code and no pointer data.
+    unsafe {
+        SendMessageW(
+            pad,
+            WM_WTSSESSION_CHANGE,
+            Some(WPARAM(WTS_SESSION_LOCK as usize)),
+            None,
+        );
+    }
+    assert!(
+        // SAFETY: pad remains a live HWND after ShowWindow(SW_HIDE).
+        !unsafe { IsWindowVisible(pad) }.as_bool()
+    );
+    for id in [TITLE_ID, BODY_ID, LIST_ID, SEARCH_ID] {
+        assert!(
+            // SAFETY: pad is live; GetDlgItem only queries a child ID.
+            unsafe { GetDlgItem(Some(pad), id) }.is_err(),
+            "memo child {id} survived simulated session lock"
+        );
+    }
+    assert_eq!(
+        text_of(control(pad, LOCK_HEADLINE_ID)),
+        "Sakura Pad はロックされています"
+    );
+    // SAFETY: host is the live renderer host HWND and this trigger message
+    // has no pointer payload.
+    unsafe {
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0)).expect("reopen locked Pad");
+    }
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    assert_ne!(
+        // SAFETY: pad remains live on reopen; this only reads style bits.
+        unsafe { GetWindowLongPtrW(pad, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST.0,
+        0
+    );
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+fn host_suspend_masks_unlocked_whole_pad_before_reopen() {
+    const PASSWORD: &str = "suspend Pad password 4f83";
+    const TITLE: &str = "suspend protected title 20ab";
+    const BODY: &str = "suspend protected body 67d1";
+    let app_data = IsolatedAppData::new("pad-host-suspend");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+
+    set_text(pad, TITLE_ID, TITLE);
+    set_text(pad, BODY_ID, BODY);
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    let deadline = Instant::now() + PATIENT;
+    while !store.load().is_ok_and(|loaded| {
+        loaded
+            .document
+            .find(1)
+            .and_then(pad_storage::PadMemo::plain_content)
+            == Some((TITLE, BODY))
+    }) {
+        assert!(Instant::now() < deadline, "plain memo did not save");
+        sleep(Duration::from_millis(30));
+    }
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, PASSWORD);
+    set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "whole-Pad recovery key",
+        |value| value == "復旧キーを保存してください",
+    );
+    let recovery_key = Zeroizing::new(text_of(control(pad, ENROLL_PASSWORD_ID)));
+    assert!(recovery_key.starts_with("SPRK1-"));
+    confirm_saved_recovery_key(pad, &recovery_key);
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    set_text(pad, LOCK_PASSWORD_ID, PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    let title = wait_for_control(pad, TITLE_ID);
+    wait_for_text(title, "unlocked protected Pad", |value| value == TITLE);
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+
+    // SAFETY: send only the suspend notification to this fixture's renderer
+    // host. It masks the Pad without suspending the Windows session.
+    let response = unsafe {
+        SendMessageW(
+            host,
+            WM_POWERBROADCAST,
+            Some(WPARAM(PBT_APMSUSPEND as usize)),
+            None,
+        )
+    };
+    assert_eq!(response.0, 1, "renderer host did not handle suspend");
+    assert!(!visible(pad), "suspend must hide the protected Pad");
+    for id in [TITLE_ID, BODY_ID, LIST_ID, SEARCH_ID] {
+        // SAFETY: pad remains live; these lookups only inspect its children.
+        let absent = unsafe { GetDlgItem(Some(pad), id) }.is_err();
+        assert!(absent, "plaintext child {id} survived suspend");
+    }
+    assert_no_child_text_contains(pad, &[TITLE, BODY]);
+    // SAFETY: the private host reopens only the Pad owned by this fixture.
+    unsafe {
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+            .expect("reopen Pad after simulated suspend");
+    }
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    for id in [TITLE_ID, BODY_ID, LIST_ID] {
+        // SAFETY: a locked Pad must not recreate these children before auth.
+        assert!(unsafe { GetDlgItem(Some(pad), id) }.is_err());
+    }
+    assert_no_child_text_contains(pad, &[TITLE, BODY]);
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires SAKURA_PAD_SESSION_TEST_EXE and an interactive Windows desktop"]
+fn one_locked_memo_hides_its_title_from_native_controls_and_search() {
+    const MEMO_PASSWORD: &str = "Independent memo fixture password 9c12";
+    const SECRET_TITLE: &str = "private memo title sentinel 93f4";
+    const SECRET_BODY: &str = "private memo body sentinel 61ab";
+    let image = PathBuf::from(
+        std::env::var_os("SAKURA_PAD_SESSION_TEST_EXE")
+            .expect("SAKURA_PAD_SESSION_TEST_EXE is required for real memo test"),
+    );
+    assert!(image.is_absolute() && image.is_file());
+    let app_data = IsolatedAppData::new("pad-memo-locked-ui");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut legacy = pad_storage::PadDocument {
+        generation: 1,
+        ..Default::default()
+    };
+    legacy
+        .memos
+        .push(pad_storage::PadMemo::new(1, SECRET_TITLE, SECRET_BODY, 1));
+    legacy.memos.push(pad_storage::PadMemo::new(
+        2,
+        "public memo",
+        "public body",
+        1,
+    ));
+    store.write(&legacy).expect("seed isolated v2 Pad");
+    let plain_v4 = store
+        .migrate_to_v4(
+            &legacy,
+            |id, document| {
+                let mut next = document.clone();
+                next.document_id = id;
+                Ok(next)
+            },
+            |_, _, _| panic!("plain migration has no encrypted memo to verify"),
+        )
+        .expect("migrate isolated Pad to v4");
+    let payload =
+        pad_storage::MemoPayloadV1::encode(SECRET_TITLE, SECRET_BODY).expect("encode memo fixture");
+    let envelope = create_test_payload(&image, plain_v4.document_id, 1, MEMO_PASSWORD, payload);
+    let mut protected = plain_v4.clone();
+    protected.generation += 1;
+    protected
+        .find_mut(1)
+        .expect("private memo")
+        .protect_with_envelope(envelope)
+        .expect("seal private memo");
+    store
+        .write_v4(&plain_v4, &protected)
+        .expect("publish protected-only recovery generation");
+
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let _apartment = PadUiaApartment::new();
+    // SAFETY: COM is initialized on this test thread; CUIAutomation is the
+    // system-provided in-process UI Automation client.
+    let automation: IUIAutomation = unsafe {
+        CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
+            .expect("create Pad UI Automation client")
+    };
+    let list = list_of(pad);
+    assert_eq!(row_count(list), 2);
+    let labels: Vec<String> = (0..2).map(|index| list_text(list, index)).collect();
+    assert!(labels.iter().any(|label| label == "保護されたメモ 01"));
+    assert!(labels.iter().any(|label| label == "public memo"));
+    assert!(labels.iter().all(|label| !label.contains(SECRET_TITLE)));
+    assert_no_child_text_contains(pad, &[SECRET_TITLE, SECRET_BODY]);
+    assert_locked_memo_uia(&automation, pad, SECRET_TITLE, SECRET_BODY);
+    set_text(pad, SEARCH_ID, SECRET_TITLE);
+    notify(pad, SEARCH_ID, EN_CHANGE as u16);
+    wait_for_text(control(pad, STATUS_ID), "locked search notice", |value| {
+        value.contains("ロック中のメモの内容は検索しません")
+    });
+    let deadline = Instant::now() + PATIENT;
+    while row_count(list) != 0 {
+        assert!(Instant::now() < deadline, "locked title appeared in search");
+        sleep(Duration::from_millis(20));
+    }
+    set_text(pad, SEARCH_ID, "");
+    notify(pad, SEARCH_ID, EN_CHANGE as u16);
+    let deadline = Instant::now() + PATIENT;
+    while row_count(list) != 2 {
+        assert!(
+            Instant::now() < deadline,
+            "list did not restore after search"
+        );
+        sleep(Duration::from_millis(20));
+    }
+    let private_row = (0..2)
+        .find(|index| list_text(list, *index) == "保護されたメモ 01")
+        .expect("private memo row remains visible");
+    // SAFETY: list is this fixture's live child. Selection uses integer
+    // indices only and the follow-up notification has no pointer payload.
+    unsafe {
+        SendMessageW(list, LB_SETCURSEL, Some(WPARAM(private_row)), None);
+    }
+    notify(pad, LIST_ID, LBN_SELCHANGE as u16);
+    wait_for_text(
+        control(pad, MEMO_PROTECT_ID),
+        "locked memo action",
+        |value| value == "このメモを解除",
+    );
+    assert_eq!(text_of(control(pad, TITLE_ID)), "");
+    assert_eq!(text_of(control(pad, BODY_ID)), "");
+    assert_no_child_text_contains(pad, &[SECRET_TITLE, SECRET_BODY]);
+    // SAFETY: both controls are live children of the isolated Pad HWND.
+    assert!(!unsafe { IsWindowEnabled(control(pad, TITLE_ID)) }.as_bool());
+    // SAFETY: both controls are live children of the isolated Pad HWND.
+    assert!(!unsafe { IsWindowEnabled(control(pad, BODY_ID)) }.as_bool());
+    assert_locked_memo_uia(&automation, pad, SECRET_TITLE, SECRET_BODY);
+    click(pad, SHARE_ID);
+    wait_for_text(control(pad, STATUS_ID), "locked copy refusal", |value| {
+        value.contains("解除が必要")
+    });
+
+    click(pad, MEMO_PROTECT_ID);
+    wait_for_control(pad, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, MEMO_PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(control(pad, TITLE_ID), "decrypted memo title", |value| {
+        value == SECRET_TITLE
+    });
+    assert_eq!(text_of(control(pad, BODY_ID)), SECRET_BODY);
+    let unlocked_uia = pad_uia_strings(&automation, pad);
+    assert!(
+        unlocked_uia
+            .iter()
+            .any(|value| value.contains(SECRET_TITLE)),
+        "unlocked title must be observable through UI Automation"
+    );
+    assert!(
+        unlocked_uia.iter().any(|value| value.contains(SECRET_BODY)),
+        "unlocked body must be observable through UI Automation"
+    );
+    click(pad, MEMO_PROTECT_ID);
+    let choice = wait_for_owned_dialog(pad);
+    // SAFETY: IDYES chooses the test-owned dialog's explicit memo lock action.
+    unsafe {
+        PostMessageW(
+            Some(choice),
+            WM_COMMAND,
+            WPARAM(IDYES.0 as usize),
+            LPARAM(0),
+        )
+        .expect("choose memo lock");
+    }
+    wait_for_text(
+        control(pad, MEMO_PROTECT_ID),
+        "relocked memo action",
+        |value| value == "このメモを解除",
+    );
+    assert_eq!(text_of(control(pad, TITLE_ID)), "");
+    assert_eq!(text_of(control(pad, BODY_ID)), "");
+    assert!(
+        (0..2).any(|index| list_text(list, index) == "保護されたメモ 01"),
+        "relocking must replace the accessible row label"
+    );
+    assert_no_child_text_contains(pad, &[SECRET_TITLE, SECRET_BODY]);
+    assert_locked_memo_uia(&automation, pad, SECRET_TITLE, SECRET_BODY);
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+/// A v4 save stages an encrypted draft before publishing its new primary.
+/// Kill the owned renderer at that precise boundary, then exercise both
+/// explicit choices shown on a later launch. No hardware or installed Pad is
+/// involved: LOCALAPPDATA, the fixture pipe, and the pause signal are private.
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop and debug build"]
+fn v4_draft_survives_forced_exit_and_can_be_deferred_then_restored() {
+    if !cfg!(debug_assertions) {
+        panic!("draft pause hook requires a debug renderer");
+    }
+    const CONFIRMED_TITLE: &str = "confirmed public memo 6e21";
+    const CONFIRMED_BODY: &str = "confirmed public body 54ac";
+    const DRAFT_TITLE: &str = "forced-exit draft title 9b30";
+    const DRAFT_BODY: &str = "forced-exit draft body 7d12";
+
+    let app_data = IsolatedAppData::new("pad-v4-forced-draft-ui");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut legacy = pad_storage::PadDocument {
+        generation: 1,
+        ..Default::default()
+    };
+    legacy.memos.push(pad_storage::PadMemo::new(
+        1,
+        "private memo before cutover",
+        "private body before cutover",
+        1,
+    ));
+    legacy.memos.push(pad_storage::PadMemo::new(
+        2,
+        CONFIRMED_TITLE,
+        CONFIRMED_BODY,
+        1,
+    ));
+    store.write(&legacy).expect("seed isolated Pad");
+    let confirmed = store
+        .migrate_to_v4(
+            &legacy,
+            |id, before| {
+                let mut next = before.clone();
+                next.document_id = id;
+                next.find_mut(1)
+                    .expect("private memo")
+                    .protect_with_envelope(b"isolated opaque memo envelope".to_vec())?;
+                Ok(next)
+            },
+            |id, memo_id, envelope| {
+                assert_ne!(id, [0; 16]);
+                assert_eq!(memo_id, 1);
+                assert_eq!(envelope, b"isolated opaque memo envelope");
+                Ok(())
+            },
+        )
+        .expect("migrate isolated Pad to memo protection mode");
+    assert!(confirmed.find(1).unwrap().plain_content().is_none());
+    let signal = DraftPauseSignal::new("v4-draft-staged");
+    let mut engine = FixtureEngine::new(initial_state());
+    let mut command = Command::new(PathBuf::from(env!("CARGO_BIN_EXE_sakura_renderer")));
+    command
+        .arg("--test-pipe")
+        .arg(engine.pipe_name())
+        .env("LOCALAPPDATA", app_data.path())
+        .env("SAKURA_PAD_TEST_PAUSE_AFTER_V4_DRAFT", signal.path());
+    let mut renderer = OwnedChild::new(
+        command.spawn().expect("spawn isolated renderer"),
+        "renderer",
+    );
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    // SAFETY: this host belongs to the renderer spawned above.
+    unsafe {
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0)).expect("open isolated Pad");
+    }
+    let pad = wait_for_renderer_window(renderer.pid(), PAD_CLASS, true);
+    let heartbeat = engine.start_heartbeat();
+    select_memo_named(pad, CONFIRMED_TITLE);
+    set_text(pad, TITLE_ID, DRAFT_TITLE);
+    set_text(pad, BODY_ID, DRAFT_BODY);
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    signal.wait_until_staged();
+    renderer.kill_and_confirm_exit();
+    assert!(find_renderer_window(renderer.pid(), HOST_CLASS, false).is_none());
+    assert!(find_renderer_window(renderer.pid(), PAD_CLASS, false).is_none());
+    drop(heartbeat);
+    engine.stop();
+
+    let still_confirmed = store
+        .load_v4()
+        .expect("load primary after forced exit")
+        .document;
+    assert_eq!(
+        still_confirmed, confirmed,
+        "the staged draft is not a committed generation"
+    );
+    let draft_path = store.directory().join("memo.draft.bin");
+    let encrypted_draft = std::fs::read(&draft_path).expect("staged draft survives process exit");
+    assert!(!encrypted_draft
+        .windows(DRAFT_BODY.len())
+        .any(|part| part == DRAFT_BODY.as_bytes()));
+
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad, dialog) = open_pad_with_draft_choice(&engine, &app_data);
+    let heartbeat = engine.start_heartbeat();
+    assert_eq!(text_of(dialog), "Sakura Pad の草稿を復元");
+    assert!(dialog_static_text(dialog).contains("強制終了前の保護された未保存草稿"));
+    // SAFETY: IDNO belongs to this isolated Pad's native recovery dialog.
+    unsafe {
+        PostMessageW(Some(dialog), WM_COMMAND, WPARAM(IDNO.0 as usize), LPARAM(0))
+            .expect("defer draft recovery");
+    }
+    wait_for_dialog_closed(dialog);
+    wait_for_renderer_window(renderer.pid(), PAD_CLASS, true);
+    select_memo_named(pad, CONFIRMED_TITLE);
+    assert_eq!(text_of(control(pad, BODY_ID)), CONFIRMED_BODY);
+    assert_eq!(
+        store.load_v4().expect("read deferred primary").document,
+        confirmed
+    );
+    assert_eq!(std::fs::read(&draft_path).unwrap(), encrypted_draft);
+    renderer.kill_and_confirm_exit();
+    drop(heartbeat);
+    engine.stop();
+
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad, dialog) = open_pad_with_draft_choice(&engine, &app_data);
+    let heartbeat = engine.start_heartbeat();
+    // SAFETY: IDYES selects restoration only for this test-owned Pad dialog.
+    unsafe {
+        PostMessageW(
+            Some(dialog),
+            WM_COMMAND,
+            WPARAM(IDYES.0 as usize),
+            LPARAM(0),
+        )
+        .expect("restore staged draft");
+    }
+    wait_for_dialog_closed(dialog);
+    wait_for_renderer_window(renderer.pid(), PAD_CLASS, true);
+    select_memo_named(pad, DRAFT_TITLE);
+    assert_eq!(text_of(control(pad, BODY_ID)), DRAFT_BODY);
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        let published = store.load_v4().expect("read restored primary").document;
+        if published.generation > confirmed.generation {
+            assert_eq!(
+                published.find(2).unwrap().plain_content(),
+                Some((DRAFT_TITLE, DRAFT_BODY))
+            );
+            assert_eq!(
+                published.find(1).unwrap().protected_envelope(),
+                confirmed.find(1).unwrap().protected_envelope()
+            );
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "accepted draft was not published"
+        );
+        sleep(Duration::from_millis(30));
+    }
+    assert!(
+        !draft_path.exists(),
+        "successful publication must clear the staged draft"
+    );
+    drop(heartbeat);
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+/// A whole-Pad draft must not be offered before its v3 envelope authenticates.
+/// The test kills only its isolated renderer after encrypted draft staging,
+/// checks the password gate, and opens a new process after accepting recovery.
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop and debug build"]
+fn v3_draft_requires_password_before_choice_and_restores_after_forced_exit() {
+    if !cfg!(debug_assertions) {
+        panic!("draft pause hook requires a debug renderer");
+    }
+    const PASSWORD: &str = "whole draft password 7f24";
+    const CONFIRMED_TITLE: &str = "whole confirmed title 4e29";
+    const CONFIRMED_BODY: &str = "whole confirmed body 86c1";
+    const DRAFT_TITLE: &str = "whole interrupted draft title 6a35";
+    const DRAFT_BODY: &str = "whole interrupted draft body 19dc";
+
+    let mut session_image = PathBuf::from(env!("CARGO_BIN_EXE_sakura_renderer"));
+    session_image.set_file_name("sakura_pad_session.exe");
+    assert!(
+        session_image.is_file(),
+        "build the adjacent Pad session image first"
+    );
+    let app_data = IsolatedAppData::new("pad-v3-forced-draft-ui");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let signal = DraftPauseSignal::new("v3-draft-staged");
+    let mut engine = FixtureEngine::new(initial_state());
+    let mut command = Command::new(PathBuf::from(env!("CARGO_BIN_EXE_sakura_renderer")));
+    command
+        .arg("--test-pipe")
+        .arg(engine.pipe_name())
+        .env("LOCALAPPDATA", app_data.path())
+        .env("SAKURA_PAD_TEST_PAUSE_AFTER_V3_DRAFT", signal.path());
+    let mut renderer = OwnedChild::new(
+        command.spawn().expect("spawn isolated renderer"),
+        "renderer",
+    );
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    // SAFETY: this host belongs only to the renderer spawned above.
+    unsafe {
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0)).expect("open isolated Pad");
+    }
+    let pad = wait_for_renderer_window(renderer.pid(), PAD_CLASS, true);
+    let heartbeat = engine.start_heartbeat();
+    set_text(pad, TITLE_ID, CONFIRMED_TITLE);
+    set_text(pad, BODY_ID, CONFIRMED_BODY);
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    let deadline = Instant::now() + PATIENT;
+    while !store.load().is_ok_and(|loaded| {
+        loaded
+            .document
+            .find(1)
+            .and_then(pad_storage::PadMemo::plain_content)
+            == Some((CONFIRMED_TITLE, CONFIRMED_BODY))
+    }) {
+        assert!(
+            Instant::now() < deadline,
+            "confirmed legacy memo did not save"
+        );
+        sleep(Duration::from_millis(30));
+    }
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, PASSWORD);
+    set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "whole recovery key",
+        |value| value == "復旧キーを保存してください",
+    );
+    let recovery_key = Zeroizing::new(text_of(control(pad, ENROLL_PASSWORD_ID)));
+    assert!(recovery_key.starts_with("SPRK1-"));
+    confirm_saved_recovery_key(pad, &recovery_key);
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    set_text(pad, LOCK_PASSWORD_ID, PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    wait_for_text(
+        wait_for_control(pad, TITLE_ID),
+        "whole Pad unlock",
+        |value| value == CONFIRMED_TITLE,
+    );
+    assert_eq!(text_of(control(pad, BODY_ID)), CONFIRMED_BODY);
+    let confirmed_ciphertext =
+        std::fs::read(store.protected_primary_path()).expect("read confirmed whole-Pad primary");
+    set_text(pad, TITLE_ID, DRAFT_TITLE);
+    set_text(pad, BODY_ID, DRAFT_BODY);
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    signal.wait_until_staged();
+    let session_children = TrackedSessionChildren::capture(renderer.pid());
+    assert!(
+        !session_children.0.is_empty(),
+        "live v3 session child was not found"
+    );
+    renderer.kill_and_confirm_exit();
+    session_children.assert_exited_after_renderer();
+    assert!(find_renderer_window(renderer.pid(), PAD_CLASS, false).is_none());
+    drop(heartbeat);
+    engine.stop();
+
+    assert!(matches!(
+        store.load(),
+        Err(pad_storage::StorageError::ProtectedCutover)
+    ));
+    assert_eq!(
+        std::fs::read(store.protected_primary_path()).unwrap(),
+        confirmed_ciphertext,
+        "staged draft must not publish the primary"
+    );
+    let draft_path = store.directory().join("memo.draft.bin");
+    let encrypted_draft = std::fs::read(&draft_path).expect("v3 draft survives forced exit");
+    assert!(!encrypted_draft
+        .windows(DRAFT_BODY.len())
+        .any(|part| part == DRAFT_BODY.as_bytes()));
+
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let heartbeat = engine.start_heartbeat();
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    for id in [TITLE_ID, BODY_ID, LIST_ID] {
+        // SAFETY: the locked Pad belongs to this fixture; read only its child IDs.
+        assert!(unsafe { GetDlgItem(Some(pad), id) }.is_err());
+    }
+    assert!(
+        find_owned_dialog(pad).is_none(),
+        "draft choice appeared before authentication"
+    );
+    assert_no_child_text_contains(pad, &[DRAFT_TITLE, DRAFT_BODY]);
+    set_text(pad, LOCK_PASSWORD_ID, "incorrect whole draft password");
+    click(pad, LOCK_UNLOCK_ID);
+    wait_for_text(control(pad, LOCK_STATUS_ID), "rejected password", |value| {
+        value.contains("解除情報が正しくありません")
+    });
+    assert!(
+        find_owned_dialog(pad).is_none(),
+        "bad password exposed draft choice"
+    );
+    wait_for_text(control(pad, LOCK_STATUS_ID), "password retry", |value| {
+        value == "再試行できます"
+    });
+    set_text(pad, LOCK_PASSWORD_ID, PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    let dialog = wait_for_owned_dialog(pad);
+    assert_eq!(text_of(dialog), "Sakura Pad の草稿を復元");
+    assert!(dialog_static_text(dialog).contains("強制終了前の保護された未保存草稿"));
+    for id in [TITLE_ID, BODY_ID, LIST_ID] {
+        // SAFETY: the modal choice precedes creation of plaintext Pad controls.
+        assert!(unsafe { GetDlgItem(Some(pad), id) }.is_err());
+    }
+    // SAFETY: IDYES is the recovery choice of this isolated native dialog.
+    unsafe {
+        PostMessageW(
+            Some(dialog),
+            WM_COMMAND,
+            WPARAM(IDYES.0 as usize),
+            LPARAM(0),
+        )
+        .expect("accept authenticated v3 draft");
+    }
+    wait_for_dialog_closed(dialog);
+    wait_for_text(
+        wait_for_control(pad, TITLE_ID),
+        "restored whole Pad title",
+        |value| value == DRAFT_TITLE,
+    );
+    assert_eq!(text_of(control(pad, BODY_ID)), DRAFT_BODY);
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while draft_path.exists() {
+        assert!(Instant::now() < deadline, "accepted v3 draft was not saved");
+        sleep(Duration::from_millis(40));
+    }
+    assert_ne!(
+        std::fs::read(store.protected_primary_path()).unwrap(),
+        confirmed_ciphertext
+    );
+    drop(heartbeat);
+    engine.stop();
+    renderer.wait_for_exit();
+
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let heartbeat = engine.start_heartbeat();
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    assert!(
+        find_owned_dialog(pad).is_none(),
+        "published draft was offered again"
+    );
+    set_text(pad, LOCK_PASSWORD_ID, PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    wait_for_text(
+        wait_for_control(pad, TITLE_ID),
+        "reopened v3 draft",
+        |value| value == DRAFT_TITLE,
+    );
+    assert_eq!(text_of(control(pad, BODY_ID)), DRAFT_BODY);
+    drop(heartbeat);
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+fn memo_recovery_key_confirmation_precedes_v4_cutover_and_unlocks_after_reopen() {
+    const PASSWORD: &str = "memo recovery enrollment 83ab";
+    const TITLE: &str = "recoverable memo title 2ea9";
+    const BODY: &str = "recoverable memo body 7f31";
+    let app_data = IsolatedAppData::new("pad-memo-recovery-confirm");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    let key = start_recoverable_memo_enrollment(pad, &store, PASSWORD, TITLE, BODY);
+    assert!(
+        !store.has_v4_cutover().unwrap(),
+        "confirmation must precede intent"
+    );
+    confirm_saved_recovery_key(pad, &key);
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while !store.has_v4_cutover().unwrap_or(false) {
+        assert!(
+            Instant::now() < deadline,
+            "confirmed memo never cut over to v4"
+        );
+        sleep(Duration::from_millis(30));
+    }
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    let protected = store
+        .load_v4()
+        .expect("read confirmed v4 document")
+        .document;
+    assert!(protected.find(1).unwrap().plain_content().is_none());
+    assert!(protected.find(1).unwrap().protected_envelope().is_some());
+    // SAFETY: close/reopen only this test-owned Pad and host. This forces a
+    // fresh UI session before exercising both independent unlock methods.
+    unsafe {
+        SendMessageW(pad, WM_CLOSE, None, None);
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+            .expect("reopen isolated Pad");
+    }
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    wait_for_child_text(pad, MEMO_PROTECT_ID, "locked memo action", |value| {
+        value == "このメモを解除"
+    });
+    click(pad, MEMO_PROTECT_ID);
+    wait_for_control(pad, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(control(pad, TITLE_ID), "password-unlocked memo", |value| {
+        value == TITLE
+    });
+    // The authenticated memo offers a native lock/settings choice. Exercise
+    // its lock branch before a fresh recovery unlock.
+    click(pad, MEMO_PROTECT_ID);
+    let choice = wait_for_owned_dialog(pad);
+    // SAFETY: this dialog belongs to the isolated Pad; IDYES selects its
+    // explicit "lock this memo" action without touching other windows.
+    unsafe {
+        PostMessageW(
+            Some(choice),
+            WM_COMMAND,
+            WPARAM(IDYES.0 as usize),
+            LPARAM(0),
+        )
+        .expect("choose memo lock");
+    }
+    wait_for_text(control(pad, MEMO_PROTECT_ID), "memo relock", |value| {
+        value == "このメモを解除"
+    });
+    click(pad, MEMO_PROTECT_ID);
+    wait_for_control(pad, ENROLL_PASSWORD_ID);
+    click(pad, ENROLL_CONFIRM_LABEL_ID);
+    wait_for_text(
+        control(pad, ENROLL_CONFIRM_LABEL_ID),
+        "recovery mode",
+        |value| value == "パスワードを使う",
+    );
+    set_text(pad, ENROLL_PASSWORD_ID, &key);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(control(pad, TITLE_ID), "recovery-unlocked memo", |value| {
+        value == TITLE
+    });
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+    click(pad, MEMO_PROTECT_ID);
+    let choice = wait_for_owned_dialog(pad);
+    // SAFETY: IDNO is this test-owned Pad's "memo code settings" choice.
+    unsafe {
+        PostMessageW(Some(choice), WM_COMMAND, WPARAM(IDNO.0 as usize), LPARAM(0))
+            .expect("choose memo TOTP settings");
+    }
+    let totp_dialog = wait_for_renderer_window(renderer.pid(), TOTP_CLASS, true);
+    assert_eq!(
+        // SAFETY: the dialog is live and the owner query is read-only.
+        unsafe { GetWindow(totp_dialog, GW_OWNER) }.ok(),
+        Some(pad)
+    );
+    let labels = dialog_static_text(totp_dialog);
+    assert!(labels.contains("同じ PC での確認です"));
+    assert!(labels.contains("オンライン 2FA ではありません"));
+    // SAFETY: cancel only this test-owned TOTP dialog before session mask.
+    unsafe {
+        SendMessageW(totp_dialog, WM_CLOSE, None, None);
+    }
+    // SAFETY: mask this test-owned Pad's open memo session before its fixture
+    // engine and renderer are asked to stop.
+    unsafe {
+        SendMessageW(
+            pad,
+            WM_WTSSESSION_CHANGE,
+            Some(WPARAM(WTS_SESSION_LOCK as usize)),
+            None,
+        );
+    }
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+fn cancelling_memo_recovery_key_display_keeps_legacy_data() {
+    const PASSWORD: &str = "memo recovery cancel 60f2";
+    const TITLE: &str = "cancelled memo title a31d";
+    const BODY: &str = "cancelled memo body 51ee";
+    let app_data = IsolatedAppData::new("pad-memo-recovery-cancel");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let _key = start_recoverable_memo_enrollment(pad, &store, PASSWORD, TITLE, BODY);
+    assert!(!store.has_v4_cutover().unwrap());
+    click(pad, ENROLL_CANCEL_ID);
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    assert!(
+        !store.has_v4_cutover().unwrap(),
+        "cancel must not publish intent"
+    );
+    let legacy = store
+        .load()
+        .expect("cancel leaves original document readable");
+    assert_eq!(
+        legacy.document.find(1).unwrap().plain_content(),
+        Some((TITLE, BODY))
+    );
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+fn start_recoverable_memo_enrollment(
+    pad: HWND,
+    store: &pad_storage::PadStore,
+    password: &str,
+    title: &str,
+    body: &str,
+) -> Zeroizing<String> {
+    set_text(pad, TITLE_ID, title);
+    set_text(pad, BODY_ID, body);
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        if let Ok(loaded) = store.load() {
+            if loaded
+                .document
+                .find(1)
+                .and_then(pad_storage::PadMemo::plain_content)
+                == Some((title, body))
+            {
+                break;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "plain memo was not durably saved"
+        );
+        sleep(Duration::from_millis(30));
+    }
+    click(pad, MEMO_PROTECT_ID);
+    wait_for_control(pad, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, password);
+    set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, password);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "recovery-key display",
+        |value| value == "復旧キーを保存してください",
+    );
+    let key = Zeroizing::new(text_of(control(pad, ENROLL_PASSWORD_ID)));
+    assert!(
+        key.starts_with("SPRK1-"),
+        "canonical key must be visible once"
+    );
+    let key_field = control(pad, ENROLL_PASSWORD_ID);
+    assert!(visible(key_field), "recovery key must be visible");
+    assert_eq!(
+        // SAFETY: the field is a live child of this isolated renderer; this
+        // reads only the native edit-control style bits.
+        unsafe { GetWindowLongPtrW(key_field, GWL_STYLE) } as u32 & 0x24,
+        0x04,
+        "the whole key must be selectable in an unmasked multiline field"
+    );
+    assert!(
+        !visible(control(pad, ENROLL_CONFIRM_LABEL_ID))
+            && !visible(control(pad, ENROLL_CONFIRM_PASSWORD_ID)),
+        "the obsolete password confirmation controls must be hidden"
+    );
+    assert_eq!(text_of(control(pad, ENROLL_SUBMIT_ID)), "保存して確認へ");
+    capture(pad, "memo-recovery-key");
+    key
+}
+
+fn confirm_saved_recovery_key(pad: HWND, key: &str) {
+    let suffix: String = key
+        .chars()
+        .rev()
+        .filter(char::is_ascii_alphanumeric)
+        .take(6)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
+    assert_eq!(suffix.len(), 6);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_child_text(pad, ENROLL_METHOD_ID, "recovery copy challenge", |value| {
+        value == "保管した復旧キーの末尾 6 文字"
+    });
+    assert_no_child_text_contains(pad, &[key]);
+    let wrong = if suffix == "AAAAAA" {
+        "BBBBBB"
+    } else {
+        "AAAAAA"
+    };
+    set_text(pad, ENROLL_PASSWORD_ID, wrong);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_child_text(pad, ENROLL_STATUS_ID, "wrong recovery suffix", |value| {
+        value == "末尾が一致しません。保管したキーを確認してください"
+    });
+    set_text(pad, ENROLL_PASSWORD_ID, &suffix);
+    click(pad, ENROLL_SUBMIT_ID);
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+fn whole_pad_recovery_key_is_confirmed_before_cutover_and_unlocks_after_reopen() {
+    const PASSWORD: &str = "pad recovery enrollment 56bc";
+    const TITLE: &str = "whole recovery title 20bf";
+    const BODY: &str = "whole recovery body 8c91";
+    let app_data = IsolatedAppData::new("pad-whole-recovery");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    set_text(pad, TITLE_ID, TITLE);
+    set_text(pad, BODY_ID, BODY);
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        if store.load().ok().and_then(|loaded| {
+            loaded
+                .document
+                .find(1)
+                .and_then(pad_storage::PadMemo::plain_content)
+                .map(|content| content == (TITLE, BODY))
+        }) == Some(true)
+        {
+            break;
+        }
+        assert!(Instant::now() < deadline, "legacy memo did not save");
+        sleep(Duration::from_millis(30));
+    }
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, PASSWORD);
+    set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "whole-Pad recovery key",
+        |value| value == "復旧キーを保存してください",
+    );
+    let key_field = control(pad, ENROLL_PASSWORD_ID);
+    let key = Zeroizing::new(text_of(key_field));
+    assert!(key.starts_with("SPRK1-"));
+    assert!(visible(key_field));
+    assert_eq!(
+        // SAFETY: the edit belongs to the isolated live Pad; style bits are
+        // read without modifying its key text.
+        unsafe { GetWindowLongPtrW(key_field, GWL_STYLE) } as u32 & 0x24,
+        0x04,
+        "recovery key must be unmasked and multiline"
+    );
+    assert!(
+        store.load().is_ok(),
+        "key display must precede cutover intent"
+    );
+    assert!(!visible(control(pad, ENROLL_CONFIRM_PASSWORD_ID)));
+    capture(pad, "pad-recovery-key");
+    confirm_saved_recovery_key(pad, &key);
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    assert!(
+        matches!(
+            store.load(),
+            Err(pad_storage::StorageError::ProtectedCutover)
+        ),
+        "confirmed whole-Pad protection must reject legacy loading"
+    );
+    click(pad, LOCK_METHOD_ID);
+    wait_for_text(
+        control(pad, LOCK_METHOD_ID),
+        "recovery unlock mode",
+        |value| value == "復旧キーで解除 · パスワードに切替",
+    );
+    set_text(pad, LOCK_PASSWORD_ID, &key);
+    click(pad, LOCK_UNLOCK_ID);
+    wait_for_control(pad, TITLE_ID);
+    wait_for_text(control(pad, TITLE_ID), "recovery-unlocked Pad", |value| {
+        value == TITLE
+    });
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+    // SAFETY: both HWNDs belong to this fixture. Close and reopen to force
+    // a fresh worker session for the independent password path.
+    unsafe {
+        SendMessageW(pad, WM_CLOSE, None, None);
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+            .expect("reopen isolated Pad");
+    }
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    set_text(pad, LOCK_PASSWORD_ID, PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    wait_for_control(pad, TITLE_ID);
+    wait_for_text(control(pad, TITLE_ID), "password-unlocked Pad", |value| {
+        value == TITLE
+    });
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+#[cfg(debug_assertions)]
+fn whole_pad_enrollment_polls_when_completion_posts_are_lost() {
+    const PASSWORD: &str = "lost completion post password 5c91";
+    const TITLE: &str = "lost completion post title 3e42";
+    const BODY: &str = "lost completion post body 8a76";
+    let app_data = IsolatedAppData::new("pad-lost-enrollment-post");
+    let stage_log = app_data.path().join("enrollment-stages.log");
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) =
+        open_test_pad_with_options(&engine, &app_data, Some(&stage_log), true);
+    let heartbeat = engine.start_heartbeat();
+    set_text(pad, TITLE_ID, TITLE);
+    set_text(pad, BODY_ID, BODY);
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, PASSWORD);
+    set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "recovery prompt without completion post",
+        |value| value == "復旧キーを保存してください",
+    );
+    let recovery_key = Zeroizing::new(text_of(control(pad, ENROLL_PASSWORD_ID)));
+    confirm_saved_recovery_key(pad, &recovery_key);
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    let stages = std::fs::read_to_string(&stage_log).expect("stage-only enrollment log");
+    assert!(stages.contains("enroll:recovery:post-suppressed-test"));
+    assert!(stages.contains("enroll:result:post-suppressed-test"));
+    set_text(pad, LOCK_PASSWORD_ID, PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    wait_for_text(
+        wait_for_control(pad, TITLE_ID),
+        "password unlock after lost completion posts",
+        |value| value == TITLE,
+    );
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+    drop(heartbeat);
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+fn whole_pad_password_change_rejects_old_password_and_preserves_memo() {
+    const OLD_PASSWORD: &str = "original pad password b72c";
+    const NEW_PASSWORD: &str = "replacement pad password 7d2f";
+    const TITLE: &str = "password change title 36d4";
+    const BODY: &str = "password change body 9f28";
+    let app_data = IsolatedAppData::new("pad-password-change");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let heartbeat = engine.start_heartbeat();
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+
+    set_text(pad, TITLE_ID, TITLE);
+    set_text(pad, BODY_ID, BODY);
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    let deadline = Instant::now() + PATIENT;
+    while store.load().ok().and_then(|loaded| {
+        loaded
+            .document
+            .find(1)
+            .and_then(pad_storage::PadMemo::plain_content)
+            .map(|content| content == (TITLE, BODY))
+    }) != Some(true)
+    {
+        assert!(Instant::now() < deadline, "legacy memo did not save");
+        sleep(Duration::from_millis(30));
+    }
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, OLD_PASSWORD);
+    set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, OLD_PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "whole-Pad recovery key before password change",
+        |value| value == "復旧キーを保存してください",
+    );
+    let recovery_key = Zeroizing::new(text_of(control(pad, ENROLL_PASSWORD_ID)));
+    confirm_saved_recovery_key(pad, &recovery_key);
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    set_text(pad, LOCK_PASSWORD_ID, OLD_PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    let title = wait_for_control(pad, TITLE_ID);
+    wait_for_text(title, "original password unlock", |value| value == TITLE);
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+
+    submit_whole_pad_password_change(pad, renderer.pid(), OLD_PASSWORD, NEW_PASSWORD);
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    assert_no_child_text_contains(pad, &[TITLE, BODY]);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let status = text_of(control(pad, LOCK_STATUS_ID));
+        if status == "パスワードを変更しました。新しいパスワードで解除してください"
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "password change did not complete: {status:?}"
+        );
+        sleep(Duration::from_millis(30));
+    }
+
+    // Reopen the same isolated Pad to prove the changed credential is durable
+    // and independent of the worker session that performed the replacement.
+    // SAFETY: both HWNDs belong to this test-owned renderer process.
+    unsafe {
+        SendMessageW(pad, WM_CLOSE, None, None);
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+            .expect("reopen isolated Pad after password change");
+    }
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    set_text(pad, LOCK_PASSWORD_ID, OLD_PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    wait_for_text(
+        control(pad, LOCK_STATUS_ID),
+        "rejected old password",
+        |value| value.contains("解除情報が正しくありません"),
+    );
+    assert_no_child_text_contains(pad, &[TITLE, BODY]);
+    wait_for_text(
+        control(pad, LOCK_STATUS_ID),
+        "password retry available",
+        |value| value == "再試行できます",
+    );
+    set_text(pad, LOCK_PASSWORD_ID, NEW_PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    let title = wait_for_control(pad, TITLE_ID);
+    wait_for_text(title, "new password unlock", |value| value == TITLE);
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+    drop(heartbeat);
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+fn submit_whole_pad_password_change(pad: HWND, renderer_pid: u32, old: &str, new: &str) {
+    click(pad, OPEN_PAD_PROTECTION);
+    let chooser = wait_for_renderer_window(renderer_pid, PROTECTION_SETTINGS_CLASS, true);
+    click(chooser, CHOOSE_PASSWORD_CHANGE_ID);
+    let dialog = wait_for_renderer_window(renderer_pid, PASSWORD_CHANGE_CLASS, true);
+    set_text(dialog, CURRENT_PASSWORD_ID, old);
+    set_text(dialog, NEW_PASSWORD_ID, new);
+    set_text(dialog, CONFIRM_NEW_PASSWORD_ID, new);
+    click(dialog, SUBMIT_PASSWORD_CHANGE_ID);
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+fn whole_pad_totp_setup_gates_password_unlock_until_code() {
+    const PASSWORD: &str = "pad TOTP enrollment 74e6";
+    const TITLE: &str = "whole TOTP title 76fa";
+    const BODY: &str = "whole TOTP body 49ec";
+    let app_data = IsolatedAppData::new("pad-whole-totp");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+
+    set_text(pad, TITLE_ID, TITLE);
+    set_text(pad, BODY_ID, BODY);
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    let deadline = Instant::now() + PATIENT;
+    while store.load().ok().and_then(|loaded| {
+        loaded
+            .document
+            .find(1)
+            .and_then(pad_storage::PadMemo::plain_content)
+            .map(|content| content == (TITLE, BODY))
+    }) != Some(true)
+    {
+        assert!(Instant::now() < deadline, "legacy memo did not save");
+        sleep(Duration::from_millis(30));
+    }
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, PASSWORD);
+    set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_control(pad, ENROLL_HEADLINE_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "whole-Pad recovery key",
+        |value| value == "復旧キーを保存してください",
+    );
+    let recovery_key = Zeroizing::new(text_of(control(pad, ENROLL_PASSWORD_ID)));
+    assert!(recovery_key.starts_with("SPRK1-"));
+    confirm_saved_recovery_key(pad, &recovery_key);
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    set_text(pad, LOCK_PASSWORD_ID, PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    let title = wait_for_control(pad, TITLE_ID);
+    wait_for_text(title, "protected Pad unlock", |value| value == TITLE);
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+
+    open_whole_pad_totp_settings(pad, renderer.pid());
+    let action = wait_for_totp_dialog(renderer.pid(), "TOTP: 未設定");
+    click(action, TOTP_ACCEPT_ID);
+    let auth = wait_for_totp_dialog(renderer.pid(), "パスワード");
+    set_text(auth, TOTP_CODE_ID, PASSWORD);
+    click(auth, TOTP_ACCEPT_ID);
+    let setup = wait_for_totp_dialog(renderer.pid(), "手動キー");
+    let manual_secret = Zeroizing::new(text_of(control(setup, TOTP_SECRET_ID)));
+    let secret = decode_totp_manual_secret(&manual_secret);
+    let step = unix_totp_step();
+    let setup_code = format!("{:06}", pad_totp::hotp(&secret, step).unwrap());
+    set_text(setup, TOTP_CODE_ID, &setup_code);
+    click(setup, TOTP_ACCEPT_ID);
+    wait_for_text(control(pad, STATUS_ID), "TOTP enabled", |value| {
+        value.contains("確認コードを有効にしました")
+    });
+
+    // Reopen through the owned renderer host to remove the authenticated Pad
+    // session before testing the password-then-code gate. Both HWNDs belong
+    // to this isolated fixture and remain live during the transition.
+    // SAFETY: both HWNDs are live and owned by this isolated fixture.
+    unsafe {
+        SendMessageW(pad, WM_CLOSE, None, None);
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+            .expect("reopen isolated Pad");
+    }
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    assert_no_child_text_contains(pad, &[TITLE, BODY]);
+    set_text(pad, LOCK_PASSWORD_ID, PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    let code_dialog = wait_for_totp_dialog(renderer.pid(), "認証アプリの 6 桁コード");
+    assert_no_child_text_contains(pad, &[TITLE, BODY]);
+    // SAFETY: this lookup reads children of the live isolated Pad HWND.
+    let title_control = unsafe { GetDlgItem(Some(pad), TITLE_ID) };
+    assert!(
+        title_control.is_err(),
+        "plaintext title edit must not be created before TOTP verification"
+    );
+    // SAFETY: this lookup reads children of the live isolated Pad HWND.
+    let body_control = unsafe { GetDlgItem(Some(pad), BODY_ID) };
+    assert!(
+        body_control.is_err(),
+        "plaintext body edit must not be created before TOTP verification"
+    );
+    // Confirmation consumes `step`. Use a fresh accepted step even if the
+    // test crossed one or more 30-second boundaries while reopening the Pad.
+    let unlock_step = unix_totp_step().max(step + 1);
+    let unlock_code = format!("{:06}", pad_totp::hotp(&secret, unlock_step).unwrap());
+    set_text(code_dialog, TOTP_CODE_ID, &unlock_code);
+    click(code_dialog, TOTP_ACCEPT_ID);
+    let title = wait_for_control(pad, TITLE_ID);
+    wait_for_text(title, "TOTP-unlocked Pad", |value| value == TITLE);
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+fn open_whole_pad_totp_settings(pad: HWND, renderer_pid: u32) {
+    click(pad, OPEN_PAD_PROTECTION);
+    let chooser = wait_for_renderer_window(renderer_pid, PROTECTION_SETTINGS_CLASS, true);
+    click(chooser, CHOOSE_TOTP_ID);
+}
+
+/// Password rotation must consume a new TOTP step before it changes the v3
+/// envelope. Cancel and a wrong code leave the old ciphertext untouched;
+/// success makes the old password fail and the new password unlock the memo.
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+fn whole_pad_password_change_requires_fresh_totp_before_rewrap() {
+    const OLD_PASSWORD: &str = "TOTP rotation old password 6e25";
+    const NEW_PASSWORD: &str = "TOTP rotation new password 39af";
+    const TITLE: &str = "TOTP rotation title 7f31";
+    const BODY: &str = "TOTP rotation body 42bc";
+    let app_data = IsolatedAppData::new("pad-totp-password-change");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let heartbeat = engine.start_heartbeat();
+
+    set_text(pad, TITLE_ID, TITLE);
+    set_text(pad, BODY_ID, BODY);
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    let deadline = Instant::now() + PATIENT;
+    while !store.load().is_ok_and(|loaded| {
+        loaded
+            .document
+            .find(1)
+            .and_then(pad_storage::PadMemo::plain_content)
+            == Some((TITLE, BODY))
+    }) {
+        assert!(Instant::now() < deadline, "legacy memo did not save");
+        sleep(Duration::from_millis(30));
+    }
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, OLD_PASSWORD);
+    set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, OLD_PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "whole recovery key",
+        |value| value == "復旧キーを保存してください",
+    );
+    let recovery_key = Zeroizing::new(text_of(control(pad, ENROLL_PASSWORD_ID)));
+    assert!(recovery_key.starts_with("SPRK1-"));
+    confirm_saved_recovery_key(pad, &recovery_key);
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    set_text(pad, LOCK_PASSWORD_ID, OLD_PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    wait_for_text(
+        wait_for_control(pad, TITLE_ID),
+        "initial password unlock",
+        |value| value == TITLE,
+    );
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+
+    open_whole_pad_totp_settings(pad, renderer.pid());
+    let action = wait_for_totp_dialog(renderer.pid(), "TOTP: 未設定");
+    click(action, TOTP_ACCEPT_ID);
+    let auth = wait_for_totp_dialog(renderer.pid(), "パスワード");
+    set_text(auth, TOTP_CODE_ID, OLD_PASSWORD);
+    click(auth, TOTP_ACCEPT_ID);
+    let setup = wait_for_totp_dialog(renderer.pid(), "手動キー");
+    let manual_secret = Zeroizing::new(text_of(control(setup, TOTP_SECRET_ID)));
+    let secret = decode_totp_manual_secret(&manual_secret);
+    let setup_step = unix_totp_step();
+    let setup_code = format!("{:06}", pad_totp::hotp(&secret, setup_step).unwrap());
+    set_text(setup, TOTP_CODE_ID, &setup_code);
+    click(setup, TOTP_ACCEPT_ID);
+    wait_for_text(control(pad, STATUS_ID), "TOTP enabled", |value| {
+        value.contains("確認コードを有効にしました")
+    });
+    let before_change = std::fs::read(store.protected_primary_path())
+        .expect("read primary before TOTP-gated password change");
+
+    submit_whole_pad_password_change(pad, renderer.pid(), OLD_PASSWORD, NEW_PASSWORD);
+    let cancel_dialog = wait_for_totp_dialog(renderer.pid(), "Pad 全体のパスワード変更");
+    // SAFETY: WM_CLOSE cancels only the test-owned code dialog.
+    unsafe { SendMessageW(cancel_dialog, WM_CLOSE, None, None) };
+    wait_for_text(
+        control(pad, STATUS_ID),
+        "cancelled password change",
+        |value| value == "パスワード変更を中止しました",
+    );
+    assert_eq!(text_of(control(pad, TITLE_ID)), TITLE);
+    assert_eq!(
+        std::fs::read(store.protected_primary_path()).unwrap(),
+        before_change
+    );
+
+    submit_whole_pad_password_change(pad, renderer.pid(), OLD_PASSWORD, NEW_PASSWORD);
+    let wrong_dialog = wait_for_totp_dialog(renderer.pid(), "Pad 全体のパスワード変更");
+    let invalid = invalid_totp_code(&secret);
+    set_text(wrong_dialog, TOTP_CODE_ID, &invalid);
+    click(wrong_dialog, TOTP_ACCEPT_ID);
+    wait_for_text(
+        wait_for_control(pad, LOCK_STATUS_ID),
+        "wrong rotation code",
+        |value| value == "確認コードが正しくありません。変更は行われませんでした",
+    );
+    assert_no_child_text_contains(pad, &[TITLE, BODY]);
+    assert_eq!(
+        std::fs::read(store.protected_primary_path()).unwrap(),
+        before_change
+    );
+
+    // A wrong code has a durable one-second rate-limit window. Wait before
+    // using the unchanged old password and the next unconsumed TOTP step.
+    sleep(Duration::from_millis(1_200));
+    set_text(pad, LOCK_PASSWORD_ID, OLD_PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    let unlock_dialog = wait_for_totp_dialog(renderer.pid(), "Pad 全体");
+    let (old_unlock_step, old_unlock_code) = fresh_totp_code_after(&secret, setup_step);
+    set_text(unlock_dialog, TOTP_CODE_ID, &old_unlock_code);
+    click(unlock_dialog, TOTP_ACCEPT_ID);
+    wait_for_text(
+        wait_for_control(pad, TITLE_ID),
+        "old password still valid",
+        |value| value == TITLE,
+    );
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+
+    submit_whole_pad_password_change(pad, renderer.pid(), OLD_PASSWORD, NEW_PASSWORD);
+    let change_dialog = wait_for_totp_dialog(renderer.pid(), "Pad 全体のパスワード変更");
+    let (change_step, change_code) = fresh_totp_code_after(&secret, old_unlock_step);
+    set_text(change_dialog, TOTP_CODE_ID, &change_code);
+    click(change_dialog, TOTP_ACCEPT_ID);
+    wait_for_text(
+        wait_for_control(pad, LOCK_STATUS_ID),
+        "successful rotation",
+        |value| value == "パスワードを変更しました。新しいパスワードで解除してください",
+    );
+    assert_ne!(
+        std::fs::read(store.protected_primary_path()).unwrap(),
+        before_change
+    );
+    set_text(pad, LOCK_PASSWORD_ID, OLD_PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    wait_for_text(
+        control(pad, LOCK_STATUS_ID),
+        "old password rejected",
+        |value| value.contains("解除情報が正しくありません"),
+    );
+    wait_for_text(
+        control(pad, LOCK_STATUS_ID),
+        "password retry available",
+        |value| value == "再試行できます",
+    );
+    set_text(pad, LOCK_PASSWORD_ID, NEW_PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    let code_dialog = wait_for_totp_dialog(renderer.pid(), "Pad 全体");
+    let (_, new_unlock_code) = fresh_totp_code_after(&secret, change_step);
+    set_text(code_dialog, TOTP_CODE_ID, &new_unlock_code);
+    click(code_dialog, TOTP_ACCEPT_ID);
+    wait_for_text(
+        wait_for_control(pad, TITLE_ID),
+        "new password unlock",
+        |value| value == TITLE,
+    );
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+    drop(heartbeat);
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+fn fresh_totp_code_after(secret: &[u8], last_accepted: u64) -> (u64, String) {
+    let deadline = Instant::now() + Duration::from_secs(35);
+    loop {
+        let current = unix_totp_step();
+        let next = current.max(last_accepted.saturating_add(1));
+        if next <= current.saturating_add(1) {
+            return (
+                next,
+                format!("{:06}", pad_totp::hotp(secret, next).unwrap()),
+            );
+        }
+        assert!(Instant::now() < deadline, "no fresh TOTP step became valid");
+        sleep(Duration::from_millis(100));
+    }
+}
+
+fn invalid_totp_code(secret: &[u8]) -> String {
+    let current = unix_totp_step();
+    let accepted: Vec<String> = [
+        current.saturating_sub(1),
+        current,
+        current.saturating_add(1),
+    ]
+    .into_iter()
+    .map(|step| format!("{:06}", pad_totp::hotp(secret, step).unwrap()))
+    .collect();
+    ["000000", "111111", "222222"]
+        .into_iter()
+        .find(|code| !accepted.iter().any(|valid| valid == code))
+        .expect("three candidate codes cannot all match the accepted window")
+        .to_owned()
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+fn memo_totp_setup_gates_password_unlock_until_code() {
+    const PASSWORD: &str = "memo TOTP enrollment 51c8";
+    const TITLE: &str = "memo TOTP title 8d24";
+    const BODY: &str = "memo TOTP body 6b97";
+    let app_data = IsolatedAppData::new("pad-memo-totp");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+
+    let recovery_key = start_recoverable_memo_enrollment(pad, &store, PASSWORD, TITLE, BODY);
+    confirm_saved_recovery_key(pad, &recovery_key);
+    let deadline = Instant::now() + PATIENT;
+    while !store.has_v4_cutover().unwrap_or(false) {
+        assert!(
+            Instant::now() < deadline,
+            "memo protection did not cut over"
+        );
+        sleep(Duration::from_millis(30));
+    }
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    click(pad, MEMO_PROTECT_ID);
+    wait_for_control(pad, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, TITLE_ID),
+        "unlocked memo before TOTP setup",
+        |value| value == TITLE,
+    );
+
+    click(pad, MEMO_PROTECT_ID);
+    let choice = wait_for_owned_dialog(pad);
+    // SAFETY: IDNO selects code settings in the test-owned memo choice dialog.
+    unsafe {
+        PostMessageW(Some(choice), WM_COMMAND, WPARAM(IDNO.0 as usize), LPARAM(0))
+            .expect("choose memo TOTP settings");
+    }
+    let action = wait_for_totp_dialog(renderer.pid(), "TOTP: 未設定");
+    click(action, TOTP_ACCEPT_ID);
+    let auth = wait_for_totp_dialog(renderer.pid(), "パスワード");
+    set_text(auth, TOTP_CODE_ID, PASSWORD);
+    click(auth, TOTP_ACCEPT_ID);
+    let setup = wait_for_totp_dialog(renderer.pid(), "手動キー");
+    let manual_secret = Zeroizing::new(text_of(control(setup, TOTP_SECRET_ID)));
+    let secret = decode_totp_manual_secret(&manual_secret);
+    let step = unix_totp_step();
+    let setup_code = format!("{:06}", pad_totp::hotp(&secret, step).unwrap());
+    set_text(setup, TOTP_CODE_ID, &setup_code);
+    click(setup, TOTP_ACCEPT_ID);
+    wait_for_text(control(pad, STATUS_ID), "memo TOTP enabled", |value| {
+        value.contains("このメモの確認コードを有効にしました")
+    });
+
+    // Reopen to remove the authenticated memo session before exercising the
+    // password-then-code gate. The host and Pad belong to this fixture.
+    // SAFETY: both HWNDs are live, and the trigger has no pointer payload.
+    unsafe {
+        SendMessageW(pad, WM_CLOSE, None, None);
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+            .expect("reopen isolated Pad");
+    }
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    let list = list_of(pad);
+    assert_eq!(row_count(list), 1);
+    assert!(list_text(list, 0).starts_with("保護されたメモ"));
+    // SAFETY: the list is this fixture's live Pad child; select its only
+    // protected row before asking for the memo-specific unlock action.
+    unsafe {
+        SendMessageW(list, LB_SETCURSEL, Some(WPARAM(0)), None);
+    }
+    notify(pad, LIST_ID, LBN_SELCHANGE as u16);
+    assert_eq!(text_of(control(pad, TITLE_ID)), "");
+    assert_eq!(text_of(control(pad, BODY_ID)), "");
+    assert_no_child_text_contains(pad, &[TITLE, BODY]);
+    click(pad, MEMO_PROTECT_ID);
+    wait_for_control(pad, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    let code_dialog = wait_for_totp_dialog(renderer.pid(), "このメモ");
+    assert_eq!(text_of(control(pad, TITLE_ID)), "");
+    assert_eq!(text_of(control(pad, BODY_ID)), "");
+    assert!(list_text(list, 0).starts_with("保護されたメモ"));
+    assert_no_child_text_contains(pad, &[TITLE, BODY]);
+
+    // Enrollment consumed `step`; use a later accepted step across any
+    // 30-second boundary crossed while reopening the Pad.
+    let unlock_step = unix_totp_step().max(step + 1);
+    let unlock_code = format!("{:06}", pad_totp::hotp(&secret, unlock_step).unwrap());
+    set_text(code_dialog, TOTP_CODE_ID, &unlock_code);
+    click(code_dialog, TOTP_ACCEPT_ID);
+    wait_for_text(control(pad, TITLE_ID), "TOTP-unlocked memo", |value| {
+        value == TITLE
+    });
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+fn wait_for_totp_dialog(renderer_pid: u32, expected_label: &str) -> HWND {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if let Some(dialog) = find_renderer_window(renderer_pid, TOTP_CLASS, true) {
+            if dialog_static_text(dialog).contains(expected_label) {
+                return dialog;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "TOTP dialog for {expected_label} never appeared"
+        );
+        sleep(Duration::from_millis(20));
+    }
+}
+
+fn unix_totp_step() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        / 30
+}
+
+fn decode_totp_manual_secret(manual: &str) -> Zeroizing<Vec<u8>> {
+    assert_eq!(manual.len(), 32, "manual TOTP key must encode 20 bytes");
+    let mut output = Zeroizing::new(Vec::with_capacity(20));
+    let mut bits = 0_u32;
+    let mut count = 0_u32;
+    for byte in manual.bytes() {
+        let value = match byte {
+            b'A'..=b'Z' => u32::from(byte - b'A'),
+            b'2'..=b'7' => u32::from(byte - b'2' + 26),
+            _ => panic!("invalid manual TOTP key character"),
+        };
+        bits = (bits << 5) | value;
+        count += 5;
+        if count >= 8 {
+            count -= 8;
+            output.push((bits >> count) as u8);
+            bits &= (1 << count) - 1;
+        }
+    }
+    assert_eq!(output.len(), 20);
+    output
+}
+
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn long_pad_fixture_keeps_watch_feed_alive() {
+    let app_data = IsolatedAppData::new("pad-long-fixture-watch");
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let heartbeat = engine.start_heartbeat();
+    // The renderer gives an unresponsive WatchUi feed 15 seconds. This
+    // fixture stays idle longer than that while the periodic state revision
+    // keeps its private pipe alive, just as physical PIN/touch tests require.
+    sleep(Duration::from_secs(18));
+    assert!(
+        renderer
+            .child
+            .try_wait()
+            .expect("poll fixture renderer")
+            .is_none(),
+        "renderer exited while the live fixture was heartbeating"
+    );
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    drop(heartbeat);
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "requires connected YubiKey 5, Pad session worker, and interactive Windows desktop"]
+fn physical_yubikey5_whole_pad_ui_enroll_and_unlock() {
+    const TITLE: &str = "isolated physical key title";
+    const BODY: &str = "isolated physical key body";
+    let app_data = IsolatedAppData::new("pad-physical-yubikey");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let stage_log = app_data.path().join("physical-enrollment-stages.log");
+    let (mut renderer, pad) = open_test_pad_with_log(&engine, &app_data, Some(&stage_log));
+    // Physical PIN/touch can take longer than the renderer's 15-second
+    // WatchUi deadline. Keep only this fixture's watch feed alive until the
+    // real engine-stop assertion at the end of the test.
+    let heartbeat = engine.start_heartbeat();
+    set_text(pad, TITLE_ID, TITLE);
+    set_text(pad, BODY_ID, BODY);
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    let deadline = Instant::now() + PATIENT;
+    while !store.load().is_ok_and(|loaded| {
+        loaded
+            .document
+            .find(1)
+            .and_then(pad_storage::PadMemo::plain_content)
+            == Some((TITLE, BODY))
+    }) {
+        assert!(Instant::now() < deadline, "isolated memo did not save");
+        sleep(Duration::from_millis(30));
+    }
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_METHOD_ID);
+    click(pad, ENROLL_METHOD_ID);
+    wait_for_text(
+        control(pad, ENROLL_METHOD_ID),
+        "physical key method",
+        |value| value == "保護方法: セキュリティキー（変更）",
+    );
+    assert!(!visible(control(pad, ENROLL_PASSWORD_ID)));
+    click(pad, ENROLL_SUBMIT_ID);
+    let deadline = Instant::now() + Duration::from_secs(180);
+    loop {
+        // SAFETY: this isolated Pad HWND owns the enrollment child throughout
+        // the asynchronous hardware operation.
+        if let Ok(headline) = unsafe { GetDlgItem(Some(pad), ENROLL_HEADLINE_ID) } {
+            if text_of(headline) == "復旧キーを保存してください" {
+                break;
+            }
+        } else {
+            // SAFETY: Pad is still the live window owned by this isolated
+            // renderer fixture; the ID lookup only reads a child HWND.
+            let status = unsafe { GetDlgItem(Some(pad), STATUS_ID) }
+                .map(text_of)
+                .unwrap_or_else(|_| "status control absent".to_owned());
+            let stages = std::fs::read_to_string(&stage_log).unwrap_or_default();
+            panic!("key registration ended before recovery setup: {status}; stages: {stages}");
+        }
+        if Instant::now() >= deadline {
+            capture(pad, "physical-key-registration-timeout");
+            let status = text_of(control(pad, ENROLL_STATUS_ID));
+            let stages = std::fs::read_to_string(&stage_log).unwrap_or_default();
+            panic!("key registration did not reach recovery setup: {status}; stages: {stages}");
+        }
+        sleep(Duration::from_millis(100));
+    }
+    let recovery_key = Zeroizing::new(text_of(control(pad, ENROLL_PASSWORD_ID)));
+    assert!(recovery_key.starts_with("SPRK1-"));
+    confirm_saved_recovery_key(pad, &recovery_key);
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    assert!(!visible(control(pad, LOCK_PASSWORD_ID)));
+    click(pad, LOCK_UNLOCK_ID);
+    let deadline = Instant::now() + Duration::from_secs(150);
+    loop {
+        // SAFETY: the unlocked editor is recreated as a child of this live
+        // fixture Pad only after its hardware and worker gates succeed.
+        if let Ok(title) = unsafe { GetDlgItem(Some(pad), TITLE_ID) } {
+            if text_of(title) == TITLE {
+                break;
+            }
+        }
+        if Instant::now() >= deadline {
+            // SAFETY: the test still owns this live Pad HWND, and these
+            // lookups only read non-secret status child controls.
+            let unlock_status = unsafe { GetDlgItem(Some(pad), LOCK_STATUS_ID) }
+                .map(text_of)
+                .unwrap_or_else(|_| "unlock status control absent".to_owned());
+            // SAFETY: same live Pad HWND; status is public UI text only.
+            let pad_status = unsafe { GetDlgItem(Some(pad), STATUS_ID) }
+                .map(text_of)
+                .unwrap_or_else(|_| "Pad status control absent".to_owned());
+            panic!(
+                "key unlock did not show isolated memo: unlock={unlock_status}; Pad={pad_status}"
+            );
+        }
+        sleep(Duration::from_millis(100));
+    }
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+    // SAFETY: close only the isolated Pad after the hardware unlock has
+    // completed, so its protected save actor reaches a terminal state before
+    // the fixture engine asks the renderer process to exit.
+    let close_result = unsafe { SendMessageW(pad, WM_CLOSE, None, None) };
+    assert_ne!(
+        close_result.0,
+        0,
+        "protected Pad vetoed close: {}",
+        text_of(control(pad, STATUS_ID))
+    );
+    drop(heartbeat);
+    engine.stop();
+    renderer.wait_for_exit_with_timeout(Duration::from_secs(30));
+}
+
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn pad_and_memo_protection_methods_hide_unused_password_fields() {
+    let app_data = IsolatedAppData::new("pad-protection-methods");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+
+    set_text(pad, TITLE_ID, "方式の確認");
+    set_text(pad, BODY_ID, "保存済みの本文");
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    let deadline = Instant::now() + PATIENT;
+    while store
+        .load()
+        .ok()
+        .and_then(|loaded| loaded.document.find(1).cloned())
+        .is_none()
+    {
+        assert!(Instant::now() < deadline, "test memo did not save");
+        sleep(Duration::from_millis(30));
+    }
+
+    for protect_id in [OPEN_PAD_PROTECTION, MEMO_PROTECT_ID] {
+        click(pad, protect_id);
+        wait_for_child_text(pad, ENROLL_METHOD_ID, "password method", |value| {
+            value == "保護方法: パスワード（変更）"
+        });
+        capture(
+            pad,
+            if protect_id == OPEN_PAD_PROTECTION {
+                "pad-method"
+            } else {
+                "memo-method"
+            },
+        );
+        assert!(visible(control(pad, ENROLL_PASSWORD_ID)));
+        assert!(visible(control(pad, ENROLL_CONFIRM_PASSWORD_ID)));
+        assert_eq!(
+            text_of(control(pad, ENROLL_INPUT_LABEL_ID)),
+            "パスワードを入力"
+        );
+        assert!(visible(control(pad, ENROLL_INPUT_LABEL_ID)));
+
+        click(pad, ENROLL_METHOD_ID);
+        wait_for_text(control(pad, ENROLL_METHOD_ID), "key-only method", |value| {
+            value == "保護方法: セキュリティキー（変更）"
+        });
+        assert!(!visible(control(pad, ENROLL_PASSWORD_ID)));
+        assert!(!visible(control(pad, ENROLL_CONFIRM_PASSWORD_ID)));
+        assert!(!visible(control(pad, ENROLL_INPUT_LABEL_ID)));
+
+        click(pad, ENROLL_METHOD_ID);
+        wait_for_text(
+            control(pad, ENROLL_METHOD_ID),
+            "password-and-key method",
+            |value| value == "保護方法: パスワード + キー（変更）",
+        );
+        assert!(visible(control(pad, ENROLL_PASSWORD_ID)));
+        assert!(visible(control(pad, ENROLL_CONFIRM_PASSWORD_ID)));
+        assert!(visible(control(pad, ENROLL_INPUT_LABEL_ID)));
+        click(pad, ENROLL_CANCEL_ID);
+        wait_for_control(pad, TITLE_ID);
+        assert!(
+            store.load().is_ok(),
+            "a method choice must not begin cutover"
+        );
+    }
+
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+fn v4_memo_can_add_whole_pad_protection_after_cancelled_attempt() {
+    const MEMO_PASSWORD: &str = "independent memo password 9d6e";
+    const PAD_PASSWORD: &str = "whole pad after memo password 8c2f";
+    const TITLE: &str = "inner protected title 8a25";
+    const BODY: &str = "inner protected body 71fd";
+    let app_data = IsolatedAppData::new("pad-v4-to-whole-recovery");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let memo_key = start_recoverable_memo_enrollment(pad, &store, MEMO_PASSWORD, TITLE, BODY);
+    confirm_saved_recovery_key(pad, &memo_key);
+    let deadline = Instant::now() + PATIENT;
+    while !store.has_v4_cutover().unwrap_or(false) {
+        assert!(
+            Instant::now() < deadline,
+            "memo protection did not cut over"
+        );
+        sleep(Duration::from_millis(30));
+    }
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    let source = store.load_v4().unwrap().document;
+    let memo_envelope = source
+        .find(1)
+        .unwrap()
+        .protected_envelope()
+        .unwrap()
+        .to_vec();
+    assert!(visible(wait_for_control(pad, OVERFLOW_ID)));
+
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, PAD_PASSWORD);
+    set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PAD_PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "whole-Pad recovery key",
+        |value| value == "復旧キーを保存してください",
+    );
+    assert_eq!(store.load_v4().unwrap().document, source);
+    click(pad, ENROLL_CANCEL_ID);
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    assert_eq!(store.load_v4().unwrap().document, source);
+    assert!(!store.has_v4_to_protected_intent().unwrap());
+
+    // Cancellation must restart the v4 actor, allowing a new plain memo to
+    // save before a second whole-Pad enrollment attempt.
+    wait_for_control(pad, TITLE_ID);
+    click_synchronously(pad, NEW_ID);
+    set_text(pad, TITLE_ID, "plain memo after cancel");
+    set_text(pad, BODY_ID, "v4 actor resumed");
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        if store.load_v4().is_ok_and(|loaded| {
+            loaded.document.memos.iter().any(|memo| {
+                memo.plain_content() == Some(("plain memo after cancel", "v4 actor resumed"))
+            })
+        }) {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "v4 actor did not resume after cancellation"
+        );
+        sleep(Duration::from_millis(30));
+    }
+    let expected = store.load_v4().unwrap().document;
+    click_until_control(pad, OPEN_PAD_PROTECTION, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, PAD_PASSWORD);
+    set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PAD_PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "second recovery key",
+        |value| value == "復旧キーを保存してください",
+    );
+    let recovery_key = Zeroizing::new(text_of(control(pad, ENROLL_PASSWORD_ID)));
+    assert!(recovery_key.starts_with("SPRK1-"));
+    assert_eq!(store.load_v4().unwrap().document, expected);
+    confirm_saved_recovery_key(pad, &recovery_key);
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    assert!(!store.has_v4_cutover().unwrap());
+    assert!(store.has_v4_to_protected_intent().unwrap());
+    assert!(!app_data
+        .path()
+        .join("SakuraInput/pad/memo.v4.bin.bak")
+        .exists());
+    set_text(pad, LOCK_PASSWORD_ID, PAD_PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    wait_for_control(pad, TITLE_ID);
+    wait_for_text(control(pad, MEMO_PROTECT_ID), "inner memo lock", |value| {
+        value == "このメモを解除"
+    });
+    click(pad, MEMO_PROTECT_ID);
+    wait_for_control(pad, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, MEMO_PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, TITLE_ID),
+        "inner memo after whole unlock",
+        |value| value == TITLE,
+    );
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+    assert_eq!(
+        expected.find(1).unwrap().protected_envelope().unwrap(),
+        memo_envelope.as_slice()
+    );
+    // SAFETY: close this isolated Pad after its nested memo session has been
+    // inspected so the renderer can retire both worker owners before exit.
+    unsafe {
+        SendMessageW(pad, WM_CLOSE, None, None);
+    }
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+fn cancelling_whole_pad_recovery_key_display_restores_legacy_writer() {
+    let app_data = IsolatedAppData::new("pad-whole-recovery-cancel");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    set_text(pad, TITLE_ID, "whole recovery cancelled title");
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    click(pad, OPEN_PAD_PROTECTION);
+    wait_for_control(pad, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, "whole recovery cancel 34a5");
+    set_text(
+        pad,
+        ENROLL_CONFIRM_PASSWORD_ID,
+        "whole recovery cancel 34a5",
+    );
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "whole-Pad cancellation key",
+        |value| value == "復旧キーを保存してください",
+    );
+    assert!(text_of(control(pad, ENROLL_PASSWORD_ID)).starts_with("SPRK1-"));
+    assert!(
+        store.load().is_ok(),
+        "display cannot publish cutover intent"
+    );
+    click(pad, ENROLL_CANCEL_ID);
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    wait_for_control(pad, TITLE_ID);
+    assert_eq!(
+        text_of(control(pad, TITLE_ID)),
+        "whole recovery cancelled title"
+    );
+    assert!(
+        store.load().is_ok(),
+        "cancel must leave legacy data readable"
+    );
+    set_text(pad, BODY_ID, "legacy writer restored 33d0");
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        if store.load().ok().and_then(|loaded| {
+            loaded
+                .document
+                .find(1)
+                .and_then(pad_storage::PadMemo::plain_content)
+                .map(|(_, body)| body == "legacy writer restored 33d0")
+        }) == Some(true)
+        {
+            break;
+        }
+        assert!(Instant::now() < deadline, "legacy writer did not resume");
+        sleep(Duration::from_millis(30));
+    }
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+fn windows_lock_clears_unconfirmed_whole_pad_recovery_key() {
+    let app_data = IsolatedAppData::new("pad-whole-recovery-session-lock");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    set_text(pad, TITLE_ID, "session-lock recovery title");
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    click(pad, OPEN_PAD_PROTECTION);
+    wait_for_control(pad, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, "session lock recovery 03ac");
+    set_text(
+        pad,
+        ENROLL_CONFIRM_PASSWORD_ID,
+        "session lock recovery 03ac",
+    );
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "whole-Pad recovery before session lock",
+        |value| value == "復旧キーを保存してください",
+    );
+    let key = Zeroizing::new(text_of(control(pad, ENROLL_PASSWORD_ID)));
+    assert!(key.starts_with("SPRK1-"));
+    // SAFETY: this simulated WTS notification is sent only to the isolated
+    // Pad HWND; it does not lock the user's Windows session.
+    unsafe {
+        SendMessageW(
+            pad,
+            WM_WTSSESSION_CHANGE,
+            Some(WPARAM(WTS_SESSION_LOCK as usize)),
+            None,
+        );
+    }
+    assert_no_child_text_contains(pad, &[key.as_str()]);
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    assert!(
+        store.load().is_ok(),
+        "session-lock cancellation cannot publish protected intent"
+    );
+    // SAFETY: the host belongs to the same isolated renderer and only opens
+    // this test Pad after its cancellation path reached a terminal state.
+    unsafe {
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+            .expect("show isolated Pad after simulated session lock");
+    }
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    wait_for_control(pad, TITLE_ID);
+    assert_eq!(
+        text_of(control(pad, TITLE_ID)),
+        "session-lock recovery title"
+    );
+    assert!(store.load().is_ok());
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn enrollment_prompt_can_cancel_without_cutover() {
+    let app_data = IsolatedAppData::new("pad-enroll-cancel");
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    set_text(pad, TITLE_ID, "enrollment cancellation sentinel");
+    click(pad, OPEN_PAD_PROTECTION);
+    let first = wait_for_control(pad, ENROLL_PASSWORD_ID);
+    let again = wait_for_control(pad, ENROLL_CONFIRM_PASSWORD_ID);
+    for child in [first, again] {
+        assert_ne!(
+            // SAFETY: child is a live enrollment edit from this Pad HWND;
+            // this only reads its style flags.
+            unsafe { GetWindowLongPtrW(child, GWL_STYLE) } as u32 & 0x20,
+            0,
+            "enrollment password must be masked"
+        );
+    }
+    assert_eq!(
+        text_of(control(pad, ENROLL_STATUS_ID)),
+        "保護時に復旧キーを一度表示します"
+    );
+    set_text(pad, ENROLL_PASSWORD_ID, "discard this secret");
+    set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, "discard this secret");
+    click(pad, ENROLL_CANCEL_ID);
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    wait_for_control(pad, TITLE_ID);
+    assert_eq!(
+        text_of(control(pad, TITLE_ID)),
+        "enrollment cancellation sentinel"
+    );
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    assert!(!matches!(
+        store.load(),
+        Err(pad_storage::StorageError::ProtectedCutover)
+    ));
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+fn create_test_envelope(
+    image: &Path,
+    vault_id: [u8; 16],
+    password: &str,
+    document: &pad_storage::PadDocument,
+) -> Vec<u8> {
+    create_test_payload(
+        image,
+        vault_id,
+        0,
+        password,
+        document.encode().expect("encode protected document"),
+    )
+}
+
+fn create_test_payload(
+    image: &Path,
+    vault_id: [u8; 16],
+    memo_id: u64,
+    password: &str,
+    payload: Vec<u8>,
+) -> Vec<u8> {
+    use std::io::Write;
+    let child = Command::new(image)
+        .env_clear()
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("start isolated Pad session fixture");
+    let mut owned = OwnedChild::new(child, "Pad session fixture");
+    let mut stdin = owned.child.stdin.take().expect("session stdin");
+    let stdout = owned.child.stdout.take().expect("session stdout");
+    let request = SessionRequest {
+        id: 1,
+        generation: 1,
+        operation: Operation::Create,
+        vault_id,
+        memo_id,
+        password: SecretBytes::new(password.as_bytes().to_vec()),
+        payload: SecretBytes::new(payload),
+    };
+    session::write_request(&mut stdin, &request).expect("send Create request");
+    stdin.flush().expect("flush Create request");
+    drop(stdin);
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let reader = thread::spawn(move || {
+        let _ = sender.send(session::read_response(stdout));
+    });
+    let response = match receiver.recv_timeout(Duration::from_secs(10)) {
+        Ok(result) => result.expect("read Create response"),
+        Err(_) => {
+            let _ = owned.child.kill();
+            let _ = owned.child.wait();
+            let _ = reader.join();
+            panic!("Pad session Create did not return within 10 seconds");
+        }
+    };
+    reader.join().expect("join session response reader");
+    assert_eq!(
+        response.status,
+        SessionStatus::Success,
+        "Create must seal fixture"
+    );
+    let envelope = response.payload.to_vec();
+    owned.wait_for_exit();
+    envelope
+}
+
+const ALL_CONTROLS: [(&str, i32); 16] = [
     ("menu", MENU_ID),
     ("count", COUNT_ID),
     ("search", SEARCH_ID),
@@ -82,9 +2601,10 @@ const ALL_CONTROLS: [(&str, i32); 15] = [
     ("body", BODY_ID),
     ("new", NEW_ID),
     ("sort", SORT_ID),
-    ("sync", SYNC_ID),
+    ("overflow", OVERFLOW_ID),
     ("share", SHARE_ID),
     ("delete", DELETE_ID),
+    ("memo-lock", MEMO_PROTECT_ID),
     ("list-rail", LIST_RAIL_ID),
     ("body-rail", BODY_RAIL_ID),
 ];
@@ -150,8 +2670,59 @@ fn the_pad_splits_above_the_breakpoint_and_folds_below_it() {
         owner.is_some_and(|owner| !owner.is_invalid()),
         "an unowned window gets a taskbar button whatever its styles say"
     );
+    assert_ne!(
+        ex_style & WS_EX_TOPMOST.0,
+        0,
+        "the pad must open as a topmost window"
+    );
+
+    // A later show request restores topmost state even if another window
+    // changed the pad's z-order while it was open.
+    // SAFETY: both HWNDs belong to this fixture; the host message is the
+    // production path that summons or refocuses the pad.
+    unsafe {
+        SetWindowPos(
+            pad,
+            Some(HWND_NOTOPMOST),
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE,
+        )
+        .expect("temporarily lower the pad");
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+            .expect("request the pad again");
+    }
+    let deadline = Instant::now() + PATIENT;
+    // SAFETY: the fixture-owned pad remains live throughout this bounded wait.
+    while (unsafe { GetWindowLongPtrW(pad, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST.0) == 0 {
+        assert!(
+            Instant::now() < deadline,
+            "the pad did not return to topmost state"
+        );
+        sleep(Duration::from_millis(20));
+    }
 
     seed_memos(pad);
+
+    // Closing hides the singleton. Reopening must retain both its contents
+    // and its topmost status.
+    // SAFETY: both handles belong to the fixture, and WM_CLOSE only hides Pad.
+    unsafe {
+        SendMessageW(pad, WM_CLOSE, None, None);
+        assert!(!IsWindowVisible(pad).as_bool());
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0)).expect("reopen pad");
+    }
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    assert_ne!(
+        // SAFETY: the same fixture-owned window was just observed visible.
+        unsafe { GetWindowLongPtrW(pad, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST.0,
+        0
+    );
 
     // --- Two panes -------------------------------------------------------
     resize_client(pad, WIDE_LOGICAL, TALL_LOGICAL);
@@ -164,9 +2735,14 @@ fn the_pad_splits_above_the_breakpoint_and_folds_below_it() {
         !wide.visible("menu"),
         "the two-pane shape shows both panes at once, so nothing needs a pane toggle: {wide:?}"
     );
-    for name in ["list", "search", "title", "body", "share", "delete"] {
+    for name in [
+        "list", "search", "title", "body", "share", "delete", "overflow",
+    ] {
         assert!(wide.visible(name), "the two-pane shape must show {name}");
     }
+    assert_eq!(text_of(control(pad, OVERFLOW_ID)), "その他");
+    assert!(visible(control(pad, MEMO_PROTECT_ID)));
+    assert!(wide.rect("overflow").top >= wide.rect("list").bottom);
     let list = wide.rect("list");
     let body = wide.rect("body");
     assert!(
@@ -180,14 +2756,14 @@ fn the_pad_splits_above_the_breakpoint_and_folds_below_it() {
     // The column is the list and the rail that reads it, so the edge every
     // control below is measured against is the rail's.
     let column = wide.rect("list-rail").right;
-    for name in ["new", "sort", "sync"] {
+    for name in ["new", "sort", "overflow"] {
         assert!(
             wide.rect(name).right <= column,
             "in the two-pane shape the bottom bar is the list column's own bar, so {name} may not \
              reach under the editor"
         );
     }
-    for name in ["share", "delete"] {
+    for name in ["share", "delete", "memo-lock"] {
         assert!(
             wide.rect(name).left >= column,
             "{name} acts on the open memo, so in the two-pane shape it belongs to the editor"
@@ -273,7 +2849,10 @@ fn the_pad_splits_above_the_breakpoint_and_folds_below_it() {
     // the desktop's clipboard away from whoever is at it.
     // SAFETY: `pad` is live and the identifier is a plain integer.
     let status_control = unsafe { GetDlgItem(Some(pad), STATUS_ID) }.expect("the status exists");
-    click(pad, SYNC_ID);
+    // Seed edits save asynchronously. Let that older completion finish before
+    // asserting a notice's lifetime, otherwise it can replace the notice.
+    wait_for_text(status_control, "seed storage completion", str::is_empty);
+    notify(pad, GIT_SYNC_MENU_ID, 0);
     let notice = wait_for_text(status_control, "a notice", |value| value.contains("GitHub"));
     let slot = client_rect(status_control);
     assert!(
@@ -328,20 +2907,22 @@ fn the_pad_splits_above_the_breakpoint_and_folds_below_it() {
             "the list pane must not leave the editor's {name} on screen"
         );
     }
-    for name in ["share", "delete", "new", "sort", "sync"] {
-        assert!(
-            list_pane.visible(name),
-            "the one-pane bottom bar carries every action, including {name}"
-        );
+    for name in ["new", "sort", "overflow"] {
+        assert!(list_pane.visible(name), "the one-pane list carries {name}");
         assert!(
             list_pane.rect(name).top >= list_pane.rect("list").bottom,
             "{name} belongs to the bottom bar, below the list"
         );
     }
+    assert!(list_pane.rect("sort").right <= list_pane.rect("overflow").left);
     assert!(
-        list_pane.rect("delete").right >= list_pane.rect("share").right,
-        "delete is the destructive action and sits at the far end of the bar"
+        list_pane.client.right - list_pane.rect("overflow").right <= 24 * dpi / 96,
+        "overflow belongs at the right edge of the folded list bar"
     );
+    for name in ["share", "delete", "memo-lock"] {
+        assert!(!list_pane.visible(name), "{name} belongs to the editor");
+    }
+    assert!(!visible(control(pad, MEMO_PROTECT_ID)));
     list_pane.assert_disjoint_and_inside();
 
     // --- One pane, editor ------------------------------------------------
@@ -365,6 +2946,15 @@ fn the_pad_splits_above_the_breakpoint_and_folds_below_it() {
         editor_pane.visible("title") && editor_pane.visible("body"),
         "the editor pane shows the memo it opened"
     );
+    for name in ["share", "delete", "memo-lock"] {
+        assert!(editor_pane.visible(name), "the editor carries {name}");
+    }
+    assert!(editor_pane.rect("memo-lock").bottom <= editor_pane.rect("body").top);
+    assert!(editor_pane.rect("memo-lock").right > editor_pane.rect("title").right);
+    assert!(visible(control(pad, MEMO_PROTECT_ID)));
+    for name in ["new", "sort", "overflow"] {
+        assert!(!editor_pane.visible(name), "{name} belongs to the list");
+    }
     editor_pane.assert_disjoint_and_inside();
 
     // And back again, so the toggle is proven to be a toggle rather than a
@@ -469,8 +3059,293 @@ fn typing_into_a_fresh_pad_puts_the_memo_in_the_list() {
         "the heading counts the memos it lists, and it reads {heading:?}"
     );
 
+    // Renaming this only row cannot change its identity or sort position.
+    // Its native label must still change, including the accessibility text.
+    for title in ["会議メモ 🌸", "修正したタイトル", ""] {
+        set_text(pad, TITLE_ID, title);
+        let expected = if title.is_empty() { "無題" } else { title };
+        wait_for_row_text(list, 0, expected);
+        assert_eq!(row_count(list), 1);
+        assert_eq!(text_of(control(pad, TITLE_ID)), title);
+    }
+
     engine.stop();
     renderer.wait_for_exit();
+}
+
+/// A selection change can consume the edited controls before their debounce
+/// timer fires. That capture must still reach the storage worker.
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn a_title_edited_just_before_switching_memos_survives_restart() {
+    pending_title_survives_restart(PendingTitleAction::Select);
+}
+
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn a_title_edited_just_before_a_failed_copy_survives_restart() {
+    pending_title_survives_restart(PendingTitleAction::Copy);
+}
+
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn a_title_edited_just_before_shutdown_survives_restart() {
+    pending_title_survives_restart(PendingTitleAction::Shutdown);
+}
+
+enum PendingTitleAction {
+    Select,
+    Copy,
+    Shutdown,
+}
+
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn renaming_a_scrolled_title_preserves_selection_and_scroll() {
+    let app_data = IsolatedAppData::new("pad-title-scroll");
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    resize_client(pad, WIDE_LOGICAL, 400);
+    let list = list_of(pad);
+    for index in 0..12 {
+        if index > 0 {
+            click(pad, NEW_ID);
+            wait_for_text(control(pad, TITLE_ID), "new memo", str::is_empty);
+        }
+        set_text(pad, TITLE_ID, &format!("メモ {index}"));
+        wait_for_row_text(list, 0, &format!("メモ {index}"));
+    }
+    // Created order keeps this memo's position stable while its title changes.
+    // SAFETY: all messages target this fixture's live list or its parent.
+    unsafe {
+        // Sort completion is the synchronous command return, not its brief
+        // status notice, which a storage completion can immediately replace.
+        SendMessageW(pad, WM_COMMAND, Some(WPARAM(SORT_ID as usize)), None);
+        SendMessageW(list, LB_SETCURSEL, Some(WPARAM(3)), None);
+        SendMessageW(
+            pad,
+            WM_COMMAND,
+            Some(WPARAM(LIST_ID as usize | ((LBN_SELCHANGE as usize) << 16))),
+            None,
+        );
+        SendMessageW(list, LB_SETTOPINDEX, Some(WPARAM(2)), None);
+        assert_eq!(SendMessageW(list, LB_GETTOPINDEX, None, None).0, 2);
+    }
+    set_text(pad, TITLE_ID, "スクロール中の変更 🌸");
+    wait_for_row_text(list, 3, "スクロール中の変更 🌸");
+    // SAFETY: these queries read only this fixture's live list.
+    unsafe {
+        assert_eq!(SendMessageW(list, LB_GETCURSEL, None, None).0, 3);
+        assert_eq!(SendMessageW(list, LB_GETTOPINDEX, None, None).0, 2);
+    }
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+fn pending_title_survives_restart(action: PendingTitleAction) {
+    let app_data = IsolatedAppData::new("pad-title-save");
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let list = list_of(pad);
+    set_text(pad, TITLE_ID, "最初のメモ");
+    wait_for_row_text(list, 0, "最初のメモ");
+    click(pad, NEW_ID);
+    wait_for_text(control(pad, TITLE_ID), "new memo", str::is_empty);
+    set_text(pad, TITLE_ID, "編集前");
+    click(pad, SORT_ID);
+    wait_for_row_text(list, 0, "編集前");
+    wait_for_text(control(pad, STATUS_ID), "initial save", |s| {
+        !s.contains("保存中")
+    });
+
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    // Hold the clipboard open in this process so the copy fails without
+    // replacing the user's clipboard. The guard releases it even on panic.
+    struct ClipboardGuard;
+    impl Drop for ClipboardGuard {
+        fn drop(&mut self) {
+            // SAFETY: this thread successfully opened the clipboard below.
+            unsafe {
+                let _ = windows::Win32::System::DataExchange::CloseClipboard();
+            }
+        }
+    }
+    let clipboard = if matches!(action, PendingTitleAction::Copy) {
+        // SAFETY: the fixture only opens and closes; it never empties or writes.
+        unsafe { windows::Win32::System::DataExchange::OpenClipboard(None) }
+            .expect("hold clipboard");
+        Some(ClipboardGuard)
+    } else {
+        None
+    };
+    let started = Instant::now();
+    set_text(pad, TITLE_ID, "切り替え直前のタイトル 🌸");
+    // Synchronous sends consume the edit before the 100 ms edit timer.
+    // SAFETY: these live controls belong to this fixture; neither message
+    // carries a pointer and selecting a row uses the public notification.
+    unsafe {
+        match action {
+            PendingTitleAction::Select => {
+                SendMessageW(list, LB_SETCURSEL, Some(WPARAM(1)), None);
+                SendMessageW(
+                    pad,
+                    WM_COMMAND,
+                    Some(WPARAM(LIST_ID as usize | ((LBN_SELCHANGE as usize) << 16))),
+                    Some(LPARAM(list.0 as isize)),
+                );
+            }
+            PendingTitleAction::Copy => {
+                SendMessageW(pad, WM_COMMAND, Some(WPARAM(SHARE_ID as usize)), None);
+            }
+            PendingTitleAction::Shutdown => {
+                SendMessageW(host, WM_CLOSE, None, None);
+            }
+        }
+    }
+    assert!(
+        started.elapsed() < Duration::from_millis(100),
+        "fixture missed the pending-edit window"
+    );
+    if matches!(action, PendingTitleAction::Select) {
+        assert_eq!(text_of(control(pad, TITLE_ID)), "最初のメモ");
+    }
+    if matches!(action, PendingTitleAction::Copy) {
+        assert_eq!(text_of(control(pad, STATUS_ID)), "コピーできません");
+    }
+    drop(clipboard);
+    engine.stop();
+    renderer.wait_for_exit();
+
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    assert_eq!(row_count(list_of(pad)), 2);
+    assert_eq!(row_text(list_of(pad), 0), "切り替え直前のタイトル 🌸");
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+fn open_test_pad(engine: &FixtureEngine, app_data: &IsolatedAppData) -> (OwnedChild, HWND) {
+    open_test_pad_with_log(engine, app_data, None)
+}
+
+fn open_pad_with_draft_choice(
+    engine: &FixtureEngine,
+    app_data: &IsolatedAppData,
+) -> (OwnedChild, HWND, HWND) {
+    let renderer = Command::new(PathBuf::from(env!("CARGO_BIN_EXE_sakura_renderer")))
+        .arg("--test-pipe")
+        .arg(engine.pipe_name())
+        .env("LOCALAPPDATA", app_data.path())
+        .spawn()
+        .expect("spawn isolated renderer with pending draft");
+    let renderer = OwnedChild::new(renderer, "renderer");
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    // SAFETY: this host HWND belongs to the fixture's renderer process.
+    unsafe {
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+            .expect("open Pad with pending draft");
+    }
+    let pad = wait_for_renderer_window(renderer.pid(), PAD_CLASS, false);
+    let dialog = wait_for_owned_dialog(pad);
+    (renderer, pad, dialog)
+}
+
+fn select_memo_named(pad: HWND, title: &str) {
+    let list = list_of(pad);
+    let deadline = Instant::now() + PATIENT;
+    let index = loop {
+        if let Some(index) =
+            (0..row_count(list).max(0) as usize).find(|&index| list_text(list, index) == title)
+        {
+            break index;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "memo row {title:?} did not appear"
+        );
+        sleep(Duration::from_millis(30));
+    };
+    // SAFETY: the list belongs to this isolated Pad; the command carries
+    // only an integer row index and the notification has no pointer payload.
+    unsafe {
+        SendMessageW(list, LB_SETCURSEL, Some(WPARAM(index)), None);
+    }
+    notify(pad, LIST_ID, LBN_SELCHANGE as u16);
+    wait_for_text(control(pad, TITLE_ID), "selected memo", |value| {
+        value == title
+    });
+}
+
+fn open_test_pad_with_log(
+    engine: &FixtureEngine,
+    app_data: &IsolatedAppData,
+    stage_log: Option<&Path>,
+) -> (OwnedChild, HWND) {
+    open_test_pad_with_options(engine, app_data, stage_log, false)
+}
+
+fn open_test_pad_with_options(
+    engine: &FixtureEngine,
+    app_data: &IsolatedAppData,
+    stage_log: Option<&Path>,
+    suppress_enrollment_posts: bool,
+) -> (OwnedChild, HWND) {
+    let mut command = Command::new(PathBuf::from(env!("CARGO_BIN_EXE_sakura_renderer")));
+    command
+        .arg("--test-pipe")
+        .arg(engine.pipe_name())
+        .env("LOCALAPPDATA", app_data.path());
+    if let Some(path) = stage_log {
+        command.env("SAKURA_PAD_DEBUG_LOG", path);
+    }
+    if suppress_enrollment_posts {
+        command.env("SAKURA_PAD_TEST_DROP_ENROLL_POST", "1");
+    }
+    let renderer = command.spawn().expect("spawn test-owned renderer");
+    let renderer = OwnedChild::new(renderer, "renderer");
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+    // SAFETY: this host belongs to the child this fixture owns.
+    unsafe {
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0)).expect("open pad");
+    }
+    let pad = wait_for_renderer_window(renderer.pid(), PAD_CLASS, true);
+    (renderer, pad)
+}
+
+fn row_text(list: HWND, index: usize) -> String {
+    // SAFETY: LB_GETTEXT is marshalled by Windows for this LBS_HASSTRINGS
+    // list, and the length-bounded buffer outlives the synchronous send.
+    unsafe {
+        let length = SendMessageW(list, LB_GETTEXTLEN, Some(WPARAM(index)), None).0;
+        assert!(length >= 0, "missing list row {index}");
+        // The row can be renamed between the two sends. Reserve the whole
+        // documented title limit plus NUL, not just the previous title length.
+        assert!(length <= 256);
+        let mut buffer = vec![0_u16; 257];
+        let copied = SendMessageW(
+            list,
+            LB_GETTEXT,
+            Some(WPARAM(index)),
+            Some(LPARAM(buffer.as_mut_ptr() as isize)),
+        )
+        .0;
+        assert!(copied >= 0);
+        String::from_utf16_lossy(&buffer[..copied as usize])
+    }
+}
+
+fn wait_for_row_text(list: HWND, index: usize, expected: &str) {
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        if row_count(list) > index as isize && row_text(list, index) == expected {
+            return;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "row {index} never changed to {expected:?}"
+        );
+        sleep(Duration::from_millis(20));
+    }
 }
 
 /// Opens a real pad, seeds it, and leaves it on screen to be looked at.
@@ -717,7 +3592,51 @@ fn seed_memos(pad: HWND) {
 }
 
 fn click(pad: HWND, id: i32) {
-    notify(pad, id, BN_CLICKED as u16);
+    if id == OPEN_PAD_PROTECTION {
+        // SAFETY: the isolated renderer owns this live Pad HWND. Settings
+        // uses this same message to enter the protection flow. Post it so
+        // modal protection dialogs do not block the fixture thread.
+        unsafe {
+            PostMessageW(Some(pad), WM_PAD_OPEN_PROTECTION, WPARAM(0), LPARAM(0))
+                .expect("post Pad protection action");
+        }
+    } else {
+        notify(pad, id, BN_CLICKED as u16);
+    }
+}
+
+fn click_synchronously(pad: HWND, id: i32) {
+    let packed = (id as u32 & 0xffff) | (BN_CLICKED << 16);
+    // SAFETY: this test-owned Pad handles the integer WM_COMMAND on its UI
+    // thread before the fixture edits the newly created memo controls.
+    unsafe {
+        SendMessageW(pad, WM_COMMAND, Some(WPARAM(packed as usize)), None);
+    }
+}
+
+fn click_until_control(pad: HWND, button_id: i32, child_id: i32) {
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        click(pad, button_id);
+        // The actor may still be finishing its last save after the previous
+        // prompt disappeared. Wait for that terminal state before retrying.
+        sleep(Duration::from_millis(50));
+        // SAFETY: this is an isolated, live fixture Pad; query only whether
+        // its expected prompt child exists after the posted click.
+        if unsafe { GetDlgItem(Some(pad), child_id) }.is_ok() {
+            return;
+        }
+        // SAFETY: the test owns this live Pad HWND and reads only its status
+        // control to report a useful timeout failure.
+        let status = unsafe { GetDlgItem(Some(pad), STATUS_ID) }
+            .ok()
+            .map(text_of)
+            .unwrap_or_default();
+        assert!(
+            Instant::now() < deadline,
+            "control {child_id} did not appear after clicking {button_id}; Pad status: {status:?}"
+        );
+    }
 }
 
 fn notify(pad: HWND, id: i32, code: u16) {
@@ -750,7 +3669,14 @@ fn set_text(pad: HWND, id: i32, value: &str) {
         )
     };
     assert_eq!(set.0, 1, "the control accepted the text");
-    assert_eq!(text_of(child), value, "the control kept the text");
+    // USER32 masks ES_PASSWORD edit contents from callers in another process,
+    // including this renderer fixture. The authenticated unlock outcome below
+    // proves the password reached the Pad without reading it back here.
+    // SAFETY: child is the live edit control found just above; GWL_STYLE is a
+    // read-only query with no caller-owned pointer data.
+    if unsafe { GetWindowLongPtrW(child, GWL_STYLE) } as u32 & 0x20 == 0 {
+        assert_eq!(text_of(child), value, "the control kept the text");
+    }
 }
 
 /// Reads one of the pad's edit controls.
@@ -779,10 +3705,150 @@ fn text_of(control: HWND) -> String {
     String::from_utf16_lossy(&buffer[..copied.max(0) as usize])
 }
 
+fn assert_no_child_text_contains(parent: HWND, secrets: &[&str]) {
+    let mut previous = None;
+    loop {
+        // SAFETY: parent is a live Pad HWND, and previous is either absent
+        // or a child returned by this enumeration in the prior iteration.
+        let child =
+            unsafe { FindWindowExW(Some(parent), previous, PCWSTR::null(), PCWSTR::null()) };
+        let Ok(child) = child else {
+            break;
+        };
+        let label = text_of(child);
+        for secret in secrets {
+            assert!(!label.contains(secret), "memo leaked through child text");
+        }
+        previous = Some(child);
+    }
+}
+
+/// Read the same UI Automation properties a screen reader can obtain from the
+/// Pad window, including native edit values that are not part of a HWND label.
+fn pad_uia_strings(automation: &IUIAutomation, pad: HWND) -> Vec<String> {
+    // SAFETY: this Pad HWND belongs to the retained fixture renderer.
+    let root = unsafe { automation.ElementFromHandle(pad) }.expect("Pad UIA root");
+    // SAFETY: both COM objects remain live for the synchronous tree query.
+    let condition = unsafe { automation.CreateTrueCondition() }.expect("UIA true condition");
+    // SAFETY: the root and condition remain live while UIA enumerates the
+    // fixture's native controls. Raw descendants include list item providers.
+    let descendants =
+        unsafe { root.FindAll(TreeScope_Descendants, &condition) }.expect("Pad UIA descendants");
+    // SAFETY: the array is retained throughout this read.
+    let count = unsafe { descendants.Length() }.expect("Pad UIA descendant count");
+    assert!(count > 0, "Pad must expose its native controls to UIA");
+    let mut strings = Vec::new();
+    for element in std::iter::once(root).chain((0..count).map(|index| {
+        // SAFETY: each index is within the UIA array length read above.
+        unsafe { descendants.GetElement(index) }.expect("Pad UIA descendant")
+    })) {
+        // SAFETY: the element proxy is live for this immediate property read.
+        strings.push(
+            unsafe { element.CurrentName() }
+                .expect("Pad UIA name")
+                .to_string(),
+        );
+        // Password controls intentionally do not expose their values.
+        // SAFETY: the element proxy is live for this immediate property read.
+        if unsafe { element.CurrentIsPassword() }
+            .expect("Pad UIA password property")
+            .as_bool()
+        {
+            continue;
+        }
+        // A native edit supports ValuePattern; static labels and many other
+        // controls do not. Query all providers that advertise this pattern.
+        if let Ok(value) =
+            // SAFETY: the live element is queried by its documented UIA ID.
+            unsafe {
+                element.GetCurrentPatternAs::<IUIAutomationValuePattern>(UIA_ValuePatternId)
+            }
+        {
+            // SAFETY: the ValuePattern proxy is live for this read.
+            strings.push(
+                unsafe { value.CurrentValue() }
+                    .expect("Pad UIA value")
+                    .to_string(),
+            );
+        }
+    }
+    strings
+}
+
+fn assert_locked_memo_uia(automation: &IUIAutomation, pad: HWND, title: &str, body: &str) {
+    let strings = pad_uia_strings(automation, pad);
+    assert!(
+        strings.iter().any(|value| value == "保護されたメモ 01"),
+        "locked memo must have a content-independent UIA name: {strings:?}"
+    );
+    for secret in [title, body] {
+        assert!(
+            strings.iter().all(|value| !value.contains(secret)),
+            "locked memo leaked through UI Automation: {strings:?}"
+        );
+    }
+}
+
+struct PadUiaApartment {
+    owns_initialization: bool,
+}
+
+impl PadUiaApartment {
+    fn new() -> Self {
+        // SAFETY: no reserved pointer is provided; COM initialization is
+        // balanced by this guard when it succeeds on the current test thread.
+        let result = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+        if result == RPC_E_CHANGED_MODE {
+            return Self {
+                owns_initialization: false,
+            };
+        }
+        result.ok().expect("initialize Pad UIA COM apartment");
+        Self {
+            owns_initialization: true,
+        }
+    }
+}
+
+impl Drop for PadUiaApartment {
+    fn drop(&mut self) {
+        if self.owns_initialization {
+            // SAFETY: balances one successful CoInitializeEx on this thread.
+            unsafe { CoUninitialize() };
+        }
+    }
+}
+
 /// One of the pad's controls, by the identifier the window publishes.
 fn control(pad: HWND, id: i32) -> HWND {
     // SAFETY: `pad` is live and the identifier is a plain integer.
     unsafe { GetDlgItem(Some(pad), id) }.expect("the control exists")
+}
+
+fn wait_for_control(pad: HWND, id: i32) -> HWND {
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        // SAFETY: pad remains live for this bounded wait; GetDlgItem only
+        // probes whether its child with this numeric ID now exists.
+        if let Ok(child) = unsafe { GetDlgItem(Some(pad), id) } {
+            return child;
+        }
+        assert!(Instant::now() < deadline, "control {id} did not appear");
+        sleep(Duration::from_millis(20));
+    }
+}
+
+fn wait_for_control_absent(pad: HWND, id: i32) {
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        // SAFETY: pad remains live for this bounded wait; GetDlgItem only
+        // checks whether the enrollment child has been destroyed.
+        if unsafe { GetDlgItem(Some(pad), id) }.is_err() {
+            return;
+        }
+        assert!(Instant::now() < deadline, "control {id} did not disappear");
+        sleep(Duration::from_millis(20));
+    }
 }
 
 fn list_of(pad: HWND) -> HWND {
@@ -794,6 +3860,27 @@ fn row_count(list: HWND) -> isize {
     // SAFETY: `list` is a live control of the child this test owns, and the
     // count query takes no buffer.
     unsafe { SendMessageW(list, LB_GETCOUNT, None, None) }.0
+}
+
+fn list_text(list: HWND, index: usize) -> String {
+    // SAFETY: the live list is owned by this fixture. LB_GETTEXTLEN and
+    // LB_GETTEXT are system-marshalled messages for this native list box.
+    let length = unsafe { SendMessageW(list, LB_GETTEXTLEN, Some(WPARAM(index)), None) }.0;
+    assert!(length >= 0, "list row {index} has readable text");
+    let mut buffer = vec![0_u16; length as usize + 1];
+    // SAFETY: buffer has space for the reported text and trailing NUL and
+    // remains alive until the synchronous cross-process message returns.
+    let copied = unsafe {
+        SendMessageW(
+            list,
+            LB_GETTEXT,
+            Some(WPARAM(index)),
+            Some(LPARAM(buffer.as_mut_ptr() as isize)),
+        )
+    }
+    .0;
+    assert!(copied >= 0, "list row {index} remained readable");
+    String::from_utf16_lossy(&buffer[..copied as usize])
 }
 
 /// Waits for `control`'s text to satisfy `settled`, and returns it.
@@ -809,6 +3896,31 @@ fn wait_for_text(control: HWND, label: &str, settled: impl Fn(&str) -> bool) -> 
         assert!(
             Instant::now() < deadline,
             "timed out waiting for {label}; the status reads {value:?}"
+        );
+        sleep(Duration::from_millis(50));
+    }
+}
+
+fn wait_for_child_text(
+    parent: HWND,
+    id: i32,
+    label: &str,
+    settled: impl Fn(&str) -> bool,
+) -> String {
+    let deadline = Instant::now() + PATIENT + PATIENT;
+    loop {
+        // SAFETY: parent is a live fixture Pad. A prompt can replace a child
+        // while the posted click is handled, so resolve its HWND each time.
+        let value = unsafe { GetDlgItem(Some(parent), id) }
+            .ok()
+            .map(text_of)
+            .unwrap_or_default();
+        if settled(&value) {
+            return value;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "timed out waiting for {label}; read {value:?}"
         );
         sleep(Duration::from_millis(50));
     }
@@ -1010,6 +4122,7 @@ fn initial_state() -> UiState {
         // Leaving it disabled keeps this fixture from registering for raw
         // keyboard input on the desktop running the test.
         pad_shortcut: PadShortcut::Disabled,
+        pad_idle_lock_timeout: sakura_proto::PadIdleLockTimeout::default(),
         mode: None,
         candidates: None,
         candidate_detail: None,
@@ -1024,6 +4137,20 @@ struct FixtureEngine {
     pipe_name: String,
     state: Arc<(Mutex<UiState>, Condvar)>,
     thread: Option<JoinHandle<()>>,
+}
+
+struct FixtureHeartbeat {
+    stop: mpsc::Sender<()>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl Drop for FixtureHeartbeat {
+    fn drop(&mut self) {
+        let _ = self.stop.send(());
+        if let Some(thread) = self.thread.take() {
+            thread.join().expect("fixture heartbeat must stop");
+        }
+    }
 }
 
 impl FixtureEngine {
@@ -1070,10 +4197,22 @@ impl FixtureEngine {
     /// gone, which hides the pad and ends the process — so an idle fixture has
     /// to keep beating or the window closes under whoever is looking at it.
     fn heartbeat(&self) {
-        let (state, changed) = &*self.state;
-        let mut current = state.lock().expect("fixture state lock");
-        current.revision = current.revision.saturating_add(1);
-        changed.notify_all();
+        heartbeat_state(&self.state);
+    }
+
+    fn start_heartbeat(&self) -> FixtureHeartbeat {
+        let state = Arc::clone(&self.state);
+        let (stop, receiver) = mpsc::channel();
+        let thread = thread::spawn(move || loop {
+            match receiver.recv_timeout(HEARTBEAT) {
+                Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                Err(mpsc::RecvTimeoutError::Timeout) => heartbeat_state(&state),
+            }
+        });
+        FixtureHeartbeat {
+            stop,
+            thread: Some(thread),
+        }
     }
 
     fn stop(&mut self) {
@@ -1095,6 +4234,16 @@ impl FixtureEngine {
             .join()
             .expect("fixture server must finish");
     }
+}
+
+fn heartbeat_state(state: &Arc<(Mutex<UiState>, Condvar)>) {
+    let (state, changed) = &**state;
+    let mut current = state.lock().expect("fixture state lock");
+    if current.stopping {
+        return;
+    }
+    current.revision = current.revision.saturating_add(1);
+    changed.notify_all();
 }
 
 impl Drop for FixtureEngine {
@@ -1163,6 +4312,51 @@ fn wait_for_state(state: &Arc<(Mutex<UiState>, Condvar)>, since: u64) -> UiState
 
 struct IsolatedAppData(PathBuf);
 
+struct DraftPauseSignal(PathBuf);
+
+impl DraftPauseSignal {
+    fn new(label: &str) -> Self {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock after Unix epoch")
+            .as_nanos();
+        let path = PathBuf::from(std::env::var_os("USERPROFILE").expect("USERPROFILE on Windows"))
+            .join("tmp")
+            .join(format!("{label}-{}-{nonce}.signal", std::process::id()));
+        std::fs::create_dir_all(path.parent().expect("signal parent"))
+            .expect("create test signal directory under user tmp");
+        Self(path)
+    }
+
+    fn path(&self) -> &Path {
+        &self.0
+    }
+
+    fn wait_until_staged(&self) {
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut observed = None;
+        loop {
+            match std::fs::read(&self.0) {
+                Ok(value) if value == b"ready" => return,
+                Ok(value) => observed = Some(value),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => panic!("read draft stage signal: {error}"),
+            }
+            assert!(
+                Instant::now() < deadline,
+                "protected draft was never staged; last signal bytes: {observed:?}"
+            );
+            sleep(Duration::from_millis(20));
+        }
+    }
+}
+
+impl Drop for DraftPauseSignal {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
 impl IsolatedAppData {
     fn new(label: &str) -> Self {
         let nonce = SystemTime::now()
@@ -1220,9 +4414,150 @@ fn find_renderer_window(renderer_pid: u32, class: PCWSTR, require_visible: bool)
     }
 }
 
+fn wait_for_owned_dialog(owner: HWND) -> HWND {
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        if let Some(dialog) = find_owned_dialog(owner) {
+            return dialog;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "Pad's native choice dialog did not appear"
+        );
+        sleep(Duration::from_millis(30));
+    }
+}
+
+fn find_owned_dialog(owner: HWND) -> Option<HWND> {
+    let mut after = None;
+    loop {
+        // SAFETY: #32770 is the registered native dialog class; this
+        // enumerates windows only and does not send input.
+        let dialog =
+            unsafe { FindWindowExW(None, after, windows::core::w!("#32770"), PCWSTR::null()) }
+                .ok()?;
+        after = Some(dialog);
+        // SAFETY: the HWND came from the current top-level enumeration.
+        if unsafe { GetWindow(dialog, GW_OWNER) }.ok() == Some(owner) {
+            return Some(dialog);
+        }
+    }
+}
+
+fn wait_for_dialog_closed(dialog: HWND) {
+    let deadline = Instant::now() + PATIENT;
+    // SAFETY: the HWND is the fixture's native dialog; this is a read-only
+    // liveness probe and does not dereference a destroyed window.
+    while unsafe { IsWindow(Some(dialog)).as_bool() } {
+        assert!(Instant::now() < deadline, "Pad draft choice did not close");
+        sleep(Duration::from_millis(20));
+    }
+}
+
+fn dialog_static_text(dialog: HWND) -> String {
+    let mut labels = String::new();
+    let mut after = None;
+    loop {
+        // SAFETY: this enumerates only native STATIC children of the live
+        // isolated dialog and never modifies them.
+        let found = unsafe {
+            FindWindowExW(
+                Some(dialog),
+                after,
+                windows::core::w!("STATIC"),
+                PCWSTR::null(),
+            )
+        };
+        let Ok(child) = found else {
+            break;
+        };
+        after = Some(child);
+        labels.push_str(&text_of(child));
+        labels.push('\n');
+    }
+    labels
+}
+
 struct OwnedChild {
     child: Child,
     label: &'static str,
+}
+
+/// Retain handles for only the Pad session children of one test-owned
+/// renderer. Handles prevent PID reuse from redirecting teardown to an
+/// unrelated process after the renderer is forcibly terminated.
+struct TrackedSessionChildren(Vec<(u32, HANDLE)>);
+
+impl TrackedSessionChildren {
+    fn capture(renderer_pid: u32) -> Self {
+        // SAFETY: TH32CS_SNAPPROCESS with pid zero obtains a read-only process
+        // snapshot; it is closed before this function returns.
+        let snapshot = unsafe { CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0) }
+            .expect("snapshot test-owned renderer children");
+        let mut entry = PROCESSENTRY32W {
+            dwSize: size_of::<PROCESSENTRY32W>() as u32,
+            ..Default::default()
+        };
+        let mut found = Vec::new();
+        // SAFETY: snapshot stays open, and PROCESSENTRY32W supplies dwSize.
+        unsafe {
+            if Process32FirstW(snapshot, &mut entry).is_ok() {
+                loop {
+                    let name = String::from_utf16_lossy(
+                        &entry.szExeFile[..entry
+                            .szExeFile
+                            .iter()
+                            .position(|&unit| unit == 0)
+                            .unwrap_or(entry.szExeFile.len())],
+                    );
+                    if entry.th32ParentProcessID == renderer_pid
+                        && name.eq_ignore_ascii_case("sakura_pad_session.exe")
+                    {
+                        if let Ok(handle) = OpenProcess(
+                            PROCESS_SYNCHRONIZE | PROCESS_TERMINATE,
+                            false,
+                            entry.th32ProcessID,
+                        ) {
+                            found.push((entry.th32ProcessID, handle));
+                        }
+                    }
+                    if Process32NextW(snapshot, &mut entry).is_err() {
+                        break;
+                    }
+                }
+            }
+            let _ = CloseHandle(snapshot);
+        }
+        Self(found)
+    }
+
+    fn assert_exited_after_renderer(&self) {
+        for (pid, handle) in &self.0 {
+            // SAFETY: each handle was opened for synchronization and remains
+            // owned here. A failure is cleaned up by Drop below.
+            let result = unsafe { WaitForSingleObject(*handle, 5_000) };
+            assert_eq!(
+                result, WAIT_OBJECT_0,
+                "Pad session child {pid} survived renderer kill"
+            );
+        }
+    }
+}
+
+impl Drop for TrackedSessionChildren {
+    fn drop(&mut self) {
+        for (_, handle) in &self.0 {
+            // SAFETY: these are handles to child processes discovered under
+            // this fixture's renderer PID. Only a survivor is terminated.
+            unsafe {
+                if WaitForSingleObject(*handle, 0) != WAIT_OBJECT_0 {
+                    let _ = TerminateProcess(*handle, 1);
+                    let _ = WaitForSingleObject(*handle, 5_000);
+                }
+                let _ = CloseHandle(*handle);
+            }
+        }
+    }
 }
 
 impl OwnedChild {
@@ -1234,8 +4569,33 @@ impl OwnedChild {
         self.child.id()
     }
 
+    fn kill_and_confirm_exit(&mut self) {
+        if self
+            .child
+            .try_wait()
+            .expect("poll fixture renderer")
+            .is_none()
+        {
+            self.child
+                .kill()
+                .expect("terminate only the fixture renderer");
+        }
+        self.wait_for_exit_with_timeout(PATIENT);
+        assert!(
+            self.child
+                .try_wait()
+                .expect("confirm fixture renderer exit")
+                .is_some(),
+            "test-owned renderer process survived termination"
+        );
+    }
+
     fn wait_for_exit(&mut self) {
-        let deadline = Instant::now() + PATIENT;
+        self.wait_for_exit_with_timeout(PATIENT);
+    }
+
+    fn wait_for_exit_with_timeout(&mut self, timeout: Duration) {
+        let deadline = Instant::now() + timeout;
         loop {
             match self.child.try_wait().expect("poll owned child") {
                 Some(_) => return,

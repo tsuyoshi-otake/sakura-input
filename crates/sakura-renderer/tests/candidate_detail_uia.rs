@@ -588,6 +588,7 @@ fn history_delete_uses_typed_index_keeps_popup_until_next_ui_state_and_never_act
         revision: 42,
         appearance_theme: AppearanceTheme::Auto,
         pad_shortcut: PadShortcut::Disabled,
+        pad_idle_lock_timeout: sakura_proto::PadIdleLockTimeout::default(),
         mode: None,
         candidates: None,
         candidate_detail: None,
@@ -910,6 +911,7 @@ fn state_with_theme(
         revision,
         appearance_theme,
         pad_shortcut: PadShortcut::Disabled,
+        pad_idle_lock_timeout: sakura_proto::PadIdleLockTimeout::default(),
         mode: None,
         candidates: Some(CandidateList {
             kind: CandidateKind::Suggestion,
@@ -937,6 +939,7 @@ fn history_state(revision: u64, anchor: ScreenRect) -> UiState {
         revision,
         appearance_theme: AppearanceTheme::Dark,
         pad_shortcut: PadShortcut::Disabled,
+        pad_idle_lock_timeout: sakura_proto::PadIdleLockTimeout::default(),
         mode: None,
         candidates: Some(CandidateList {
             kind: CandidateKind::Suggestion,

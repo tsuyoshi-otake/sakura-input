@@ -1,5 +1,62 @@
 use super::*;
 
+#[test]
+fn settings_status_code_covers_method_lock_and_failure() {
+    assert_eq!(pad_status_code(false, false, false, None, false), 1);
+    assert_eq!(pad_status_code(true, true, false, None, false), 9);
+    for (hint, unlocked, locked) in [(None, 2, 3), (Some(false), 4, 5), (Some(true), 6, 7)] {
+        assert_eq!(pad_status_code(false, true, false, hint, false), unlocked);
+        assert_eq!(pad_status_code(false, true, true, hint, false), locked);
+        assert_eq!(pad_status_code(false, true, true, hint, true), 8);
+    }
+    assert_eq!(pad_status_code(false, false, true, None, true), 8);
+}
+
+#[test]
+fn settings_lock_reply_requires_completed_mask_and_revoked_session() {
+    assert_eq!(pad_mask_reply(true, true, true, true, true, true, true), 1);
+    assert_eq!(
+        pad_mask_reply(true, false, false, true, true, true, true),
+        1
+    );
+    // The old reply accepted enrollment completion even when the actual
+    // protected lock failed and kept its authenticated save actor.
+    assert_eq!(
+        pad_mask_reply(true, true, false, false, true, true, true),
+        3
+    );
+    assert_eq!(pad_mask_reply(true, true, true, false, true, true, true), 3);
+    assert_eq!(
+        pad_mask_reply(false, true, false, false, true, true, true),
+        3
+    );
+    assert_eq!(pad_mask_reply(true, true, true, true, false, true, true), 3);
+    assert_eq!(pad_mask_reply(true, true, true, true, true, false, true), 3);
+    assert_eq!(pad_mask_reply(true, true, true, true, true, true, false), 3);
+}
+
+#[test]
+fn closed_pad_status_distinguishes_empty_store_from_unreadable_data() {
+    let root =
+        std::path::PathBuf::from(std::env::var_os("USERPROFILE").expect("USERPROFILE")).join("tmp");
+    std::fs::create_dir_all(&root).expect("create ~/tmp");
+    let directory = root.join(format!(
+        "sakura-pad-closed-status-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos()
+    ));
+    assert!(directory.starts_with(&root));
+    std::fs::create_dir(&directory).expect("create isolated store");
+    let store = PadStore::at(&directory);
+    assert_eq!(PadWindow::closed_protection_status(&store), 1);
+    std::fs::write(store.path(), b"unreadable Pad image").expect("write corrupt fixture");
+    assert_eq!(PadWindow::closed_protection_status(&store), 8);
+    std::fs::remove_dir_all(&directory).expect("remove isolated store");
+}
+
 const DPIS: [u32; 3] = [96, 144, 192];
 
 /// The widths a status reading can ask its slot for: nothing to say, the
@@ -24,13 +81,17 @@ fn client(width_96: i32, height_96: i32, dpi: u32) -> RECT {
 /// Every rectangle a control is actually placed at. Containers are checked
 /// separately: they are meant to hold the leaves, not to avoid them.
 fn leaves(plan: &PadLayout) -> Vec<(&'static str, RECT)> {
-    let mut leaves = vec![
+    let mut leaves = [
         ("copy", plan.copy),
         ("delete", plan.delete),
+        ("memo_protect", plan.memo_protect),
         ("new", plan.new),
         ("sort", plan.sort),
-        ("sync", plan.sync),
-    ];
+        ("overflow", plan.overflow),
+    ]
+    .into_iter()
+    .filter(|(_, rect)| !is_empty(*rect))
+    .collect::<Vec<_>>();
     for (name, rect) in [
         ("menu", plan.menu),
         ("header_title", plan.header_title),
@@ -88,9 +149,9 @@ fn a_long_reading_widens_the_status_slot_but_never_starves_the_title() {
                 let widened = layout(area, dpi, pane, sentence);
                 let status = widened.status.expect("the slot does not disappear");
                 assert!(
-                        width_of(status) >= width_of(resting_status),
-                        "a measured reading never gets less than the resting width                          at {width} @ {dpi}"
-                    );
+                    width_of(status) >= width_of(resting_status),
+                    "a measured reading never gets less than the resting width                          at {width} @ {dpi}"
+                );
                 assert!(
                     width_of(status) <= sentence,
                     "and never more than it asked for at {width} @ {dpi}"
@@ -207,9 +268,9 @@ fn no_two_controls_overlap_at_any_dpi_or_width() {
                             );
                             for (other, other_rect) in &placed[index + 1..] {
                                 assert!(
-                                        !overlaps(*rect, *other_rect),
-                                        "{name} overlaps {other} at {width}x{height} @ {dpi} ({pane:?}/{want})"
-                                    );
+                                    !overlaps(*rect, *other_rect),
+                                    "{name} overlaps {other} at {width}x{height} @ {dpi} ({pane:?}/{want})"
+                                );
                             }
                         }
                     }
@@ -265,9 +326,9 @@ fn each_shape_shows_exactly_the_panes_it_promises() {
         assert!(narrow_editor.search.is_none() && narrow_editor.list.is_none());
         assert!(narrow_editor.title.is_some() && narrow_editor.body.is_some());
         assert!(
-                narrow_editor.header_title.is_none(),
-                "the open memo's own title takes the header, so the list name                  does not also claim it"
-            );
+            narrow_editor.header_title.is_none(),
+            "the open memo's own title takes the header, so the list name                  does not also claim it"
+        );
 
         assert!(
             layout(client(500, 520, dpi), dpi, PadPane::Editor, 1)
@@ -285,9 +346,9 @@ fn each_shape_shows_exactly_the_panes_it_promises() {
             let wide = layout(client(720, 520, dpi), dpi, pane, 0);
             assert!(wide.menu.is_none(), "a resident list needs no toggle");
             assert!(
-                    wide.header.is_none() && wide.header_title.is_none(),
-                    "reaching every memo from the list beside it leaves the                      window's own caption as the only chrome above the panes"
-                );
+                wide.header.is_none() && wide.header_title.is_none(),
+                "reaching every memo from the list beside it leaves the                      window's own caption as the only chrome above the panes"
+            );
             assert!(wide.search.is_some() && wide.list.is_some());
             assert!(wide.title.is_some() && wide.body.is_some());
             assert!(wide.meta.is_some(), "the editor carries its own first row");
@@ -300,7 +361,15 @@ fn each_shape_shows_exactly_the_panes_it_promises() {
 /// icon alone is exactly what the owner could not read.
 #[test]
 fn every_drawn_face_has_hover_text() {
-    for id in [MENU_ID, NEW_ID, SORT_ID, SYNC_ID, COPY_ID, DELETE_ID] {
+    for id in [
+        MENU_ID,
+        NEW_ID,
+        SORT_ID,
+        OVERFLOW_ID,
+        COPY_ID,
+        DELETE_ID,
+        MEMO_PROTECT_ID,
+    ] {
         assert!(button_face(id, false).is_some(), "{id} has no face");
         let text = hint(id).unwrap_or_else(|| panic!("{id} has no hint"));
         // A tip repeating the button's own one-word name teaches nothing
@@ -325,6 +394,27 @@ fn the_copy_control_says_markdown() {
     );
 }
 
+#[test]
+fn overflow_and_memo_lock_use_distinct_icons_and_hints() {
+    assert_eq!(
+        button_face(MEMO_PROTECT_ID, false).map(|face| face.icon),
+        Some(PadIcon::Lock)
+    );
+    assert_eq!(
+        button_face(OVERFLOW_ID, false).map(|face| face.icon),
+        Some(PadIcon::More)
+    );
+    assert_eq!(hint(MEMO_PROTECT_ID), Some("このメモだけを保護または解除"));
+    assert_eq!(
+        hint(OVERFLOW_ID),
+        Some("GitHub 同期と Pad 全体の設定を開く")
+    );
+    assert_eq!(
+        button_face(OVERFLOW_ID, true).map(|face| face.label),
+        Some(None)
+    );
+}
+
 /// Where the memo's own controls live is the difference between the two
 /// shapes: beside the memo when there is room, in the bar when there is not.
 #[test]
@@ -339,7 +429,7 @@ fn copying_and_deleting_follow_the_memo_between_the_shapes() {
             "the bar belongs to the list column in the two-pane shape"
         );
 
-        let narrow = layout(client(500, 520, dpi), dpi, PadPane::List, 0);
+        let narrow = layout(client(500, 520, dpi), dpi, PadPane::Editor, 0);
         assert!(contains(narrow.bottom, narrow.copy));
         assert!(contains(narrow.bottom, narrow.delete));
         assert!(
@@ -347,6 +437,57 @@ fn copying_and_deleting_follow_the_memo_between_the_shapes() {
             "delete is the far end of the bar, away from the rest"
         );
     }
+}
+
+#[test]
+fn overflow_stays_in_list_bar_and_memo_lock_stays_with_editor() {
+    for dpi in DPIS {
+        let wide = layout(client(760, 520, dpi), dpi, PadPane::Editor, 0);
+        assert!(contains(wide.bottom, wide.overflow));
+        assert!(contains(wide.meta.expect("editor head"), wide.memo_protect));
+        assert!(wide.memo_protect.right <= wide.copy.left);
+
+        let list = layout(client(500, 520, dpi), dpi, PadPane::List, 0);
+        assert!(contains(list.bottom, list.overflow));
+        assert_eq!(
+            list.overflow.right,
+            list.bottom.right - scaled(PADDING_96, dpi)
+        );
+        assert!(list.sort.right <= list.overflow.left);
+        assert!(is_empty(list.memo_protect));
+        assert!(is_empty(list.copy));
+        assert!(is_empty(list.delete));
+
+        let editor = layout(client(500, 520, dpi), dpi, PadPane::Editor, 0);
+        assert!(editor.menu.is_some(), "menu returns to the list's overflow");
+        assert!(contains(
+            editor.header.expect("folded editor header"),
+            editor.memo_protect
+        ));
+        assert!(editor.memo_protect.right > editor.title.expect("editor title").right);
+        assert!(editor.copy.right <= editor.delete.left);
+        assert!(is_empty(editor.new));
+        assert!(is_empty(editor.sort));
+        assert!(is_empty(editor.overflow));
+    }
+}
+
+#[test]
+fn settings_uses_only_installed_bootstrap_with_pad_argument() {
+    let renderer =
+        Path::new(r"C:\Program Files\Sakura Input\versions\2.0.7-a1\sakura_renderer.exe");
+    assert_eq!(
+        installed_settings_bootstrap(renderer),
+        Some(PathBuf::from(
+            r"C:\Program Files\Sakura Input\sakura_settings.exe"
+        ))
+    );
+    assert_eq!(SETTINGS_PAD_ARGUMENT, "--pad");
+    assert!(installed_settings_bootstrap(Path::new(r"C:\tmp\sakura_renderer.exe")).is_none());
+    assert!(installed_settings_bootstrap(Path::new(
+        r"C:\Program Files\Sakura Input\versions\2.0.7-a1\other.exe"
+    ))
+    .is_none());
 }
 
 /// The bar, the header and the meta row always hold their own controls.
@@ -399,7 +540,14 @@ fn every_band_contains_the_controls_it_owns() {
                     let row = row.expect("a memo row needs a band");
                     assert!(contains(row, rect), "{name} escapes the memo row");
                 }
-                for (name, rect) in [("new", plan.new), ("sort", plan.sort), ("sync", plan.sync)] {
+                for (name, rect) in [
+                    ("new", plan.new),
+                    ("sort", plan.sort),
+                    ("overflow", plan.overflow),
+                ] {
+                    if is_empty(rect) {
+                        continue;
+                    }
                     assert!(contains(plan.bottom, rect), "{name} escapes the bar");
                 }
             }
@@ -427,7 +575,15 @@ fn no_control_covers_the_rules_the_pad_paints() {
                 for (band, occupants) in [
                     (
                         plan.header,
-                        vec![("menu", plan.menu), ("header title", plan.header_title)],
+                        vec![
+                            ("menu", plan.menu),
+                            ("header title", plan.header_title),
+                            (
+                                "memo lock",
+                                (!is_empty(plan.memo_protect) && !plan.wide)
+                                    .then_some(plan.memo_protect),
+                            ),
+                        ],
                     ),
                     (
                         plan.meta,
@@ -454,7 +610,14 @@ fn no_control_covers_the_rules_the_pad_paints() {
                 }
                 // The bar's rule is painted on its top edge instead.
                 let rule_bottom = plan.bottom.top + border;
-                for (name, rect) in [("new", plan.new), ("sort", plan.sort), ("sync", plan.sync)] {
+                for (name, rect) in [
+                    ("new", plan.new),
+                    ("sort", plan.sort),
+                    ("overflow", plan.overflow),
+                ] {
+                    if is_empty(rect) {
+                        continue;
+                    }
                     assert!(
                         rect.top >= rule_bottom,
                         "{name} reaches {} into the bar rule at {rule_bottom} \

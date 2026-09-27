@@ -70,9 +70,9 @@ en.PostInstallAi=Configure Sakura Input AI text transformation
 #ifndef AppBuildId
 #define AppBuildId "dev"
 #endif
-#define AppProductVersion "2.0.7"
+#define AppProductVersion "2.0.8"
 #ifndef AppVersionedDir
-#define AppVersionedDir "{app}\versions\2.0.7-dev"
+#define AppVersionedDir "{app}\versions\2.0.8-dev"
 #endif
 #ifndef IncludeJapaneseWordNet
 #define IncludeJapaneseWordNet 0
@@ -164,6 +164,7 @@ Source: "..\target\x86_64-pc-windows-msvc\release\sakura_tsf.dll"; DestDir: "{#A
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_engine.exe"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_ai_worker.exe"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_renderer.exe"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
+Source: "..\target\x86_64-pc-windows-msvc\release\sakura_pad_session.exe"; DestDir: "{#AppVersionedDir}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_regtool.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_logon.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\target\x86_64-pc-windows-msvc\release\sakura_settings.exe"; DestDir: "{app}"; Flags: ignoreversion

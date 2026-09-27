@@ -4,7 +4,8 @@ use sakura_values::AiTextStatus;
 
 use crate::types::{
     AppearanceTheme, CandidateDetail, CandidateList, EngineTimingEntry, EngineTimingSite,
-    ErrorCode, FaultInjectionEntry, FaultPoint, Mode, Output, PadShortcut, ScreenRect,
+    ErrorCode, FaultInjectionEntry, FaultPoint, Mode, Output, PadIdleLockTimeout, PadShortcut,
+    ScreenRect,
 };
 use crate::wire::{Reader, Sink};
 use crate::wire_types::Wire;
@@ -239,6 +240,7 @@ fn encode_response_body<S: Sink>(res: &Response, w: &mut S) -> Result<(), Error>
             w.write_u64(ui.revision)?;
             ui.appearance_theme.encode(w)?;
             ui.pad_shortcut.encode(w)?;
+            ui.pad_idle_lock_timeout.encode(w)?;
             w.write_option(&ui.mode, |w, mode| mode.encode(w))?;
             w.write_option(&ui.candidates, |w, candidates| candidates.encode(w))?;
             w.write_option(&ui.candidate_detail, |w, detail| detail.encode(w))?;
@@ -357,6 +359,7 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
             let revision = r.read_u64()?;
             let appearance_theme = AppearanceTheme::decode(&mut r)?;
             let pad_shortcut = PadShortcut::decode(&mut r)?;
+            let pad_idle_lock_timeout = PadIdleLockTimeout::decode(&mut r)?;
             let mode = r.read_option(Mode::decode)?;
             let candidates = r.read_option(CandidateList::decode)?;
             let candidate_detail = r.read_option(CandidateDetail::decode)?;
@@ -371,6 +374,7 @@ pub fn decode_response(payload: &[u8]) -> Result<(RequestId, Response), Error> {
                 revision,
                 appearance_theme,
                 pad_shortcut,
+                pad_idle_lock_timeout,
                 mode,
                 candidates,
                 candidate_detail,

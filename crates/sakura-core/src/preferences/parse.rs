@@ -6,7 +6,7 @@ use crate::keymap::Preset;
 use crate::width::{
     BracketStyle, CommaMark, Normalizer, PeriodMark, PunctuationStyle, Width, WidthPolicy,
 };
-use sakura_values::{AppearanceTheme, Mode, PadShortcut};
+use sakura_values::{AppearanceTheme, Mode, PadIdleLockTimeout, PadShortcut};
 
 use super::{default_app_profiles, is_valid_profile_process_name, AppProfile};
 use super::{
@@ -123,6 +123,17 @@ pub fn parse_preferences(source: &str) -> Result<ParsedPreferences, ParseError> 
             .as_text()
             .and_then(PadShortcut::from_name)
             .unwrap_or(PadShortcut::Disabled);
+    }
+    if let Some(value) = document.section(input_section).and_then(|entries| {
+        entries
+            .iter()
+            .find(|entry| entry.key == "pad-idle-lock-minutes")
+    }) {
+        preferences.pad_idle_lock_timeout = value
+            .value
+            .as_text()
+            .and_then(PadIdleLockTimeout::from_name)
+            .unwrap_or_default();
     }
 
     let mut width = WidthPolicy::default();

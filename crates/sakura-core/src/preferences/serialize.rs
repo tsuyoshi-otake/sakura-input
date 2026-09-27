@@ -62,8 +62,9 @@ pub fn serialize_preferences_with_profiles(
     output = output.replacen(
         "\n\n[input-support]",
         &format!(
-            "\npad-shortcut = \"{}\"\n\n[input-support]",
-            preferences.pad_shortcut.name()
+            "\npad-shortcut = \"{}\"\npad-idle-lock-minutes = \"{}\"\n\n[input-support]",
+            preferences.pad_shortcut.name(),
+            preferences.pad_idle_lock_timeout.name()
         ),
         1,
     );

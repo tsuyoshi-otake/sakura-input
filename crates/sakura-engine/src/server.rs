@@ -257,9 +257,10 @@ impl Shared {
         // Appearance is carried in the same atomic snapshot, but the renderer
         // board still gets its narrow notification so an open popup repaints
         // without waiting for a key request.
-        self.ui.set_appearance_theme_and_pad_shortcut(
+        self.ui.set_global_preferences(
             preferences.appearance_theme,
             preferences.pad_shortcut,
+            preferences.pad_idle_lock_timeout,
         );
     }
 
@@ -463,9 +464,10 @@ impl Server {
                 total_created: AtomicU32::new(0),
                 admission: Arc::new(Admission::default()),
                 shutdown,
-                ui: UiBoard::with_appearance_theme_and_pad_shortcut(
+                ui: UiBoard::with_global_preferences(
                     preferences.appearance_theme,
                     preferences.pad_shortcut,
+                    preferences.pad_idle_lock_timeout,
                 ),
                 composition_fence: Arc::new(CompositionFence::new()),
                 conversion,
@@ -525,9 +527,10 @@ impl Server {
         shared.learning = Some(learning);
         shared.prediction = prediction;
         shared.history_runtime = history_runtime;
-        shared.ui = UiBoard::with_appearance_theme_and_pad_shortcut(
+        shared.ui = UiBoard::with_global_preferences(
             preferences.appearance_theme,
             preferences.pad_shortcut,
+            preferences.pad_idle_lock_timeout,
         );
         shared.configuration = RwLock::new(RuntimeConfiguration {
             preferences,
