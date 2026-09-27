@@ -9,9 +9,11 @@ use std::mem::size_of;
 use std::os::windows::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
 use std::thread::sleep;
 use std::time::Duration;
 
+mod pad_action_icons;
 mod pages;
 mod presentation;
 mod save;
@@ -27,6 +29,7 @@ fn native_test_guard() -> std::sync::MutexGuard<'static, ()> {
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner())
 }
+use pad_action_icons::{draw_pad_action_icon, PadActionIcon};
 use pages::*;
 use presentation::{BoxRect, Presentation, TextRole};
 use windows::Win32::UI::Controls::{
@@ -39,9 +42,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 use sakura_core::{
     AppProfile, AppearanceTheme, BracketStyle, CommaMark, ConversionMethod, InputMethod,
-    InputSupport, NeuralRerankerScope, Normalizer, NotationStyle, PadShortcut, PeriodMark, Preset,
-    PunctuationStyle, ShiftSpaceBehavior, SpaceWidth, SuggestAccept, UserDictionary,
-    UserDictionaryEntry, UserPartOfSpeech, Width,
+    InputSupport, NeuralRerankerScope, Normalizer, NotationStyle, PadIdleLockTimeout, PadShortcut,
+    PeriodMark, Preset, PunctuationStyle, ShiftSpaceBehavior, SpaceWidth, SuggestAccept,
+    UserDictionary, UserDictionaryEntry, UserPartOfSpeech, Width,
 };
 use sakura_proto::Mode;
 use sakura_settings::configuration::ConfigurationDocument;
@@ -60,7 +63,8 @@ use windows::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_D
 use windows::Win32::Graphics::Gdi::{
     CreateSolidBrush, DeleteObject, DrawTextW, FillRect, FrameRect, GetStockObject,
     GetSysColorBrush, InvalidateRect, SetBkColor, SetBkMode, SetTextColor, UpdateWindow,
-    COLOR_WINDOW, DEFAULT_GUI_FONT, DT_CENTER, DT_SINGLELINE, DT_VCENTER, HBRUSH, HDC, TRANSPARENT,
+    COLOR_WINDOW, DEFAULT_GUI_FONT, DT_CALCRECT, DT_CENTER, DT_LEFT, DT_SINGLELINE, DT_VCENTER,
+    HBRUSH, HDC, TRANSPARENT,
 };
 use windows::Win32::System::Registry::{RegGetValueW, HKEY_CURRENT_USER, RRF_RT_REG_DWORD};
 use windows::Win32::System::Threading::CreateMutexW;
@@ -82,15 +86,16 @@ use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, FindWindowW, GetClientRect, GetMessageW, GetParent, GetWindow,
     GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW, IsDialogMessageW,
     IsIconic, LoadCursorW, LoadImageW, MessageBoxW, PostMessageW, PostQuitMessage, RegisterClassW,
-    SendMessageW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow,
-    SystemParametersInfoW, TranslateMessage, BM_GETCHECK, BM_SETCHECK, BS_AUTOCHECKBOX,
-    BS_AUTORADIOBUTTON, BS_DEFPUSHBUTTON, BS_OWNERDRAW, BS_PUSHBUTTON, BS_TYPEMASK, CBN_SELCHANGE,
-    CBS_DROPDOWNLIST, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CW_USEDEFAULT, ES_AUTOHSCROLL,
-    ES_AUTOVSCROLL, ES_MULTILINE, ES_PASSWORD, ES_READONLY, ES_WANTRETURN, GWLP_USERDATA,
-    GWL_STYLE, GW_CHILD, GW_ENABLEDPOPUP, GW_HWNDNEXT, GW_OWNER, ICON_BIG, ICON_SMALL, IDC_ARROW,
-    IDYES, IMAGE_ICON, LBN_SELCHANGE, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LB_ADDSTRING, LB_GETCURSEL,
-    LB_RESETCONTENT, LB_SETCURSEL, LR_LOADFROMFILE, MB_ICONERROR, MB_ICONINFORMATION,
-    MB_ICONWARNING, MB_OK, MB_YESNO, MSG, SPI_GETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+    RegisterWindowMessageW, SendMessageTimeoutW, SendMessageW, SetForegroundWindow,
+    SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, SystemParametersInfoW,
+    TranslateMessage, BM_GETCHECK, BM_SETCHECK, BS_AUTOCHECKBOX, BS_AUTORADIOBUTTON,
+    BS_DEFPUSHBUTTON, BS_OWNERDRAW, BS_PUSHBUTTON, BS_TYPEMASK, CBN_SELCHANGE, CBS_DROPDOWNLIST,
+    CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CW_USEDEFAULT, ES_AUTOHSCROLL, ES_AUTOVSCROLL,
+    ES_MULTILINE, ES_PASSWORD, ES_READONLY, ES_WANTRETURN, GWLP_USERDATA, GWL_STYLE, GW_CHILD,
+    GW_ENABLEDPOPUP, GW_HWNDNEXT, GW_OWNER, ICON_BIG, ICON_SMALL, IDC_ARROW, IDYES, IMAGE_ICON,
+    LBN_SELCHANGE, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LB_ADDSTRING, LB_GETCURSEL, LB_RESETCONTENT,
+    LB_SETCURSEL, LR_LOADFROMFILE, MB_ICONERROR, MB_ICONINFORMATION, MB_ICONWARNING, MB_OK,
+    MB_YESNO, MSG, SMTO_ABORTIFHUNG, SPI_GETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOACTIVATE,
     SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_RESTORE, SW_SHOW,
     SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_CLOSE,
     WM_COMMAND, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC, WM_DESTROY,
@@ -106,6 +111,12 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 const WINDOW_CLASS: PCWSTR = windows::core::w!("SakuraInputSettingsWindow");
+/// Renderer host contract. The message carries no Pad content or credentials.
+const RENDERER_HOST_CLASS: PCWSTR = windows::core::w!("SakuraInputRenderer");
+const PAD_OPEN_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.OpenPad.v1");
+const PAD_LOCK_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.LockPad.v1");
+const PAD_PROTECTION_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.OpenPadProtection.v1");
+const PAD_STATUS_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.PadStatus.v1");
 /// The class of the hidden window that owns the settings window.
 ///
 /// It exists for one reason: an unowned top-level window gets a taskbar
@@ -121,6 +132,14 @@ const PANEL_CLASS: PCWSTR = windows::core::w!("SakuraInputSettingsPanel");
 // `Local\\` keeps separate interactive sessions independent while making all
 // versions of the settings UI share one slot for the current session.
 const SINGLE_INSTANCE_NAME: PCWSTR = windows::core::w!("Local\\SakuraInputSettings");
+const OPEN_PAD_SETTINGS_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.OpenPadSettings.v1");
+static OPEN_PAD_SETTINGS_ID: OnceLock<u32> = OnceLock::new();
+
+fn open_pad_settings_message() -> u32 {
+    // SAFETY: Windows copies this static, NUL-terminated registered-message name.
+    *OPEN_PAD_SETTINGS_ID
+        .get_or_init(|| unsafe { RegisterWindowMessageW(OPEN_PAD_SETTINGS_MESSAGE) })
+}
 const PANEL_COUNT: usize = 5;
 const WM_UPDATE_COMPLETE: u32 = WM_APP + 17;
 const DARK_SURFACE: COLORREF = rgb(0x35, 0x35, 0x35);
@@ -187,6 +206,7 @@ const INPUT_TOPIC_NORMALIZER: usize = 7;
 const INPUT_TOPIC_AI_TEXT: usize = 8;
 const INPUT_TOPIC_INPUT_REPAIR: usize = 9;
 const INPUT_TOPIC_INPUT_SYMBOL: usize = 10;
+const INPUT_TOPIC_PAD: usize = 11;
 const TREE_GROUP: usize = usize::MAX;
 // Shown after `NotationStyle::ALL`. It is a readout, never a value: choosing
 // it writes nothing, and it is what the preset falls back to whenever the
@@ -196,7 +216,7 @@ const NOTATION_STYLE_CUSTOM_LABEL: &str = "カスタム（個別に設定）";
 // invent ATOK-only pages or map a label to an unrelated Sakura setting. Each
 // leaf owns the panel the user sees on the right; category rows normalize to
 // their first leaf so the TreeView highlight and right-hand page agree.
-const INPUT_TREE_LABELS: [&str; 13] = [
+const INPUT_TREE_LABELS: [&str; 14] = [
     "基本",
     "入力補助",
     "AI文章変換",
@@ -210,11 +230,17 @@ const INPUT_TREE_LABELS: [&str; 13] = [
     "推測変換",
     "連想変換",
     "アプリ別の設定",
+    "Sakura Pad",
 ];
 
 #[derive(Debug)]
 struct GeneralControls {
     basic_panel: HWND,
+    pad_panel: HWND,
+    pad_status: HWND,
+    pad_open: HWND,
+    pad_lock: HWND,
+    pad_protection: HWND,
     profile_panel: HWND,
     input_assist_panel: HWND,
     ai_text_panel: HWND,
@@ -230,6 +256,7 @@ struct GeneralControls {
     input_method_kana: HWND,
     default_mode: HWND,
     pad_shortcut: HWND,
+    pad_idle_lock_timeout: HWND,
     input_assist_space_width: HWND,
     input_assist_shift_space: HWND,
     ai_text_key: HWND,
@@ -463,7 +490,13 @@ impl UiTheme {
         }
     }
 
-    fn draw_button(&self, item: &DRAWITEMSTRUCT, default: bool, selected_tab: bool) -> bool {
+    fn draw_button(
+        &self,
+        item: &DRAWITEMSTRUCT,
+        default: bool,
+        selected_tab: bool,
+        pad_icon: Option<PadActionIcon>,
+    ) -> bool {
         if self.high_contrast || item.CtlType != ODT_BUTTON {
             return false;
         }
@@ -514,20 +547,55 @@ impl UiTheme {
             let _ = FillRect(item.hDC, &item.rcItem, fill);
             let _ = FrameRect(item.hDC, &item.rcItem, frame);
             let _ = SetBkMode(item.hDC, TRANSPARENT);
-            let _ = SetTextColor(
-                item.hDC,
-                if disabled {
-                    self.disabled_ink()
-                } else {
-                    self.ink()
-                },
-            );
-            let _ = DrawTextW(
-                item.hDC,
-                &mut text,
-                &mut text_rect,
-                DT_CENTER | DT_VCENTER | DT_SINGLELINE,
-            );
+            let ink = if disabled {
+                self.disabled_ink()
+            } else {
+                self.ink()
+            };
+            let _ = SetTextColor(item.hDC, ink);
+            let mut text_format = DT_CENTER | DT_VCENTER | DT_SINGLELINE;
+            if let Some(kind) = pad_icon {
+                let dpi = GetDpiForWindow(item.hwndItem).clamp(96, 384) as i32;
+                let icon_size = (16 * dpi + 48) / 96;
+                let gap = (6 * dpi + 48) / 96;
+                let horizontal_inset = (8 * dpi + 48) / 96;
+                let vertical_inset = (3 * dpi + 48) / 96;
+                let mut measured = RECT::default();
+                let measured_height = DrawTextW(
+                    item.hDC,
+                    &mut text,
+                    &mut measured,
+                    DT_CALCRECT | DT_SINGLELINE,
+                );
+                let group_width = icon_size + gap + measured.right - measured.left;
+                if measured_height > 0
+                    && group_width <= item.rcItem.right - item.rcItem.left - 2 * horizontal_inset
+                    && icon_size <= item.rcItem.bottom - item.rcItem.top - 2 * vertical_inset
+                {
+                    let shift = i32::from(pressed);
+                    let icon_left = item.rcItem.left
+                        + (item.rcItem.right - item.rcItem.left - group_width) / 2
+                        + shift;
+                    let icon_top = item.rcItem.top
+                        + (item.rcItem.bottom - item.rcItem.top - icon_size) / 2
+                        + shift;
+                    draw_pad_action_icon(
+                        item.hDC,
+                        RECT {
+                            left: icon_left,
+                            top: icon_top,
+                            right: icon_left + icon_size,
+                            bottom: icon_top + icon_size,
+                        },
+                        kind,
+                        ink,
+                    );
+                    text_rect.left = icon_left + icon_size + gap;
+                    text_rect.right = text_rect.left + measured.right - measured.left;
+                    text_format = DT_LEFT | DT_VCENTER | DT_SINGLELINE;
+                }
+            }
+            let _ = DrawTextW(item.hDC, &mut text, &mut text_rect, text_format);
             if focused {
                 let mut focus_rect = item.rcItem;
                 focus_rect.left += 4;
@@ -651,6 +719,7 @@ struct App {
     tabs: HWND,
     page_topics: HWND,
     input_tree: HWND,
+    pad_tree_item: HTREEITEM,
     status: HWND,
     ok: HWND,
     cancel: HWND,
@@ -712,14 +781,54 @@ impl Drop for SettingsInstance {
     }
 }
 
-fn activate_existing_window() -> bool {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Destination {
+    Default,
+    Pad,
+}
+
+fn activate_existing_window(destination: Destination) -> bool {
     const ACTIVATION_ATTEMPTS: usize = 50;
     const ACTIVATION_WAIT: Duration = Duration::from_millis(10);
+
+    let message = if destination == Destination::Pad {
+        let message = open_pad_settings_message();
+        if message == 0 {
+            return false;
+        }
+        Some(message)
+    } else {
+        None
+    };
 
     for _ in 0..ACTIVATION_ATTEMPTS {
         // SAFETY: both class and title pointers are static; a successful HWND
         // remains valid for the synchronous activation calls below.
         if let Ok(window) = unsafe { FindWindowW(WINDOW_CLASS, PCWSTR::null()) } {
+            if let Some(message) = message {
+                let mut result = 0usize;
+                // SAFETY: no pointers cross the process boundary. A zero result
+                // means the first instance has not installed its App yet (or
+                // cannot service the request); only an acknowledgement succeeds.
+                let delivered = unsafe {
+                    SendMessageTimeoutW(
+                        window,
+                        message,
+                        WPARAM(0),
+                        LPARAM(0),
+                        SMTO_ABORTIFHUNG,
+                        2_500,
+                        Some(&mut result),
+                    )
+                };
+                if delivered.0 == 0 {
+                    return false;
+                }
+                if result != 1 {
+                    sleep(ACTIVATION_WAIT);
+                    continue;
+                }
+            }
             // SAFETY: the HWND was returned by User32 and all operations are
             // scalar window-manager calls on that live top-level window.
             unsafe {
@@ -738,14 +847,142 @@ fn activate_existing_window() -> bool {
     false
 }
 
-pub fn run() -> Result<(), String> {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PadAction {
+    Open,
+    OpenProtection,
+}
+
+impl PadAction {
+    const fn message(self) -> PCWSTR {
+        match self {
+            Self::Open => PAD_OPEN_MESSAGE,
+            Self::OpenProtection => PAD_PROTECTION_MESSAGE,
+        }
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Open => "Sakura Padを開く",
+            Self::OpenProtection => "保護の設定を開く",
+        }
+    }
+}
+
+/// Queue a Pad action on the renderer's hidden host. Queueing is the only
+/// acknowledgement available here; the renderer owns the resulting state.
+fn request_pad_action(action: PadAction) -> Result<(), String> {
+    // SAFETY: both static class and null title are valid for a read-only
+    // top-level window lookup in this interactive session.
+    let host = unsafe { FindWindowW(RENDERER_HOST_CLASS, PCWSTR::null()) }.map_err(|_| {
+        "rendererが起動していません。Sakura Inputを起動してから再試行してください。".to_owned()
+    })?;
+    // SAFETY: the process-independent name contains no pointers or secrets.
+    let message = unsafe { RegisterWindowMessageW(action.message()) };
+    if message == 0 {
+        return Err(format!(
+            "{}メッセージを登録できませんでした。",
+            action.label()
+        ));
+    }
+    // SAFETY: only the registered scalar message and zero parameters cross
+    // processes. USER32 validates the HWND and reports a failed queue attempt.
+    unsafe { PostMessageW(Some(host), message, WPARAM(0), LPARAM(0)) }
+        .map_err(|_| format!("rendererに{}依頼を送信できませんでした。", action.label()))
+}
+
+/// A bounded, data-free request to the renderer's UI thread. Zero is reserved
+/// for an unavailable/invalid reply; no cross-process pointer is exchanged.
+fn request_pad_scalar(message_name: PCWSTR) -> Result<usize, String> {
+    // SAFETY: both class name and title sentinel are immutable process-local
+    // values; the returned HWND is used only for a bounded scalar request.
+    let host = unsafe { FindWindowW(RENDERER_HOST_CLASS, PCWSTR::null()) }
+        .map_err(|_| "Padから応答がありません".to_owned())?;
+    // SAFETY: the caller supplies a static registered-message name; Windows
+    // copies its characters and returns a numeric message identifier.
+    let message = unsafe { RegisterWindowMessageW(message_name) };
+    if message == 0 {
+        return Err("Padの状態照会を登録できませんでした。".to_owned());
+    }
+    let mut result = 0usize;
+    // SAFETY: the registered message and zero parameters contain no process
+    // pointers or secrets. The renderer owns the returned scalar value.
+    let delivered = unsafe {
+        SendMessageTimeoutW(
+            host,
+            message,
+            WPARAM(0),
+            LPARAM(0),
+            SMTO_ABORTIFHUNG,
+            2_000,
+            Some(&mut result),
+        )
+    };
+    if delivered.0 == 0 || result == 0 {
+        return Err("Padから応答がありません".to_owned());
+    }
+    Ok(result)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PadStatus {
+    Unprotected,
+    PasswordUnlocked,
+    PasswordLocked,
+    KeyUnlocked,
+    KeyLocked,
+    PasswordKeyUnlocked,
+    PasswordKeyLocked,
+    Unavailable,
+    MemoProtected,
+}
+
+impl PadStatus {
+    fn from_wire(value: usize) -> Option<Self> {
+        Some(match value {
+            1 => Self::Unprotected,
+            2 => Self::PasswordUnlocked,
+            3 => Self::PasswordLocked,
+            4 => Self::KeyUnlocked,
+            5 => Self::KeyLocked,
+            6 => Self::PasswordKeyUnlocked,
+            7 => Self::PasswordKeyLocked,
+            8 => Self::Unavailable,
+            9 => Self::MemoProtected,
+            _ => return None,
+        })
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Unprotected => "Pad全体: 未保護",
+            Self::PasswordUnlocked => "Pad全体: パスワード保護・解除中",
+            Self::PasswordLocked => "Pad全体: パスワード保護・ロック中",
+            Self::KeyUnlocked => "Pad全体: セキュリティキー保護・解除中",
+            Self::KeyLocked => "Pad全体: セキュリティキー保護・ロック中",
+            Self::PasswordKeyUnlocked => "Pad全体: パスワード＋キー保護・解除中",
+            Self::PasswordKeyLocked => "Pad全体: パスワード＋キー保護・ロック中",
+            Self::Unavailable => "Pad全体: 状態を確認できません（復旧が必要）",
+            Self::MemoProtected => "Pad全体: 未保護（メモ別保護を使用）",
+        }
+    }
+}
+
+fn query_pad_status() -> Result<PadStatus, String> {
+    let value = request_pad_scalar(PAD_STATUS_MESSAGE)?;
+    PadStatus::from_wire(value).ok_or_else(|| "Padの状態を読み取れません".to_owned())
+}
+
+pub fn run(destination: Destination) -> Result<(), String> {
     let Some(_instance) = SettingsInstance::acquire().map_err(display)? else {
         // A second launch is an activation request, not a second settings
         // document. The first process may still be between mutex creation and
         // window creation, so give its UI thread a short bounded hand-off
         // window before returning.
-        let _ = activate_existing_window();
-        return Ok(());
+        if activate_existing_window(destination) || destination == Destination::Default {
+            return Ok(());
+        }
+        return Err("既存の設定画面でSakura Pad設定を開けませんでした。".to_owned());
     };
     // SAFETY: process DPI awareness is selected before creating any window.
     unsafe {
@@ -767,6 +1004,9 @@ pub fn run() -> Result<(), String> {
     // this UI thread reads the pointer stored on its own window.
     unsafe {
         SetWindowLongPtrW(window, GWLP_USERDATA, app as isize);
+        if destination == Destination::Pad {
+            (*app).show_pad_settings();
+        }
         if (*app).update_preferences.enabled {
             if let Err(error) = (*app).start_update(UpdateOperation::AutomaticCheck) {
                 let message = format!("自動更新の確認を開始できませんでした: {error}");
@@ -861,6 +1101,7 @@ impl App {
             tabs,
             page_topics,
             input_tree,
+            pad_tree_item: HTREEITEM::default(),
             status,
             ok,
             cancel,
@@ -887,7 +1128,7 @@ impl App {
             theme_apply_in_progress: false,
         };
         app.apply_theme();
-        app.populate_input_tree();
+        app.pad_tree_item = app.populate_input_tree();
         app.show_page_controls(0);
         app.populate_general();
         app.populate_dictionary();
@@ -899,6 +1140,31 @@ impl App {
     }
 
     fn handle_command(&mut self, source: HWND, notification: u16) -> Result<(), String> {
+        if source == self.general.pad_open {
+            request_pad_action(PadAction::Open)?;
+            self.set_status("Sakura Padを開く依頼をrendererへ送信しました。");
+            self.refresh_pad_status();
+            return Ok(());
+        }
+        if source == self.general.pad_lock {
+            match request_pad_scalar(PAD_LOCK_MESSAGE)? {
+                1 => self.set_status("Sakura Padのロック処理が完了しました。"),
+                2 => self.set_status("Sakura Padはまだ開かれていません。"),
+                3 => {
+                    self.refresh_pad_status();
+                    return Err("Padの保護処理中です。ロックの完了を確認できません。".to_owned());
+                }
+                _ => return Err("rendererのロック応答を認識できません。".to_owned()),
+            }
+            self.refresh_pad_status();
+            return Ok(());
+        }
+        if source == self.general.pad_protection {
+            request_pad_action(PadAction::OpenProtection)?;
+            self.set_status("保護設定を開く依頼をrendererへ送信しました。");
+            self.refresh_pad_status();
+            return Ok(());
+        }
         if source == self.apply {
             return self.save_global_settings();
         }
@@ -1042,6 +1308,17 @@ impl App {
         }
     }
 
+    fn show_pad_settings(&mut self) {
+        self.show_panel(0);
+        // A previous Pad selection remains selected when another tab was
+        // visited, so TreeView need not send a new selection notification.
+        if selected_input_tree_item(self.input_tree) == self.pad_tree_item {
+            self.show_topic_controls(INPUT_TOPIC_PAD);
+        } else {
+            select_input_tree_item(self.input_tree, self.pad_tree_item);
+        }
+    }
+
     /// Synchronize the first frame and later tab changes through one visibility
     /// boundary. This avoids relying on a theme change or first user selection
     /// to reveal controls that are already part of the selected page.
@@ -1089,7 +1366,7 @@ impl App {
         select_list(self.page_topics, 0);
     }
 
-    fn populate_input_tree(&self) {
+    fn populate_input_tree(&self) -> HTREEITEM {
         let basics = insert_input_tree_item(
             self.input_tree,
             Default::default(),
@@ -1181,9 +1458,17 @@ impl App {
             INPUT_TOPIC_PROFILE,
             false,
         );
+        let pad = insert_input_tree_item(
+            self.input_tree,
+            Default::default(),
+            INPUT_TREE_LABELS[13],
+            INPUT_TOPIC_PAD,
+            false,
+        );
         expand_input_tree_item(self.input_tree, conversion_assist);
         expand_input_tree_item(self.input_tree, input_support);
         select_input_tree_item(self.input_tree, basics);
+        pad
     }
 
     /// The settings tree is a real navigation control, not a decorative index:
@@ -1200,6 +1485,14 @@ impl App {
                     let _ = ShowWindow(
                         self.general.basic_panel,
                         if topic == INPUT_TOPIC_BASIC {
+                            SW_SHOW
+                        } else {
+                            SW_HIDE
+                        },
+                    );
+                    let _ = ShowWindow(
+                        self.general.pad_panel,
+                        if topic == INPUT_TOPIC_PAD {
                             SW_SHOW
                         } else {
                             SW_HIDE
@@ -1324,6 +1617,16 @@ impl App {
             }
         }
         self.layout();
+        if self.selected_panel == 0 && topic == INPUT_TOPIC_PAD {
+            self.refresh_pad_status();
+        }
+    }
+
+    fn refresh_pad_status(&self) {
+        let text = query_pad_status()
+            .map(|status| status.label().to_owned())
+            .unwrap_or_else(|error| format!("Pad全体: 状態を確認できません（{error}）"));
+        set_text(self.general.pad_status, &text);
     }
 
     fn layout(&mut self) {
@@ -1433,6 +1736,10 @@ impl App {
         select_combo(
             self.general.pad_shortcut,
             pad_shortcut_index(self.configuration.preferences.pad_shortcut),
+        );
+        select_combo(
+            self.general.pad_idle_lock_timeout,
+            pad_idle_lock_timeout_index(self.configuration.preferences.pad_idle_lock_timeout),
         );
         select_combo(
             self.general.conversion_assist_method,
@@ -1577,6 +1884,8 @@ impl App {
             mode_from_index(combo_index(self.general.default_mode))?;
         configuration.preferences.pad_shortcut =
             pad_shortcut_from_index(combo_index(self.general.pad_shortcut))?;
+        configuration.preferences.pad_idle_lock_timeout =
+            pad_idle_lock_timeout_from_index(combo_index(self.general.pad_idle_lock_timeout))?;
         configuration.preferences.conversion_method =
             conversion_method_from_index(combo_index(self.general.conversion_assist_method))?;
         configuration.preferences.prediction_enabled = is_checked(self.general.prediction);
@@ -1998,8 +2307,11 @@ impl App {
         window == self.diagnostics_controls.text || window == self.update_controls.result
     }
 
-    fn buttons(&self) -> [HWND; 21] {
+    fn buttons(&self) -> [HWND; 24] {
         [
+            self.general.pad_open,
+            self.general.pad_lock,
+            self.general.pad_protection,
             self.general.ai_api_key_clear,
             self.general.normalizer_reset,
             self.general.input_support_reset,
@@ -2054,7 +2366,16 @@ impl App {
 
     fn draw_button(&self, item: &DRAWITEMSTRUCT) -> bool {
         let default = item.hwndItem == self.ok;
-        self.theme.draw_button(item, default, false)
+        let pad_icon = if item.hwndItem == self.general.pad_open {
+            Some(PadActionIcon::Open)
+        } else if item.hwndItem == self.general.pad_lock {
+            Some(PadActionIcon::Lock)
+        } else if item.hwndItem == self.general.pad_protection {
+            Some(PadActionIcon::Protection)
+        } else {
+            None
+        };
+        self.theme.draw_button(item, default, false, pad_icon)
     }
 
     fn select_profile(&self) {
@@ -3244,6 +3565,21 @@ fn select_input_tree_item(tree: HWND, item: HTREEITEM) {
     }
 }
 
+fn selected_input_tree_item(tree: HWND) -> HTREEITEM {
+    // SAFETY: the query reads a scalar selection handle from the live tree.
+    HTREEITEM(
+        unsafe {
+            SendMessageW(
+                tree,
+                TVM_GETNEXTITEM,
+                Some(WPARAM(TVGN_CARET as usize)),
+                None,
+            )
+        }
+        .0,
+    )
+}
+
 fn first_input_tree_child(tree: HWND, parent: HTREEITEM) -> Option<HTREEITEM> {
     // SAFETY: `parent` belongs to the live TreeView.  The query carries only
     // scalar item handles and returns the first direct child, if it exists.
@@ -3932,6 +4268,28 @@ const fn pad_shortcut_label(value: PadShortcut) -> &'static str {
     }
 }
 
+fn pad_idle_lock_timeout_index(value: PadIdleLockTimeout) -> usize {
+    PadIdleLockTimeout::ALL
+        .iter()
+        .position(|candidate| *candidate == value)
+        .unwrap_or(1)
+}
+
+fn pad_idle_lock_timeout_from_index(index: Option<usize>) -> Result<PadIdleLockTimeout, String> {
+    index
+        .and_then(|index| PadIdleLockTimeout::ALL.get(index).copied())
+        .ok_or_else(|| "Sakura Padの自動ロック時間を選択してください。".to_owned())
+}
+
+fn pad_idle_lock_timeout_label(value: PadIdleLockTimeout) -> &'static str {
+    match value {
+        PadIdleLockTimeout::OneMinute => "1分",
+        PadIdleLockTimeout::FiveMinutes => "5分（既定）",
+        PadIdleLockTimeout::FifteenMinutes => "15分",
+        PadIdleLockTimeout::ThirtyMinutes => "30分",
+    }
+}
+
 fn windows_apps_use_light_theme() -> bool {
     let mut value = 1u32;
     let mut bytes = size_of::<u32>() as u32;
@@ -4258,7 +4616,34 @@ unsafe extern "system" fn window_procedure(
     wparam: WPARAM,
     lparam: LPARAM,
 ) -> LRESULT {
+    if message >= 0xC000 && message == open_pad_settings_message() {
+        // SAFETY: only the UI thread accesses the App pointer; a second launch
+        // can arrive while the first is still constructing, so zero is a
+        // retryable, explicit response until the pointer is installed.
+        let pointer = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut App;
+        if pointer.is_null() {
+            return LRESULT(0);
+        }
+        // SAFETY: the pointer belongs to this window and this UI thread;
+        // it stays live until GWLP_USERDATA is cleared during teardown.
+        unsafe { &mut *pointer }.show_pad_settings();
+        return LRESULT(1);
+    }
     match message {
+        windows::Win32::UI::WindowsAndMessaging::WM_ACTIVATE if wparam.0 & 0xffff != 0 => {
+            // SAFETY: this window stores its live App pointer in GWLP_USERDATA
+            // after construction and clears it before the App is released.
+            let pointer = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut App;
+            if !pointer.is_null() {
+                // SAFETY: the non-null pointer is the App owned by this live
+                // window; activation is handled synchronously on its UI thread.
+                let app = unsafe { &*pointer };
+                if app.selected_panel == 0 && has_visible_style(app.general.pad_panel) {
+                    app.refresh_pad_status();
+                }
+            }
+            LRESULT(0)
+        }
         WM_SIZE => {
             // SAFETY: construction has null user data; normal resize owns a live App.
             let pointer = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut App;

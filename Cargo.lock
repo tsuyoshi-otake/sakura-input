@@ -9,10 +9,75 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa"
 
 [[package]]
+name = "aead"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d122413f284cf2d62fb1b7db97e02edb8cda96d769b16e443a4f6195e35662b0"
+dependencies = [
+ "crypto-common",
+ "generic-array",
+]
+
+[[package]]
+name = "aes"
+version = "0.8.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b169f7a6d4742236a0a00c541b845991d0ac43e546831af1249753ab4c3aa3a0"
+dependencies = [
+ "cfg-if",
+ "cipher",
+ "cpufeatures",
+ "zeroize",
+]
+
+[[package]]
+name = "aes-gcm"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "831010a0f742e1209b3bcea8fab6a8e149051ba6099432c8cb2cc117dec3ead1"
+dependencies = [
+ "aead",
+ "aes",
+ "cipher",
+ "ctr",
+ "ghash",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
+name = "argon2"
+version = "0.5.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c3610892ee6e0cbce8ae2700349fcf8f98adb0dbfbee85aec3c9179d29cc072"
+dependencies = [
+ "base64ct",
+ "blake2",
+ "cpufeatures",
+ "password-hash",
+ "zeroize",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
+
+[[package]]
+name = "base64ct"
+version = "1.8.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2af50177e190e07a26ab74f8b1efbfe2ef87da2116221318cb1c2e82baf7de06"
+
+[[package]]
+name = "blake2"
+version = "0.10.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "46502ad458c9a52b69d4d4d32775c788b7a1b85e8bc9d482d92250fc0e3f8efe"
+dependencies = [
+ "digest",
+]
 
 [[package]]
 name = "block-buffer"
@@ -28,6 +93,16 @@ name = "cfg-if"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801"
+
+[[package]]
+name = "cipher"
+version = "0.4.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "773f3b9af64447d2ce9850330c473515014aa235e6a783b02db81ff39e4a3dad"
+dependencies = [
+ "crypto-common",
+ "inout",
+]
 
 [[package]]
 name = "cpufeatures"
@@ -58,8 +133,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ctr"
+version = "0.9.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0369ee1ad671834580515889b80f2ea915f23b8be8d0daa4bbaf2ac5c7590835"
+dependencies = [
+ "cipher",
+]
+
+[[package]]
 name = "dictc"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "dictc-core",
  "sakura-core",
@@ -71,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "dictc-core"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "flate2",
  "quick-xml",
@@ -93,6 +177,7 @@ checksum = "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292"
 dependencies = [
  "block-buffer",
  "crypto-common",
+ "subtle",
 ]
 
 [[package]]
@@ -113,6 +198,26 @@ checksum = "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a"
 dependencies = [
  "typenum",
  "version_check",
+]
+
+[[package]]
+name = "ghash"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0d8a4362ccb29cb0b265253fb0a2728f592895ee6854fd9bc13f2ffda266ff1"
+dependencies = [
+ "opaque-debug",
+ "polyval",
+ "zeroize",
+]
+
+[[package]]
+name = "inout"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "879f10e63c20629ecabbb64a8010319738c66a5cd0c29b02d63d272b03751d01"
+dependencies = [
+ "generic-array",
 ]
 
 [[package]]
@@ -212,6 +317,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 
 [[package]]
+name = "opaque-debug"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c08d65885ee38876c4f86fa503fb49d7b507c2b62552df7c70b2fce627e06381"
+
+[[package]]
 name = "ort"
 version = "2.0.0-rc.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -231,10 +342,34 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf211e3776eea6aec988552fa118dd746d70e1b1e5e244058d1c98015f3e5872"
 
 [[package]]
+name = "password-hash"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "346f04948ba92c43e8469c1ee6736c7563d71012b17d40745260fe106aac2166"
+dependencies = [
+ "base64ct",
+ "rand_core",
+ "subtle",
+]
+
+[[package]]
 name = "pin-project-lite"
 version = "0.2.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd"
+
+[[package]]
+name = "polyval"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d1fe60d06143b2430aa532c94cfe9e29783047f06c0d7fd359a9a51b729fa25"
+dependencies = [
+ "cfg-if",
+ "cpufeatures",
+ "opaque-debug",
+ "universal-hash",
+ "zeroize",
+]
 
 [[package]]
 name = "portable-atomic"
@@ -279,6 +414,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand_core"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c"
+
+[[package]]
 name = "rawpointer"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -292,11 +433,11 @@ checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
 name = "sakura-ai-proto"
-version = "2.0.7"
+version = "2.0.8"
 
 [[package]]
 name = "sakura-ai-worker"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "sakura-ai-proto",
  "serde_json",
@@ -305,18 +446,18 @@ dependencies = [
 
 [[package]]
 name = "sakura-candidate-sweep"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "sakura-core",
 ]
 
 [[package]]
 name = "sakura-context-proto"
-version = "2.0.7"
+version = "2.0.8"
 
 [[package]]
 name = "sakura-context-research"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "sakura-context-proto",
  "sakura-values",
@@ -324,7 +465,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-conversion-eval"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "sakura-core",
  "sakura-proto",
@@ -335,14 +476,14 @@ dependencies = [
 
 [[package]]
 name = "sakura-core"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "sakura-values",
 ]
 
 [[package]]
 name = "sakura-engine"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "dictc-core",
  "sakura-ai-proto",
@@ -361,7 +502,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-ime-eval"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "dictc-core",
  "sakura-core",
@@ -376,7 +517,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-install-maintenance"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "sakura-reg",
  "windows",
@@ -385,7 +526,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-ipc"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "sakura-proto",
  "windows",
@@ -394,7 +535,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-logon"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "sakura-install-maintenance",
  "sakura-reg",
@@ -402,7 +543,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-neural-worker"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "ort",
  "sakura-rerank-proto",
@@ -413,18 +554,39 @@ dependencies = [
 
 [[package]]
 name = "sakura-oracles"
-version = "2.0.7"
+version = "2.0.8"
+
+[[package]]
+name = "sakura-pad-session-proto"
+version = "2.0.8"
+dependencies = [
+ "zeroize",
+]
+
+[[package]]
+name = "sakura-pad-worker"
+version = "2.0.8"
+dependencies = [
+ "aes",
+ "aes-gcm",
+ "argon2",
+ "ghash",
+ "polyval",
+ "sakura-pad-session-proto",
+ "windows",
+ "zeroize",
+]
 
 [[package]]
 name = "sakura-proto"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "sakura-values",
 ]
 
 [[package]]
 name = "sakura-reg"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "windows",
  "windows-core",
@@ -432,7 +594,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-regtool"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "sakura-install-maintenance",
  "sakura-ipc",
@@ -443,24 +605,26 @@ dependencies = [
 
 [[package]]
 name = "sakura-renderer"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "sakura-ipc",
+ "sakura-pad-session-proto",
  "sakura-proto",
  "windows",
  "windows-core",
+ "zeroize",
 ]
 
 [[package]]
 name = "sakura-rerank-proto"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "sakura-values",
 ]
 
 [[package]]
 name = "sakura-settings"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "sakura-ai-proto",
  "sakura-core",
@@ -476,7 +640,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-store"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "sakura-values",
  "windows",
@@ -484,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-tsf"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "sakura-ipc",
  "sakura-proto",
@@ -496,7 +660,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-user-prefs"
-version = "2.0.7"
+version = "2.0.8"
 dependencies = [
  "sakura-reg",
  "windows",
@@ -505,7 +669,7 @@ dependencies = [
 
 [[package]]
 name = "sakura-values"
-version = "2.0.7"
+version = "2.0.8"
 
 [[package]]
 name = "serde"
@@ -561,6 +725,12 @@ name = "smallvec"
 version = "1.15.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90"
+
+[[package]]
+name = "subtle"
+version = "2.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 
 [[package]]
 name = "syn"
@@ -626,6 +796,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5fd4f6878c9cb28d874b009da9e8d183b5abc80117c40bbd187a1fde336be6e8"
 dependencies = [
  "tinyvec",
+]
+
+[[package]]
+name = "universal-hash"
+version = "0.5.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fc1de2c688dc15305988b563c3854064043356019f97a4b46276fe734c4f07ea"
+dependencies = [
+ "crypto-common",
+ "subtle",
 ]
 
 [[package]]
@@ -743,3 +923,9 @@ checksum = "3949bd5b99cafdf1c7ca86b43ca564028dfe27d66958f2470940f73d86d75b37"
 dependencies = [
  "windows-link",
 ]
+
+[[package]]
+name = "zeroize"
+version = "1.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b97154e67e32c85465826e8bcc1c59429aaaf107c1e4a9e53c8d8ccd5eff88d0"

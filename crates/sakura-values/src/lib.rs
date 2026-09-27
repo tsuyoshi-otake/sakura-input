@@ -9,7 +9,7 @@ mod input;
 mod scope;
 
 pub use ai_text::{AiTextOperation, AiTextStatus};
-pub use appearance::{AppearanceTheme, PadShortcut};
+pub use appearance::{AppearanceTheme, PadIdleLockTimeout, PadShortcut};
 pub use capacity::{
     CANDIDATE_PAGE_SIZE, MAX_CANDIDATES, MAX_CANDIDATE_DETAIL_DEFINITION_BYTES,
     MAX_CANDIDATE_DETAIL_READING_BYTES, MAX_CANDIDATE_DETAIL_RELATIONS,

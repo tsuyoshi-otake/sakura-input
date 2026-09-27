@@ -122,6 +122,7 @@ fn lost_feed_hides_native_popup_and_click_targets_without_replaying_stale_update
             pad_theme: AppearanceTheme::Auto,
             raw_input: crate::raw_input::RawInputOwner::new(host, 0),
             pad_shortcut: sakura_proto::PadShortcut::Disabled,
+            pad_idle_lock_timeout: sakura_proto::PadIdleLockTimeout::default(),
             pad_config_generation: 0,
             shown_indicator: None,
             mailbox: Arc::new(Mutex::new(None)),

@@ -1,7 +1,8 @@
 //! The renderer-facing UI snapshot carried by `Response::Ui`.
 
 use crate::types::{
-    AppearanceTheme, CandidateDetail, CandidateList, Mode, PadShortcut, ScreenRect,
+    AppearanceTheme, CandidateDetail, CandidateList, Mode, PadIdleLockTimeout, PadShortcut,
+    ScreenRect,
 };
 use crate::Revision;
 
@@ -31,6 +32,9 @@ pub struct UiState {
     /// is hidden so the renderer can apply a changed preference before the
     /// next visible interaction.
     pub pad_shortcut: PadShortcut,
+    /// The protected Pad's bounded idle-lock interval. Carried even while the
+    /// Pad is hidden so a configuration reload reaches the renderer promptly.
+    pub pad_idle_lock_timeout: PadIdleLockTimeout,
     /// The mode to show, or `None` when no field is composing and the
     /// indicator should be hidden.
     pub mode: Option<Mode>,

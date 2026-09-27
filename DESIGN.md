@@ -252,8 +252,8 @@ the text service's `ITfContextView` rects).
 
 ### 3.1 Dependency policy (the full-scratch rule)
 
-Every Sakura-authored shipping binary is Rust, including the isolated neural
-worker. Core shipping binaries allow only `windows`/`windows-sys` — auto-generated Windows
+Every Sakura-authored shipping binary is Rust, including isolated workers.
+Core shipping binaries allow only `windows`/`windows-sys` — auto-generated Windows
 API/COM bindings; that *is* the platform, not a library. Everything else
 is `std`-only, hand-written:
 
@@ -305,6 +305,18 @@ intended release payload keeps `onnxruntime.dll` beside
 the TSF DLL nor `sakura_engine.exe` links this runtime. This is isolation, not
 a claim that the complete installed product has no native third-party runtime
 dependencies.
+
+An experimental dependency exception is reserved for a dedicated
+`sakura-pad-worker` to isolate password-based Pad envelope cryptography. Its
+closed `$PadWorkerRuntime` allowlist in `ci/dep-policy.ps1` admits only the
+Argon2id, AES-GCM, and zeroization dependency closure (including the Argon2
+`alloc` feature's password-hash and salt-source dependencies), and CI rejects that
+closure from every other workspace crate, including the AI and neural workers
+and offline tools. This exception establishes only a dependency boundary; it
+does not implement Pad locking, password prompts, memo-level protection, a
+production document format, or migration. The current Pad remains protected by its
+existing current-user DPAPI format until a separately specified renderer and
+storage integration ships.
 
 ### 3.2 Target platform and instruction set
 

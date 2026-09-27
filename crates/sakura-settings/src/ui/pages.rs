@@ -10,7 +10,7 @@ pub(super) fn create_general_controls(
         parent,
         "基本設定",
         "いつもの入力方法と、使い慣れたキー操作を選びます。",
-        368,
+        320,
     )?;
     let basic_panel = p.window();
     p.section("既定の入力", 100)?;
@@ -32,10 +32,39 @@ pub(super) fn create_general_controls(
     for mode in Mode::ALL {
         add_combo(default_mode, mode_label(mode));
     }
-    let pad_shortcut = p.row_combo("Sakura Pad", 296)?;
+    let mut p = layout.page(
+        parent,
+        "Sakura Pad",
+        "保護状態と起動キー、自動ロック時間を確認・設定します。変更は［適用］を押すと保存されます。",
+        656,
+    )?;
+    let pad_panel = p.window();
+    p.section("現在の保護状態", 100)?;
+    let pad_status = p.helper("状態を確認中…", 140)?;
+    // Keep the full action names readable beside their icons in the compact
+    // 640px window. All three actions remain visible without scrolling.
+    let pad_open = p.button("Sakura Padを開く", R::new(0, 196, 268, 34))?;
+    let pad_lock = p.button("今すぐロック", R::new(284, 196, 268, 34))?;
+    let pad_protection = p.button("保護の設定を開く", R::new(0, 242, 552, 34))?;
+    p.helper(
+        "ロックはPadを隠し、保護中なら解除状態を破棄します。保護方法の変更はPad内で行います。",
+        291,
+    )?;
+    p.section("起動キー", 348)?;
+    let pad_shortcut = p.row_combo("ショートカット", 394)?;
     for value in PadShortcut::ALL {
         add_combo(pad_shortcut, pad_shortcut_label(value));
     }
+    p.helper(
+        "Sakura Padは開くと最前面に表示されます。ショートカットを無効にすると、キーからは起動しません。",
+        444,
+    )?;
+    p.section("保護中の自動ロック", 498)?;
+    let pad_idle_lock_timeout = p.row_combo("操作がないとき", 546)?;
+    for value in PadIdleLockTimeout::ALL {
+        add_combo(pad_idle_lock_timeout, pad_idle_lock_timeout_label(value));
+    }
+    p.helper("保護したPadやメモを開いている間に適用します。", 600)?;
 
     let mut p = layout.page(
         parent,
@@ -100,7 +129,7 @@ pub(super) fn create_general_controls(
         parent,
         "推測変換",
         "入力中に候補を自動表示し、確定方法を選べます。",
-        260,
+        380,
     )?;
     let prediction_panel = p.window();
     let prediction = p.checkbox("予測入力を使う", R::new(0, 108, 552, 34))?;
@@ -276,6 +305,11 @@ pub(super) fn create_general_controls(
 
     Ok(GeneralControls {
         basic_panel,
+        pad_panel,
+        pad_status,
+        pad_open,
+        pad_lock,
+        pad_protection,
         profile_panel,
         input_assist_panel,
         ai_text_panel,
@@ -291,6 +325,7 @@ pub(super) fn create_general_controls(
         input_method_kana,
         default_mode,
         pad_shortcut,
+        pad_idle_lock_timeout,
         input_assist_space_width,
         input_assist_shift_space,
         ai_text_key,

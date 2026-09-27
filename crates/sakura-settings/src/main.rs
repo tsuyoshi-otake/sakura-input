@@ -12,8 +12,8 @@ const EXIT_USAGE: i32 = 2;
 
 fn main() {
     let arguments: Vec<String> = std::env::args().skip(1).collect();
-    if arguments.is_empty() {
-        if let Err(error) = ui::run() {
+    if let Some(destination) = ui_destination(&arguments) {
+        if let Err(error) = ui::run(destination) {
             ui::show_fatal_error(&format!(
                 "Sakura Input settings could not start.\n\n{error}"
             ));
@@ -39,5 +39,34 @@ fn main() {
     if let Err(message) = cli::run(command) {
         eprintln!("sakura_settings: {message}");
         std::process::exit(EXIT_FAILED);
+    }
+}
+
+fn ui_destination(arguments: &[String]) -> Option<ui::Destination> {
+    match arguments {
+        [] => Some(ui::Destination::Default),
+        [argument] if argument == "--pad" => Some(ui::Destination::Pad),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_exact_pad_option_changes_gui_destination() {
+        assert_eq!(ui_destination(&[]), Some(ui::Destination::Default));
+        assert_eq!(
+            ui_destination(&["--pad".into()]),
+            Some(ui::Destination::Pad)
+        );
+        for arguments in [
+            vec!["--pad".into(), "extra".into()],
+            vec!["--PAD".into()],
+            vec!["config".into(), "show".into()],
+        ] {
+            assert_eq!(ui_destination(&arguments), None);
+        }
     }
 }

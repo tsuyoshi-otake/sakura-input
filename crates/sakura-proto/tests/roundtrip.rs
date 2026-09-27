@@ -219,6 +219,7 @@ fn every_response_variant_roundtrips() {
             revision: 1,
             appearance_theme: AppearanceTheme::Dark,
             pad_shortcut: PadShortcut::DoubleCtrl,
+            pad_idle_lock_timeout: sakura_proto::PadIdleLockTimeout::ThirtyMinutes,
             mode: Some(Mode::HalfAlnum),
             candidates: Some(CandidateList {
                 kind: CandidateKind::Conversion,
@@ -253,6 +254,7 @@ fn every_response_variant_roundtrips() {
             revision: u64::MAX,
             appearance_theme: AppearanceTheme::Auto,
             pad_shortcut: PadShortcut::Disabled,
+            pad_idle_lock_timeout: sakura_proto::PadIdleLockTimeout::default(),
             mode: None,
             candidates: None,
             candidate_detail: None,
@@ -267,6 +269,7 @@ fn every_response_variant_roundtrips() {
             revision: 2,
             appearance_theme: AppearanceTheme::Light,
             pad_shortcut: PadShortcut::Disabled,
+            pad_idle_lock_timeout: sakura_proto::PadIdleLockTimeout::default(),
             mode: Some(Mode::Hiragana),
             candidates: None,
             candidate_detail: None,
@@ -525,18 +528,18 @@ fn request_ids_roundtrip_exactly_including_u64_max() {
 }
 
 #[test]
-fn protocol_v23_hello_roundtrips_and_v22_payloads_are_rejected() {
-    const PREVIOUS_PROTOCOL_VERSION: u16 = 22;
+fn protocol_v24_hello_roundtrips_and_v23_payloads_are_rejected() {
+    const PREVIOUS_PROTOCOL_VERSION: u16 = 23;
     assert_eq!(
-        PROTOCOL_VERSION, 23,
-        "the expanded candidate capacity changes the wire contract"
+        PROTOCOL_VERSION, 24,
+        "the Pad timeout field changes the UI wire contract"
     );
 
     let request = Request::Hello {
         client_version: PROTOCOL_VERSION,
     };
     let mut request_frame = Vec::new();
-    encode_request(&request, 20, &mut request_frame).expect("encode v23 request");
+    encode_request(&request, 20, &mut request_frame).expect("encode v24 request");
     assert_eq!(
         &request_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()
@@ -557,7 +560,7 @@ fn protocol_v23_hello_roundtrips_and_v22_payloads_are_rejected() {
         engine_version: [1, 0, 0],
     };
     let mut response_frame = Vec::new();
-    encode_response(&response, 20, &mut response_frame).expect("encode v23 response");
+    encode_response(&response, 20, &mut response_frame).expect("encode v24 response");
     assert_eq!(
         &response_frame[FRAME_HEADER_LEN..FRAME_HEADER_LEN + 2],
         &PROTOCOL_VERSION.to_le_bytes()
