@@ -14,7 +14,7 @@
 
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread::{self, sleep, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -54,6 +54,13 @@ const TEST_PIPE_PREFIX: &str = r"\\.\pipe\SakuraInputRendererTest-";
 const HOST_CLASS: PCWSTR = windows::core::w!("SakuraInputRenderer");
 const PAD_CLASS: PCWSTR = windows::core::w!("SakuraInputPad");
 const TOTP_CLASS: PCWSTR = windows::core::w!("SakuraPadTotpPrompt");
+const TOTP_CODE_ID: i32 = 301;
+const TOTP_ACCEPT_ID: i32 = 302;
+const TOTP_SECRET_ID: i32 = 304;
+
+#[allow(dead_code)] // The UI fixture only needs HOTP from the renderer's local TOTP primitive.
+#[path = "../src/pad_totp.rs"]
+mod pad_totp;
 /// `WM_PAD_TRIGGER` in `main.rs`. The gesture that normally sends it is a
 /// Ctrl double tap, which a test cannot deliver without typing into whatever
 /// the user has in front.
@@ -820,6 +827,191 @@ fn whole_pad_recovery_key_is_confirmed_before_cutover_and_unlocks_after_reopen()
 }
 
 #[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+fn whole_pad_totp_setup_gates_password_unlock_until_code() {
+    const PASSWORD: &str = "pad TOTP enrollment 74e6";
+    const TITLE: &str = "whole TOTP title 76fa";
+    const BODY: &str = "whole TOTP body 49ec";
+    let app_data = IsolatedAppData::new("pad-whole-totp");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+
+    set_text(pad, TITLE_ID, TITLE);
+    set_text(pad, BODY_ID, BODY);
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    let deadline = Instant::now() + PATIENT;
+    while store.load().ok().and_then(|loaded| {
+        loaded
+            .document
+            .find(1)
+            .and_then(pad_storage::PadMemo::plain_content)
+            .map(|content| content == (TITLE, BODY))
+    }) != Some(true)
+    {
+        assert!(Instant::now() < deadline, "legacy memo did not save");
+        sleep(Duration::from_millis(30));
+    }
+    click_until_control(pad, PROTECT_ID, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, PASSWORD);
+    set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_control(pad, ENROLL_HEADLINE_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "whole-Pad recovery key",
+        |value| value == "復旧キーを保存してください",
+    );
+    let recovery_key = Zeroizing::new(text_of(control(pad, ENROLL_PASSWORD_ID)));
+    assert!(recovery_key.starts_with("SPRK1-"));
+    confirm_saved_recovery_key(pad, &recovery_key);
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    set_text(pad, LOCK_PASSWORD_ID, PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    let title = wait_for_control(pad, TITLE_ID);
+    wait_for_text(title, "protected Pad unlock", |value| value == TITLE);
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+
+    click(pad, PROTECT_ID);
+    let action = wait_for_totp_dialog(renderer.pid(), "TOTP: 未設定");
+    click(action, TOTP_ACCEPT_ID);
+    let auth = wait_for_totp_dialog(renderer.pid(), "パスワード");
+    set_text(auth, TOTP_CODE_ID, PASSWORD);
+    click(auth, TOTP_ACCEPT_ID);
+    let setup = wait_for_totp_dialog(renderer.pid(), "手動キー");
+    let manual_secret = Zeroizing::new(text_of(control(setup, TOTP_SECRET_ID)));
+    let secret = decode_totp_manual_secret(&manual_secret);
+    let step = unix_totp_step();
+    let setup_code = format!("{:06}", pad_totp::hotp(&secret, step).unwrap());
+    set_text(setup, TOTP_CODE_ID, &setup_code);
+    click(setup, TOTP_ACCEPT_ID);
+    wait_for_text(control(pad, STATUS_ID), "TOTP enabled", |value| {
+        value.contains("確認コードを有効にしました")
+    });
+
+    // Reopen through the owned renderer host to remove the authenticated Pad
+    // session before testing the password-then-code gate. Both HWNDs belong
+    // to this isolated fixture and remain live during the transition.
+    // SAFETY: both HWNDs are live and owned by this isolated fixture.
+    unsafe {
+        SendMessageW(pad, WM_CLOSE, None, None);
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+            .expect("reopen isolated Pad");
+    }
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    assert_no_child_text_contains(pad, &[TITLE, BODY]);
+    set_text(pad, LOCK_PASSWORD_ID, PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    let code_dialog = wait_for_totp_dialog(renderer.pid(), "認証アプリの 6 桁コード");
+    assert_no_child_text_contains(pad, &[TITLE, BODY]);
+    // SAFETY: this lookup reads children of the live isolated Pad HWND.
+    let title_control = unsafe { GetDlgItem(Some(pad), TITLE_ID) };
+    assert!(
+        title_control.is_err(),
+        "plaintext title edit must not be created before TOTP verification"
+    );
+    // SAFETY: this lookup reads children of the live isolated Pad HWND.
+    let body_control = unsafe { GetDlgItem(Some(pad), BODY_ID) };
+    assert!(
+        body_control.is_err(),
+        "plaintext body edit must not be created before TOTP verification"
+    );
+    // Confirmation consumes `step`. Use a fresh accepted step even if the
+    // test crossed one or more 30-second boundaries while reopening the Pad.
+    let unlock_step = unix_totp_step().max(step + 1);
+    let unlock_code = format!("{:06}", pad_totp::hotp(&secret, unlock_step).unwrap());
+    set_text(code_dialog, TOTP_CODE_ID, &unlock_code);
+    click(code_dialog, TOTP_ACCEPT_ID);
+    let title = wait_for_control(pad, TITLE_ID);
+    wait_for_text(title, "TOTP-unlocked Pad", |value| value == TITLE);
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+fn wait_for_totp_dialog(renderer_pid: u32, expected_label: &str) -> HWND {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if let Some(dialog) = find_renderer_window(renderer_pid, TOTP_CLASS, true) {
+            if dialog_static_text(dialog).contains(expected_label) {
+                return dialog;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "TOTP dialog for {expected_label} never appeared"
+        );
+        sleep(Duration::from_millis(20));
+    }
+}
+
+fn unix_totp_step() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_secs()
+        / 30
+}
+
+fn decode_totp_manual_secret(manual: &str) -> Zeroizing<Vec<u8>> {
+    assert_eq!(manual.len(), 32, "manual TOTP key must encode 20 bytes");
+    let mut output = Zeroizing::new(Vec::with_capacity(20));
+    let mut bits = 0_u32;
+    let mut count = 0_u32;
+    for byte in manual.bytes() {
+        let value = match byte {
+            b'A'..=b'Z' => u32::from(byte - b'A'),
+            b'2'..=b'7' => u32::from(byte - b'2' + 26),
+            _ => panic!("invalid manual TOTP key character"),
+        };
+        bits = (bits << 5) | value;
+        count += 5;
+        if count >= 8 {
+            count -= 8;
+            output.push((bits >> count) as u8);
+            bits &= (1 << count) - 1;
+        }
+    }
+    assert_eq!(output.len(), 20);
+    output
+}
+
+#[test]
+#[ignore = "real renderer process; requires an interactive Windows desktop"]
+fn long_pad_fixture_keeps_watch_feed_alive() {
+    let app_data = IsolatedAppData::new("pad-long-fixture-watch");
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let heartbeat = engine.start_heartbeat();
+    // The renderer gives an unresponsive WatchUi feed 15 seconds. This
+    // fixture stays idle longer than that while the periodic state revision
+    // keeps its private pipe alive, just as physical PIN/touch tests require.
+    sleep(Duration::from_secs(18));
+    assert!(
+        renderer
+            .child
+            .try_wait()
+            .expect("poll fixture renderer")
+            .is_none(),
+        "renderer exited while the live fixture was heartbeating"
+    );
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    drop(heartbeat);
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
 #[ignore = "requires connected YubiKey 5, Pad session worker, and interactive Windows desktop"]
 fn physical_yubikey5_whole_pad_ui_enroll_and_unlock() {
     const TITLE: &str = "isolated physical key title";
@@ -828,6 +1020,10 @@ fn physical_yubikey5_whole_pad_ui_enroll_and_unlock() {
     let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
     let mut engine = FixtureEngine::new(initial_state());
     let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    // Physical PIN/touch can take longer than the renderer's 15-second
+    // WatchUi deadline. Keep only this fixture's watch feed alive until the
+    // real engine-stop assertion at the end of the test.
+    let heartbeat = engine.start_heartbeat();
     set_text(pad, TITLE_ID, TITLE);
     set_text(pad, BODY_ID, BODY);
     notify(pad, TITLE_ID, EN_CHANGE as u16);
@@ -890,21 +1086,36 @@ fn physical_yubikey5_whole_pad_ui_enroll_and_unlock() {
                 break;
             }
         }
-        assert!(
-            Instant::now() < deadline,
-            "key unlock did not show isolated memo"
-        );
+        if Instant::now() >= deadline {
+            // SAFETY: the test still owns this live Pad HWND, and these
+            // lookups only read non-secret status child controls.
+            let unlock_status = unsafe { GetDlgItem(Some(pad), LOCK_STATUS_ID) }
+                .map(text_of)
+                .unwrap_or_else(|_| "unlock status control absent".to_owned());
+            // SAFETY: same live Pad HWND; status is public UI text only.
+            let pad_status = unsafe { GetDlgItem(Some(pad), STATUS_ID) }
+                .map(text_of)
+                .unwrap_or_else(|_| "Pad status control absent".to_owned());
+            panic!(
+                "key unlock did not show isolated memo: unlock={unlock_status}; Pad={pad_status}"
+            );
+        }
         sleep(Duration::from_millis(100));
     }
     assert_eq!(text_of(control(pad, BODY_ID)), BODY);
     // SAFETY: close only the isolated Pad after the hardware unlock has
     // completed, so its protected save actor reaches a terminal state before
     // the fixture engine asks the renderer process to exit.
-    unsafe {
-        SendMessageW(pad, WM_CLOSE, None, None);
-    }
+    let close_result = unsafe { SendMessageW(pad, WM_CLOSE, None, None) };
+    assert_ne!(
+        close_result.0,
+        0,
+        "protected Pad vetoed close: {}",
+        text_of(control(pad, STATUS_ID))
+    );
+    drop(heartbeat);
     engine.stop();
-    renderer.wait_for_exit();
+    renderer.wait_for_exit_with_timeout(Duration::from_secs(30));
 }
 
 #[test]
@@ -2687,6 +2898,20 @@ struct FixtureEngine {
     thread: Option<JoinHandle<()>>,
 }
 
+struct FixtureHeartbeat {
+    stop: mpsc::Sender<()>,
+    thread: Option<JoinHandle<()>>,
+}
+
+impl Drop for FixtureHeartbeat {
+    fn drop(&mut self) {
+        let _ = self.stop.send(());
+        if let Some(thread) = self.thread.take() {
+            thread.join().expect("fixture heartbeat must stop");
+        }
+    }
+}
+
 impl FixtureEngine {
     fn new(initial: UiState) -> Self {
         let nonce = SystemTime::now()
@@ -2731,10 +2956,22 @@ impl FixtureEngine {
     /// gone, which hides the pad and ends the process — so an idle fixture has
     /// to keep beating or the window closes under whoever is looking at it.
     fn heartbeat(&self) {
-        let (state, changed) = &*self.state;
-        let mut current = state.lock().expect("fixture state lock");
-        current.revision = current.revision.saturating_add(1);
-        changed.notify_all();
+        heartbeat_state(&self.state);
+    }
+
+    fn start_heartbeat(&self) -> FixtureHeartbeat {
+        let state = Arc::clone(&self.state);
+        let (stop, receiver) = mpsc::channel();
+        let thread = thread::spawn(move || loop {
+            match receiver.recv_timeout(HEARTBEAT) {
+                Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                Err(mpsc::RecvTimeoutError::Timeout) => heartbeat_state(&state),
+            }
+        });
+        FixtureHeartbeat {
+            stop,
+            thread: Some(thread),
+        }
     }
 
     fn stop(&mut self) {
@@ -2756,6 +2993,16 @@ impl FixtureEngine {
             .join()
             .expect("fixture server must finish");
     }
+}
+
+fn heartbeat_state(state: &Arc<(Mutex<UiState>, Condvar)>) {
+    let (state, changed) = &**state;
+    let mut current = state.lock().expect("fixture state lock");
+    if current.stopping {
+        return;
+    }
+    current.revision = current.revision.saturating_add(1);
+    changed.notify_all();
 }
 
 impl Drop for FixtureEngine {
@@ -2946,7 +3193,11 @@ impl OwnedChild {
     }
 
     fn wait_for_exit(&mut self) {
-        let deadline = Instant::now() + PATIENT;
+        self.wait_for_exit_with_timeout(PATIENT);
+    }
+
+    fn wait_for_exit_with_timeout(&mut self, timeout: Duration) {
+        let deadline = Instant::now() + timeout;
         loop {
             match self.child.try_wait().expect("poll owned child") {
                 Some(_) => return,

@@ -966,6 +966,15 @@ mod tests {
         assert_ne!(first, second);
         assert!(first.contains("Sakura%20Pad%20Memo%200000000000000001"));
         assert!(first.len() <= MAX_OTPAUTH_URI_BYTES);
+        let last = memo_otpauth_uri("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567", u64::MAX);
+        let rect = RECT {
+            left: 0,
+            top: 0,
+            right: 240,
+            bottom: 240,
+        };
+        assert!(qr_image(&first, rect).is_some());
+        assert!(qr_image(&last, rect).is_some());
     }
 
     #[test]

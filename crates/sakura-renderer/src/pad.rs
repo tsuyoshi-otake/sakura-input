@@ -98,7 +98,7 @@ use crate::pad_storage::{
 use crate::pad_tooltip::Tooltips;
 use crate::pad_totp_store::{EnrollmentStatus, PadTotpStore, TotpScope};
 use crate::pad_totp_ui;
-use crate::pad_webauthn::Cancellation as HardwareCancellation;
+use crate::pad_webauthn::{Cancellation as HardwareCancellation, WebAuthnError};
 use crate::theme::{
     fill_color, font, font_weighted, palette, scaled, select_font, text, text_width, Palette,
     BODY_FONT_96, GAP_96, PADDING_96, SUPPORT_FONT_96,
@@ -117,6 +117,53 @@ const WM_PAD_UNLOCK_FINISHED: u32 = WM_APP + 7;
 const WM_PAD_MASK_FOR_SESSION: u32 = WM_APP + 8;
 const WM_PAD_SECURITY_FINISHED: u32 = WM_APP + 11;
 const MAX_PASSWORD_UTF16_UNITS: usize = 256;
+
+/// Keep Windows-specific failure classification at the UI orchestration boundary.
+/// The storage transaction receives only a content-free reason.
+const fn hardware_enrollment_failure(error: WebAuthnError) -> FailureReason {
+    match error {
+        WebAuthnError::CancelledOrTimedOut => FailureReason::UserCancelledOrTimedOut,
+        WebAuthnError::Unsupported | WebAuthnError::PrfUnavailable => {
+            FailureReason::UnsupportedHardware
+        }
+        WebAuthnError::Busy => FailureReason::HardwareBusy,
+        WebAuthnError::EntropyUnavailable => FailureReason::Entropy,
+        WebAuthnError::InvalidInput
+        | WebAuthnError::CredentialMismatch
+        | WebAuthnError::UserVerificationMissing
+        | WebAuthnError::MalformedResponse
+        | WebAuthnError::Windows(_) => FailureReason::Unavailable,
+    }
+}
+
+#[cfg(test)]
+mod hardware_enrollment_failure_tests {
+    use super::*;
+
+    #[test]
+    fn maps_platform_failures_to_content_free_outcomes() {
+        assert_eq!(
+            hardware_enrollment_failure(WebAuthnError::CancelledOrTimedOut),
+            FailureReason::UserCancelledOrTimedOut
+        );
+        assert_eq!(
+            hardware_enrollment_failure(WebAuthnError::Unsupported),
+            FailureReason::UnsupportedHardware
+        );
+        assert_eq!(
+            hardware_enrollment_failure(WebAuthnError::PrfUnavailable),
+            FailureReason::UnsupportedHardware
+        );
+        assert_eq!(
+            hardware_enrollment_failure(WebAuthnError::Busy),
+            FailureReason::HardwareBusy
+        );
+        assert_eq!(
+            hardware_enrollment_failure(WebAuthnError::Windows(windows::Win32::Foundation::E_FAIL)),
+            FailureReason::Unavailable
+        );
+    }
+}
 
 fn unlock_retry_delay(failures: u32) -> Duration {
     let exponent = failures.saturating_sub(1).min(5);
@@ -6091,7 +6138,7 @@ impl PadState {
                                 Duration::from_secs(120),
                                 worker_hardware_cancel.as_ref().expect("key method"),
                             )
-                            .map_err(|_| FailureReason::Unavailable)
+                            .map_err(hardware_enrollment_failure)
                         })
                         .map(|(prepared, key)| (PreparedEnrollment::V4(prepared), key)),
                     (false, _) => engine
@@ -6102,7 +6149,7 @@ impl PadState {
                                 Duration::from_secs(120),
                                 worker_hardware_cancel.as_ref().expect("key method"),
                             )
-                            .map_err(|_| FailureReason::Unavailable)
+                            .map_err(hardware_enrollment_failure)
                         })
                         .map(|(prepared, key)| (PreparedEnrollment::Legacy(prepared), key)),
                 };
@@ -6331,12 +6378,50 @@ impl PadState {
                 self.save_blocked = self.worker.is_none();
             }
             let _ = create_controls(self, window);
+            let failure_reason = match &completion.result {
+                EnrollTaskResult::Finished(Err(error)) => error.reason,
+                _ => FailureReason::Unavailable,
+            };
             reading = if self.save_blocked {
                 "保護できず、保存も確認できません。メモをコピーしてください"
+            } else if method == ProtectionMethod::Password {
+                if source_v4 {
+                    "Pad 全体の保護を中止しました。メモ別保護は継続しています"
+                } else {
+                    "保護できませんでした。Pad は保護されていません"
+                }
             } else if source_v4 {
-                "Pad 全体の保護を中止しました。メモ別保護は継続しています"
+                match failure_reason {
+                    FailureReason::UserCancelledOrTimedOut => {
+                        "キー登録を中止または時間切れ。メモ別保護は継続"
+                    }
+                    FailureReason::UnsupportedHardware => {
+                        "端末・キーが非対応。メモ別保護は継続"
+                    }
+                    FailureReason::HardwareBusy => {
+                        "キーが使用中。メモ別保護は継続"
+                    }
+                    FailureReason::Unavailable => {
+                        "キーを利用できません。メモ別保護は継続"
+                    }
+                    _ => "Pad 全体の保護を中止しました。メモ別保護は継続しています",
+                }
             } else {
-                "保護できませんでした。Pad は保護されていません"
+                match failure_reason {
+                    FailureReason::UserCancelledOrTimedOut => {
+                        "キー登録を中止または時間切れ。再試行できます"
+                    }
+                    FailureReason::UnsupportedHardware => {
+                        "端末・キーが非対応です。Pad は未保護"
+                    }
+                    FailureReason::HardwareBusy => {
+                        "キーが使用中です。少し待って再試行"
+                    }
+                    FailureReason::Unavailable => {
+                        "キーを利用できません。接続を確認"
+                    }
+                    _ => "保護できませんでした。Pad は保護されていません",
+                }
             };
             self.set_status(reading.to_owned());
             self.update_status();

@@ -34,6 +34,10 @@ Pad 全 UI 経路や予備キー管理の完了を意味しない。TOTP サイ�
 `verification/sakura-pad-protected-store.md` と
 `verification/sakura-pad-memo-protection.md` に記録する。旧形式への後退防止の
 初期検証は `verification/sakura-pad-protection-foundation.md` を参照。
+実機 Pad UI テストが終了しなかった一因は、長い OS 認証中に隔離テスト用
+エンジンの WatchUi 更新が止まり、renderer の15秒の監視期限を超えたことだった。
+3秒ごとのテスト用更新を追加し、18秒の隔離 UI テストで終了まで確認した。
+実機 UI の登録完了・終了までの一連のテストは引き続き未合格。
 実機検証は YubiKey 5 NFC firmware 5.4.3 で行った。登録では Windows の
 legacy `hmac-secret` extension が必要だった。仕様上の PRF 値は Windows API 側で
 WebAuthn PRF 値へ変換される（[Microsoft `webauthn.h`](https://github.com/microsoft/webauthn/blob/master/webauthn.h)）。

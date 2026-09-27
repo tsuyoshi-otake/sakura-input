@@ -45,6 +45,9 @@ pub enum FailureReason {
     Stale,
     Protocol,
     Entropy,
+    UserCancelledOrTimedOut,
+    UnsupportedHardware,
+    HardwareBusy,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -960,6 +963,9 @@ fn record_failure(previous: &mut Option<FailureReason>, reason: FailureReason) {
         FailureReason::Storage => 5,
         FailureReason::Worker | FailureReason::Protocol | FailureReason::Unavailable => 4,
         FailureReason::Stale | FailureReason::Locked | FailureReason::Entropy => 3,
+        FailureReason::UserCancelledOrTimedOut
+        | FailureReason::UnsupportedHardware
+        | FailureReason::HardwareBusy => 3,
         FailureReason::Authentication => 1,
     };
     if previous.is_none_or(|old| priority(reason) > priority(old)) {
