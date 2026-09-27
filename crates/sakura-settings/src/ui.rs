@@ -109,6 +109,8 @@ const WINDOW_CLASS: PCWSTR = windows::core::w!("SakuraInputSettingsWindow");
 /// Renderer host contract. The message carries no Pad content or credentials.
 const RENDERER_HOST_CLASS: PCWSTR = windows::core::w!("SakuraInputRenderer");
 const PAD_OPEN_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.OpenPad.v1");
+const PAD_LOCK_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.LockPad.v1");
+const PAD_PROTECTION_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.OpenPadProtection.v1");
 /// The class of the hidden window that owns the settings window.
 ///
 /// It exists for one reason: an unowned top-level window gets a taskbar
@@ -222,6 +224,8 @@ struct GeneralControls {
     basic_panel: HWND,
     pad_panel: HWND,
     pad_open: HWND,
+    pad_lock: HWND,
+    pad_protection: HWND,
     profile_panel: HWND,
     input_assist_panel: HWND,
     ai_text_panel: HWND,
@@ -746,23 +750,51 @@ fn activate_existing_window() -> bool {
     false
 }
 
-/// Requests activation from the renderer's hidden host. Queueing is the only
-/// acknowledgement available here; the renderer owns Pad creation and focus.
-fn request_pad_open() -> Result<(), String> {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PadAction {
+    Open,
+    Lock,
+    OpenProtection,
+}
+
+impl PadAction {
+    const fn message(self) -> PCWSTR {
+        match self {
+            Self::Open => PAD_OPEN_MESSAGE,
+            Self::Lock => PAD_LOCK_MESSAGE,
+            Self::OpenProtection => PAD_PROTECTION_MESSAGE,
+        }
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Open => "Sakura Padを開く",
+            Self::Lock => "Sakura Padをロックする",
+            Self::OpenProtection => "保護の設定を開く",
+        }
+    }
+}
+
+/// Queue a Pad action on the renderer's hidden host. Queueing is the only
+/// acknowledgement available here; the renderer owns the resulting state.
+fn request_pad_action(action: PadAction) -> Result<(), String> {
     // SAFETY: both static class and null title are valid for a read-only
     // top-level window lookup in this interactive session.
     let host = unsafe { FindWindowW(RENDERER_HOST_CLASS, PCWSTR::null()) }.map_err(|_| {
         "rendererが起動していません。Sakura Inputを起動してから再試行してください。".to_owned()
     })?;
     // SAFETY: the process-independent name contains no pointers or secrets.
-    let message = unsafe { RegisterWindowMessageW(PAD_OPEN_MESSAGE) };
+    let message = unsafe { RegisterWindowMessageW(action.message()) };
     if message == 0 {
-        return Err("Sakura Padを開くメッセージを登録できませんでした。".to_owned());
+        return Err(format!(
+            "{}メッセージを登録できませんでした。",
+            action.label()
+        ));
     }
     // SAFETY: only the registered scalar message and zero parameters cross
     // processes. USER32 validates the HWND and reports a failed queue attempt.
     unsafe { PostMessageW(Some(host), message, WPARAM(0), LPARAM(0)) }
-        .map_err(|_| "rendererにSakura Padを開く依頼を送信できませんでした。".to_owned())
+        .map_err(|_| format!("rendererに{}依頼を送信できませんでした。", action.label()))
 }
 
 pub fn run() -> Result<(), String> {
@@ -927,8 +959,18 @@ impl App {
 
     fn handle_command(&mut self, source: HWND, notification: u16) -> Result<(), String> {
         if source == self.general.pad_open {
-            request_pad_open()?;
+            request_pad_action(PadAction::Open)?;
             self.set_status("Sakura Padを開く依頼をrendererへ送信しました。");
+            return Ok(());
+        }
+        if source == self.general.pad_lock {
+            request_pad_action(PadAction::Lock)?;
+            self.set_status("Sakura Padのロック依頼をrendererへ送信しました。");
+            return Ok(());
+        }
+        if source == self.general.pad_protection {
+            request_pad_action(PadAction::OpenProtection)?;
+            self.set_status("保護設定を開く依頼をrendererへ送信しました。");
             return Ok(());
         }
         if source == self.apply {
@@ -2051,8 +2093,11 @@ impl App {
         window == self.diagnostics_controls.text || window == self.update_controls.result
     }
 
-    fn buttons(&self) -> [HWND; 21] {
+    fn buttons(&self) -> [HWND; 24] {
         [
+            self.general.pad_open,
+            self.general.pad_lock,
+            self.general.pad_protection,
             self.general.ai_api_key_clear,
             self.general.normalizer_reset,
             self.general.input_support_reset,

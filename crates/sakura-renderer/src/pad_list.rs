@@ -26,6 +26,34 @@ pub(crate) const UNTITLED: &str = "無題";
 /// A protected memo without an explicit unlocked projection reveals no content.
 pub(crate) const PROTECTED_MEMO: &str = "保護されたメモ";
 
+/// A display-only ordinal among live protected memos, independent of title,
+/// ciphertext, list sort, search, and whether this memo is currently open.
+/// Adding or removing protected membership can renumber later rows; the
+/// persisted memo ID remains the separate identity used for authentication.
+fn protected_label(document: &PadDocument, id: u64) -> String {
+    let number = document
+        .live()
+        .filter(|memo| memo.protected_envelope().is_some() && memo.id <= id)
+        .count();
+    format!("{PROTECTED_MEMO} {number:02}")
+}
+
+/// Shared GDI and LISTBOX label, so the painted row and its accessible name
+/// reveal the same information after every lock transition.
+pub(crate) fn display_title(
+    document: &PadDocument,
+    memo: &PadMemo,
+    projection: &MemoProjection<'_>,
+) -> String {
+    if matches!(projection, MemoProjection::Locked) {
+        protected_label(document, memo.id)
+    } else {
+        projection.title().to_owned()
+    }
+}
+
+pub(crate) const LOCKED_SEARCH_HINT: &str = "ロック中のメモの内容は検索しません";
+
 /// Plaintext held by the window's unlock state, never by `PadDocument`.
 #[derive(Clone, Copy)]
 pub(crate) struct UnlockedMemo<'a> {
@@ -415,6 +443,28 @@ mod tests {
             assert!(rows(&document, query).is_empty(), "{query}");
         }
         assert_eq!(rows(&document, ""), [1, 2]);
+    }
+
+    #[test]
+    fn protected_display_numbers_ignore_content_sort_search_and_unlock_state() {
+        let first = protected(4, "secret one", "body one", 50, 50);
+        let second = protected(8, "secret two", "body two", 10, 10);
+        let ordinary = memo(6, "ordinary", "visible", 20, 20);
+        let unlocked = HashMap::from([(
+            4,
+            UnlockedMemo {
+                title: "opened",
+                body: "readable",
+            },
+        )]);
+        for sort in [PadSort::Updated, PadSort::Created, PadSort::Title] {
+            let document = document(sort, vec![second.clone(), ordinary.clone(), first.clone()]);
+            assert_eq!(protected_label(&document, 4), "保護されたメモ 01");
+            assert_eq!(protected_label(&document, 8), "保護されたメモ 02");
+            assert_eq!(rows_with_unlocked(&document, "readable", &unlocked), [4]);
+            assert!(rows(&document, "secret two").is_empty());
+            assert_eq!(protected_label(&document, 8), "保護されたメモ 02");
+        }
     }
 
     #[test]

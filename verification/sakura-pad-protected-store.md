@@ -8,13 +8,16 @@ protection. No migration of the user's actual Pad, installation, or release is
 claimed here. Per-memo password, recovery-key, and WebAuthn PRF protection has
 separate evidence in `sakura-pad-memo-protection.md`. A physical YubiKey 5 NFC
 (firmware 5.4.3) successfully enrolled and reopened an isolated whole-Pad store
-through the real worker. The physical native Pad UI also reached recovery
-confirmation and reopened the correct title/body. Its original long-running
+through the real worker. The physical native Pad UI later completed recovery
+confirmation, reopened the correct title/body, and exited its isolated renderer.
+Its original long-running
 fixture stopped its watch feed after the renderer's 15-second idle deadline;
 the Pad correctly vetoed that premature shutdown during registration. A
-three-second fixture heartbeat now has an 18-second native regression test,
-but the latest physical registration with the heartbeat did not complete
-within 180 seconds. Spare-key management remains
+three-second fixture heartbeat now has an 18-second native regression test.
+An earlier heartbeat-enabled physical registration did not complete within
+180 seconds even though both Windows Security prompts were completed. Stage-only
+diagnostics remain for recurrence; the intermittent stop is unexplained.
+Spare-key management remains
 open. TOTP is local confirmation backed by a current-user DPAPI
 sidecar; it is not independent cryptographic protection or online 2FA.
 
@@ -30,6 +33,7 @@ sidecar; it is not independent cryptographic protection or online 2FA.
 | Native lock never exposes memo controls | Run `pad_ui::migrated_protected_pad_starts_and_reopens_without_legacy_text` and `pad_ui::session_lock_removes_unlocked_protected_memo_hwnds` with isolated storage and the real session worker | Locked startup and Windows session lock have no title/body/list HWNDs; reopening stays locked and topmost |
 | Enrollment is a distinct transaction | Run `pad_ui::enrollment_prompt_can_cancel_without_cutover`, `pad_ui::whole_pad_recovery_key_is_confirmed_before_cutover_and_unlocks_after_reopen`, and the real-worker recovery test | The key is displayed before durable intent; confirmation cuts over; cancellation keeps legacy storage and restores its writer; both password and recovery unlock survive reopening |
 | Session lock clears unconfirmed key | Run `pad_ui::windows_lock_clears_unconfirmed_whole_pad_recovery_key` against an isolated renderer | The key vanishes from native child text, no cutover intent is published, and the original editor reopens |
+| Suspend revokes the surface | Run `pad_ui::host_suspend_masks_unlocked_whole_pad_before_reopen` against an isolated renderer and session worker | A simulated host `PBT_APMSUSPEND` removes protected title/body/list HWNDs before the Pad can reopen, which requires authentication |
 | Repository checks and process lifetime | Wrapped Cargo tests, fmt, clippy, dependency/audit gates, and `ci/check-process-clean.ps1` | Required suites pass, no runner survives, no package is added younger than seven days |
 
 The storage transaction owns the durable protected cutover and version guard.
@@ -72,9 +76,11 @@ data remain separate acceptance criteria in
   The isolated native UI passed key display/confirmation before cutover,
   recovery unlock, password unlock after reopening, cancellation with legacy
   writer restoration, and key erasure on a simulated Windows session lock.
-- Physical YubiKey 5 NFC, firmware 5.4.3: `pad_hardware::tests::physical_yubikey5_pad_prf_enroll_and_reopen` passed with repeated enrollment using the same PRF secret. The isolated real-worker test `pad_protection::process_tests::physical_yubikey5_seals_and_reopens_isolated_whole_pad` also passed, covering whole-Pad protected sealing and reopening. The PRF-only attempt failed with `PrfUnavailable`; adding the Windows legacy `hmac-secret` extension to registration fixed the exercised path. In native Pad UI tests, one registration attempt ended before recovery setup despite the user completing both PIN/touch prompts; later runs reached recovery-key confirmation, reasserted the key, and matched the exact isolated title/body. Those runs failed renderer teardown waits of five and thirty seconds. A scoped exit trace proved that the fixture's 15-second idle watch deadline fired during hardware registration, after which the still-registering Pad correctly vetoed premature renderer shutdown. A fresh registration attempt with a three-second fixture heartbeat stayed open but did not complete within 180 seconds; the user-observed OS dialog outcome for that attempt remains to be confirmed. The automated end-to-end test is not yet green. No device serial is recorded.
+- Physical YubiKey 5 NFC, firmware 5.4.3: the PRF adapter and isolated whole-Pad worker seal/reopen tests passed after requesting Windows' legacy `hmac-secret` extension at registration. The native UI test `pad_ui::physical_yubikey5_whole_pad_ui_enroll_and_unlock` later passed through two Windows Security PIN/touch prompts, recovery-key confirmation, exact title/body reappearance, and isolated renderer exit; a process check found no survivor. Earlier attempts reached the same UI content but could not exit because the fixture's 15-second watch deadline fired mid-authentication. Another heartbeat-enabled attempt stayed at registration for 180 seconds despite both prompts being completed. Stage-only diagnostics now report future stalls; that intermittent stop is not yet explained. No device serial is recorded.
 - `pad_ui::long_pad_fixture_keeps_watch_feed_alive` passed: the isolated renderer stayed live for 18 seconds of otherwise idle Pad time with the three-second heartbeat, then exited cleanly on the deliberate engine stop. This bounds the test-fixture cause of the prior teardown failures, not the separate hardware registration timeout.
 - The isolated native whole-Pad TOTP setup/password/code gate test passed after a retry without concurrent desktop typing; it confirmed the protected title/body HWNDs remained absent between password entry and code acceptance.
+- The isolated native host-suspend test passed: a simulated `WM_POWERBROADCAST/PBT_APMSUSPEND` masked title/body/list controls before reopening, and the Pad reopened locked. This is a message-path check, not a physical sleep/resume measurement.
+- Settings' data-free registered protection and lock messages reached an isolated renderer. The former opened the Pad protection prompt; the latter hid it. The sender only reports successful queueing, not a completed lock.
 - During WebAuthn calls the Pad parent releases its topmost z-order, restores it on completion, and rejects overlapping requests. A focused native-window test passed. The user confirmed seeing and completing both Windows Security PIN/touch prompts over the physical Pad UI test.
 - The internal Version 8-M TOTP QR encoder passed dependency policy. Independent ZXing-cpp 2.3.0 decoding recovered the exact dummy Pad otpauth URI and a maximum-length 152-byte payload; no real TOTP secret left the test process.
 - Password-entry labeling was improved so the field remains visibly identified while editing; this is a focused UX change, not completion of the planned visual/accessibility matrix.

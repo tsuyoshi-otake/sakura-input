@@ -66,8 +66,8 @@ use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageTime, GetMessageW,
     GetWindowLongPtrW, KillTimer, PostMessageW, PostQuitMessage, RegisterClassW,
     RegisterWindowMessageW, SetTimer, SetWindowLongPtrW, TranslateMessage, GWLP_USERDATA, MSG,
-    WM_APP, WM_CLOSE, WM_DESTROY, WM_ENDSESSION, WM_INPUT, WM_INPUT_DEVICE_CHANGE,
-    WM_QUERYENDSESSION, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
+    PBT_APMSUSPEND, WM_APP, WM_CLOSE, WM_DESTROY, WM_ENDSESSION, WM_INPUT, WM_INPUT_DEVICE_CHANGE,
+    WM_POWERBROADCAST, WM_QUERYENDSESSION, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
 };
 
 use candidate::CandidateWindow;
@@ -115,15 +115,34 @@ const WM_CANDIDATE_COMMIT_FINISHED: u32 = WM_APP + 5;
 /// posts this deferred message so the complete USER32 packet has returned and
 /// normal message ordering/focus rules remain observable.
 const WM_PAD_TRIGGER: u32 = WM_APP + 6;
+const WM_PAD_PROTECTION_TRIGGER: u32 = WM_APP + 12;
 /// Settings sends this process-independent, data-free request to the hidden
 /// host. The host then uses its existing deferred Pad trigger on its UI thread.
 const PAD_OPEN_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.OpenPad.v1");
 static PAD_OPEN_MESSAGE_ID: OnceLock<u32> = OnceLock::new();
+const PAD_LOCK_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.LockPad.v1");
+static PAD_LOCK_MESSAGE_ID: OnceLock<u32> = OnceLock::new();
+const PAD_PROTECTION_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.OpenPadProtection.v1");
+static PAD_PROTECTION_MESSAGE_ID: OnceLock<u32> = OnceLock::new();
 
 fn pad_open_message_id() -> u32 {
     *PAD_OPEN_MESSAGE_ID.get_or_init(|| {
         // SAFETY: the static message name is valid for this process lifetime.
         unsafe { RegisterWindowMessageW(PAD_OPEN_MESSAGE) }
+    })
+}
+
+fn pad_lock_message_id() -> u32 {
+    *PAD_LOCK_MESSAGE_ID.get_or_init(|| {
+        // SAFETY: the registered name is valid for this process lifetime.
+        unsafe { RegisterWindowMessageW(PAD_LOCK_MESSAGE) }
+    })
+}
+
+fn pad_protection_message_id() -> u32 {
+    *PAD_PROTECTION_MESSAGE_ID.get_or_init(|| {
+        // SAFETY: the registered name is valid for this process lifetime.
+        unsafe { RegisterWindowMessageW(PAD_PROTECTION_MESSAGE) }
     })
 }
 /// A short UI-thread timer gives the pure gesture reducer an explicit timeout
@@ -447,6 +466,35 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
         }
         return LRESULT(0);
     }
+    let pad_lock_message = pad_lock_message_id();
+    if pad_lock_message != 0 && message == pad_lock_message {
+        if !app.is_null() {
+            // SAFETY: this host owns `app` and the Pad on the UI thread.
+            let app = unsafe { &mut *app };
+            if let Some(pad) = app.pad.as_ref() {
+                pad.mask_for_session();
+            }
+        }
+        return LRESULT(0);
+    }
+    let pad_protection_message = pad_protection_message_id();
+    if pad_protection_message != 0 && message == pad_protection_message {
+        if !app.is_null() {
+            // SAFETY: both data-free messages target this live host HWND.
+            // Open first, then route into the Pad's own protection UI. Both
+            // messages are queued to this same host in order.
+            unsafe {
+                let _ = PostMessageW(Some(window), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0));
+                let _ = PostMessageW(
+                    Some(window),
+                    WM_PAD_PROTECTION_TRIGGER,
+                    WPARAM(0),
+                    LPARAM(0),
+                );
+            }
+        }
+        return LRESULT(0);
+    }
     match message {
         WM_UI if !app.is_null() => {
             // SAFETY: `app` is the live local from `main`, and this runs on
@@ -643,6 +691,14 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
             }
             LRESULT(0)
         }
+        WM_PAD_PROTECTION_TRIGGER if !app.is_null() => {
+            // SAFETY: this host owns `app` on the UI thread.
+            let app = unsafe { &mut *app };
+            if let Some(pad) = app.pad.as_ref() {
+                pad.open_protection_settings();
+            }
+            LRESULT(0)
+        }
         WM_QUERYENDSESSION => {
             // A protected Pad with a failed or uncertain save keeps its editor
             // available for recovery and vetoes an ordinary session end.
@@ -652,6 +708,20 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
                 let app = unsafe { &mut *app };
                 if app.pad.as_ref().is_some_and(|pad| !pad.hide()) {
                     return LRESULT(0);
+                }
+            }
+            LRESULT(1)
+        }
+        WM_POWERBROADCAST if w.0 == PBT_APMSUSPEND as usize => {
+            // Suspend can arrive without a preceding session lock. Revoke the
+            // Pad's unlocked surface before Windows freezes this UI thread;
+            // resuming must require a fresh unlock rather than repainting old
+            // memo controls.
+            if !app.is_null() {
+                // SAFETY: this host owns `app` on its UI thread.
+                let app = unsafe { &mut *app };
+                if let Some(pad) = app.pad.as_ref() {
+                    pad.mask_for_session();
                 }
             }
             LRESULT(1)
