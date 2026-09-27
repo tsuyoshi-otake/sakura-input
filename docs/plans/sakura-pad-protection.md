@@ -37,7 +37,13 @@ Pad 全 UI 経路や予備キー管理の完了を意味しない。TOTP サイ�
 実機 Pad UI テストが終了しなかった一因は、長い OS 認証中に隔離テスト用
 エンジンの WatchUi 更新が止まり、renderer の15秒の監視期限を超えたことだった。
 3秒ごとのテスト用更新を追加し、18秒の隔離 UI テストで終了まで確認した。
-実機 UI の登録完了・終了までの一連のテストは引き続き未合格。
+その後、実機の Pad 全体保護 UI は登録・復旧確認・解除・終了まで一度通過した。
+一方、更新を保った別の実機試行は PIN・タッチ２回の後も180秒間登録中のまま
+だった。原因を断定せず、秘密を含まない段階診断を残している。
+メモ単位の TOTP は隔離した実 UI で登録・コード確認・再解除まで通過した。
+Windows スリープ通知の模擬入力では、Pad の表示内容を消して再認証を要求した。
+設定ページには即時ロックと保護画面への入口を追加した。保護状態の直接表示、
+方法変更・予備キー管理、実スリープでの計測はまだ行っていない。
 実機検証は YubiKey 5 NFC firmware 5.4.3 で行った。登録では Windows の
 legacy `hmac-secret` extension が必要だった。仕様上の PRF 値は Windows API 側で
 WebAuthn PRF 値へ変換される（[Microsoft `webauthn.h`](https://github.com/microsoft/webauthn/blob/master/webauthn.h)）。

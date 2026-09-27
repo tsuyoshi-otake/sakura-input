@@ -164,16 +164,24 @@ fn register_for_salt(
     let register_challenge = random_32()?;
     // Reserve half the caller's total budget for the second touch. Any
     // unused registration time remains available to the assertion.
+    crate::pad_debug("hardware:register:start");
     let credential = pad_webauthn::register(
         parent,
         &user_id,
         &register_challenge,
         timeout / 2,
         cancellation,
-    )?;
+    );
+    crate::pad_debug(if credential.is_ok() {
+        "hardware:register:ok"
+    } else {
+        "hardware:register:error"
+    });
+    let credential = credential?;
     ensure_active(cancellation)?;
     let assertion_challenge = random_32()?;
     let remaining = remaining_timeout(timeout, started)?;
+    crate::pad_debug("hardware:assert:start");
     let prf = pad_webauthn::assert_prf(
         parent,
         &credential.id,
@@ -181,7 +189,13 @@ fn register_for_salt(
         &assertion_challenge,
         remaining,
         cancellation,
-    )?;
+    );
+    crate::pad_debug(if prf.is_ok() {
+        "hardware:assert:ok"
+    } else {
+        "hardware:assert:error"
+    });
+    let prf = prf?;
     ensure_active(cancellation)?;
     Ok((credential.id, prf))
 }

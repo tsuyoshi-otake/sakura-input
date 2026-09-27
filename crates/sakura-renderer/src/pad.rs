@@ -116,6 +116,7 @@ const PROTECTED_CLIPBOARD_LIFETIME_MS: u32 = 15_000;
 const WM_PAD_UNLOCK_FINISHED: u32 = WM_APP + 7;
 const WM_PAD_MASK_FOR_SESSION: u32 = WM_APP + 8;
 const WM_PAD_SECURITY_FINISHED: u32 = WM_APP + 11;
+const WM_PAD_OPEN_PROTECTION: u32 = WM_APP + 12;
 const MAX_PASSWORD_UTF16_UNITS: usize = 256;
 
 /// Keep Windows-specific failure classification at the UI orchestration boundary.
@@ -1726,6 +1727,16 @@ impl PadWindow {
         }
     }
 
+    /// Enter the same whole-Pad protection flow as the Pad's own protection
+    /// button. A locked Pad remains on its unlock screen until authenticated.
+    pub fn open_protection_settings(&self) {
+        // SAFETY: this Pad owns the live HWND and handles this data-free
+        // message on its UI thread.
+        unsafe {
+            let _ = SendMessageW(self.hwnd, WM_PAD_OPEN_PROTECTION, None, None);
+        }
+    }
+
     #[cfg(debug_assertions)]
     pub fn is_visible(&self) -> bool {
         // SAFETY: the window is live for the lifetime of this object.
@@ -3303,9 +3314,10 @@ fn draw_row(item: &DRAWITEMSTRUCT, state: &PadState, colors: Palette, dpi: u32) 
         colors.ink
     };
     let previous = select_font(item.hDC, state.fonts.body);
+    let row_title = pad_list::display_title(&state.document, memo, &projection);
     text(
         item.hDC,
-        projection.title(),
+        &row_title,
         RECT {
             left: inner_left,
             top: row.top,
@@ -6114,6 +6126,7 @@ impl PadState {
         let spawn = thread::Builder::new()
             .name("sakura-pad-enroll".to_owned())
             .spawn(move || {
+                crate::pad_debug("enroll:prepare:start");
                 let mut engine = PadProtectionEngine::new(Duration::from_secs(15));
                 let prepared = match (source_v4, method) {
                     (true, ProtectionMethod::Password) => engine
@@ -6153,6 +6166,11 @@ impl PadState {
                         })
                         .map(|(prepared, key)| (PreparedEnrollment::Legacy(prepared), key)),
                 };
+                crate::pad_debug(if prepared.is_ok() {
+                    "enroll:prepare:ok"
+                } else {
+                    "enroll:prepare:error"
+                });
                 let result = match prepared {
                     Ok((prepared, key)) => {
                         if sender
@@ -6167,18 +6185,29 @@ impl PadState {
                         }
                         // SAFETY: a destroyed HWND makes posting fail. The
                         // UI receiver checks the epoch before displaying.
-                        unsafe {
-                            let _ = PostMessageW(
+                        let posted = unsafe {
+                            PostMessageW(
                                 Some(HWND(raw_window as *mut c_void)),
                                 WM_PAD_ENROLL_FINISHED,
                                 WPARAM(0),
                                 LPARAM(0),
-                            );
-                        }
-                        if confirmation_receiver
+                            )
+                        };
+                        crate::pad_debug(if posted.is_ok() {
+                            "enroll:recovery:posted"
+                        } else {
+                            "enroll:recovery:post-error"
+                        });
+                        let approved = confirmation_receiver
                             .recv_timeout(Duration::from_secs(600))
-                            .is_ok_and(|approved| approved)
-                        {
+                            .is_ok_and(|approved| approved);
+                        crate::pad_debug(if approved {
+                            "enroll:confirmation:approved"
+                        } else {
+                            "enroll:confirmation:rejected-or-timeout"
+                        });
+                        if approved {
+                            crate::pad_debug("enroll:commit:start");
                             EnrollTaskResult::Finished(match prepared {
                                 PreparedEnrollment::Legacy(prepared) => {
                                     engine.confirm_recoverable_enroll(&store, prepared)
@@ -6193,6 +6222,7 @@ impl PadState {
                     }
                     Err(error) => EnrollTaskResult::Finished(Err(error)),
                 };
+                crate::pad_debug("enroll:result:ready");
                 let source_exact = !matches!(&result, EnrollTaskResult::Finished(Ok(())))
                     && if source_v4 {
                         store.load_v4().is_ok_and(|loaded| {
@@ -6215,14 +6245,19 @@ impl PadState {
                     // SAFETY: raw_window came from the Pad HWND before this
                     // thread started. A stale HWND is harmless: the UI-side
                     // receiver and epoch gate any eventual message.
-                    unsafe {
-                        let _ = PostMessageW(
+                    let posted = unsafe {
+                        PostMessageW(
                             Some(HWND(raw_window as *mut c_void)),
                             WM_PAD_ENROLL_FINISHED,
                             WPARAM(0),
                             LPARAM(0),
-                        );
-                    }
+                        )
+                    };
+                    crate::pad_debug(if posted.is_ok() {
+                        "enroll:result:posted"
+                    } else {
+                        "enroll:result:post-error"
+                    });
                 }
             });
         if spawn.is_err() {
@@ -6273,11 +6308,13 @@ impl PadState {
     }
 
     fn finish_enrollment(&mut self, window: HWND) {
+        crate::pad_debug("enroll:ui:handler");
         let Some(completion) = self
             .enroll_result
             .as_ref()
             .and_then(|rx| rx.try_recv().ok())
         else {
+            crate::pad_debug("enroll:ui:no-result");
             return;
         };
         if completion.epoch != self.enroll_epoch || self.enroll_phase != EnrollPhase::Running {
@@ -6290,6 +6327,7 @@ impl PadState {
             return;
         }
         if let EnrollTaskResult::RecoveryReady(key) = &completion.result {
+            crate::pad_debug("enroll:ui:recovery-ready");
             if self.pad_enroll_masked {
                 if let Some(confirmation) = self.pad_recovery_confirmation.take() {
                     let _ = confirmation.send(false);
@@ -6306,6 +6344,7 @@ impl PadState {
             }
             return;
         }
+        crate::pad_debug("enroll:ui:finished");
         self.enroll_result = None;
         self.pad_recovery_confirmation = None;
         self.pad_hardware_cancel = None;
@@ -6395,15 +6434,9 @@ impl PadState {
                     FailureReason::UserCancelledOrTimedOut => {
                         "キー登録を中止または時間切れ。メモ別保護は継続"
                     }
-                    FailureReason::UnsupportedHardware => {
-                        "端末・キーが非対応。メモ別保護は継続"
-                    }
-                    FailureReason::HardwareBusy => {
-                        "キーが使用中。メモ別保護は継続"
-                    }
-                    FailureReason::Unavailable => {
-                        "キーを利用できません。メモ別保護は継続"
-                    }
+                    FailureReason::UnsupportedHardware => "端末・キーが非対応。メモ別保護は継続",
+                    FailureReason::HardwareBusy => "キーが使用中。メモ別保護は継続",
+                    FailureReason::Unavailable => "キーを利用できません。メモ別保護は継続",
                     _ => "Pad 全体の保護を中止しました。メモ別保護は継続しています",
                 }
             } else {
@@ -6411,15 +6444,9 @@ impl PadState {
                     FailureReason::UserCancelledOrTimedOut => {
                         "キー登録を中止または時間切れ。再試行できます"
                     }
-                    FailureReason::UnsupportedHardware => {
-                        "端末・キーが非対応です。Pad は未保護"
-                    }
-                    FailureReason::HardwareBusy => {
-                        "キーが使用中です。少し待って再試行"
-                    }
-                    FailureReason::Unavailable => {
-                        "キーを利用できません。接続を確認"
-                    }
+                    FailureReason::UnsupportedHardware => "端末・キーが非対応です。Pad は未保護",
+                    FailureReason::HardwareBusy => "キーが使用中です。少し待って再試行",
+                    FailureReason::Unavailable => "キーを利用できません。接続を確認",
                     _ => "保護できませんでした。Pad は保護されていません",
                 }
             };
@@ -7310,7 +7337,8 @@ impl PadState {
                                 title: &open.title,
                                 body: &open.body,
                             });
-                        pad_list::projection(memo, opened).title().to_owned()
+                        let projection = pad_list::projection(memo, opened);
+                        pad_list::display_title(&self.document, memo, &projection)
                     })
                     .unwrap_or_else(|| pad_list::UNTITLED.to_owned());
                 let mut wide: Vec<u16> = label.encode_utf16().collect();
@@ -7330,7 +7358,11 @@ impl PadState {
             let _ = SendMessageW(self.list, LB_SETCURSEL, Some(selected), Some(LPARAM(0)));
         }
         let total = self.document.live().count();
-        let heading = if self.query.is_empty() {
+        let heading = if !self.query.is_empty() && self.pane == PadPane::List {
+            // The folded list has no editor status control. Put the search
+            // scope beside the list itself while it is the visible pane.
+            pad_list::LOCKED_SEARCH_HINT.to_owned()
+        } else if self.query.is_empty() {
             format!("メモ帳（{total}）")
         } else {
             format!("メモ帳（{}/{total}）", self.rows.len())
@@ -7397,7 +7429,14 @@ impl PadState {
     /// is the newer fact. A notice then expires and gives the row back; a
     /// state stays until its successor replaces it.
     fn status_line(&self) -> String {
-        self.status_message.clone()
+        if self.query.is_empty() {
+            return self.status_message.clone();
+        }
+        if self.status_message.is_empty() {
+            pad_list::LOCKED_SEARCH_HINT.to_owned()
+        } else {
+            format!("{} · {}", self.status_message, pad_list::LOCKED_SEARCH_HINT)
+        }
     }
 
     /// How wide the status reading is asking its slot to be, in device pixels.
@@ -7702,11 +7741,9 @@ impl PadState {
                 title: &open.title,
                 body: &open.body,
             });
-        let label: Vec<u16> = pad_list::projection(memo, opened)
-            .title()
-            .encode_utf16()
-            .chain(Some(0))
-            .collect();
+        let projection = pad_list::projection(memo, opened);
+        let title = pad_list::display_title(&self.document, memo, &projection);
+        let label: Vec<u16> = title.encode_utf16().chain(Some(0)).collect();
         let selection = selected_row(self.list).unwrap_or(usize::MAX);
         // SAFETY: the list belongs to this state and the string outlives the
         // synchronous insert. These messages do not send selection notifications.
@@ -7772,6 +7809,9 @@ impl PadState {
             return;
         }
         self.pane = pane;
+        if pane == PadPane::List && !self.query.is_empty() {
+            self.refresh_list();
+        }
         update_layout(self, window);
         // SAFETY: the window and control are live children of this pad.
         unsafe {
@@ -7940,6 +7980,7 @@ impl PadState {
         }
         self.query = get_control_text(self.search, MAX_QUERY_UTF16_UNITS);
         self.refresh_list();
+        self.update_status();
         self.invalidate_rows();
     }
 
@@ -8471,6 +8512,18 @@ extern "system" fn pad_procedure(window: HWND, message: u32, w: WPARAM, l: LPARA
                 let _ = ShowWindow(window, SW_HIDE);
             }
             LRESULT(1)
+        }
+        WM_PAD_OPEN_PROTECTION if !state_ptr.is_null() => {
+            // SAFETY: this message is dispatched on the Pad's UI thread.
+            let state = unsafe { &mut *state_ptr };
+            if !state.locked && state.enroll_phase == EnrollPhase::None {
+                if state.protected_session_seen && !state.v4_mode {
+                    state.show_security_settings(window);
+                } else {
+                    state.show_enroll_prompt(window);
+                }
+            }
+            LRESULT(0)
         }
         WM_WTSSESSION_CHANGE if !state_ptr.is_null() && w.0 == WTS_SESSION_LOCK as usize => {
             // WTS sends this only to registered HWNDs in this session. Keep

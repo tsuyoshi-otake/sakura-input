@@ -1,6 +1,28 @@
 use super::*;
 
 #[test]
+fn pad_actions_use_distinct_registered_renderer_messages() {
+    for (action, name) in [
+        (PadAction::Open, windows::core::w!("SakuraInput.OpenPad.v1")),
+        (PadAction::Lock, windows::core::w!("SakuraInput.LockPad.v1")),
+        (
+            PadAction::OpenProtection,
+            windows::core::w!("SakuraInput.OpenPadProtection.v1"),
+        ),
+    ] {
+        // SAFETY: the test registers process-independent constant names only.
+        let expected = unsafe { RegisterWindowMessageW(name) };
+        // SAFETY: this is another process-independent constant name from the
+        // action's static message contract.
+        let actual = unsafe { RegisterWindowMessageW(action.message()) };
+        assert_ne!(expected, 0);
+        assert_eq!(actual, expected, "{action:?}");
+    }
+    assert_eq!(PadAction::Lock.label(), "Sakura Padをロックする");
+    assert_eq!(PadAction::OpenProtection.label(), "保護の設定を開く");
+}
+
+#[test]
 fn combo_mappings_cover_every_mode_suggest_binding_and_dictionary_format() {
     for mode in Mode::ALL {
         assert_eq!(mode_from_index(Some(mode_index(mode))), Ok(mode));
