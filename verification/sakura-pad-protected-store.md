@@ -8,8 +8,14 @@ protection. No migration of the user's actual Pad, installation, or release is
 claimed here. Per-memo password, recovery-key, and WebAuthn PRF protection has
 separate evidence in `sakura-pad-memo-protection.md`. A physical YubiKey 5 NFC
 (firmware 5.4.3) successfully enrolled and reopened an isolated whole-Pad store
-through the real worker. This verifies the exercised API/storage path, not the
-full Pad UI flow or spare-key management. TOTP is local confirmation backed by a current-user DPAPI
+through the real worker. The physical native Pad UI also reached recovery
+confirmation and reopened the correct title/body. Its original long-running
+fixture stopped its watch feed after the renderer's 15-second idle deadline;
+the Pad correctly vetoed that premature shutdown during registration. A
+three-second fixture heartbeat now has an 18-second native regression test,
+but the latest physical registration with the heartbeat did not complete
+within 180 seconds. Spare-key management remains
+open. TOTP is local confirmation backed by a current-user DPAPI
 sidecar; it is not independent cryptographic protection or online 2FA.
 
 ## Rubric
@@ -66,8 +72,11 @@ data remain separate acceptance criteria in
   The isolated native UI passed key display/confirmation before cutover,
   recovery unlock, password unlock after reopening, cancellation with legacy
   writer restoration, and key erasure on a simulated Windows session lock.
-- Physical YubiKey 5 NFC, firmware 5.4.3: `pad_hardware::tests::physical_yubikey5_pad_prf_enroll_and_reopen` passed with repeated enrollment using the same PRF secret. The isolated real-worker test `pad_protection::process_tests::physical_yubikey5_seals_and_reopens_isolated_whole_pad` also passed, covering whole-Pad protected sealing and reopening. The PRF-only attempt failed with `PrfUnavailable`; adding the Windows legacy `hmac-secret` extension to registration fixed the exercised path. The complete Pad UI key test reached decrypted content once but failed teardown, and a later registration attempt timed out before recovery setup; it remains unverified. No device serial is recorded.
-- During WebAuthn calls the Pad parent releases its topmost z-order, restores it on completion, and rejects overlapping requests. A focused native-window test passed. Visibility of the actual Windows Security prompt over the real Pad remains to be observed.
+- Physical YubiKey 5 NFC, firmware 5.4.3: `pad_hardware::tests::physical_yubikey5_pad_prf_enroll_and_reopen` passed with repeated enrollment using the same PRF secret. The isolated real-worker test `pad_protection::process_tests::physical_yubikey5_seals_and_reopens_isolated_whole_pad` also passed, covering whole-Pad protected sealing and reopening. The PRF-only attempt failed with `PrfUnavailable`; adding the Windows legacy `hmac-secret` extension to registration fixed the exercised path. In native Pad UI tests, one registration attempt ended before recovery setup despite the user completing both PIN/touch prompts; later runs reached recovery-key confirmation, reasserted the key, and matched the exact isolated title/body. Those runs failed renderer teardown waits of five and thirty seconds. A scoped exit trace proved that the fixture's 15-second idle watch deadline fired during hardware registration, after which the still-registering Pad correctly vetoed premature renderer shutdown. A fresh registration attempt with a three-second fixture heartbeat stayed open but did not complete within 180 seconds; the user-observed OS dialog outcome for that attempt remains to be confirmed. The automated end-to-end test is not yet green. No device serial is recorded.
+- `pad_ui::long_pad_fixture_keeps_watch_feed_alive` passed: the isolated renderer stayed live for 18 seconds of otherwise idle Pad time with the three-second heartbeat, then exited cleanly on the deliberate engine stop. This bounds the test-fixture cause of the prior teardown failures, not the separate hardware registration timeout.
+- The isolated native whole-Pad TOTP setup/password/code gate test passed after a retry without concurrent desktop typing; it confirmed the protected title/body HWNDs remained absent between password entry and code acceptance.
+- During WebAuthn calls the Pad parent releases its topmost z-order, restores it on completion, and rejects overlapping requests. A focused native-window test passed. The user confirmed seeing and completing both Windows Security PIN/touch prompts over the physical Pad UI test.
+- The internal Version 8-M TOTP QR encoder passed dependency policy. Independent ZXing-cpp 2.3.0 decoding recovered the exact dummy Pad otpauth URI and a maximum-length 152-byte payload; no real TOTP secret left the test process.
 - Password-entry labeling was improved so the field remains visibly identified while editing; this is a focused UX change, not completion of the planned visual/accessibility matrix.
 - Storage cutover/fault tests: 31 pass; protected actor tests: four pass.
 - The quiet runner's workflow self-test passed after the new CI step was
