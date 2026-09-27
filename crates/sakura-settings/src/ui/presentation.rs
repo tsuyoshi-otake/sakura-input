@@ -748,11 +748,14 @@ mod tests {
     }
 
     #[test]
-    fn pad_action_names_and_two_row_layout_fit_without_scrolling() {
+    fn pad_action_names_and_two_row_layout_are_reachable_at_supported_dpi() {
         let mut fixture = NativeFixture::new();
         let app = &mut fixture.app;
         for dpi in [96, 120, 144, 192] {
-            let width = scale_dpi_value(WINDOW_WIDTH, 96, dpi).min(1366);
+            // At 192 DPI, constrain the work area to cover the horizontal
+            // scroll path that smaller CI desktops must use.
+            let width =
+                scale_dpi_value(WINDOW_WIDTH, 96, dpi).min(if dpi == 192 { 960 } else { 1366 });
             let height = scale_dpi_value(WINDOW_HEIGHT, 96, dpi).min(728);
             app.apply_dpi_change(
                 dpi,
@@ -766,6 +769,12 @@ mod tests {
             app.show_panel(0);
             app.show_topic_controls(INPUT_TOPIC_PAD);
             let view = screen_rect(app.panels[0]);
+            if dpi == 192 {
+                assert!(
+                    screen_rect(app.general.pad_lock).right > view.right,
+                    "the constrained 192 DPI case must exercise horizontal focus scrolling"
+                );
+            }
             let actions = [
                 (app.general.pad_open, "Sakura Padを開く"),
                 (app.general.pad_lock, "今すぐロック"),
@@ -773,13 +782,31 @@ mod tests {
             ];
             for (window, name) in actions {
                 assert_eq!(window_text(window), name, "native/UIA name at {dpi} DPI");
-                let rect = screen_rect(window);
+                let initial = screen_rect(window);
                 assert!(
+                    initial.top >= view.top && initial.bottom <= view.bottom,
+                    "Pad action {name} stays vertically visible at {dpi} DPI: {initial:?}, {view:?}"
+                );
+                if dpi == 96 {
+                    assert!(
+                        initial.left >= view.left && initial.right <= view.right,
+                        "Pad action {name} fits without horizontal scrolling at 96 DPI"
+                    );
+                }
+                app.presentation.reveal_focus(window);
+                let rect = screen_rect(window);
+                let view = screen_rect(app.panels[0]);
+                let margin = scale_dpi_value(8, 96, dpi);
+                let horizontally_reachable = if rect.right - rect.left <= view.right - view.left {
+                    rect.left >= view.left && rect.right <= view.right
+                } else {
                     rect.left >= view.left
-                        && rect.right <= view.right
-                        && rect.top >= view.top
-                        && rect.bottom <= view.bottom,
-                    "Pad action {name} fits in the viewport at {dpi} DPI: {rect:?}, {view:?}"
+                        && rect.left <= view.left + margin
+                        && rect.right > view.right
+                };
+                assert!(
+                    horizontally_reachable && rect.top >= view.top && rect.bottom <= view.bottom,
+                    "Pad action {name} is reachable at {dpi} DPI: {rect:?}, {view:?}"
                 );
             }
             let open = screen_rect(app.general.pad_open);
