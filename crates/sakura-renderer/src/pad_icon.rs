@@ -87,6 +87,9 @@ pub(crate) enum PadIcon {
     Sync,
     Copy,
     Trash,
+    Lock,
+    Shield,
+    Settings,
 }
 
 /// The side of an icon's box at this DPI.
@@ -488,6 +491,51 @@ fn figures(icon: PadIcon, ink: &Ink) {
             ink.stroke(&[(8.5, 9.0), (10.5, 26.5), (21.5, 26.5), (23.5, 9.0)]);
             ink.stroke(&[(13.5, 13.0), (13.5, 22.5)]);
             ink.stroke(&[(18.5, 13.0), (18.5, 22.5)]);
+        }
+        // Memo protection is a lock: a closed shackle over a broad body.
+        PadIcon::Lock => {
+            let mut shackle = Vec::new();
+            arc(&mut shackle, (16.0, 13.0), 6.0, 180.0, 360.0);
+            ink.stroke(&shackle);
+            ink.stroke(&rounded_rect(7.0, 13.0, 25.0, 27.0, 2.0));
+            ink.stroke(&[(16.0, 18.0), (16.0, 22.0)]);
+        }
+        // Pad-wide settings use a shield so the broader scope reads apart
+        // from the per-memo lock.
+        PadIcon::Shield => {
+            ink.stroke(&[
+                (16.0, 4.5),
+                (26.0, 8.5),
+                (25.0, 18.0),
+                (21.0, 24.0),
+                (16.0, 28.0),
+                (11.0, 24.0),
+                (7.0, 18.0),
+                (6.0, 8.5),
+                (16.0, 4.5),
+            ]);
+            ink.stroke(&[(11.0, 16.0), (14.5, 19.5), (21.0, 12.5)]);
+        }
+        // A gear marks the legacy protected-session action as settings.
+        PadIcon::Settings => {
+            let mut ring = Vec::with_capacity(32);
+            arc(&mut ring, (16.0, 16.0), 7.0, 0.0, 360.0);
+            ink.stroke(&ring);
+            let mut hub = Vec::with_capacity(24);
+            arc(&mut hub, (16.0, 16.0), 2.5, 0.0, 360.0);
+            ink.stroke(&hub);
+            for (a, b) in [
+                ((16.0, 4.5), (16.0, 8.0)),
+                ((16.0, 24.0), (16.0, 27.5)),
+                ((4.5, 16.0), (8.0, 16.0)),
+                ((24.0, 16.0), (27.5, 16.0)),
+                ((7.9, 7.9), (10.4, 10.4)),
+                ((21.6, 21.6), (24.1, 24.1)),
+                ((24.1, 7.9), (21.6, 10.4)),
+                ((10.4, 21.6), (7.9, 24.1)),
+            ] {
+                ink.stroke(&[a, b]);
+            }
         }
     }
 }
