@@ -1,5 +1,62 @@
 use super::*;
 
+#[test]
+fn settings_status_code_covers_method_lock_and_failure() {
+    assert_eq!(pad_status_code(false, false, false, None, false), 1);
+    assert_eq!(pad_status_code(true, true, false, None, false), 9);
+    for (hint, unlocked, locked) in [(None, 2, 3), (Some(false), 4, 5), (Some(true), 6, 7)] {
+        assert_eq!(pad_status_code(false, true, false, hint, false), unlocked);
+        assert_eq!(pad_status_code(false, true, true, hint, false), locked);
+        assert_eq!(pad_status_code(false, true, true, hint, true), 8);
+    }
+    assert_eq!(pad_status_code(false, false, true, None, true), 8);
+}
+
+#[test]
+fn settings_lock_reply_requires_completed_mask_and_revoked_session() {
+    assert_eq!(pad_mask_reply(true, true, true, true, true, true, true), 1);
+    assert_eq!(
+        pad_mask_reply(true, false, false, true, true, true, true),
+        1
+    );
+    // The old reply accepted enrollment completion even when the actual
+    // protected lock failed and kept its authenticated save actor.
+    assert_eq!(
+        pad_mask_reply(true, true, false, false, true, true, true),
+        3
+    );
+    assert_eq!(pad_mask_reply(true, true, true, false, true, true, true), 3);
+    assert_eq!(
+        pad_mask_reply(false, true, false, false, true, true, true),
+        3
+    );
+    assert_eq!(pad_mask_reply(true, true, true, true, false, true, true), 3);
+    assert_eq!(pad_mask_reply(true, true, true, true, true, false, true), 3);
+    assert_eq!(pad_mask_reply(true, true, true, true, true, true, false), 3);
+}
+
+#[test]
+fn closed_pad_status_distinguishes_empty_store_from_unreadable_data() {
+    let root =
+        std::path::PathBuf::from(std::env::var_os("USERPROFILE").expect("USERPROFILE")).join("tmp");
+    std::fs::create_dir_all(&root).expect("create ~/tmp");
+    let directory = root.join(format!(
+        "sakura-pad-closed-status-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("clock")
+            .as_nanos()
+    ));
+    assert!(directory.starts_with(&root));
+    std::fs::create_dir(&directory).expect("create isolated store");
+    let store = PadStore::at(&directory);
+    assert_eq!(PadWindow::closed_protection_status(&store), 1);
+    std::fs::write(store.path(), b"unreadable Pad image").expect("write corrupt fixture");
+    assert_eq!(PadWindow::closed_protection_status(&store), 8);
+    std::fs::remove_dir_all(&directory).expect("remove isolated store");
+}
+
 const DPIS: [u32; 3] = [96, 144, 192];
 
 /// The widths a status reading can ask its slot for: nothing to say, the

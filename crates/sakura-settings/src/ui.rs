@@ -82,17 +82,18 @@ use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, FindWindowW, GetClientRect, GetMessageW, GetParent, GetWindow,
     GetWindowLongPtrW, GetWindowRect, GetWindowTextLengthW, GetWindowTextW, IsDialogMessageW,
     IsIconic, LoadCursorW, LoadImageW, MessageBoxW, PostMessageW, PostQuitMessage, RegisterClassW,
-    RegisterWindowMessageW, SendMessageW, SetForegroundWindow, SetWindowLongPtrW, SetWindowPos,
-    SetWindowTextW, ShowWindow, SystemParametersInfoW, TranslateMessage, BM_GETCHECK, BM_SETCHECK,
-    BS_AUTOCHECKBOX, BS_AUTORADIOBUTTON, BS_DEFPUSHBUTTON, BS_OWNERDRAW, BS_PUSHBUTTON,
-    BS_TYPEMASK, CBN_SELCHANGE, CBS_DROPDOWNLIST, CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL,
-    CW_USEDEFAULT, ES_AUTOHSCROLL, ES_AUTOVSCROLL, ES_MULTILINE, ES_PASSWORD, ES_READONLY,
-    ES_WANTRETURN, GWLP_USERDATA, GWL_STYLE, GW_CHILD, GW_ENABLEDPOPUP, GW_HWNDNEXT, GW_OWNER,
-    ICON_BIG, ICON_SMALL, IDC_ARROW, IDYES, IMAGE_ICON, LBN_SELCHANGE, LBS_NOINTEGRALHEIGHT,
-    LBS_NOTIFY, LB_ADDSTRING, LB_GETCURSEL, LB_RESETCONTENT, LB_SETCURSEL, LR_LOADFROMFILE,
-    MB_ICONERROR, MB_ICONINFORMATION, MB_ICONWARNING, MB_OK, MB_YESNO, MSG, SPI_GETHIGHCONTRAST,
-    SWP_FRAMECHANGED, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_RESTORE,
-    SW_SHOW, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_CLOSE,
+    RegisterWindowMessageW, SendMessageTimeoutW, SendMessageW, SetForegroundWindow,
+    SetWindowLongPtrW, SetWindowPos, SetWindowTextW, ShowWindow, SystemParametersInfoW,
+    TranslateMessage, BM_GETCHECK, BM_SETCHECK, BS_AUTOCHECKBOX, BS_AUTORADIOBUTTON,
+    BS_DEFPUSHBUTTON, BS_OWNERDRAW, BS_PUSHBUTTON, BS_TYPEMASK, CBN_SELCHANGE, CBS_DROPDOWNLIST,
+    CB_ADDSTRING, CB_GETCURSEL, CB_SETCURSEL, CW_USEDEFAULT, ES_AUTOHSCROLL, ES_AUTOVSCROLL,
+    ES_MULTILINE, ES_PASSWORD, ES_READONLY, ES_WANTRETURN, GWLP_USERDATA, GWL_STYLE, GW_CHILD,
+    GW_ENABLEDPOPUP, GW_HWNDNEXT, GW_OWNER, ICON_BIG, ICON_SMALL, IDC_ARROW, IDYES, IMAGE_ICON,
+    LBN_SELCHANGE, LBS_NOINTEGRALHEIGHT, LBS_NOTIFY, LB_ADDSTRING, LB_GETCURSEL, LB_RESETCONTENT,
+    LB_SETCURSEL, LR_LOADFROMFILE, MB_ICONERROR, MB_ICONINFORMATION, MB_ICONWARNING, MB_OK,
+    MB_YESNO, MSG, SMTO_ABORTIFHUNG, SPI_GETHIGHCONTRAST, SWP_FRAMECHANGED, SWP_NOACTIVATE,
+    SWP_NOMOVE, SWP_NOSIZE, SWP_NOZORDER, SW_HIDE, SW_RESTORE, SW_SHOW,
+    SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS, WINDOW_EX_STYLE, WINDOW_STYLE, WM_APP, WM_CLOSE,
     WM_COMMAND, WM_CTLCOLORBTN, WM_CTLCOLOREDIT, WM_CTLCOLORLISTBOX, WM_CTLCOLORSTATIC, WM_DESTROY,
     WM_DPICHANGED, WM_DRAWITEM, WM_ERASEBKGND, WM_KEYDOWN, WM_NOTIFY, WM_SETFONT, WM_SETICON,
     WM_SETTINGCHANGE, WM_THEMECHANGED, WNDCLASSW, WS_CAPTION, WS_CHILD, WS_CLIPCHILDREN,
@@ -111,6 +112,7 @@ const RENDERER_HOST_CLASS: PCWSTR = windows::core::w!("SakuraInputRenderer");
 const PAD_OPEN_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.OpenPad.v1");
 const PAD_LOCK_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.LockPad.v1");
 const PAD_PROTECTION_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.OpenPadProtection.v1");
+const PAD_STATUS_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.PadStatus.v1");
 /// The class of the hidden window that owns the settings window.
 ///
 /// It exists for one reason: an unowned top-level window gets a taskbar
@@ -223,6 +225,7 @@ const INPUT_TREE_LABELS: [&str; 14] = [
 struct GeneralControls {
     basic_panel: HWND,
     pad_panel: HWND,
+    pad_status: HWND,
     pad_open: HWND,
     pad_lock: HWND,
     pad_protection: HWND,
@@ -753,7 +756,6 @@ fn activate_existing_window() -> bool {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PadAction {
     Open,
-    Lock,
     OpenProtection,
 }
 
@@ -761,7 +763,6 @@ impl PadAction {
     const fn message(self) -> PCWSTR {
         match self {
             Self::Open => PAD_OPEN_MESSAGE,
-            Self::Lock => PAD_LOCK_MESSAGE,
             Self::OpenProtection => PAD_PROTECTION_MESSAGE,
         }
     }
@@ -769,7 +770,6 @@ impl PadAction {
     const fn label(self) -> &'static str {
         match self {
             Self::Open => "Sakura Padを開く",
-            Self::Lock => "Sakura Padをロックする",
             Self::OpenProtection => "保護の設定を開く",
         }
     }
@@ -795,6 +795,88 @@ fn request_pad_action(action: PadAction) -> Result<(), String> {
     // processes. USER32 validates the HWND and reports a failed queue attempt.
     unsafe { PostMessageW(Some(host), message, WPARAM(0), LPARAM(0)) }
         .map_err(|_| format!("rendererに{}依頼を送信できませんでした。", action.label()))
+}
+
+/// A bounded, data-free request to the renderer's UI thread. Zero is reserved
+/// for an unavailable/invalid reply; no cross-process pointer is exchanged.
+fn request_pad_scalar(message_name: PCWSTR) -> Result<usize, String> {
+    // SAFETY: both class name and title sentinel are immutable process-local
+    // values; the returned HWND is used only for a bounded scalar request.
+    let host = unsafe { FindWindowW(RENDERER_HOST_CLASS, PCWSTR::null()) }
+        .map_err(|_| "Padから応答がありません".to_owned())?;
+    // SAFETY: the caller supplies a static registered-message name; Windows
+    // copies its characters and returns a numeric message identifier.
+    let message = unsafe { RegisterWindowMessageW(message_name) };
+    if message == 0 {
+        return Err("Padの状態照会を登録できませんでした。".to_owned());
+    }
+    let mut result = 0usize;
+    // SAFETY: the registered message and zero parameters contain no process
+    // pointers or secrets. The renderer owns the returned scalar value.
+    let delivered = unsafe {
+        SendMessageTimeoutW(
+            host,
+            message,
+            WPARAM(0),
+            LPARAM(0),
+            SMTO_ABORTIFHUNG,
+            2_000,
+            Some(&mut result),
+        )
+    };
+    if delivered.0 == 0 || result == 0 {
+        return Err("Padから応答がありません".to_owned());
+    }
+    Ok(result)
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum PadStatus {
+    Unprotected,
+    PasswordUnlocked,
+    PasswordLocked,
+    KeyUnlocked,
+    KeyLocked,
+    PasswordKeyUnlocked,
+    PasswordKeyLocked,
+    Unavailable,
+    MemoProtected,
+}
+
+impl PadStatus {
+    fn from_wire(value: usize) -> Option<Self> {
+        Some(match value {
+            1 => Self::Unprotected,
+            2 => Self::PasswordUnlocked,
+            3 => Self::PasswordLocked,
+            4 => Self::KeyUnlocked,
+            5 => Self::KeyLocked,
+            6 => Self::PasswordKeyUnlocked,
+            7 => Self::PasswordKeyLocked,
+            8 => Self::Unavailable,
+            9 => Self::MemoProtected,
+            _ => return None,
+        })
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Unprotected => "Pad全体: 未保護",
+            Self::PasswordUnlocked => "Pad全体: パスワード保護・解除中",
+            Self::PasswordLocked => "Pad全体: パスワード保護・ロック中",
+            Self::KeyUnlocked => "Pad全体: セキュリティキー保護・解除中",
+            Self::KeyLocked => "Pad全体: セキュリティキー保護・ロック中",
+            Self::PasswordKeyUnlocked => "Pad全体: パスワード＋キー保護・解除中",
+            Self::PasswordKeyLocked => "Pad全体: パスワード＋キー保護・ロック中",
+            Self::Unavailable => "Pad全体: 状態を確認できません（復旧が必要）",
+            Self::MemoProtected => "Pad全体: 未保護（メモ別保護を使用）",
+        }
+    }
+}
+
+fn query_pad_status() -> Result<PadStatus, String> {
+    let value = request_pad_scalar(PAD_STATUS_MESSAGE)?;
+    PadStatus::from_wire(value).ok_or_else(|| "Padの状態を読み取れません".to_owned())
 }
 
 pub fn run() -> Result<(), String> {
@@ -961,16 +1043,26 @@ impl App {
         if source == self.general.pad_open {
             request_pad_action(PadAction::Open)?;
             self.set_status("Sakura Padを開く依頼をrendererへ送信しました。");
+            self.refresh_pad_status();
             return Ok(());
         }
         if source == self.general.pad_lock {
-            request_pad_action(PadAction::Lock)?;
-            self.set_status("Sakura Padのロック依頼をrendererへ送信しました。");
+            match request_pad_scalar(PAD_LOCK_MESSAGE)? {
+                1 => self.set_status("Sakura Padのロック処理が完了しました。"),
+                2 => self.set_status("Sakura Padはまだ開かれていません。"),
+                3 => {
+                    self.refresh_pad_status();
+                    return Err("Padの保護処理中です。ロックの完了を確認できません。".to_owned());
+                }
+                _ => return Err("rendererのロック応答を認識できません。".to_owned()),
+            }
+            self.refresh_pad_status();
             return Ok(());
         }
         if source == self.general.pad_protection {
             request_pad_action(PadAction::OpenProtection)?;
             self.set_status("保護設定を開く依頼をrendererへ送信しました。");
+            self.refresh_pad_status();
             return Ok(());
         }
         if source == self.apply {
@@ -1413,6 +1505,16 @@ impl App {
             }
         }
         self.layout();
+        if self.selected_panel == 0 && topic == INPUT_TOPIC_PAD {
+            self.refresh_pad_status();
+        }
+    }
+
+    fn refresh_pad_status(&self) {
+        let text = query_pad_status()
+            .map(|status| status.label().to_owned())
+            .unwrap_or_else(|error| format!("Pad全体: 状態を確認できません（{error}）"));
+        set_text(self.general.pad_status, &text);
     }
 
     fn layout(&mut self) {
@@ -4379,6 +4481,20 @@ unsafe extern "system" fn window_procedure(
     lparam: LPARAM,
 ) -> LRESULT {
     match message {
+        windows::Win32::UI::WindowsAndMessaging::WM_ACTIVATE if wparam.0 & 0xffff != 0 => {
+            // SAFETY: this window stores its live App pointer in GWLP_USERDATA
+            // after construction and clears it before the App is released.
+            let pointer = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut App;
+            if !pointer.is_null() {
+                // SAFETY: the non-null pointer is the App owned by this live
+                // window; activation is handled synchronously on its UI thread.
+                let app = unsafe { &*pointer };
+                if app.selected_panel == 0 && has_visible_style(app.general.pad_panel) {
+                    app.refresh_pad_status();
+                }
+            }
+            LRESULT(0)
+        }
         WM_SIZE => {
             // SAFETY: construction has null user data; normal resize owns a live App.
             let pointer = unsafe { GetWindowLongPtrW(window, GWLP_USERDATA) } as *mut App;

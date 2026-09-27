@@ -125,6 +125,8 @@ const PAD_LOCK_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.LockPad.v1");
 static PAD_LOCK_MESSAGE_ID: OnceLock<u32> = OnceLock::new();
 const PAD_PROTECTION_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.OpenPadProtection.v1");
 static PAD_PROTECTION_MESSAGE_ID: OnceLock<u32> = OnceLock::new();
+const PAD_STATUS_MESSAGE: PCWSTR = windows::core::w!("SakuraInput.PadStatus.v1");
+static PAD_STATUS_MESSAGE_ID: OnceLock<u32> = OnceLock::new();
 
 fn pad_open_message_id() -> u32 {
     *PAD_OPEN_MESSAGE_ID.get_or_init(|| {
@@ -144,6 +146,13 @@ fn pad_protection_message_id() -> u32 {
     *PAD_PROTECTION_MESSAGE_ID.get_or_init(|| {
         // SAFETY: the registered name is valid for this process lifetime.
         unsafe { RegisterWindowMessageW(PAD_PROTECTION_MESSAGE) }
+    })
+}
+
+fn pad_status_message_id() -> u32 {
+    *PAD_STATUS_MESSAGE_ID.get_or_init(|| {
+        // SAFETY: the registered name is valid for this process lifetime.
+        unsafe { RegisterWindowMessageW(PAD_STATUS_MESSAGE) }
     })
 }
 /// A short UI-thread timer gives the pure gesture reducer an explicit timeout
@@ -473,10 +482,27 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
             // SAFETY: this host owns `app` and the Pad on the UI thread.
             let app = unsafe { &mut *app };
             if let Some(pad) = app.pad.as_ref() {
-                pad.mask_for_session();
+                return LRESULT(if pad.mask_for_session() { 1 } else { 3 });
             }
         }
-        return LRESULT(0);
+        return LRESULT(2);
+    }
+    let pad_status_message = pad_status_message_id();
+    if pad_status_message != 0 && message == pad_status_message {
+        if !app.is_null() {
+            // SAFETY: this host owns `app` on the UI thread.
+            let app = unsafe { &mut *app };
+            let status = app.pad.as_ref().map_or_else(
+                || {
+                    pad_storage::PadStore::default()
+                        .map(|store| PadWindow::closed_protection_status(&store))
+                        .unwrap_or(8)
+                },
+                PadWindow::protection_status,
+            );
+            return LRESULT(status as isize);
+        }
+        return LRESULT(8);
     }
     let pad_protection_message = pad_protection_message_id();
     if pad_protection_message != 0 && message == pad_protection_message {
@@ -680,7 +706,7 @@ extern "system" fn procedure(window: HWND, message: u32, w: WPARAM, l: LPARAM) -
                     pad_debug("pad:create-failed");
                 }
             }
-            if let Some(pad) = app.pad.as_ref() {
+            if let Some(pad) = app.pad.as_mut() {
                 pad_debug("pad:show");
                 pad.show_or_focus();
                 #[cfg(debug_assertions)]
