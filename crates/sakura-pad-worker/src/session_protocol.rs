@@ -3,16 +3,17 @@
 use std::io::{self, Read, Write};
 
 pub use sakura_pad_session_proto::{
-    encode_created_recovery, encode_v3_auth_payload, parse_created_recovery, parse_v3_auth_payload,
-    read_request, read_response, write_request, write_response, Operation, Request, Response,
-    Status,
+    encode_change_password_v2_payload, encode_created_recovery, encode_v3_auth_payload,
+    parse_change_password_v2_payload, parse_created_recovery, parse_v3_auth_payload, read_request,
+    read_response, write_request, write_response, Operation, Request, Response, Status,
 };
 use zeroize::Zeroizing;
 
 use crate::envelope::{
-    seal_with_password_and_prf, seal_with_prf, seal_with_recovery, unlock_with_password_and_prf,
-    unlock_with_password_v2, unlock_with_prf, unlock_with_recovery_v2, unlock_with_recovery_v3,
-    RecoveryKey, UnlockedHardwareEnvelope, UnlockedRecoveryEnvelope,
+    rewrap_password_v2, seal_with_password_and_prf, seal_with_prf, seal_with_recovery,
+    unlock_with_password_and_prf, unlock_with_password_v2, unlock_with_prf,
+    unlock_with_recovery_v2, unlock_with_recovery_v3, RecoveryKey, UnlockedHardwareEnvelope,
+    UnlockedRecoveryEnvelope,
 };
 use crate::{seal, unlock, EnvelopeError, Scope, UnlockedEnvelope};
 
@@ -79,12 +80,41 @@ impl Session {
             status: Status::Rejected,
             payload: Zeroizing::new(Vec::new()),
         };
+        // Password replacement consumes the prior authenticated session even
+        // when the request is stale, rejected, or crypto becomes unavailable.
+        if request.operation == Operation::ChangePasswordV2 {
+            self.unlocked = None;
+        }
         if self.shutdown || request.id <= self.last_request_id {
             response.status = Status::Stale;
             return response;
         }
         self.last_request_id = request.id;
         match request.operation {
+            Operation::ChangePasswordV2 => {
+                if request.generation <= self.generation {
+                    response.status = Status::Stale;
+                } else {
+                    self.generation = request.generation;
+                    let result = parse_change_password_v2_payload(&request.payload)
+                        .map_err(|_| EnvelopeError::InvalidInput)
+                        .and_then(|fields| {
+                            rewrap_password_v2(
+                                Scope::pad(request.vault_id),
+                                &request.password,
+                                fields.new_password,
+                                fields.envelope,
+                            )
+                        });
+                    match result {
+                        Ok(envelope) => {
+                            response.status = Status::Success;
+                            response.payload = Zeroizing::new(envelope);
+                        }
+                        Err(error) => response.status = status_for(error),
+                    }
+                }
+            }
             Operation::Unlock
             | Operation::UnlockPasswordV2
             | Operation::UnlockRecoveryV2

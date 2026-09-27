@@ -13,8 +13,8 @@ use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use sakura_pad_session_proto::{
-    encode_v3_auth_payload, parse_created_recovery, Operation, Request, SecretBytes, Status,
-    MAX_PAYLOAD_BYTES,
+    encode_change_password_v2_payload, encode_v3_auth_payload, parse_created_recovery, Operation,
+    Request, SecretBytes, Status, MAX_PAYLOAD_BYTES,
 };
 use windows::Win32::Security::Cryptography::{BCryptGenRandom, BCRYPT_USE_SYSTEM_PREFERRED_RNG};
 use zeroize::Zeroizing;
@@ -625,13 +625,43 @@ impl PadProtectionEngine {
                 document,
                 recovered_from_backup: false,
             })
-        } else if memo_cutover {
-            // A completed memo-protection transition forbids reopening a
-            // pre-protection v3 backup. Authenticate candidates with a fresh
-            // password session, enforce the durable generation floor, and
-            // repair an interrupted primary before exposing an editable Pad.
-            store
-                .recover_protected_memo_cutover(|path| {
+        } else {
+            // A precommit password change may have replaced the backup but
+            // cannot publish a new primary before its committed digest.
+            // Authenticate its old primary and restore the old backup before
+            // allowing any save, including when a protected-memo floor exists.
+            let pending_rewrap = store.recover_pending_protected_rewrap(|path| {
+                let result = self.unlock_path(path, vault_id, &credential, &mut attempt_failure);
+                auth_rejected = attempt_failure == Some(FailureReason::Authentication);
+                result
+            });
+            match pending_rewrap {
+                Ok(Some(document)) => Ok(LoadOutcome {
+                    document,
+                    recovered_from_backup: false,
+                }),
+                Err(error) => Err(error),
+                Ok(None) if memo_cutover => {
+                    // A completed memo-protection transition forbids reopening
+                    // a pre-protection v3 backup. Authenticate candidates,
+                    // enforce the durable generation floor, and repair an
+                    // interrupted primary before exposing an editable Pad.
+                    store
+                        .recover_protected_memo_cutover(|path| {
+                            if auth_rejected {
+                                return Err(StorageError::ProtectedVerification);
+                            }
+                            let result =
+                                self.unlock_path(path, vault_id, &credential, &mut attempt_failure);
+                            auth_rejected = attempt_failure == Some(FailureReason::Authentication);
+                            result
+                        })
+                        .map(|document| LoadOutcome {
+                            document,
+                            recovered_from_backup: false,
+                        })
+                }
+                Ok(None) => store.load_protected(|path| {
                     if auth_rejected {
                         return Err(StorageError::ProtectedVerification);
                     }
@@ -639,23 +669,34 @@ impl PadProtectionEngine {
                         self.unlock_path(path, vault_id, &credential, &mut attempt_failure);
                     auth_rejected = attempt_failure == Some(FailureReason::Authentication);
                     result
-                })
-                .map(|document| LoadOutcome {
-                    document,
-                    recovered_from_backup: false,
-                })
-        } else {
-            store.load_protected(|path| {
-                if auth_rejected {
-                    return Err(StorageError::ProtectedVerification);
-                }
-                let result = self.unlock_path(path, vault_id, &credential, &mut attempt_failure);
-                auth_rejected = attempt_failure == Some(FailureReason::Authentication);
-                result
-            })
+                }),
+            }
         };
         match loaded {
-            Ok(value) => Ok(value),
+            Ok(mut value) => {
+                if value.recovered_from_backup {
+                    // A committed password rotation may be interrupted after
+                    // its new backup becomes authoritative but before the
+                    // primary is replaced. Repair that primary while this
+                    // authenticated session is live, so the save actor can
+                    // accept edits after unlock.
+                    match store.recover_protected_rewrap(|path| self.verify_path(path, vault_id)) {
+                        Ok(document) => {
+                            value.document = document;
+                            value.recovered_from_backup = false;
+                        }
+                        Err(StorageError::ProtectedCutover) => {}
+                        Err(_) => {
+                            self.lock();
+                            return Err(ProtectionError::new(
+                                FailurePhase::Unlock,
+                                FailureReason::Storage,
+                            ));
+                        }
+                    }
+                }
+                Ok(value)
+            }
             Err(error) => {
                 self.lock();
                 Err(ProtectionError::new(
@@ -773,6 +814,87 @@ impl PadProtectionEngine {
             self.lock();
         }
         result
+    }
+
+    /// Change only a recoverable v2 whole-Pad password. The old envelope is
+    /// authenticated by the worker, which returns a candidate with the same
+    /// document and recovery wrap. The storage owner compares the exact old
+    /// bytes under its writer lock, authenticates the candidate under the new
+    /// password, and disqualifies all old backup bytes before reporting a
+    /// successful change. This method leaves no unlocked session behind.
+    pub fn change_password_v2(
+        &mut self,
+        store: &PadStore,
+        expected: &PadDocument,
+        old_password: SecretBytes,
+        new_password: SecretBytes,
+    ) -> Result<(), ProtectionError> {
+        self.lock();
+        let vault_id = store.protected_vault_id().map_err(|_| {
+            ProtectionError::new(FailurePhase::BeforeIntent, FailureReason::Storage)
+        })?;
+        let current = read_envelope(store.protected_primary_path()).map_err(|_| {
+            ProtectionError::new(FailurePhase::BeforeIntent, FailureReason::Storage)
+        })?;
+        let payload = encode_change_password_v2_payload(&new_password, &current).map_err(|_| {
+            ProtectionError::new(FailurePhase::BeforeIntent, FailureReason::Protocol)
+        })?;
+        self.fresh_session(FailurePhase::BeforeIntent)?;
+        let candidate =
+            match self.exchange(Operation::ChangePasswordV2, vault_id, old_password, payload) {
+                Ok(candidate) => candidate,
+                Err(reason) => {
+                    self.lock();
+                    return Err(ProtectionError::new(FailurePhase::BeforeIntent, reason));
+                }
+            };
+        // The ChangePasswordV2 worker has already invalidated its own key
+        // session. Reap it and create a separate new-password verifier.
+        self.lock();
+        let mut verifier = Self::new(self.timeout);
+        #[cfg(test)]
+        {
+            verifier.worker_image = self.worker_image.clone();
+        }
+        let credential = UnlockCredential::Password(new_password);
+        let mut new_opened = false;
+        let mut new_failure = None;
+        let result = store.rewrap_protected(&current, expected, &candidate, |path| {
+            if new_opened {
+                verifier.verify_path(path, vault_id)
+            } else {
+                let opened = verifier.unlock_path(path, vault_id, &credential, &mut new_failure);
+                new_opened = opened.is_ok();
+                opened
+            }
+        });
+        verifier.lock();
+        let abort_result = if result.is_err() {
+            // Before the digest commit, restore the exact old recovery copy
+            // so a fresh randomized candidate can be retried. After commit
+            // this refuses rollback; the caller must unlock with the new
+            // password and let the store repair from its new backup.
+            Some(store.abort_pending_protected_rewrap(&current, expected))
+        } else {
+            None
+        };
+        result.map_err(|error| {
+            let reason = if matches!(error, StorageError::StaleProtectedDocument) {
+                FailureReason::Stale
+            } else if new_failure == Some(FailureReason::Unavailable) {
+                FailureReason::Unavailable
+            } else {
+                // A new-password verification failure is not evidence that
+                // the *old* password was entered incorrectly.
+                FailureReason::Storage
+            };
+            let phase = if abort_result.is_some_and(|outcome| outcome.is_ok()) {
+                FailurePhase::BeforeIntent
+            } else {
+                FailurePhase::Uncertain
+            };
+            ProtectionError::new(phase, reason)
+        })
     }
 
     /// Cancel and reap the exact worker child, dropping its key session.
@@ -1928,6 +2050,101 @@ mod process_tests {
                 .unwrap_err()
                 .reason,
             FailureReason::Authentication
+        );
+    }
+
+    #[test]
+    #[ignore = "requires SAKURA_PAD_SESSION_TEST_EXE"]
+    fn real_worker_password_change_preserves_recovery_and_rejects_old_replay() {
+        let image = PathBuf::from(
+            std::env::var_os("SAKURA_PAD_SESSION_TEST_EXE")
+                .expect("set SAKURA_PAD_SESSION_TEST_EXE to the built absolute session image"),
+        );
+        assert!(image.is_absolute() && image.is_file());
+        let isolated = IsolatedPad::new();
+        let store = PadStore::at(&isolated.0);
+        let mut original = PadDocument {
+            generation: 1,
+            ..PadDocument::default()
+        };
+        original
+            .memos
+            .push(PadMemo::new(1, "title", "private body", 1));
+        store.write(&original).unwrap();
+        let replacement = || SecretBytes::new(b"replacement Pad password for test".to_vec());
+
+        let mut enrollment = engine(&image);
+        let (prepared, recovery_key) = enrollment
+            .prepare_recoverable_enroll(&store, &original, password())
+            .unwrap();
+        enrollment
+            .confirm_recoverable_enroll(&store, prepared)
+            .unwrap();
+        enrollment.lock();
+        let old_envelope = std::fs::read(store.protected_primary_path()).unwrap();
+
+        let mut changer = engine(&image);
+        let rejected = changer.change_password_v2(
+            &store,
+            &original,
+            SecretBytes::new(b"incorrect old password".to_vec()),
+            replacement(),
+        );
+        assert_eq!(rejected.unwrap_err().reason, FailureReason::Authentication);
+        assert_eq!(
+            std::fs::read(store.protected_primary_path()).unwrap(),
+            old_envelope
+        );
+        changer
+            .change_password_v2(&store, &original, password(), replacement())
+            .unwrap();
+        let new_envelope = std::fs::read(store.protected_primary_path()).unwrap();
+        assert_ne!(new_envelope, old_envelope);
+
+        let mut old = engine(&image);
+        assert_eq!(
+            old.unlock(&store, password()).unwrap_err().reason,
+            FailureReason::Authentication
+        );
+        let mut recovered = engine(&image);
+        assert_eq!(
+            recovered
+                .unlock_with_recovery(&store, SecretBytes::new(recovery_key.as_bytes().to_vec()))
+                .unwrap()
+                .document,
+            original
+        );
+        recovered.lock();
+
+        // Simulate a replayed pre-change primary. The committed digest admits
+        // only the new backup, and unlocking repairs the primary before save.
+        std::fs::write(store.protected_primary_path(), &old_envelope).unwrap();
+        let mut reopened = engine(&image);
+        let opened = reopened.unlock(&store, replacement()).unwrap();
+        assert_eq!(opened.document, original);
+        assert!(!opened.recovered_from_backup);
+        assert_eq!(
+            std::fs::read(store.protected_primary_path()).unwrap(),
+            new_envelope
+        );
+        let mut next = opened.document.clone();
+        next.generation += 1;
+        next.memos.push(PadMemo::new(2, "after", "change", 2));
+        reopened.save(&store, &opened.document, &next).unwrap();
+        reopened.lock();
+        let mut final_open = engine(&image);
+        assert_eq!(
+            final_open.unlock(&store, replacement()).unwrap().document,
+            next
+        );
+        final_open.lock();
+        let mut recovery_again = engine(&image);
+        assert_eq!(
+            recovery_again
+                .unlock_with_recovery(&store, SecretBytes::new(recovery_key.as_bytes().to_vec()))
+                .unwrap()
+                .document,
+            next
         );
     }
 

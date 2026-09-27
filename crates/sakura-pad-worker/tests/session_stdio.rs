@@ -85,6 +85,116 @@ fn create_request(id: u64, generation: u64, plaintext: &[u8]) -> Request {
     request
 }
 
+fn change_request(id: u64, generation: u64, old: &[u8], new: &[u8], envelope: &[u8]) -> Request {
+    let mut change = request(
+        id,
+        generation,
+        Operation::ChangePasswordV2,
+        session_protocol::encode_change_password_v2_payload(new, envelope)
+            .unwrap()
+            .to_vec(),
+    );
+    change.vault_id = VAULT;
+    change.password = Zeroizing::new(old.to_vec());
+    change
+}
+
+#[test]
+fn whole_pad_password_change_preserves_recovery_and_consumes_session() {
+    const NEW_PASSWORD: &[u8] = b"different synthetic password";
+    let mut child = OwnedChild::spawn();
+    let mut create = create_request(1, 1, b"private body");
+    create.operation = Operation::CreateRecoverable;
+    let created = child.exchange(&create);
+    assert_eq!(created.status, Status::Success);
+    let fields = session_protocol::parse_created_recovery(&created.payload).unwrap();
+    let key = RecoveryKey::decode(fields.recovery_key).unwrap();
+    let original = fields.envelope.to_vec();
+
+    let wrong = child.exchange(&change_request(2, 2, b"wrong old", NEW_PASSWORD, &original));
+    assert_eq!(wrong.status, Status::Rejected);
+    assert!(wrong.payload.is_empty());
+    assert_eq!(
+        child
+            .exchange(&request(3, 2, Operation::Verify, original.clone()))
+            .status,
+        Status::Locked
+    );
+
+    let changed = child.exchange(&change_request(4, 3, PASSWORD, NEW_PASSWORD, &original));
+    assert_eq!(changed.status, Status::Success);
+    assert_eq!(&changed.payload[..8], b"SKRPENV2");
+    assert_ne!(&*changed.payload, &original);
+    assert!(changed.payload.len() == original.len());
+    assert_eq!(&changed.payload[45..61], &original[45..61]);
+    assert_eq!(&changed.payload[150..198], &original[150..198]);
+    assert!(open_with_password_v2(Scope::pad(VAULT), PASSWORD, &changed.payload).is_err());
+    assert_eq!(
+        &*open_with_password_v2(Scope::pad(VAULT), NEW_PASSWORD, &changed.payload).unwrap(),
+        b"private body"
+    );
+    assert!(open_with_password_v2(
+        Scope::pad(VAULT),
+        b"incorrect new password",
+        &changed.payload
+    )
+    .is_err());
+    assert_eq!(
+        &*open_with_recovery_v2(Scope::pad(VAULT), &key, &changed.payload).unwrap(),
+        b"private body"
+    );
+    assert!(open_with_password_v2(
+        Scope::pad(*b"different-vault!"),
+        NEW_PASSWORD,
+        &changed.payload
+    )
+    .is_err());
+    assert_eq!(
+        child
+            .exchange(&request(5, 3, Operation::Reseal, b"blocked".to_vec()))
+            .status,
+        Status::Locked
+    );
+    assert_eq!(
+        child
+            .exchange(&request(6, 3, Operation::Verify, changed.payload.to_vec()))
+            .status,
+        Status::Locked
+    );
+
+    let mut tampered = changed.payload.to_vec();
+    *tampered.last_mut().unwrap() ^= 1;
+    assert_eq!(
+        child
+            .exchange(&change_request(
+                7,
+                4,
+                NEW_PASSWORD,
+                b"third password",
+                &tampered
+            ))
+            .status,
+        Status::Rejected
+    );
+    assert_eq!(
+        child
+            .exchange(&request(8, 4, Operation::Reseal, b"blocked".to_vec()))
+            .status,
+        Status::Locked
+    );
+
+    let mut unlock = unlock_request(9, 5, NEW_PASSWORD, changed.payload.to_vec());
+    unlock.operation = Operation::UnlockPasswordV2;
+    assert_eq!(&*child.exchange(&unlock).payload, b"private body");
+    assert_eq!(
+        child
+            .exchange(&request(10, 5, Operation::Shutdown, vec![]))
+            .status,
+        Status::Success
+    );
+    child.exit_within(Duration::from_secs(2));
+}
+
 #[test]
 fn recoverable_creation_returns_exactly_one_key_and_both_routes_reseal() {
     let mut child = OwnedChild::spawn();

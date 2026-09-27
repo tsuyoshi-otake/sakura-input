@@ -21,7 +21,7 @@ use std::cell::RefCell;
 use std::ffi::c_void;
 use std::mem::size_of;
 use std::sync::atomic::{AtomicIsize, Ordering};
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -90,6 +90,7 @@ use crate::pad_protection::{
     ProtectedLockStatus, ProtectedSaveActor, ProtectedSaveStatus, ProtectionError,
     SubmitRejectReason,
 };
+use crate::pad_protection_settings_ui::{self, ProtectionSettingsAction};
 use crate::pad_rail;
 use crate::pad_storage::{
     now_ms, MemoPayloadV1, PadDocument, PadMemo, PadStore, SaveStatus, StorageError, StorageWorker,
@@ -112,6 +113,12 @@ pub const PAD_NOTICE_TIMER: usize = 0x5344;
 const PAD_UNLOCK_RETRY_TIMER: usize = 0x5345;
 const PAD_PROTECTED_CLIPBOARD_TIMER: usize = 0x5346;
 const PAD_IDLE_LOCK_TIMER: usize = 0x5347;
+const PAD_ENROLL_POLL_TIMER: usize = 0x5348;
+const PAD_ENROLL_POLL_MS: u32 = 250;
+const PAD_ENROLL_PREPARE_BUDGET: Duration = Duration::from_secs(150);
+const PAD_ENROLL_CONFIRM_BUDGET: Duration = Duration::from_secs(600);
+const PAD_ENROLL_COMMIT_BUDGET: Duration = Duration::from_secs(120);
+const PAD_ENROLL_CANCEL_BUDGET: Duration = Duration::from_secs(30);
 const PROTECTED_CLIPBOARD_LIFETIME_MS: u32 = 15_000;
 const WM_PAD_UNLOCK_FINISHED: u32 = WM_APP + 7;
 const WM_PAD_MASK_FOR_SESSION: u32 = WM_APP + 8;
@@ -367,6 +374,112 @@ enum EnrollPhase {
     MemoRecoveryPrompt,
     MemoUnlockPrompt,
     MemoUnlockRunning,
+}
+
+/// The confirmation is the only authority to publish cutover intent. A
+/// timeout after sending `true` cannot claim the original store is unchanged.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum EnrollWaitStage {
+    Preparing,
+    AwaitingRecoveryConfirmation,
+    FinalizingBeforeIntent,
+    FinalizingAfterApproval,
+}
+
+fn post_enrollment_completion(raw_window: isize, recovery_ready: bool) {
+    #[cfg(debug_assertions)]
+    if std::env::var_os("SAKURA_PAD_TEST_DROP_ENROLL_POST").is_some() {
+        crate::pad_debug(if recovery_ready {
+            "enroll:recovery:post-suppressed-test"
+        } else {
+            "enroll:result:post-suppressed-test"
+        });
+        return;
+    }
+    // SAFETY: this is only a best-effort notification to the Pad HWND. The
+    // timer reads the owned result channel even if posting fails or is lost.
+    let posted = unsafe {
+        PostMessageW(
+            Some(HWND(raw_window as *mut c_void)),
+            WM_PAD_ENROLL_FINISHED,
+            WPARAM(0),
+            LPARAM(0),
+        )
+    };
+    crate::pad_debug(match (recovery_ready, posted.is_ok()) {
+        (true, true) => "enroll:recovery:posted",
+        (true, false) => "enroll:recovery:post-error",
+        (false, true) => "enroll:result:posted",
+        (false, false) => "enroll:result:post-error",
+    });
+}
+
+#[derive(Clone, Copy, Debug)]
+struct EnrollWait {
+    stage: EnrollWaitStage,
+    deadline: Instant,
+}
+
+impl EnrollWait {
+    fn new(stage: EnrollWaitStage, now: Instant) -> Self {
+        let budget = match stage {
+            EnrollWaitStage::Preparing => PAD_ENROLL_PREPARE_BUDGET,
+            EnrollWaitStage::AwaitingRecoveryConfirmation => PAD_ENROLL_CONFIRM_BUDGET,
+            EnrollWaitStage::FinalizingBeforeIntent => PAD_ENROLL_CANCEL_BUDGET,
+            EnrollWaitStage::FinalizingAfterApproval => PAD_ENROLL_COMMIT_BUDGET,
+        };
+        Self {
+            stage,
+            deadline: now + budget,
+        }
+    }
+
+    fn timeout_phase(self) -> FailurePhase {
+        match self.stage {
+            EnrollWaitStage::FinalizingAfterApproval => FailurePhase::Uncertain,
+            _ => FailurePhase::BeforeIntent,
+        }
+    }
+
+    fn expired_phase(self, now: Instant) -> Option<FailurePhase> {
+        (now >= self.deadline).then(|| self.timeout_phase())
+    }
+}
+
+#[cfg(test)]
+mod enroll_wait_tests {
+    use super::{EnrollWait, EnrollWaitStage, FailurePhase};
+    use std::time::{Duration, Instant};
+
+    #[test]
+    fn enrollment_deadlines_preserve_the_approval_boundary() {
+        let now = Instant::now();
+        let preparing = EnrollWait::new(EnrollWaitStage::Preparing, now);
+        assert_eq!(
+            preparing.expired_phase(now + Duration::from_secs(149)),
+            None
+        );
+        assert_eq!(
+            preparing.expired_phase(now + Duration::from_secs(150)),
+            Some(FailurePhase::BeforeIntent)
+        );
+        let confirmation = EnrollWait::new(EnrollWaitStage::AwaitingRecoveryConfirmation, now);
+        assert_eq!(
+            confirmation.expired_phase(now + Duration::from_secs(600)),
+            Some(FailurePhase::BeforeIntent)
+        );
+        let approved = EnrollWait::new(EnrollWaitStage::FinalizingAfterApproval, now);
+        assert_eq!(approved.expired_phase(now + Duration::from_secs(119)), None);
+        assert_eq!(
+            approved.expired_phase(now + Duration::from_secs(120)),
+            Some(FailurePhase::Uncertain)
+        );
+        let cancelled = EnrollWait::new(EnrollWaitStage::FinalizingBeforeIntent, now);
+        assert_eq!(
+            cancelled.expired_phase(now + Duration::from_secs(30)),
+            Some(FailurePhase::BeforeIntent)
+        );
+    }
 }
 
 enum RecoveryCopyCheck {
@@ -1190,6 +1303,11 @@ struct PadSettingAuth {
 
 enum SecurityJob {
     Status,
+    ChangePassword {
+        expected: PadDocument,
+        old_password: SecretBytes,
+        new_password: SecretBytes,
+    },
     Begin(PadSettingAuth),
     Confirm {
         code: Zeroizing<String>,
@@ -1232,6 +1350,7 @@ fn authenticate_pad_for_setting(
 
 enum SecurityTaskResult {
     Status(std::result::Result<EnrollmentStatus, &'static str>),
+    PasswordChanged(std::result::Result<(), ProtectionError>),
     Prepared(std::result::Result<Zeroizing<String>, &'static str>),
     Finished(std::result::Result<&'static str, &'static str>),
 }
@@ -1276,6 +1395,7 @@ struct PadState {
     enroll_controls: [HWND; 9],
     enroll_epoch: u64,
     enroll_result: Option<Receiver<EnrollCompletion>>,
+    enroll_wait: Option<EnrollWait>,
     pad_recovery_confirmation: Option<Sender<bool>>,
     recovery_copy_check: Option<RecoveryCopyCheck>,
     pad_enroll_masked: bool,
@@ -1476,6 +1596,7 @@ impl PadWindow {
             enroll_controls: [HWND::default(); 9],
             enroll_epoch: 0,
             enroll_result: None,
+            enroll_wait: None,
             pad_recovery_confirmation: None,
             recovery_copy_check: None,
             pad_enroll_masked: false,
@@ -1749,6 +1870,11 @@ impl Drop for PadWindow {
         if let Some(cancel) = self.state.pad_hardware_cancel.take() {
             let _ = cancel.cancel();
         }
+        if let Some(confirmation) = self.state.pad_recovery_confirmation.take() {
+            let _ = confirmation.send(false);
+        }
+        self.state.enroll_result = None;
+        self.state.enroll_wait = None;
         if let Some(cancel) = self.state.memo_hardware_cancel.take() {
             let _ = cancel.cancel();
         }
@@ -1769,6 +1895,7 @@ impl Drop for PadWindow {
             let _ = KillTimer(Some(self.hwnd), PAD_UNLOCK_RETRY_TIMER);
             let _ = KillTimer(Some(self.hwnd), PAD_PROTECTED_CLIPBOARD_TIMER);
             let _ = KillTimer(Some(self.hwnd), PAD_IDLE_LOCK_TIMER);
+            let _ = KillTimer(Some(self.hwnd), PAD_ENROLL_POLL_TIMER);
             let _ = DestroyWindow(self.hwnd);
         }
         if let Some(worker) = self.state.worker.as_mut() {
@@ -3469,7 +3596,50 @@ impl PadState {
         {
             return;
         }
-        self.start_security_job(window, SecurityJob::Status);
+        match pad_protection_settings_ui::choose_protection_setting(
+            window,
+            self.pad_hardware_hint.is_none(),
+        ) {
+            ProtectionSettingsAction::ChangePassword if !self.locked => {
+                if self.pad_hardware_hint.is_some() {
+                    self.set_status(
+                        "セキュリティキーで保護した Pad のパスワード変更は未対応です".to_owned(),
+                    );
+                    self.update_status();
+                    return;
+                }
+                let Some(change) = pad_protection_settings_ui::prompt_password_change(window)
+                else {
+                    self.set_status("パスワード変更を中止しました".to_owned());
+                    self.update_status();
+                    return;
+                };
+                if self.locked || self.security_result.is_some() {
+                    return;
+                }
+                if self.capture_controls() {
+                    self.publish(window);
+                }
+                let expected = self.document.clone();
+                let old_password = SecretBytes::new(change.old_password.as_bytes().to_vec());
+                let new_password = SecretBytes::new(change.new_password.as_bytes().to_vec());
+                if !self.lock_protected(window, false) {
+                    return;
+                }
+                self.start_security_job(
+                    window,
+                    SecurityJob::ChangePassword {
+                        expected,
+                        old_password,
+                        new_password,
+                    },
+                );
+            }
+            ProtectionSettingsAction::TotpSettings if !self.locked => {
+                self.start_security_job(window, SecurityJob::Status);
+            }
+            _ => {}
+        }
     }
 
     fn start_security_job(&mut self, window: HWND, job: SecurityJob) {
@@ -3488,59 +3658,88 @@ impl PadState {
         let launched = thread::Builder::new()
             .name("sakura-pad-security-setting".to_owned())
             .spawn(move || {
-                let result = match PadStore::default() {
-                    Err(_) => SecurityTaskResult::Finished(Err("Pad の保存先を確認できません")),
-                    Ok(store) => match pad_totp_store(&store) {
-                        Err(_) => SecurityTaskResult::Finished(Err("認証設定を確認できません")),
-                        Ok(totp) => match job {
-                            SecurityJob::Status => SecurityTaskResult::Status(
-                                totp.status().map_err(|_| "認証設定を読み取れません"),
-                            ),
-                            SecurityJob::Begin(auth) => SecurityTaskResult::Prepared(
-                                authenticate_pad_for_setting(
+                let result = match job {
+                    SecurityJob::ChangePassword {
+                        expected,
+                        old_password,
+                        new_password,
+                    } => SecurityTaskResult::PasswordChanged(
+                        PadStore::default()
+                            .map_err(|_| ProtectionError {
+                                phase: FailurePhase::BeforeIntent,
+                                reason: FailureReason::Storage,
+                            })
+                            .and_then(|store| {
+                                let mut engine = PadProtectionEngine::new(Duration::from_secs(15));
+                                engine.change_password_v2(
                                     &store,
-                                    HWND(raw_window as *mut c_void),
-                                    auth.password,
-                                    auth.hint,
-                                    auth.cancellation.as_deref(),
+                                    &expected,
+                                    old_password,
+                                    new_password,
                                 )
-                                .and_then(|()| {
-                                    totp.begin_enrollment()
-                                        .map_err(|_| "確認コードの設定を開始できません")
-                                }),
-                            ),
-                            SecurityJob::Confirm { code } => SecurityTaskResult::Finished(
-                                current_unix_seconds()
-                                    .map_err(|_| "時刻を確認できません")
-                                    .and_then(|now| {
-                                        totp.confirm_enrollment(&code, now)
-                                            .map_err(|_| "確認コードが違うか保存できません")
-                                    })
-                                    .map(|()| "確認コードを有効にしました"),
-                            ),
-                            SecurityJob::Cancel => SecurityTaskResult::Finished(
-                                totp.cancel_enrollment()
-                                    .map(|()| "確認コードの設定を中止しました")
-                                    .map_err(|_| "設定の中止を保存できません"),
-                            ),
-                            SecurityJob::Disable { auth, code } => SecurityTaskResult::Finished(
-                                authenticate_pad_for_setting(
-                                    &store,
-                                    HWND(raw_window as *mut c_void),
-                                    auth.password,
-                                    auth.hint,
-                                    auth.cancellation.as_deref(),
-                                )
-                                .and_then(|()| {
+                            }),
+                    ),
+                    job => match PadStore::default() {
+                        Err(_) => SecurityTaskResult::Finished(Err("Pad の保存先を確認できません")),
+                        Ok(store) => match pad_totp_store(&store) {
+                            Err(_) => SecurityTaskResult::Finished(Err("認証設定を確認できません")),
+                            Ok(totp) => match job {
+                                SecurityJob::Status => SecurityTaskResult::Status(
+                                    totp.status().map_err(|_| "認証設定を読み取れません"),
+                                ),
+                                SecurityJob::Begin(auth) => SecurityTaskResult::Prepared(
+                                    authenticate_pad_for_setting(
+                                        &store,
+                                        HWND(raw_window as *mut c_void),
+                                        auth.password,
+                                        auth.hint,
+                                        auth.cancellation.as_deref(),
+                                    )
+                                    .and_then(|()| {
+                                        totp.begin_enrollment()
+                                            .map_err(|_| "確認コードの設定を開始できません")
+                                    }),
+                                ),
+                                SecurityJob::Confirm { code } => SecurityTaskResult::Finished(
                                     current_unix_seconds()
                                         .map_err(|_| "時刻を確認できません")
                                         .and_then(|now| {
-                                            totp.disable_after_reauthentication(&code, now)
+                                            totp.confirm_enrollment(&code, now)
                                                 .map_err(|_| "確認コードが違うか保存できません")
                                         })
-                                })
-                                .map(|()| "確認コードを解除しました"),
-                            ),
+                                        .map(|()| "確認コードを有効にしました"),
+                                ),
+                                SecurityJob::Cancel => SecurityTaskResult::Finished(
+                                    totp.cancel_enrollment()
+                                        .map(|()| "確認コードの設定を中止しました")
+                                        .map_err(|_| "設定の中止を保存できません"),
+                                ),
+                                SecurityJob::Disable { auth, code } => {
+                                    SecurityTaskResult::Finished(
+                                        authenticate_pad_for_setting(
+                                            &store,
+                                            HWND(raw_window as *mut c_void),
+                                            auth.password,
+                                            auth.hint,
+                                            auth.cancellation.as_deref(),
+                                        )
+                                        .and_then(|()| {
+                                            current_unix_seconds()
+                                                .map_err(|_| "時刻を確認できません")
+                                                .and_then(|now| {
+                                                    totp.disable_after_reauthentication(&code, now)
+                                                        .map_err(|_| {
+                                                            "確認コードが違うか保存できません"
+                                                        })
+                                                })
+                                        })
+                                        .map(|()| "確認コードを解除しました"),
+                                    )
+                                }
+                                SecurityJob::ChangePassword { .. } => {
+                                    SecurityTaskResult::Finished(Err("設定を開始できません"))
+                                }
+                            },
                         },
                     },
                 };
@@ -3561,9 +3760,17 @@ impl PadState {
             self.security_epoch = epoch;
             self.security_result = Some(receiver);
             self.pad_hardware_cancel = hardware_cancel;
-            self.set_status("認証設定を確認しています…".to_owned());
+            if self.locked {
+                set_control_text(self.lock_status, "パスワードを変更しています…");
+            } else {
+                self.set_status("認証設定を確認しています…".to_owned());
+            }
         } else {
-            self.set_status("認証設定を開始できません".to_owned());
+            if self.locked {
+                set_control_text(self.lock_status, "パスワード変更を開始できません");
+            } else {
+                self.set_status("認証設定を開始できません".to_owned());
+            }
         }
         self.update_status();
     }
@@ -3578,7 +3785,28 @@ impl PadState {
         };
         self.security_result = None;
         self.pad_hardware_cancel = None;
-        if completion.epoch != self.security_epoch || self.locked {
+        if completion.epoch != self.security_epoch {
+            return;
+        }
+        if let SecurityTaskResult::PasswordChanged(result) = completion.result {
+            if self.locked {
+                let status = match result {
+                    Ok(()) => "パスワードを変更しました。新しいパスワードで解除してください",
+                    Err(ProtectionError {
+                        phase: FailurePhase::Uncertain,
+                        ..
+                    }) => "変更結果を確認できません。新旧パスワードか復旧キーで解除してください",
+                    Err(ProtectionError {
+                        reason: FailureReason::Authentication,
+                        ..
+                    }) => "現在のパスワードが違います。変更は行われませんでした",
+                    Err(_) => "パスワード変更に失敗しました。旧パスワードで解除してください",
+                };
+                set_control_text(self.lock_status, status);
+            }
+            return;
+        }
+        if self.locked {
             return;
         }
         match completion.result {
@@ -3631,6 +3859,7 @@ impl PadState {
             SecurityTaskResult::Prepared(Err(message))
             | SecurityTaskResult::Finished(Err(message))
             | SecurityTaskResult::Finished(Ok(message)) => self.set_status(message.to_owned()),
+            SecurityTaskResult::PasswordChanged(_) => {}
         }
         self.update_status();
     }
@@ -5902,6 +6131,10 @@ impl PadState {
             if let Some(confirmation) = self.pad_recovery_confirmation.take() {
                 let _ = confirmation.send(false);
             }
+            self.enroll_wait = Some(EnrollWait::new(
+                EnrollWaitStage::FinalizingBeforeIntent,
+                Instant::now(),
+            ));
             self.enroll_phase = EnrollPhase::Running;
             set_control_text(self.enroll_controls[7], "保護を中止しています…");
             // SAFETY: both controls belong to the live recovery prompt and
@@ -5976,11 +6209,27 @@ impl PadState {
             return;
         }
         set_control_text(self.enroll_controls[2], "");
-        if let Some(confirmation) = self.pad_recovery_confirmation.take() {
-            let _ = confirmation.send(true);
-        }
+        let approved = self
+            .pad_recovery_confirmation
+            .take()
+            .is_some_and(|confirmation| confirmation.send(true).is_ok());
+        self.enroll_wait = Some(EnrollWait::new(
+            if approved {
+                EnrollWaitStage::FinalizingAfterApproval
+            } else {
+                EnrollWaitStage::FinalizingBeforeIntent
+            },
+            Instant::now(),
+        ));
         self.enroll_phase = EnrollPhase::Running;
-        set_control_text(self.enroll_controls[7], "保護へ切り替えています…");
+        set_control_text(
+            self.enroll_controls[7],
+            if approved {
+                "保護へ切り替えています…"
+            } else {
+                "切替結果を確認中です"
+            },
+        );
         // SAFETY: these live buttons cannot start another cutover while the
         // confirmation worker owns the migration transaction.
         unsafe {
@@ -6183,21 +6432,7 @@ impl PadState {
                         {
                             return;
                         }
-                        // SAFETY: a destroyed HWND makes posting fail. The
-                        // UI receiver checks the epoch before displaying.
-                        let posted = unsafe {
-                            PostMessageW(
-                                Some(HWND(raw_window as *mut c_void)),
-                                WM_PAD_ENROLL_FINISHED,
-                                WPARAM(0),
-                                LPARAM(0),
-                            )
-                        };
-                        crate::pad_debug(if posted.is_ok() {
-                            "enroll:recovery:posted"
-                        } else {
-                            "enroll:recovery:post-error"
-                        });
+                        post_enrollment_completion(raw_window, true);
                         let approved = confirmation_receiver
                             .recv_timeout(Duration::from_secs(600))
                             .is_ok_and(|approved| approved);
@@ -6242,22 +6477,7 @@ impl PadState {
                     })
                     .is_ok()
                 {
-                    // SAFETY: raw_window came from the Pad HWND before this
-                    // thread started. A stale HWND is harmless: the UI-side
-                    // receiver and epoch gate any eventual message.
-                    let posted = unsafe {
-                        PostMessageW(
-                            Some(HWND(raw_window as *mut c_void)),
-                            WM_PAD_ENROLL_FINISHED,
-                            WPARAM(0),
-                            LPARAM(0),
-                        )
-                    };
-                    crate::pad_debug(if posted.is_ok() {
-                        "enroll:result:posted"
-                    } else {
-                        "enroll:result:post-error"
-                    });
+                    post_enrollment_completion(raw_window, false);
                 }
             });
         if spawn.is_err() {
@@ -6290,6 +6510,7 @@ impl PadState {
             return;
         }
         self.enroll_result = Some(receiver);
+        self.enroll_wait = Some(EnrollWait::new(EnrollWaitStage::Preparing, Instant::now()));
         self.pad_recovery_confirmation = Some(confirmation_sender);
         self.pad_hardware_cancel = hardware_cancel;
         self.enroll_phase = EnrollPhase::Running;
@@ -6305,36 +6526,128 @@ impl PadState {
         }
         update_layout(self, window);
         pad_caption::cloak(window, false);
+        // The channel is authoritative; periodic polling also observes a
+        // completed prepare/commit when its best-effort WM_APP post is lost.
+        // SAFETY: this Pad HWND and its timer are owned by the UI thread.
+        if unsafe {
+            SetTimer(
+                Some(window),
+                PAD_ENROLL_POLL_TIMER,
+                PAD_ENROLL_POLL_MS,
+                None,
+            )
+        } == 0
+        {
+            self.expire_enrollment(window, FailureReason::Unavailable);
+        }
+    }
+
+    fn enrollment_source_exact(&self) -> bool {
+        let Ok(store) = PadStore::default() else {
+            return false;
+        };
+        if self.v4_mode {
+            store.load_v4().is_ok_and(|loaded| {
+                !loaded.recovered_from_backup && loaded.document == self.document
+            })
+        } else {
+            store.load().is_ok_and(|loaded| {
+                !loaded.recovered_from_backup && loaded.document == self.document
+            })
+        }
+    }
+
+    fn expire_enrollment(&mut self, window: HWND, reason: FailureReason) {
+        let Some(wait) = self.enroll_wait.take() else {
+            return;
+        };
+        // Invalidate queued posts first. Dropping both channels and sending
+        // `false` prevents a still-running prepare from ever committing; a
+        // previously approved worker may already be past the intent boundary.
+        self.enroll_epoch = self.enroll_epoch.wrapping_add(1);
+        self.enroll_result = None;
+        if let Some(confirmation) = self.pad_recovery_confirmation.take() {
+            let _ = confirmation.send(false);
+        }
+        if let Some(cancel) = self.pad_hardware_cancel.take() {
+            let _ = cancel.cancel();
+        }
+        self.recovery_copy_check = None;
+        if self.enroll_phase == EnrollPhase::PadRecoveryPrompt {
+            set_control_text(self.enroll_controls[2], "");
+            self.enroll_phase = EnrollPhase::Running;
+        }
+        let source_exact =
+            wait.timeout_phase() == FailurePhase::BeforeIntent && self.enrollment_source_exact();
+        let phase = if source_exact {
+            FailurePhase::BeforeIntent
+        } else {
+            FailurePhase::Uncertain
+        };
+        crate::pad_debug(if phase == FailurePhase::BeforeIntent {
+            "enroll:ui:expired-before-intent"
+        } else {
+            "enroll:ui:expired-uncertain"
+        });
+        self.apply_enrollment_completion(
+            window,
+            EnrollCompletion {
+                epoch: self.enroll_epoch,
+                result: EnrollTaskResult::Finished(Err(ProtectionError { phase, reason })),
+                source_exact,
+            },
+        );
+    }
+
+    fn enrollment_tick(&mut self, window: HWND) {
+        self.finish_enrollment(window);
+        let Some(wait) = self.enroll_wait else {
+            return;
+        };
+        if wait.expired_phase(Instant::now()).is_some() {
+            self.expire_enrollment(window, FailureReason::UserCancelledOrTimedOut);
+        }
     }
 
     fn finish_enrollment(&mut self, window: HWND) {
-        crate::pad_debug("enroll:ui:handler");
-        let Some(completion) = self
-            .enroll_result
-            .as_ref()
-            .and_then(|rx| rx.try_recv().ok())
-        else {
-            crate::pad_debug("enroll:ui:no-result");
-            return;
-        };
-        if completion.epoch != self.enroll_epoch || self.enroll_phase != EnrollPhase::Running {
-            if matches!(&completion.result, EnrollTaskResult::RecoveryReady(_)) {
-                if let Some(confirmation) = self.pad_recovery_confirmation.take() {
-                    let _ = confirmation.send(false);
-                }
-                self.enroll_result = None;
+        let completion = match self.enroll_result.as_ref().map(Receiver::try_recv) {
+            Some(Ok(completion)) => completion,
+            Some(Err(TryRecvError::Disconnected)) => {
+                self.expire_enrollment(window, FailureReason::Unavailable);
+                return;
             }
+            _ => return,
+        };
+        self.apply_enrollment_completion(window, completion);
+    }
+
+    fn apply_enrollment_completion(&mut self, window: HWND, completion: EnrollCompletion) {
+        if completion.epoch != self.enroll_epoch {
             return;
         }
         if let EnrollTaskResult::RecoveryReady(key) = &completion.result {
+            if self.enroll_phase != EnrollPhase::Running {
+                if self.enroll_phase == EnrollPhase::PadRecoveryPrompt {
+                    self.cancel_enroll_prompt(window);
+                }
+                return;
+            }
             crate::pad_debug("enroll:ui:recovery-ready");
             if self.pad_enroll_masked {
                 if let Some(confirmation) = self.pad_recovery_confirmation.take() {
                     let _ = confirmation.send(false);
                 }
+                self.enroll_wait = Some(EnrollWait::new(
+                    EnrollWaitStage::FinalizingBeforeIntent,
+                    Instant::now(),
+                ));
                 return;
             }
             self.enroll_phase = EnrollPhase::PadRecoveryPrompt;
+            self.enroll_wait = Some(EnrollWait::new(
+                EnrollWaitStage::AwaitingRecoveryConfirmation,
+                Instant::now(),
+            ));
             if !self.show_recovery_key_prompt(window, key) {
                 self.cancel_enroll_prompt(window);
                 set_control_text(
@@ -6344,10 +6657,25 @@ impl PadState {
             }
             return;
         }
+        if self.enroll_phase == EnrollPhase::PadRecoveryPrompt {
+            // The worker's confirmation wait can itself expire. Clear the key
+            // and consume that terminal result even if the user never clicked.
+            self.recovery_copy_check = None;
+            set_control_text(self.enroll_controls[2], "");
+            self.enroll_phase = EnrollPhase::Running;
+        }
+        if self.enroll_phase != EnrollPhase::Running {
+            return;
+        }
         crate::pad_debug("enroll:ui:finished");
         self.enroll_result = None;
+        self.enroll_wait = None;
         self.pad_recovery_confirmation = None;
         self.pad_hardware_cancel = None;
+        // SAFETY: the terminal enrollment owns this dedicated Pad timer.
+        unsafe {
+            let _ = KillTimer(Some(window), PAD_ENROLL_POLL_TIMER);
+        }
         let source_v4 = self.v4_mode;
         let method = self.pad_protection_method;
         self.pad_enroll_masked = false;
@@ -8379,6 +8707,12 @@ extern "system" fn pad_procedure(window: HWND, message: u32, w: WPARAM, l: LPARA
             // SAFETY: state_ptr and its timer belong to this Pad UI thread.
             let state = unsafe { &mut *state_ptr };
             state.idle_lock_tick(window);
+            LRESULT(0)
+        }
+        WM_TIMER if !state_ptr.is_null() && w.0 == PAD_ENROLL_POLL_TIMER => {
+            // SAFETY: state_ptr and the timer belong to this live Pad HWND.
+            let state = unsafe { &mut *state_ptr };
+            state.enrollment_tick(window);
             LRESULT(0)
         }
         WM_TIMER if !state_ptr.is_null() && w.0 == PAD_EDIT_TIMER => {

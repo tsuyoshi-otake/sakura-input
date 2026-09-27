@@ -27,12 +27,20 @@ use sakura_proto::{
     PROTOCOL_VERSION,
 };
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{HWND, LPARAM, RECT, WPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM, RECT, RPC_E_CHANGED_MODE, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     BitBlt, ClientToScreen, CreateCompatibleBitmap, CreateCompatibleDC, DeleteDC, DeleteObject,
     DrawTextW, GetDC, GetDIBits, GetWindowDC, ReleaseDC, SelectObject, BITMAPINFO,
     BITMAPINFOHEADER, BI_RGB, DIB_RGB_COLORS, DT_CALCRECT, DT_NOPREFIX, DT_SINGLELINE, HFONT,
     SRCCOPY,
+};
+use windows::Win32::System::Com::{
+    CoCreateInstance, CoInitializeEx, CoUninitialize, CLSCTX_INPROC_SERVER,
+    COINIT_APARTMENTTHREADED,
+};
+use windows::Win32::UI::Accessibility::{
+    CUIAutomation, IUIAutomation, IUIAutomationValuePattern, TreeScope_Descendants,
+    UIA_ValuePatternId,
 };
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::Input::KeyboardAndMouse::IsWindowEnabled;
@@ -54,6 +62,13 @@ const TEST_PIPE_PREFIX: &str = r"\\.\pipe\SakuraInputRendererTest-";
 const HOST_CLASS: PCWSTR = windows::core::w!("SakuraInputRenderer");
 const PAD_CLASS: PCWSTR = windows::core::w!("SakuraInputPad");
 const TOTP_CLASS: PCWSTR = windows::core::w!("SakuraPadTotpPrompt");
+const PROTECTION_SETTINGS_CLASS: PCWSTR = windows::core::w!("SakuraPadProtectionSettingsPrompt");
+const PASSWORD_CHANGE_CLASS: PCWSTR = windows::core::w!("SakuraPadPasswordChangePrompt");
+const CHOOSE_PASSWORD_CHANGE_ID: i32 = 411;
+const CURRENT_PASSWORD_ID: i32 = 401;
+const NEW_PASSWORD_ID: i32 = 402;
+const CONFIRM_NEW_PASSWORD_ID: i32 = 403;
+const SUBMIT_PASSWORD_CHANGE_ID: i32 = 404;
 const TOTP_CODE_ID: i32 = 301;
 const TOTP_ACCEPT_ID: i32 = 302;
 const TOTP_SECRET_ID: i32 = 304;
@@ -529,6 +544,13 @@ fn one_locked_memo_hides_its_title_from_native_controls_and_search() {
 
     let mut engine = FixtureEngine::new(initial_state());
     let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let _apartment = PadUiaApartment::new();
+    // SAFETY: COM is initialized on this test thread; CUIAutomation is the
+    // system-provided in-process UI Automation client.
+    let automation: IUIAutomation = unsafe {
+        CoCreateInstance(&CUIAutomation, None, CLSCTX_INPROC_SERVER)
+            .expect("create Pad UI Automation client")
+    };
     let list = list_of(pad);
     assert_eq!(row_count(list), 2);
     let labels: Vec<String> = (0..2).map(|index| list_text(list, index)).collect();
@@ -536,6 +558,7 @@ fn one_locked_memo_hides_its_title_from_native_controls_and_search() {
     assert!(labels.iter().any(|label| label == "public memo"));
     assert!(labels.iter().all(|label| !label.contains(SECRET_TITLE)));
     assert_no_child_text_contains(pad, &[SECRET_TITLE, SECRET_BODY]);
+    assert_locked_memo_uia(&automation, pad, SECRET_TITLE, SECRET_BODY);
     set_text(pad, SEARCH_ID, SECRET_TITLE);
     notify(pad, SEARCH_ID, EN_CHANGE as u16);
     wait_for_text(control(pad, STATUS_ID), "locked search notice", |value| {
@@ -577,6 +600,7 @@ fn one_locked_memo_hides_its_title_from_native_controls_and_search() {
     assert!(!unsafe { IsWindowEnabled(control(pad, TITLE_ID)) }.as_bool());
     // SAFETY: both controls are live children of the isolated Pad HWND.
     assert!(!unsafe { IsWindowEnabled(control(pad, BODY_ID)) }.as_bool());
+    assert_locked_memo_uia(&automation, pad, SECRET_TITLE, SECRET_BODY);
     click(pad, SHARE_ID);
     wait_for_text(control(pad, STATUS_ID), "locked copy refusal", |value| {
         value.contains("解除が必要")
@@ -590,6 +614,17 @@ fn one_locked_memo_hides_its_title_from_native_controls_and_search() {
         value == SECRET_TITLE
     });
     assert_eq!(text_of(control(pad, BODY_ID)), SECRET_BODY);
+    let unlocked_uia = pad_uia_strings(&automation, pad);
+    assert!(
+        unlocked_uia
+            .iter()
+            .any(|value| value.contains(SECRET_TITLE)),
+        "unlocked title must be observable through UI Automation"
+    );
+    assert!(
+        unlocked_uia.iter().any(|value| value.contains(SECRET_BODY)),
+        "unlocked body must be observable through UI Automation"
+    );
     click(pad, MEMO_PROTECT_ID);
     let choice = wait_for_owned_dialog(pad);
     // SAFETY: IDYES chooses the test-owned dialog's explicit memo lock action.
@@ -614,6 +649,7 @@ fn one_locked_memo_hides_its_title_from_native_controls_and_search() {
         "relocking must replace the accessible row label"
     );
     assert_no_child_text_contains(pad, &[SECRET_TITLE, SECRET_BODY]);
+    assert_locked_memo_uia(&automation, pad, SECRET_TITLE, SECRET_BODY);
     engine.stop();
     renderer.wait_for_exit();
 }
@@ -962,6 +998,160 @@ fn whole_pad_recovery_key_is_confirmed_before_cutover_and_unlocks_after_reopen()
 
 #[test]
 #[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+#[cfg(debug_assertions)]
+fn whole_pad_enrollment_polls_when_completion_posts_are_lost() {
+    const PASSWORD: &str = "lost completion post password 5c91";
+    const TITLE: &str = "lost completion post title 3e42";
+    const BODY: &str = "lost completion post body 8a76";
+    let app_data = IsolatedAppData::new("pad-lost-enrollment-post");
+    let stage_log = app_data.path().join("enrollment-stages.log");
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) =
+        open_test_pad_with_options(&engine, &app_data, Some(&stage_log), true);
+    let heartbeat = engine.start_heartbeat();
+    set_text(pad, TITLE_ID, TITLE);
+    set_text(pad, BODY_ID, BODY);
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    click_until_control(pad, PROTECT_ID, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, PASSWORD);
+    set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "recovery prompt without completion post",
+        |value| value == "復旧キーを保存してください",
+    );
+    let recovery_key = Zeroizing::new(text_of(control(pad, ENROLL_PASSWORD_ID)));
+    confirm_saved_recovery_key(pad, &recovery_key);
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    let stages = std::fs::read_to_string(&stage_log).expect("stage-only enrollment log");
+    assert!(stages.contains("enroll:recovery:post-suppressed-test"));
+    assert!(stages.contains("enroll:result:post-suppressed-test"));
+    set_text(pad, LOCK_PASSWORD_ID, PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    wait_for_text(
+        wait_for_control(pad, TITLE_ID),
+        "password unlock after lost completion posts",
+        |value| value == TITLE,
+    );
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+    drop(heartbeat);
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
+fn whole_pad_password_change_rejects_old_password_and_preserves_memo() {
+    const OLD_PASSWORD: &str = "original pad password b72c";
+    const NEW_PASSWORD: &str = "replacement pad password 7d2f";
+    const TITLE: &str = "password change title 36d4";
+    const BODY: &str = "password change body 9f28";
+    let app_data = IsolatedAppData::new("pad-password-change");
+    let store = pad_storage::PadStore::at(app_data.path().join("SakuraInput").join("pad"));
+    let mut engine = FixtureEngine::new(initial_state());
+    let (mut renderer, pad) = open_test_pad(&engine, &app_data);
+    let heartbeat = engine.start_heartbeat();
+    let host = wait_for_renderer_window(renderer.pid(), HOST_CLASS, false);
+
+    set_text(pad, TITLE_ID, TITLE);
+    set_text(pad, BODY_ID, BODY);
+    notify(pad, TITLE_ID, EN_CHANGE as u16);
+    notify(pad, BODY_ID, EN_CHANGE as u16);
+    let deadline = Instant::now() + PATIENT;
+    while store.load().ok().and_then(|loaded| {
+        loaded
+            .document
+            .find(1)
+            .and_then(pad_storage::PadMemo::plain_content)
+            .map(|content| content == (TITLE, BODY))
+    }) != Some(true)
+    {
+        assert!(Instant::now() < deadline, "legacy memo did not save");
+        sleep(Duration::from_millis(30));
+    }
+    click_until_control(pad, PROTECT_ID, ENROLL_PASSWORD_ID);
+    set_text(pad, ENROLL_PASSWORD_ID, OLD_PASSWORD);
+    set_text(pad, ENROLL_CONFIRM_PASSWORD_ID, OLD_PASSWORD);
+    click(pad, ENROLL_SUBMIT_ID);
+    wait_for_text(
+        control(pad, ENROLL_HEADLINE_ID),
+        "whole-Pad recovery key before password change",
+        |value| value == "復旧キーを保存してください",
+    );
+    let recovery_key = Zeroizing::new(text_of(control(pad, ENROLL_PASSWORD_ID)));
+    confirm_saved_recovery_key(pad, &recovery_key);
+    wait_for_control_absent(pad, ENROLL_PASSWORD_ID);
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    set_text(pad, LOCK_PASSWORD_ID, OLD_PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    let title = wait_for_control(pad, TITLE_ID);
+    wait_for_text(title, "original password unlock", |value| value == TITLE);
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+
+    click(pad, PROTECT_ID);
+    let chooser = wait_for_renderer_window(renderer.pid(), PROTECTION_SETTINGS_CLASS, true);
+    click(chooser, CHOOSE_PASSWORD_CHANGE_ID);
+    let dialog = wait_for_renderer_window(renderer.pid(), PASSWORD_CHANGE_CLASS, true);
+    set_text(dialog, CURRENT_PASSWORD_ID, OLD_PASSWORD);
+    set_text(dialog, NEW_PASSWORD_ID, NEW_PASSWORD);
+    set_text(dialog, CONFIRM_NEW_PASSWORD_ID, NEW_PASSWORD);
+    click(dialog, SUBMIT_PASSWORD_CHANGE_ID);
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    assert_no_child_text_contains(pad, &[TITLE, BODY]);
+    let deadline = Instant::now() + Duration::from_secs(30);
+    loop {
+        let status = text_of(control(pad, LOCK_STATUS_ID));
+        if status == "パスワードを変更しました。新しいパスワードで解除してください"
+        {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "password change did not complete: {status:?}"
+        );
+        sleep(Duration::from_millis(30));
+    }
+
+    // Reopen the same isolated Pad to prove the changed credential is durable
+    // and independent of the worker session that performed the replacement.
+    // SAFETY: both HWNDs belong to this test-owned renderer process.
+    unsafe {
+        SendMessageW(pad, WM_CLOSE, None, None);
+        PostMessageW(Some(host), WM_PAD_TRIGGER, WPARAM(0), LPARAM(0))
+            .expect("reopen isolated Pad after password change");
+    }
+    assert_eq!(
+        wait_for_renderer_window(renderer.pid(), PAD_CLASS, true),
+        pad
+    );
+    wait_for_control(pad, LOCK_PASSWORD_ID);
+    set_text(pad, LOCK_PASSWORD_ID, OLD_PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    wait_for_text(
+        control(pad, LOCK_STATUS_ID),
+        "rejected old password",
+        |value| value.contains("解除情報が正しくありません"),
+    );
+    assert_no_child_text_contains(pad, &[TITLE, BODY]);
+    wait_for_text(
+        control(pad, LOCK_STATUS_ID),
+        "password retry available",
+        |value| value == "再試行できます",
+    );
+    set_text(pad, LOCK_PASSWORD_ID, NEW_PASSWORD);
+    click(pad, LOCK_UNLOCK_ID);
+    let title = wait_for_control(pad, TITLE_ID);
+    wait_for_text(title, "new password unlock", |value| value == TITLE);
+    assert_eq!(text_of(control(pad, BODY_ID)), BODY);
+    drop(heartbeat);
+    engine.stop();
+    renderer.wait_for_exit();
+}
+
+#[test]
+#[ignore = "real renderer and Pad session images; requires an interactive Windows desktop"]
 fn whole_pad_totp_setup_gates_password_unlock_until_code() {
     const PASSWORD: &str = "pad TOTP enrollment 74e6";
     const TITLE: &str = "whole TOTP title 76fa";
@@ -1301,7 +1491,8 @@ fn physical_yubikey5_whole_pad_ui_enroll_and_unlock() {
             let status = unsafe { GetDlgItem(Some(pad), STATUS_ID) }
                 .map(text_of)
                 .unwrap_or_else(|_| "status control absent".to_owned());
-            panic!("key registration ended before recovery setup: {status}");
+            let stages = std::fs::read_to_string(&stage_log).unwrap_or_default();
+            panic!("key registration ended before recovery setup: {status}; stages: {stages}");
         }
         if Instant::now() >= deadline {
             capture(pad, "physical-key-registration-timeout");
@@ -2409,6 +2600,15 @@ fn open_test_pad_with_log(
     app_data: &IsolatedAppData,
     stage_log: Option<&Path>,
 ) -> (OwnedChild, HWND) {
+    open_test_pad_with_options(engine, app_data, stage_log, false)
+}
+
+fn open_test_pad_with_options(
+    engine: &FixtureEngine,
+    app_data: &IsolatedAppData,
+    stage_log: Option<&Path>,
+    suppress_enrollment_posts: bool,
+) -> (OwnedChild, HWND) {
     let mut command = Command::new(PathBuf::from(env!("CARGO_BIN_EXE_sakura_renderer")));
     command
         .arg("--test-pipe")
@@ -2416,6 +2616,9 @@ fn open_test_pad_with_log(
         .env("LOCALAPPDATA", app_data.path());
     if let Some(path) = stage_log {
         command.env("SAKURA_PAD_DEBUG_LOG", path);
+    }
+    if suppress_enrollment_posts {
+        command.env("SAKURA_PAD_TEST_DROP_ENROLL_POST", "1");
     }
     let renderer = command.spawn().expect("spawn test-owned renderer");
     let renderer = OwnedChild::new(renderer, "renderer");
@@ -2826,6 +3029,102 @@ fn assert_no_child_text_contains(parent: HWND, secrets: &[&str]) {
             assert!(!label.contains(secret), "memo leaked through child text");
         }
         previous = Some(child);
+    }
+}
+
+/// Read the same UI Automation properties a screen reader can obtain from the
+/// Pad window, including native edit values that are not part of a HWND label.
+fn pad_uia_strings(automation: &IUIAutomation, pad: HWND) -> Vec<String> {
+    // SAFETY: this Pad HWND belongs to the retained fixture renderer.
+    let root = unsafe { automation.ElementFromHandle(pad) }.expect("Pad UIA root");
+    // SAFETY: both COM objects remain live for the synchronous tree query.
+    let condition = unsafe { automation.CreateTrueCondition() }.expect("UIA true condition");
+    // SAFETY: the root and condition remain live while UIA enumerates the
+    // fixture's native controls. Raw descendants include list item providers.
+    let descendants =
+        unsafe { root.FindAll(TreeScope_Descendants, &condition) }.expect("Pad UIA descendants");
+    // SAFETY: the array is retained throughout this read.
+    let count = unsafe { descendants.Length() }.expect("Pad UIA descendant count");
+    assert!(count > 0, "Pad must expose its native controls to UIA");
+    let mut strings = Vec::new();
+    for element in std::iter::once(root).chain((0..count).map(|index| {
+        // SAFETY: each index is within the UIA array length read above.
+        unsafe { descendants.GetElement(index) }.expect("Pad UIA descendant")
+    })) {
+        // SAFETY: the element proxy is live for this immediate property read.
+        strings.push(
+            unsafe { element.CurrentName() }
+                .expect("Pad UIA name")
+                .to_string(),
+        );
+        // Password controls intentionally do not expose their values.
+        // SAFETY: the element proxy is live for this immediate property read.
+        if unsafe { element.CurrentIsPassword() }
+            .expect("Pad UIA password property")
+            .as_bool()
+        {
+            continue;
+        }
+        // A native edit supports ValuePattern; static labels and many other
+        // controls do not. Query all providers that advertise this pattern.
+        if let Ok(value) =
+            // SAFETY: the live element is queried by its documented UIA ID.
+            unsafe {
+                element.GetCurrentPatternAs::<IUIAutomationValuePattern>(UIA_ValuePatternId)
+            }
+        {
+            // SAFETY: the ValuePattern proxy is live for this read.
+            strings.push(
+                unsafe { value.CurrentValue() }
+                    .expect("Pad UIA value")
+                    .to_string(),
+            );
+        }
+    }
+    strings
+}
+
+fn assert_locked_memo_uia(automation: &IUIAutomation, pad: HWND, title: &str, body: &str) {
+    let strings = pad_uia_strings(automation, pad);
+    assert!(
+        strings.iter().any(|value| value == "保護されたメモ 01"),
+        "locked memo must have a content-independent UIA name: {strings:?}"
+    );
+    for secret in [title, body] {
+        assert!(
+            strings.iter().all(|value| !value.contains(secret)),
+            "locked memo leaked through UI Automation: {strings:?}"
+        );
+    }
+}
+
+struct PadUiaApartment {
+    owns_initialization: bool,
+}
+
+impl PadUiaApartment {
+    fn new() -> Self {
+        // SAFETY: no reserved pointer is provided; COM initialization is
+        // balanced by this guard when it succeeds on the current test thread.
+        let result = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+        if result == RPC_E_CHANGED_MODE {
+            return Self {
+                owns_initialization: false,
+            };
+        }
+        result.ok().expect("initialize Pad UIA COM apartment");
+        Self {
+            owns_initialization: true,
+        }
+    }
+}
+
+impl Drop for PadUiaApartment {
+    fn drop(&mut self) {
+        if self.owns_initialization {
+            // SAFETY: balances one successful CoInitializeEx on this thread.
+            unsafe { CoUninitialize() };
+        }
     }
 }
 

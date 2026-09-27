@@ -22,8 +22,12 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use windows::Win32::Foundation::{LocalFree, HLOCAL};
 use windows::Win32::Security::Cryptography::{
-    BCryptGenRandom, CryptProtectData, CryptUnprotectData, BCRYPT_USE_SYSTEM_PREFERRED_RNG,
-    CRYPTPROTECT_UI_FORBIDDEN, CRYPT_INTEGER_BLOB,
+    BCryptCloseAlgorithmProvider, BCryptCreateHash, BCryptDestroyHash, BCryptFinishHash,
+    BCryptGenRandom, BCryptGetProperty, BCryptHashData, BCryptOpenAlgorithmProvider,
+    CryptProtectData, CryptUnprotectData, BCRYPT_ALG_HANDLE, BCRYPT_HASH_HANDLE,
+    BCRYPT_HASH_LENGTH, BCRYPT_OBJECT_LENGTH, BCRYPT_OPEN_ALGORITHM_PROVIDER_FLAGS,
+    BCRYPT_SHA256_ALGORITHM, BCRYPT_USE_SYSTEM_PREFERRED_RNG, CRYPTPROTECT_UI_FORBIDDEN,
+    CRYPT_INTEGER_BLOB,
 };
 use windows::Win32::Storage::FileSystem::{
     MoveFileExW, ReplaceFileW, MOVEFILE_WRITE_THROUGH, REPLACE_FILE_FLAGS,
@@ -71,6 +75,7 @@ const MAX_PROTECTED_BYTES: u64 = 24 * 1024 * 1024;
 const PROTECTED_MAGIC: [u8; 8] = *b"SKRLPAD3";
 const PROTECTED_VERSION: u16 = 3;
 const VAULT_ID_LEN: usize = 16;
+const REWRAP_DIGEST_LEN: usize = 32;
 
 /// A newer `SKRLPADn` magic in DPAPI plaintext identifies a future document
 /// format and must not be treated as corruption during recovery. This only
@@ -851,6 +856,7 @@ pub struct PadStore {
     intent: PathBuf,
     marker: PathBuf,
     protected_memo_floor: PathBuf,
+    rewrap_marker: PathBuf,
     v4_backup: PathBuf,
     v4_temp: PathBuf,
     v4_intent: PathBuf,
@@ -893,6 +899,7 @@ impl PadStore {
             intent: directory.join("memo.v3.committing"),
             marker: directory.join("memo.v3.marker"),
             protected_memo_floor: directory.join("memo.v3.memo-floor"),
+            rewrap_marker: directory.join("memo.v3.rewrap"),
             v4_backup: directory.join("memo.v4.bin.bak"),
             v4_temp: directory.join("memo.v4.bin.tmp"),
             v4_intent: directory.join("memo.v4.committing"),
@@ -909,6 +916,10 @@ impl PadStore {
     /// Directory shared with Pad's scope-bound protection metadata.
     pub fn directory(&self) -> &Path {
         self.path.parent().expect("PadStore paths have a parent")
+    }
+
+    pub fn protected_primary_path(&self) -> &Path {
+        &self.protected_path
     }
 
     /// Presence alone claims v4 ownership, including a damaged signal. The
@@ -1089,6 +1100,25 @@ impl PadStore {
         } else {
             read_protected_intent(&self.intent)?.vault_id()
         };
+        if let Some(marker) = self.read_rewrap_marker(vault_id)? {
+            match marker {
+                RewrapMarker::Pending { old, .. } => {
+                    if envelope_digest(&self.protected_path)? != old {
+                        return Err(StorageError::ProtectedVerification);
+                    }
+                }
+                RewrapMarker::Committed { digest } => {
+                    let path = if envelope_digest(&self.protected_path).ok() == Some(digest) {
+                        &self.protected_path
+                    } else if envelope_digest(&self.protected_backup).ok() == Some(digest) {
+                        &self.protected_backup
+                    } else {
+                        return Err(StorageError::ProtectedVerification);
+                    };
+                    return read_hardware_hint(path, vault_id);
+                }
+            }
+        }
         match read_hardware_hint(&self.protected_path, vault_id) {
             Ok(hint) => Ok(hint),
             Err(StorageError::Io(error)) if error.kind() == io::ErrorKind::NotFound => {
@@ -1146,6 +1176,32 @@ impl PadStore {
         let intent = self.active_protected_intent()?;
         let vault_id = intent.vault_id();
         let floor = self.protected_memo_generation_floor(vault_id)?;
+        let rewrap = self.read_rewrap_marker(vault_id)?;
+        if let Some(RewrapMarker::Pending { old, .. }) = rewrap {
+            // No fallback while the old primary is the only authorized copy.
+            if envelope_digest(&self.protected_path)? != old {
+                return Err(StorageError::ProtectedVerification);
+            }
+            let (opened_id, document) =
+                open_v3(&self.protected_path).map_err(|_| StorageError::ProtectedVerification)?;
+            if opened_id != vault_id || !intent.accepts(&document, floor) {
+                return Err(StorageError::ProtectedVerification);
+            }
+            return Ok(LoadOutcome {
+                document,
+                recovered_from_backup: false,
+            });
+        }
+        let committed = match rewrap {
+            Some(RewrapMarker::Committed { digest }) => Some(digest),
+            _ => None,
+        };
+        if let Some(digest) = committed {
+            // A replayed old envelope may authenticate, but cannot be read.
+            if envelope_digest(&self.protected_path).ok() != Some(digest) {
+                return self.load_rewrap_backup(open_v3, intent, floor, digest);
+            }
+        }
         match open_v3(&self.protected_path) {
             Ok((opened_id, _document)) if opened_id != vault_id => {
                 return Err(StorageError::ProtectedVerification)
@@ -1161,7 +1217,11 @@ impl PadStore {
         }
         match open_v3(&self.protected_backup) {
             Ok((opened_id, document))
-                if opened_id == vault_id && intent.accepts(&document, floor) =>
+                if opened_id == vault_id
+                    && intent.accepts(&document, floor)
+                    && committed.is_none_or(|digest| {
+                        envelope_digest(&self.protected_backup).ok() == Some(digest)
+                    }) =>
             {
                 Ok(LoadOutcome {
                     document,
@@ -1171,6 +1231,281 @@ impl PadStore {
             Err(error @ StorageError::UnsupportedVersion(_)) => Err(error),
             _ => Err(StorageError::ProtectedVerification),
         }
+    }
+
+    fn load_rewrap_backup<F>(
+        &self,
+        open_v3: &mut F,
+        intent: ProtectedIntent,
+        floor: u64,
+        digest: [u8; REWRAP_DIGEST_LEN],
+    ) -> Result<LoadOutcome, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        if envelope_digest(&self.protected_backup).ok() != Some(digest) {
+            return Err(StorageError::ProtectedVerification);
+        }
+        let (id, document) =
+            open_v3(&self.protected_backup).map_err(|_| StorageError::ProtectedVerification)?;
+        if id != intent.vault_id() || !intent.accepts(&document, floor) {
+            return Err(StorageError::ProtectedVerification);
+        }
+        Ok(LoadOutcome {
+            document,
+            recovered_from_backup: true,
+        })
+    }
+
+    fn read_rewrap_marker(
+        &self,
+        vault_id: [u8; VAULT_ID_LEN],
+    ) -> Result<Option<RewrapMarker>, StorageError> {
+        if !self.rewrap_marker.try_exists()? {
+            return Ok(None);
+        }
+        let (id, marker) = read_rewrap_marker(&self.rewrap_marker)?;
+        if id != vault_id {
+            return Err(StorageError::ProtectedCutover);
+        }
+        Ok(Some(marker))
+    }
+
+    /// Rotate a whole-Pad password without changing the authenticated document
+    /// or vault identity. The caller supplies a previously authenticated
+    /// document and its exact old envelope; the old bytes are compared under
+    /// the writer lock after the worker has changed its password session.
+    pub fn rewrap_protected<N>(
+        &self,
+        expected_envelope: &[u8],
+        expected_document: &PadDocument,
+        replacement_envelope: &[u8],
+        open_new: N,
+    ) -> Result<(), StorageError>
+    where
+        N: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        self.rewrap_protected_with_hook(
+            expected_envelope,
+            expected_document,
+            replacement_envelope,
+            open_new,
+            |_| Ok(()),
+        )
+    }
+
+    fn rewrap_protected_with_hook<N, H>(
+        &self,
+        expected_envelope: &[u8],
+        expected_document: &PadDocument,
+        replacement_envelope: &[u8],
+        mut open_new: N,
+        mut hook: H,
+    ) -> Result<(), StorageError>
+    where
+        N: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+        H: FnMut(RewrapPoint) -> Result<(), StorageError>,
+    {
+        if expected_envelope.is_empty()
+            || replacement_envelope.is_empty()
+            || expected_envelope.len() as u64 > MAX_PROTECTED_BYTES
+            || replacement_envelope.len() as u64 > MAX_PROTECTED_BYTES
+            || expected_envelope == replacement_envelope
+        {
+            return Err(StorageError::InvalidFormat);
+        }
+        let old_digest = digest_bytes(expected_envelope)?;
+        let new_digest = digest_bytes(replacement_envelope)?;
+        let _lock = self.exclusive_writer()?;
+        let intent = self.active_protected_intent()?;
+        let vault_id = intent.vault_id();
+        let floor = self.protected_memo_generation_floor(vault_id)?;
+        if !intent.accepts(expected_document, floor)
+            || fs::read(&self.protected_path)? != expected_envelope
+        {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        let marker = self.read_rewrap_marker(vault_id)?;
+        match marker {
+            Some(RewrapMarker::Pending { old, new }) if old == old_digest && new == new_digest => {}
+            Some(RewrapMarker::Pending { .. }) => return Err(StorageError::TempConflict),
+            Some(RewrapMarker::Committed { digest }) if digest != old_digest => {
+                return Err(StorageError::StaleProtectedDocument);
+            }
+            _ => {}
+        }
+        if self.protected_temp.try_exists()?
+            && fs::read(&self.protected_temp)? != replacement_envelope
+        {
+            return Err(StorageError::TempConflict);
+        }
+        if marker
+            != Some(RewrapMarker::Pending {
+                old: old_digest,
+                new: new_digest,
+            })
+        {
+            publish_rewrap_marker(
+                &self.rewrap_marker,
+                vault_id,
+                RewrapMarker::Pending {
+                    old: old_digest,
+                    new: new_digest,
+                },
+            )?;
+        }
+        hook(RewrapPoint::PendingPublished)?;
+        if !self.protected_temp.try_exists()? {
+            write_flushed_temp(&self.protected_temp, replacement_envelope)?;
+        }
+        hook(RewrapPoint::Staged)?;
+        let (new_id, new_document) =
+            open_new(&self.protected_temp).map_err(|_| StorageError::ProtectedVerification)?;
+        if new_id != vault_id || new_document != *expected_document {
+            return Err(StorageError::ProtectedVerification);
+        }
+        hook(RewrapPoint::Verified)?;
+        let backup_temp = self.protected_backup.with_extension("rewrap-stage.tmp");
+        remove_if_present(&backup_temp)?;
+        write_flushed_temp(&backup_temp, replacement_envelope)?;
+        if self.protected_backup.try_exists()? {
+            replace_without_backup(&self.protected_backup, &backup_temp)?;
+        } else {
+            move_first_write(&backup_temp, &self.protected_backup)?;
+        }
+        let (backup_id, backup_document) =
+            open_new(&self.protected_backup).map_err(|_| StorageError::ProtectedVerification)?;
+        if backup_id != vault_id
+            || backup_document != *expected_document
+            || envelope_digest(&self.protected_backup)? != new_digest
+        {
+            return Err(StorageError::ProtectedVerification);
+        }
+        hook(RewrapPoint::BackupPublished)?;
+        publish_rewrap_marker(
+            &self.rewrap_marker,
+            vault_id,
+            RewrapMarker::Committed { digest: new_digest },
+        )?;
+        hook(RewrapPoint::Committed)?;
+        replace_without_backup(&self.protected_path, &self.protected_temp)?;
+        hook(RewrapPoint::PrimaryPublished)?;
+        Ok(())
+    }
+
+    /// Abort a pre-commit rotation so a retry may use freshly randomized
+    /// ciphertext. The caller supplies the old authenticated snapshot; the
+    /// exact old primary is checked under lock before changing recovery data.
+    /// A committed rotation can never be rolled back through this method.
+    pub fn abort_pending_protected_rewrap(
+        &self,
+        expected_envelope: &[u8],
+        expected_document: &PadDocument,
+    ) -> Result<(), StorageError> {
+        let _lock = self.exclusive_writer()?;
+        if !self.rewrap_marker.try_exists()? {
+            return Ok(());
+        }
+        let intent = self.active_protected_intent()?;
+        let vault_id = intent.vault_id();
+        let Some(RewrapMarker::Pending { old, .. }) = self.read_rewrap_marker(vault_id)? else {
+            return Err(StorageError::ProtectedCutover);
+        };
+        let floor = self.protected_memo_generation_floor(vault_id)?;
+        if !intent.accepts(expected_document, floor)
+            || fs::read(&self.protected_path)? != expected_envelope
+        {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        let old_digest = digest_bytes(expected_envelope)?;
+        if old != old_digest {
+            return Err(StorageError::StaleProtectedDocument);
+        }
+        self.restore_old_rewrap_copy(expected_envelope)
+    }
+
+    /// Complete recovery after an interrupted pre-commit password rotation.
+    /// No marker means no work: a normal writer's temp is never touched.
+    /// On Pending, authenticate the exact old primary before restoring its
+    /// backup and clearing the marker, all under one writer lock.
+    pub fn recover_pending_protected_rewrap<F>(
+        &self,
+        mut open_old: F,
+    ) -> Result<Option<PadDocument>, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        let _lock = self.exclusive_writer()?;
+        if !self.rewrap_marker.try_exists()? {
+            return Ok(None);
+        }
+        let intent = self.active_protected_intent()?;
+        let vault_id = intent.vault_id();
+        let Some(RewrapMarker::Pending { old, .. }) = self.read_rewrap_marker(vault_id)? else {
+            return Ok(None);
+        };
+        let primary = fs::read(&self.protected_path)?;
+        if primary.is_empty()
+            || primary.len() as u64 > MAX_PROTECTED_BYTES
+            || digest_bytes(&primary)? != old
+        {
+            return Err(StorageError::ProtectedVerification);
+        }
+        let (opened_id, document) =
+            open_old(&self.protected_path).map_err(|_| StorageError::ProtectedVerification)?;
+        let floor = self.protected_memo_generation_floor(vault_id)?;
+        if opened_id != vault_id || !intent.accepts(&document, floor) {
+            return Err(StorageError::ProtectedVerification);
+        }
+        self.restore_old_rewrap_copy(&primary)?;
+        Ok(Some(document))
+    }
+
+    fn restore_old_rewrap_copy(&self, old_envelope: &[u8]) -> Result<(), StorageError> {
+        let restore = self.protected_backup.with_extension("rewrap-abort.tmp");
+        remove_if_present(&restore)?;
+        write_flushed_temp(&restore, old_envelope)?;
+        if self.protected_backup.try_exists()? {
+            replace_without_backup(&self.protected_backup, &restore)?;
+        } else {
+            move_first_write(&restore, &self.protected_backup)?;
+        }
+        if fs::read(&self.protected_backup)? != old_envelope {
+            return Err(StorageError::ProtectedVerification);
+        }
+        remove_if_present(&self.rewrap_marker)?;
+        remove_if_present(&signal_temp_path(&self.rewrap_marker))?;
+        remove_if_present(&self.protected_temp)?;
+        Ok(())
+    }
+
+    /// After a committed marker, repair an interrupted primary publication
+    /// using only the exact marker-qualified authenticated backup.
+    pub fn recover_protected_rewrap<F>(&self, mut open_new: F) -> Result<PadDocument, StorageError>
+    where
+        F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
+    {
+        let _lock = self.exclusive_writer()?;
+        let intent = self.active_protected_intent()?;
+        let Some(RewrapMarker::Committed { digest }) =
+            self.read_rewrap_marker(intent.vault_id())?
+        else {
+            return Err(StorageError::ProtectedCutover);
+        };
+        let floor = self.protected_memo_generation_floor(intent.vault_id())?;
+        let outcome = self.load_rewrap_backup(&mut open_new, intent, floor, digest)?;
+        if envelope_digest(&self.protected_path).ok() != Some(digest) {
+            let temp = self.protected_path.with_extension("rewrap-recover.tmp");
+            remove_if_present(&temp)?;
+            write_flushed_temp(&temp, &fs::read(&self.protected_backup)?)?;
+            if self.protected_path.try_exists()? {
+                replace_without_backup(&self.protected_path, &temp)?;
+            } else {
+                move_first_write(&temp, &self.protected_path)?;
+            }
+        }
+        remove_if_present(&self.protected_temp)?;
+        Ok(outcome.document)
     }
 
     /// Compare the authenticated published document with the caller's exact
@@ -1212,6 +1547,12 @@ impl PadStore {
         let _lock = self.exclusive_writer()?;
         let intent = self.active_protected_intent()?;
         let vault_id = intent.vault_id();
+        if matches!(
+            self.read_rewrap_marker(vault_id)?,
+            Some(RewrapMarker::Pending { .. })
+        ) {
+            return Err(StorageError::ProtectedCutover);
+        }
         let loaded = self.load_protected_unlocked(&mut open_v3)?;
         if loaded.recovered_from_backup {
             return Err(StorageError::ProtectedVerification);
@@ -1263,6 +1604,43 @@ impl PadStore {
             return Err(StorageError::ProtectedVerification);
         }
         hook(ProtectedWritePoint::Verified)?;
+        if self.rewrap_marker.try_exists()? {
+            // After password rotation, every later write advances the exact
+            // envelope gate. The new backup is durable before the marker;
+            // the old primary remains authorized until that marker changes.
+            let backup_temp = self.protected_backup.with_extension("rewrap-stage.tmp");
+            remove_if_present(&backup_temp)?;
+            write_flushed_temp(&backup_temp, encrypted_v3)?;
+            if self.protected_backup.try_exists()? {
+                replace_without_backup(&self.protected_backup, &backup_temp)?;
+            } else {
+                move_first_write(&backup_temp, &self.protected_backup)?;
+            }
+            let (backup_id, backup) =
+                open_v3(&self.protected_backup).map_err(|_| StorageError::ProtectedVerification)?;
+            if backup_id != vault_id || backup != *next {
+                return Err(StorageError::ProtectedVerification);
+            }
+            hook(ProtectedWritePoint::RecoveryStaged)?;
+            publish_rewrap_marker(
+                &self.rewrap_marker,
+                vault_id,
+                RewrapMarker::Committed {
+                    digest: envelope_digest(&self.protected_temp)?,
+                },
+            )?;
+            if protects_plain {
+                publish_protected_memo_floor(
+                    &self.protected_memo_floor,
+                    vault_id,
+                    next.generation,
+                )?;
+                hook(ProtectedWritePoint::FloorPublished)?;
+            }
+            replace_without_backup(&self.protected_path, &self.protected_temp)?;
+            hook(ProtectedWritePoint::Published)?;
+            return Ok(WriteOutcome::Replaced);
+        }
         if protects_plain {
             // Keep a recovery image that already contains the newly sealed
             // memo; never let ReplaceFileW preserve the plaintext generation.
@@ -1556,6 +1934,9 @@ impl PadStore {
         F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
     {
         let _lock = self.exclusive_writer()?;
+        if self.rewrap_marker.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
         let ProtectedIntent::FromV4 {
             vault_id,
             document_id,
@@ -1605,6 +1986,9 @@ impl PadStore {
         F: FnMut(&Path) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError>,
     {
         let _lock = self.exclusive_writer()?;
+        if self.rewrap_marker.try_exists()? {
+            return Err(StorageError::ProtectedCutover);
+        }
         if self.protected_memo_floor.try_exists()? {
             return Err(StorageError::ProtectedCutover);
         }
@@ -1672,14 +2056,28 @@ impl PadStore {
             return Err(StorageError::ProtectedCutover);
         }
         let floor = self.protected_memo_generation_floor(vault_id)?;
+        let rewrap = self.read_rewrap_marker(vault_id)?;
+        let digest = match rewrap {
+            Some(RewrapMarker::Pending { .. }) => return Err(StorageError::ProtectedCutover),
+            Some(RewrapMarker::Committed { digest }) => Some(digest),
+            None => None,
+        };
         if let Ok((opened_id, document)) = open_v3(&self.protected_path) {
-            if opened_id == vault_id && intent.accepts(&document, floor) {
+            if opened_id == vault_id
+                && intent.accepts(&document, floor)
+                && digest
+                    .is_none_or(|value| envelope_digest(&self.protected_path).ok() == Some(value))
+            {
                 return Ok(document);
             }
         }
         let (backup_id, backup) =
             open_v3(&self.protected_backup).map_err(|_| StorageError::ProtectedVerification)?;
-        if backup_id != vault_id || !intent.accepts(&backup, floor) {
+        if backup_id != vault_id
+            || !intent.accepts(&backup, floor)
+            || digest
+                .is_some_and(|value| envelope_digest(&self.protected_backup).ok() != Some(value))
+        {
             return Err(StorageError::ProtectedVerification);
         }
         remove_if_present(&self.protected_temp)?;
@@ -2130,6 +2528,172 @@ enum ProtectedWritePoint {
     RecoveryStaged,
     FloorPublished,
     Published,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RewrapPoint {
+    Staged,
+    Verified,
+    PendingPublished,
+    BackupPublished,
+    Committed,
+    PrimaryPublished,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RewrapMarker {
+    Pending { old: [u8; 32], new: [u8; 32] },
+    Committed { digest: [u8; 32] },
+}
+
+fn publish_rewrap_marker(
+    path: &Path,
+    vault_id: [u8; VAULT_ID_LEN],
+    marker: RewrapMarker,
+) -> Result<(), StorageError> {
+    let mut plain = Vec::from(PROTECTED_MAGIC);
+    plain.extend_from_slice(&PROTECTED_VERSION.to_le_bytes());
+    plain.extend_from_slice(b"rewrap");
+    plain.extend_from_slice(&vault_id);
+    match marker {
+        RewrapMarker::Pending { old, new } => {
+            plain.push(0);
+            plain.extend_from_slice(&old);
+            plain.extend_from_slice(&new);
+        }
+        RewrapMarker::Committed { digest } => {
+            plain.push(1);
+            plain.extend_from_slice(&digest);
+        }
+    }
+    let protected = protect(&plain)?;
+    plain.fill(0);
+    let temp = signal_temp_path(path);
+    remove_if_present(&temp)?;
+    write_flushed_temp(&temp, &protected)?;
+    if path.try_exists()? {
+        replace_without_backup(path, &temp)
+    } else {
+        move_first_write(&temp, path)
+    }
+}
+
+fn read_rewrap_marker(path: &Path) -> Result<([u8; VAULT_ID_LEN], RewrapMarker), StorageError> {
+    let mut plain = read_decrypted(path).map_err(|_| StorageError::ProtectedCutover)?;
+    let result = (|| {
+        if !plain.starts_with(&PROTECTED_MAGIC)
+            || plain.get(8..10) != Some(PROTECTED_VERSION.to_le_bytes().as_slice())
+            || plain.get(10..16) != Some(b"rewrap".as_slice())
+        {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let id: [u8; VAULT_ID_LEN] = plain
+            .get(16..32)
+            .ok_or(StorageError::ProtectedCutover)?
+            .try_into()
+            .map_err(|_| StorageError::ProtectedCutover)?;
+        if id == [0; VAULT_ID_LEN] {
+            return Err(StorageError::ProtectedCutover);
+        }
+        let marker = match (plain.get(32), plain.len()) {
+            (Some(&0), 97) => RewrapMarker::Pending {
+                old: plain[33..65]
+                    .try_into()
+                    .map_err(|_| StorageError::ProtectedCutover)?,
+                new: plain[65..97]
+                    .try_into()
+                    .map_err(|_| StorageError::ProtectedCutover)?,
+            },
+            (Some(&1), 65) => RewrapMarker::Committed {
+                digest: plain[33..65]
+                    .try_into()
+                    .map_err(|_| StorageError::ProtectedCutover)?,
+            },
+            _ => return Err(StorageError::ProtectedCutover),
+        };
+        Ok((id, marker))
+    })();
+    plain.fill(0);
+    result
+}
+
+fn envelope_digest(path: &Path) -> Result<[u8; REWRAP_DIGEST_LEN], StorageError> {
+    let bytes = fs::read(path)?;
+    if bytes.is_empty() || bytes.len() as u64 > MAX_PROTECTED_BYTES {
+        return Err(StorageError::ProtectedVerification);
+    }
+    digest_bytes(&bytes)
+}
+
+fn digest_bytes(bytes: &[u8]) -> Result<[u8; REWRAP_DIGEST_LEN], StorageError> {
+    let mut algorithm = BCRYPT_ALG_HANDLE::default();
+    // SAFETY: static algorithm name and initialized handle.
+    let status = unsafe {
+        BCryptOpenAlgorithmProvider(
+            &mut algorithm,
+            BCRYPT_SHA256_ALGORITHM,
+            windows::core::PCWSTR::null(),
+            BCRYPT_OPEN_ALGORITHM_PROVIDER_FLAGS(0),
+        )
+    };
+    if status.0 < 0 {
+        return Err(StorageError::ProtectedVerification);
+    }
+    let result = (|| {
+        let mut object_len = [0_u8; 4];
+        let mut hash_len = [0_u8; 4];
+        for (property, value) in [
+            (BCRYPT_OBJECT_LENGTH, &mut object_len),
+            (BCRYPT_HASH_LENGTH, &mut hash_len),
+        ] {
+            let mut written = 0;
+            // SAFETY: provider and four-byte result buffer are live.
+            if unsafe {
+                BCryptGetProperty(algorithm.into(), property, Some(value), &mut written, 0)
+            }
+            .0 < 0
+                || written != 4
+            {
+                return Err(StorageError::ProtectedVerification);
+            }
+        }
+        let object_size = u32::from_le_bytes(object_len) as usize;
+        if object_size == 0
+            || object_size > 1024 * 1024
+            || u32::from_le_bytes(hash_len) as usize != REWRAP_DIGEST_LEN
+        {
+            return Err(StorageError::ProtectedVerification);
+        }
+        let mut object = vec![0_u8; object_size];
+        let mut hash = BCRYPT_HASH_HANDLE::default();
+        // SAFETY: object is owned until hash destruction.
+        if unsafe { BCryptCreateHash(algorithm, &mut hash, Some(&mut object), None, 0) }.0 < 0 {
+            return Err(StorageError::ProtectedVerification);
+        }
+        let result = (|| {
+            // SAFETY: hash and byte slice are live for this synchronous call.
+            if unsafe { BCryptHashData(hash, bytes, 0) }.0 < 0 {
+                return Err(StorageError::ProtectedVerification);
+            }
+            let mut digest = [0_u8; REWRAP_DIGEST_LEN];
+            // SAFETY: SHA-256 output is exactly 32 bytes.
+            if unsafe { BCryptFinishHash(hash, &mut digest, 0) }.0 < 0 {
+                return Err(StorageError::ProtectedVerification);
+            }
+            Ok(digest)
+        })();
+        // SAFETY: this scope owns the successfully created hash handle.
+        unsafe {
+            let _ = BCryptDestroyHash(hash);
+        }
+        object.fill(0);
+        result
+    })();
+    // SAFETY: this scope owns the successfully opened algorithm provider.
+    unsafe {
+        let _ = BCryptCloseAlgorithmProvider(algorithm, 0);
+    }
+    result
 }
 
 fn remove_if_present(path: &Path) -> Result<(), StorageError> {
@@ -4463,6 +5027,302 @@ mod tests {
         ));
         assert!(!store.protected_path.exists());
         assert!(!store.intent.exists());
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    fn open_rewrapped(
+        path: &Path,
+        document: &PadDocument,
+    ) -> Result<([u8; VAULT_ID_LEN], PadDocument), StorageError> {
+        match fs::read(path)?.as_slice() {
+            b"future encrypted payload" | b"rotated envelope" => {
+                Ok((TEST_VAULT_ID, document.clone()))
+            }
+            _ => Err(StorageError::ProtectedVerification),
+        }
+    }
+
+    #[test]
+    fn password_rewrap_cut_points_gate_old_and_new_copies() {
+        for point in [
+            RewrapPoint::Staged,
+            RewrapPoint::Verified,
+            RewrapPoint::PendingPublished,
+            RewrapPoint::BackupPublished,
+            RewrapPoint::Committed,
+            RewrapPoint::PrimaryPublished,
+        ] {
+            let (directory, store, document) = migrated_store();
+            let result = store.rewrap_protected_with_hook(
+                b"future encrypted payload",
+                &document,
+                b"rotated envelope",
+                |path| open_rewrapped(path, &document),
+                |at| {
+                    if at == point {
+                        Err(StorageError::ProtectedVerification)
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert!(
+                matches!(result, Err(StorageError::ProtectedVerification)),
+                "{point:?}"
+            );
+            let loaded = store
+                .load_protected(|path| open_rewrapped(path, &document))
+                .unwrap();
+            let committed = matches!(
+                point,
+                RewrapPoint::Committed | RewrapPoint::PrimaryPublished
+            );
+            assert_eq!(
+                loaded.recovered_from_backup,
+                point == RewrapPoint::Committed,
+                "{point:?}"
+            );
+            if committed {
+                assert_eq!(
+                    fs::read(&store.protected_backup).unwrap(),
+                    b"rotated envelope"
+                );
+                store
+                    .recover_protected_rewrap(|path| open_rewrapped(path, &document))
+                    .unwrap();
+                assert_eq!(
+                    fs::read(&store.protected_path).unwrap(),
+                    b"rotated envelope"
+                );
+                fs::write(&store.protected_path, b"future encrypted payload").unwrap();
+                assert!(
+                    store
+                        .load_protected(|path| {
+                            if fs::read(path)?.as_slice() == b"future encrypted payload" {
+                                Ok((TEST_VAULT_ID, document.clone()))
+                            } else {
+                                Err(StorageError::ProtectedVerification)
+                            }
+                        })
+                        .is_err(),
+                    "old password opened after {point:?}"
+                );
+            } else {
+                assert_eq!(
+                    fs::read(&store.protected_path).unwrap(),
+                    b"future encrypted payload"
+                );
+                assert!(!loaded.recovered_from_backup);
+            }
+            let _ = fs::remove_dir_all(directory);
+        }
+    }
+
+    #[test]
+    fn password_rewrap_rejects_stale_bytes_and_wrong_new_document() {
+        let (directory, store, document) = migrated_store();
+        let mut wrong = document.clone();
+        wrong.generation += 1;
+        assert!(matches!(
+            store.rewrap_protected(
+                b"other old envelope",
+                &document,
+                b"rotated envelope",
+                |path| open_rewrapped(path, &document),
+            ),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        assert!(matches!(
+            store.rewrap_protected(
+                b"future encrypted payload",
+                &document,
+                b"rotated envelope",
+                |_| Ok((TEST_VAULT_ID, wrong.clone())),
+            ),
+            Err(StorageError::ProtectedVerification)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn password_rewrap_gate_advances_on_later_document_write() {
+        let (directory, store, document) = migrated_store();
+        store
+            .rewrap_protected(
+                b"future encrypted payload",
+                &document,
+                b"rotated envelope",
+                |path| open_rewrapped(path, &document),
+            )
+            .unwrap();
+        let next = one("new", "saved after password change", 2);
+        store
+            .write_protected(
+                &document,
+                &next,
+                b"updated rotated envelope",
+                |path| match fs::read(path)?.as_slice() {
+                    b"rotated envelope" => Ok((TEST_VAULT_ID, document.clone())),
+                    b"updated rotated envelope" => Ok((TEST_VAULT_ID, next.clone())),
+                    _ => Err(StorageError::ProtectedVerification),
+                },
+            )
+            .unwrap();
+        fs::write(&store.protected_backup, b"future encrypted payload").unwrap();
+        fs::write(&store.protected_path, b"rotated envelope").unwrap();
+        assert!(store
+            .load_protected(|path| open_rewrapped(path, &document))
+            .is_err());
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn interrupted_precommit_rewrap_can_abort_and_retry_with_fresh_ciphertext() {
+        for point in [
+            RewrapPoint::Staged,
+            RewrapPoint::Verified,
+            RewrapPoint::PendingPublished,
+            RewrapPoint::BackupPublished,
+        ] {
+            let (directory, store, document) = migrated_store();
+            assert!(store
+                .rewrap_protected_with_hook(
+                    b"future encrypted payload",
+                    &document,
+                    b"first random candidate",
+                    |_| Ok((TEST_VAULT_ID, document.clone())),
+                    |at| if at == point {
+                        Err(StorageError::ProtectedVerification)
+                    } else {
+                        Ok(())
+                    },
+                )
+                .is_err());
+            store
+                .abort_pending_protected_rewrap(b"future encrypted payload", &document)
+                .unwrap();
+            assert!(!store.rewrap_marker.exists(), "{point:?}");
+            assert!(!store.protected_temp.exists(), "{point:?}");
+            assert_eq!(
+                fs::read(&store.protected_backup).unwrap(),
+                b"future encrypted payload"
+            );
+            store
+                .rewrap_protected(
+                    b"future encrypted payload",
+                    &document,
+                    b"second random candidate",
+                    |_| Ok((TEST_VAULT_ID, document.clone())),
+                )
+                .unwrap();
+            assert_eq!(
+                fs::read(&store.protected_path).unwrap(),
+                b"second random candidate"
+            );
+            assert_eq!(
+                fs::read(&store.protected_backup).unwrap(),
+                b"second random candidate"
+            );
+            assert!(matches!(
+                store.abort_pending_protected_rewrap(b"future encrypted payload", &document),
+                Err(StorageError::StaleProtectedDocument | StorageError::ProtectedCutover)
+            ));
+            let _ = fs::remove_dir_all(directory);
+        }
+    }
+
+    #[test]
+    fn authenticated_pending_recovery_restores_old_backup_and_allows_normal_save() {
+        let directory = temp_dir();
+        let store = PadStore::at(&directory);
+        let document = v4_with_protected_memo(&store);
+        store
+            .migrate_v4_to_protected(
+                &document,
+                TEST_VAULT_ID,
+                b"future encrypted payload",
+                |path| open_staged(&document, path),
+            )
+            .unwrap();
+        publish_protected_memo_floor(
+            &store.protected_memo_floor,
+            TEST_VAULT_ID,
+            document.generation,
+        )
+        .unwrap();
+        assert!(store
+            .rewrap_protected_with_hook(
+                b"future encrypted payload",
+                &document,
+                b"lost random candidate",
+                |_| Ok((TEST_VAULT_ID, document.clone())),
+                |point| if point == RewrapPoint::BackupPublished {
+                    Err(StorageError::ProtectedVerification)
+                } else {
+                    Ok(())
+                },
+            )
+            .is_err());
+        let old_primary = fs::read(&store.protected_path).unwrap();
+        let new_backup = fs::read(&store.protected_backup).unwrap();
+        assert!(matches!(
+            store.recover_pending_protected_rewrap(|_| Err(StorageError::ProtectedVerification)),
+            Err(StorageError::ProtectedVerification)
+        ));
+        assert_eq!(fs::read(&store.protected_path).unwrap(), old_primary);
+        assert_eq!(fs::read(&store.protected_backup).unwrap(), new_backup);
+        assert!(store.rewrap_marker.exists());
+        assert!(matches!(
+            store.abort_pending_protected_rewrap(b"wrong old bytes", &document),
+            Err(StorageError::StaleProtectedDocument)
+        ));
+        assert_eq!(fs::read(&store.protected_backup).unwrap(), new_backup);
+        assert_eq!(
+            store
+                .recover_pending_protected_rewrap(|path| open_rewrapped(path, &document))
+                .unwrap(),
+            Some(document.clone())
+        );
+        assert!(!store.rewrap_marker.exists());
+        assert!(!store.protected_temp.exists());
+        assert_eq!(fs::read(&store.protected_backup).unwrap(), old_primary);
+        let mut next = document.clone();
+        next.generation += 1;
+        next.memos[1]
+            .edit("after recovery", "old password remains active", 3)
+            .unwrap();
+        store
+            .write_protected(&document, &next, b"new encrypted payload", |path| {
+                open_protected_test(&document, &next, path)
+            })
+            .unwrap();
+        assert_eq!(
+            store
+                .load_protected(|path| open_protected_test(&document, &next, path))
+                .unwrap()
+                .document,
+            next
+        );
+        let _ = fs::remove_dir_all(directory);
+    }
+
+    #[test]
+    fn no_pending_rewrap_leaves_normal_writer_temp_untouched() {
+        let (directory, store, document) = migrated_store();
+        fs::write(&store.protected_temp, b"normal writer staged bytes").unwrap();
+        assert_eq!(
+            store
+                .recover_pending_protected_rewrap(|_| panic!("must not open without Pending"))
+                .unwrap(),
+            None
+        );
+        store
+            .abort_pending_protected_rewrap(b"wrong", &document)
+            .unwrap();
+        assert_eq!(
+            fs::read(&store.protected_temp).unwrap(),
+            b"normal writer staged bytes"
+        );
         let _ = fs::remove_dir_all(directory);
     }
 }

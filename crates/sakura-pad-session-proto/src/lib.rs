@@ -22,6 +22,8 @@ const RECOVERY_KEY_BYTES: usize = 77;
 const CREATED_HEADER: usize = 8 + 4;
 const CREATED_MAGIC: &[u8; 8] = b"SKRCR001";
 const V3_AUTH_MAGIC: &[u8; 8] = b"SKR3AUTH";
+const CHANGE_PASSWORD_V2_MAGIC: &[u8; 8] = b"SKRCPW01";
+const CHANGE_PASSWORD_V2_HEADER: usize = 8 + 2;
 const V3_PRF_BYTES: usize = 32;
 const V3_CREDENTIAL_ID_MAX: usize = 1024;
 const V3_AUTH_HEADER: usize = 8 + 2 + V3_PRF_BYTES;
@@ -51,6 +53,8 @@ pub enum Operation {
     UnlockPrfV3 = 12,
     UnlockPasswordAndPrfV3 = 13,
     UnlockRecoveryV3 = 14,
+    /// Replace a whole-Pad v2 password, retaining its recovery-key route.
+    ChangePasswordV2 = 15,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -69,14 +73,16 @@ pub struct Request {
     pub id: u64,
     pub generation: u64,
     pub operation: Operation,
-    /// Used by Create and Unlock variants. Other operations must set this to zero.
+    /// Used by Create, Unlock, and ChangePasswordV2. Other operations set zero.
     pub vault_id: [u8; 16],
     /// Zero denotes the Pad vault; nonzero denotes an individual memo.
     pub memo_id: u64,
     pub password: SecretBytes,
     /// V3 payload prefix: `SKR3AUTH`, u16 credential ID length, credential
     /// ID, and exactly 32 PRF bytes. The suffix is plaintext (create) or an
-    /// envelope (unlock). Password data remains in the separate password field.
+    /// envelope (unlock). ChangePasswordV2 uses an independent versioned
+    /// new-password/envelope payload; its old password is this request's
+    /// separate password field.
     pub payload: SecretBytes,
 }
 
@@ -119,6 +125,17 @@ fn validate_request(request: &Request) -> io::Result<()> {
             if request.vault_id == [0; 16]
                 || request.password.len() != RECOVERY_KEY_BYTES
                 || request.payload.len() > MAX_ENVELOPE_BYTES
+            {
+                return Err(invalid());
+            }
+        }
+        Operation::ChangePasswordV2 => {
+            let changed = parse_change_password_v2_payload(&request.payload)?;
+            if request.vault_id == [0; 16]
+                || request.memo_id != 0
+                || !(1..=MAX_PASSWORD_BYTES).contains(&request.password.len())
+                || !(V2_ENVELOPE_OVERHEAD..=MAX_ENVELOPE_BYTES).contains(&changed.envelope.len())
+                || !changed.envelope.starts_with(b"SKRPENV2")
             {
                 return Err(invalid());
             }
@@ -233,6 +250,7 @@ pub fn read_request(mut reader: impl Read) -> io::Result<Option<Request>> {
         12 => Operation::UnlockPrfV3,
         13 => Operation::UnlockPasswordAndPrfV3,
         14 => Operation::UnlockRecoveryV3,
+        15 => Operation::ChangePasswordV2,
         _ => return Err(invalid()),
     };
     let vault_id = frame[25..41].try_into().map_err(|_| invalid())?;
@@ -265,6 +283,62 @@ pub fn read_request(mut reader: impl Read) -> io::Result<Option<Request>> {
 pub struct CreatedRecovery<'a> {
     pub envelope: &'a [u8],
     pub recovery_key: &'a str,
+}
+
+/// A versioned request body for whole-Pad v2 password replacement.
+/// The old password remains in `Request.password`; this body contains the
+/// new password and the complete current envelope. Neither is persisted by
+/// this protocol. A successful response contains only the new v2 envelope.
+#[allow(missing_debug_implementations)]
+pub struct ChangePasswordV2Payload<'a> {
+    pub new_password: &'a [u8],
+    pub envelope: &'a [u8],
+}
+
+pub fn encode_change_password_v2_payload(
+    new_password: &[u8],
+    envelope: &[u8],
+) -> io::Result<SecretBytes> {
+    if !(1..=MAX_PASSWORD_BYTES).contains(&new_password.len())
+        || !(V2_ENVELOPE_OVERHEAD..=MAX_ENVELOPE_BYTES).contains(&envelope.len())
+        || !envelope.starts_with(b"SKRPENV2")
+    {
+        return Err(invalid());
+    }
+    let mut payload = SecretBytes::new(Vec::with_capacity(
+        CHANGE_PASSWORD_V2_HEADER + new_password.len() + envelope.len(),
+    ));
+    payload.extend_from_slice(CHANGE_PASSWORD_V2_MAGIC);
+    payload.extend_from_slice(&(new_password.len() as u16).to_le_bytes());
+    payload.extend_from_slice(new_password);
+    payload.extend_from_slice(envelope);
+    Ok(payload)
+}
+
+pub fn parse_change_password_v2_payload(payload: &[u8]) -> io::Result<ChangePasswordV2Payload<'_>> {
+    if payload.len() < CHANGE_PASSWORD_V2_HEADER + 1 + V2_ENVELOPE_OVERHEAD
+        || payload.len() > MAX_PAYLOAD_BYTES
+        || !payload.starts_with(CHANGE_PASSWORD_V2_MAGIC)
+    {
+        return Err(invalid());
+    }
+    let password_len =
+        u16::from_le_bytes(payload[8..10].try_into().map_err(|_| invalid())?) as usize;
+    if !(1..=MAX_PASSWORD_BYTES).contains(&password_len) {
+        return Err(invalid());
+    }
+    let envelope = payload
+        .get(CHANGE_PASSWORD_V2_HEADER + password_len..)
+        .ok_or_else(invalid)?;
+    if !(V2_ENVELOPE_OVERHEAD..=MAX_ENVELOPE_BYTES).contains(&envelope.len())
+        || !envelope.starts_with(b"SKRPENV2")
+    {
+        return Err(invalid());
+    }
+    Ok(ChangePasswordV2Payload {
+        new_password: &payload[CHANGE_PASSWORD_V2_HEADER..CHANGE_PASSWORD_V2_HEADER + password_len],
+        envelope,
+    })
 }
 
 /// Borrowed v3 authenticator bundle. The containing request payload is a
@@ -521,6 +595,40 @@ mod tests {
         assert!(write_request(Vec::new(), &request).is_ok());
         request.payload = SecretBytes::new(vec![0; MAX_ENVELOPE_BYTES + 1]);
         assert!(write_request(Vec::new(), &request).is_err());
+    }
+
+    #[test]
+    fn change_password_v2_body_is_versioned_bounded_and_whole_pad_only() {
+        let mut envelope = vec![0; V2_ENVELOPE_OVERHEAD];
+        envelope[..8].copy_from_slice(b"SKRPENV2");
+        let mut body = encode_change_password_v2_payload(b"new secret", &envelope).unwrap();
+        let parsed = parse_change_password_v2_payload(&body).unwrap();
+        assert_eq!(parsed.new_password, b"new secret");
+        assert_eq!(parsed.envelope, envelope);
+        let mut req = request();
+        req.operation = Operation::ChangePasswordV2;
+        req.vault_id = *b"session-vault-01";
+        req.password = SecretBytes::new(b"old secret".to_vec());
+        req.payload = body.clone();
+        let mut frame = Vec::new();
+        write_request(&mut frame, &req).unwrap();
+        assert_eq!(
+            read_request(frame.as_slice()).unwrap().unwrap().operation,
+            Operation::ChangePasswordV2
+        );
+        req.memo_id = 7;
+        assert!(write_request(Vec::new(), &req).is_err());
+        req.memo_id = 0;
+        req.password.clear();
+        assert!(write_request(Vec::new(), &req).is_err());
+        body[0] ^= 1;
+        assert!(parse_change_password_v2_payload(&body).is_err());
+        assert!(encode_change_password_v2_payload(b"", &envelope).is_err());
+        assert!(
+            encode_change_password_v2_payload(&vec![0; MAX_PASSWORD_BYTES + 1], &envelope).is_err()
+        );
+        envelope[..8].copy_from_slice(b"SKRPENV3");
+        assert!(encode_change_password_v2_payload(b"new", &envelope).is_err());
     }
 
     #[test]

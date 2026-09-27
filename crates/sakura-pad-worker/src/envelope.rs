@@ -614,6 +614,38 @@ pub fn open_with_recovery_v2(
     unlock_with_recovery_v2(scope, recovery_key, envelope).map(|(plaintext, _)| plaintext)
 }
 
+/// Replace the password on an authenticated v2 envelope without changing its
+/// recovery key or scope. The original KDF salt is part of the recovery-wrap
+/// AAD and must stay fixed; the password wrap and content receive fresh nonces.
+/// Plaintext exists only inside the worker and is never returned to the caller.
+pub fn rewrap_password_v2(
+    scope: Scope,
+    old_password: &[u8],
+    new_password: &[u8],
+    envelope: &[u8],
+) -> Result<Vec<u8>, EnvelopeError> {
+    validate_password(new_password)?;
+    let (plaintext, unlocked) = unlock_with_password_v2(scope, old_password, envelope)?;
+    let mut header = unlocked.header;
+    fill_random(&mut header[61..73])?;
+    fill_random(&mut header[73..85])?;
+    let password_key = derive_key(new_password, &header[45..61])?;
+    let password_wrap = wrap_v2(
+        &password_key,
+        &unlocked.data_key,
+        &header,
+        &header[61..73],
+        V2_PASSWORD_PURPOSE,
+    )?;
+    encrypt_v2(
+        &header,
+        &password_wrap,
+        &unlocked.recovery_wrap,
+        &unlocked.data_key,
+        &plaintext,
+    )
+}
+
 fn unlock_v2_with_key(
     scope: Scope,
     envelope: &[u8],
@@ -1505,6 +1537,40 @@ mod tests {
             open(MEMO_SCOPE, PASSWORD, &third).err(),
             Some(EnvelopeError::InvalidEnvelope)
         );
+    }
+
+    #[test]
+    fn v2_password_rewrap_retains_authenticated_recovery_scope() {
+        let (first, recovery) = seal_with_recovery(SCOPE, PASSWORD, b"whole Pad").unwrap();
+        let second = rewrap_password_v2(SCOPE, PASSWORD, b"new secret", &first).unwrap();
+        assert_eq!(&first[..61], &second[..61]);
+        assert_eq!(
+            &first[V2_RECOVERY_NONCE_OFFSET..V2_HEADER_LEN],
+            &second[V2_RECOVERY_NONCE_OFFSET..V2_HEADER_LEN]
+        );
+        assert_eq!(
+            &first[V2_RECOVERY_WRAP_OFFSET..V2_PAYLOAD_OFFSET],
+            &second[V2_RECOVERY_WRAP_OFFSET..V2_PAYLOAD_OFFSET]
+        );
+        assert_ne!(&first[61..85], &second[61..85]);
+        assert_eq!(
+            &*open_with_password_v2(SCOPE, b"new secret", &second).unwrap(),
+            b"whole Pad"
+        );
+        assert_eq!(
+            &*open_with_recovery_v2(SCOPE, &recovery, &second).unwrap(),
+            b"whole Pad"
+        );
+        assert!(open_with_password_v2(SCOPE, PASSWORD, &second).is_err());
+        assert!(rewrap_password_v2(MEMO_SCOPE, PASSWORD, b"new secret", &first).is_err());
+        assert!(rewrap_password_v2(SCOPE, b"wrong old", b"new secret", &first).is_err());
+        assert_eq!(
+            rewrap_password_v2(SCOPE, PASSWORD, b"", &first).err(),
+            Some(EnvelopeError::InvalidInput)
+        );
+        let mut tampered = first;
+        *tampered.last_mut().unwrap() ^= 1;
+        assert!(rewrap_password_v2(SCOPE, PASSWORD, b"new secret", &tampered).is_err());
     }
 
     #[test]
