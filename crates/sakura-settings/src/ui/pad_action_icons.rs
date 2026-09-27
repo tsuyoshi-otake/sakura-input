@@ -69,21 +69,19 @@ pub(super) fn draw_pad_action_icon(dc: HDC, rect: RECT, kind: PadActionIcon, col
             ],
             // An empty shield denotes protection settings without implying
             // that the Pad is already protected.
-            PadActionIcon::Protection => &[
-                &[
-                    (8, 1),
-                    (14, 3),
-                    (14, 7),
-                    (13, 10),
-                    (11, 13),
-                    (8, 15),
-                    (5, 13),
-                    (3, 10),
-                    (2, 7),
-                    (2, 3),
-                    (8, 1),
-                ],
-            ],
+            PadActionIcon::Protection => &[&[
+                (8, 1),
+                (14, 3),
+                (14, 7),
+                (13, 10),
+                (11, 13),
+                (8, 15),
+                (5, 13),
+                (3, 10),
+                (2, 7),
+                (2, 3),
+                (8, 1),
+            ]],
         };
 
         for path in points {
