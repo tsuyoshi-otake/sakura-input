@@ -1933,7 +1933,7 @@ fn ai_records_roundtrip_and_aggregate_logical_requests_attempts_and_tokens() {
         AiTextStatus::Applied,
         "元",
         "結果",
-        "gpt-5.6-luna",
+        "gpt-6-luna",
         "openai",
         "technical",
         "",
@@ -1962,7 +1962,7 @@ fn ai_records_roundtrip_and_aggregate_logical_requests_attempts_and_tokens() {
         .expect("AI record");
     assert_eq!(ai.operation, AiTextOperation::Proofread);
     assert_eq!(ai.status, AiTextStatus::Applied);
-    assert_eq!(ai.model, "gpt-5.6-luna");
+    assert_eq!(ai.model, "gpt-6-luna");
     assert_eq!(ai.attempts, 2);
     assert_eq!(
         snapshot

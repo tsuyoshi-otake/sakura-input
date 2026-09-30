@@ -2230,7 +2230,7 @@ fn renderer_host_policy_rejects_ai_start_apply_poll_cancel_and_record() {
             status: AiTextStatus::Rejected,
             source: "Pad本文".to_owned(),
             result: "外部結果".to_owned(),
-            model: "gpt-5.6-luna".to_owned(),
+            model: "gpt-6-luna".to_owned(),
             provider: "custom".to_owned(),
             style: "plain".to_owned(),
             error_code: "private-renderer".to_owned(),

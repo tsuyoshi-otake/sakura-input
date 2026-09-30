@@ -347,7 +347,7 @@ pub fn populate_menu(menu: &ITfMenu, state: Snapshot, last_ai_error: Option<&str
         menu,
         MENU_AI_TRANSFORM,
         ai_flags,
-        "GPT-5.6 Lunaで文章変換",
+        "GPT-6 Lunaで文章変換",
         &mut unused,
     )?;
     add(

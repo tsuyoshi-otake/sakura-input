@@ -2958,19 +2958,7 @@ impl TextService {
         self.record_ai_result(
             pending.operation,
             pending.source,
-            AiTextResult {
-                status: AiTextStatus::Cancelled,
-                result: String::new(),
-                model: "gpt-5.6-luna".to_owned(),
-                provider: String::new(),
-                style: String::new(),
-                error_code: reason.to_owned(),
-                latency_ms: 0,
-                input_tokens: 0,
-                output_tokens: 0,
-                cached_tokens: 0,
-                attempts: 0,
-            },
+            ai_terminal_result(AiTextStatus::Cancelled, reason),
             AiTextStatus::Cancelled,
             Some(reason),
         );
@@ -3047,19 +3035,10 @@ impl TextService {
                 self.record_ai_result(
                     operation,
                     source,
-                    AiTextResult {
-                        status: AiTextStatus::Rejected,
-                        result: String::new(),
-                        model: "gpt-5.6-luna".to_owned(),
-                        provider: String::new(),
-                        style: String::new(),
-                        error_code: format!("start_{code:?}").to_ascii_lowercase(),
-                        latency_ms: 0,
-                        input_tokens: 0,
-                        output_tokens: 0,
-                        cached_tokens: 0,
-                        attempts: 0,
-                    },
+                    ai_terminal_result(
+                        AiTextStatus::Rejected,
+                        &format!("start_{code:?}").to_ascii_lowercase(),
+                    ),
                     AiTextStatus::Rejected,
                     None,
                 );
@@ -4322,11 +4301,13 @@ fn visible_text(preedit: &Preedit) -> String {
     text
 }
 
+/// Result for a request the TSF terminates without a worker response. The
+/// model must match `sakura_ai_proto::MODEL`, which this DLL does not link.
 fn ai_terminal_result(status: AiTextStatus, error_code: &str) -> AiTextResult {
     AiTextResult {
         status,
         result: String::new(),
-        model: "gpt-5.6-luna".to_owned(),
+        model: "gpt-6-luna".to_owned(),
         provider: String::new(),
         style: String::new(),
         error_code: error_code.to_owned(),

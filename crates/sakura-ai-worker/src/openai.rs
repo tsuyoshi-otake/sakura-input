@@ -668,7 +668,7 @@ mod tests {
         let request = captured.lock().expect("captured").join("");
         assert!(request.starts_with("POST /responses HTTP/1.1"));
         assert!(request.contains("Authorization: Bearer test-key"));
-        assert!(request.contains("\"model\":\"gpt-5.6-luna\""));
+        assert!(request.contains("\"model\":\"gpt-6-luna\""));
         assert!(request.contains("\"store\":false"));
         assert!(request.contains("元の文章"));
     }
