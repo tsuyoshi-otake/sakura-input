@@ -89,7 +89,7 @@ pub(super) fn create_general_controls(
     let mut p = layout.page(
         parent,
         "AI文章変換",
-        "明示操作した文章だけをGPT-5.6 Lunaへ送信します。",
+        "明示操作した文章だけをGPT-6 Lunaへ送信します。",
         720,
     )?;
     let ai_text_panel = p.window();
