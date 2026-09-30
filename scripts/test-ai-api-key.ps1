@@ -9,7 +9,7 @@
     HKCU\SOFTWARE\SakuraInput\Preferences. The key is never printed, written
     to argv, or left in a temp file.
 
-    Exit 0 only when both GET /models and POST /responses (gpt-5.6-luna)
+    Exit 0 only when both GET /models and POST /responses (gpt-6-luna)
     succeed. A 401 means the stored key is rejected; 403/404 usually means
     the account cannot use that model.
 
@@ -27,7 +27,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $Target = 'SakuraInput/AI/APIKey'
-$Model = 'gpt-5.6-luna'
+$Model = 'gpt-6-luna'
 $PrefPath = 'HKCU:\SOFTWARE\SakuraInput\Preferences'
 
 function Write-Result {

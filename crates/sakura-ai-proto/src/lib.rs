@@ -6,7 +6,7 @@ use std::io::{self, Read, Write};
 const REQUEST_MAGIC: &[u8; 4] = b"SAIR";
 const RESPONSE_MAGIC: &[u8; 4] = b"SAIS";
 const VERSION: u16 = 1;
-pub const MODEL: &str = "gpt-5.6-luna";
+pub const MODEL: &str = "gpt-6-luna";
 pub const MAX_TEXT_BYTES: usize = 4 * 1024;
 pub const MAX_METADATA_BYTES: usize = 128;
 pub const MAX_ENDPOINT_BYTES: usize = 2 * 1024;
