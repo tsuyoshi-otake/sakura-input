@@ -1432,6 +1432,7 @@ impl Dispatcher {
                 self.learning.as_deref(),
                 self.input_history.as_deref(),
                 ExecutionPolicy::Apply,
+                CommitContext::Recover,
                 &mut self.scratch,
                 out,
             ) {
@@ -2477,6 +2478,17 @@ fn candidate_learning_key(candidate: &ConversionCandidate) -> (&str, u16) {
     )
 }
 
+/// What a [`commit_pending`] caller does with the left context that a plain
+/// reading commit leaves behind (#273).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CommitContext {
+    /// The next composition can follow this commit, so recover its right id.
+    Recover,
+    /// The caller retires the carried context right after this commit, so a
+    /// lookup could only spend the conversion budget on a discarded value.
+    Retire,
+}
+
 /// Recovers the connection class that an unconverted reading commit leaves
 /// to its right, so a particle committed with Enter still conditions the next
 /// conversion (#273). The committed text never changes: only a lexical
@@ -2664,17 +2676,26 @@ fn apply_key(
         return Ok(());
     }
     match action {
-        Some(action) => apply_action(
-            session_id,
-            session,
-            action,
-            key,
-            services,
-            policy,
-            &mut prediction_cache,
-            scratch,
-            out,
-        )?,
+        Some(action) => {
+            apply_action(
+                session_id,
+                session,
+                action,
+                key,
+                services,
+                policy,
+                &mut prediction_cache,
+                scratch,
+                out,
+            )?;
+            // A claimed idle action can still decline and hand its key to the
+            // host: outside the armed window `undo_commit` lets Ctrl+Backspace
+            // delete the previous word. Whatever the host does with it is as
+            // invisible here as an unclaimed key above (#273).
+            if state == State::Idle && !out.consumed {
+                session.reset_carryover();
+            }
+        }
 
         None if idle_space_commit => {
             let is_full = session.idle_space_is_full(key.modifiers.shift());
@@ -2704,6 +2725,7 @@ fn apply_key(
                 services.learning,
                 services.input_history,
                 policy,
+                CommitContext::Recover,
                 scratch,
                 out,
             )?;
@@ -3550,6 +3572,7 @@ fn apply_action(
                     services.learning,
                     services.input_history,
                     policy,
+                    CommitContext::Recover,
                     scratch,
                     out,
                 )?;
@@ -3576,6 +3599,7 @@ fn apply_action(
                     services.learning,
                     services.input_history,
                     policy,
+                    CommitContext::Recover,
                     scratch,
                     out,
                 )?;
@@ -3855,6 +3879,7 @@ fn commit_conversion_then_feed_literal(
         services.learning,
         services.input_history,
         policy,
+        CommitContext::Recover,
         scratch,
         out,
     )?;
@@ -5511,6 +5536,7 @@ fn commit_pending(
     learning: Option<&LearningService>,
     input_history: Option<&InputHistoryService>,
     policy: ExecutionPolicy,
+    context: CommitContext,
     scratch: &mut FixedStr<MAX_PREEDIT_BYTES>,
     out: &mut OutputBuf,
 ) -> Result<(), Overflow> {
@@ -5577,7 +5603,12 @@ fn commit_pending(
         if preserve_exact {
             session.record_current_commit_without_cache(scratch.as_str(), 0, 0, 0);
         } else {
-            let right_id = plain_commit_right_id(session, conversion, policy, scratch.as_str());
+            let right_id = match context {
+                CommitContext::Recover => {
+                    plain_commit_right_id(session, conversion, policy, scratch.as_str())
+                }
+                CommitContext::Retire => 0,
+            };
             session.record_current_commit(scratch.as_str(), right_id, 0, 0);
         }
     }
@@ -5602,6 +5633,7 @@ fn switch_mode(
         services.learning,
         services.input_history,
         policy,
+        CommitContext::Retire,
         scratch,
         out,
     )?;

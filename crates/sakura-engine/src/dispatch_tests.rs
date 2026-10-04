@@ -10143,6 +10143,106 @@ fn idle_caret_navigation_retires_the_previous_commit_context() {
     assert_idle_key_retires_the_previous_commit_context(KeyCode::Left);
 }
 
+#[test]
+fn idle_declined_undo_commit_retires_the_previous_commit_context() {
+    let mut dispatcher = contextual_conversion_dispatcher();
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "context.exe");
+    type_word(&mut dispatcher, session, "isha", &mut out);
+    for step in [KeyCode::Space, KeyCode::Enter] {
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(step),
+            },
+            &mut out,
+        );
+    }
+    assert_eq!(out.commit_text(), Some("医者"));
+    // A cancelled composition disarms the commit undo but leaves the
+    // committed text, and so its context, in place.
+    type_word(&mut dispatcher, session, "a", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Escape),
+        },
+        &mut out,
+    );
+    assert_eq!(
+        dispatcher
+            .sessions
+            .get(session)
+            .expect("session")
+            .carry_right_id(),
+        3
+    );
+
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: modified_named_key(KeyCode::Backspace, Modifiers::CTRL),
+        },
+        &mut out,
+    );
+    assert!(
+        !out.consumed,
+        "an unarmed undo_commit hands Ctrl+Backspace to the host"
+    );
+    assert_eq!(
+        dispatcher
+            .sessions
+            .get(session)
+            .expect("session")
+            .carry_right_id(),
+        0,
+        "the host may have deleted the word the context described"
+    );
+
+    type_word(&mut dispatcher, session, "itta", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Space),
+        },
+        &mut out,
+    );
+    assert_eq!(out.preedit_text(), "言った");
+}
+
+#[cfg(feature = "dev-fixtures")]
+#[test]
+fn mode_switch_commit_spends_no_conversion_lookup() {
+    let mut dispatcher = contextual_conversion_dispatcher();
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "context.exe");
+    type_word(&mut dispatcher, session, "ni", &mut out);
+    take_conversion_lookup_count_for_test();
+
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::HankakuZenkaku),
+        },
+        &mut out,
+    );
+    assert_eq!(out.commit_text(), Some("に"));
+    assert_eq!(out.to_output().mode, Some(Mode::Direct));
+    assert_eq!(
+        take_conversion_lookup_count_for_test(),
+        0,
+        "switch_mode retires the context, so a lookup would be discarded"
+    );
+    assert_eq!(
+        dispatcher
+            .sessions
+            .get(session)
+            .expect("session")
+            .carry_right_id(),
+        0
+    );
+}
+
 #[cfg(feature = "dev-fixtures")]
 #[test]
 fn probe_enter_of_a_plain_reading_spends_no_conversion_lookup() {
