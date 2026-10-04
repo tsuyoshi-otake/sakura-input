@@ -2566,6 +2566,15 @@ fn test_only_enter_preserves_learning_preference_and_input_history_before_real_e
         | InputHistoryRecord::Engine(_) => None,
     });
     assert_eq!(commit.map(|record| record.reading.as_str()), Some(reading));
+    assert_eq!(
+        learning.generation(),
+        generation_before,
+        "the real Enter stages its learning until the next action (#275)"
+    );
+    assert_eq!(
+        dispatcher.dispatch(&Request::ResetDocumentContext { session }, &mut out),
+        Reply::Message(Response::Ok)
+    );
     assert_eq!(learning.generation(), generation_before + 1);
 
     history.stop().expect("stop history");
@@ -8269,16 +8278,19 @@ fn a_temporary_kana_transform_commits_without_teaching_the_reading_its_katakana_
         "the transformed surface must be absent from the learning store"
     );
 
-    // An ordinary commit of the same reading still teaches the store, so the
-    // gate is specific to transforms rather than a blanket suppression.
+    // An ordinary commit of the same reading still teaches the store once the
+    // next action keeps it (#275), so the gate is specific to transforms
+    // rather than a blanket suppression.
     type_word(&mut dispatcher, session, "kana", &mut out);
-    dispatcher.dispatch(
-        &Request::SendKey {
-            session,
-            key: named_key(KeyCode::Enter),
-        },
-        &mut out,
-    );
+    for code in [KeyCode::Enter, KeyCode::Right] {
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(code),
+            },
+            &mut out,
+        );
+    }
     assert_eq!(learning.generation(), generation_before + 1);
 }
 
@@ -10691,4 +10703,249 @@ fn reset_drops_every_session_but_keeps_configuration() {
         &mut out,
     );
     assert_eq!(out.preedit_text(), "か");
+}
+
+// #275: learning waits for the session's next action to show whether a
+// commit survived.
+
+fn send_keys(
+    dispatcher: &mut Dispatcher,
+    session: SessionId,
+    keys: &[KeyInput],
+    out: &mut OutputBuf,
+) {
+    for key in keys {
+        dispatcher.dispatch(&Request::SendKey { session, key: *key }, out);
+    }
+}
+
+/// Commits the second `kana` candidate (加奈) with Enter, leaving `session`
+/// idle right after the commit.
+fn commit_second_kana_candidate(
+    dispatcher: &mut Dispatcher,
+    session: SessionId,
+    out: &mut OutputBuf,
+) {
+    type_word(dispatcher, session, "kana", out);
+    send_keys(
+        dispatcher,
+        session,
+        &[
+            named_key(KeyCode::Space),
+            named_key(KeyCode::Down),
+            named_key(KeyCode::Enter),
+        ],
+        out,
+    );
+    assert_eq!(out.commit_text(), Some("加奈"));
+}
+
+fn learned_kana_choice(learning: &LearningService) -> Option<usize> {
+    learning
+        .preference("かな", 0, [("仮名", 0), ("加奈", 0)])
+        .exact
+}
+
+fn staged_learning_dispatcher() -> (Arc<LearningService>, Dispatcher, OutputBuf, SessionId) {
+    let learning = Arc::new(LearningService::memory());
+    let mut dispatcher = Dispatcher::new_with_services(conversion_fixture(), Arc::clone(&learning))
+        .expect("dispatcher");
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "editor.exe");
+    assert_eq!(
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        ),
+        Reply::Message(Response::Ok)
+    );
+    (learning, dispatcher, out, session)
+}
+
+#[test]
+fn an_implicit_commit_erased_by_the_next_idle_backspace_is_not_learned() {
+    let (learning, mut dispatcher, mut out, session) = staged_learning_dispatcher();
+    type_word(&mut dispatcher, session, "kana", &mut out);
+    send_keys(
+        &mut dispatcher,
+        session,
+        &[
+            named_key(KeyCode::Space),
+            named_key(KeyCode::Down),
+            char_key('a'),
+        ],
+        &mut out,
+    );
+    assert_eq!(out.commit_text(), Some("加奈"), "typing commits implicitly");
+    assert_eq!(out.preedit_text(), "あ");
+
+    // The new reading is abandoned, then the idle Backspace reaches the host
+    // and erases the implicit commit.
+    send_keys(
+        &mut dispatcher,
+        session,
+        &[named_key(KeyCode::Backspace)],
+        &mut out,
+    );
+    assert_eq!(out.preedit_text(), "");
+    send_keys(
+        &mut dispatcher,
+        session,
+        &[named_key(KeyCode::Backspace)],
+        &mut out,
+    );
+    assert!(!out.consumed, "the idle Backspace belongs to the host");
+
+    learning.confirm_all_staged();
+    assert_eq!(learned_kana_choice(&learning), None);
+}
+
+#[test]
+fn a_commit_erased_by_the_next_idle_backspace_is_not_learned() {
+    for modifiers in [Modifiers::NONE, Modifiers::SHIFT] {
+        let (learning, mut dispatcher, mut out, session) = staged_learning_dispatcher();
+        commit_second_kana_candidate(&mut dispatcher, session, &mut out);
+        send_keys(
+            &mut dispatcher,
+            session,
+            &[modified_named_key(KeyCode::Backspace, modifiers)],
+            &mut out,
+        );
+        assert!(!out.consumed);
+
+        learning.confirm_all_staged();
+        assert_eq!(learned_kana_choice(&learning), None, "{modifiers:?}");
+    }
+}
+
+#[test]
+fn an_applied_commit_undo_is_not_learned_but_a_rejected_one_is() {
+    for (outcome, expected) in [
+        (UndoCommitOutcome::Applied, None),
+        (UndoCommitOutcome::Unknown, None),
+        (UndoCommitOutcome::Rejected, Some(1)),
+    ] {
+        let (learning, mut dispatcher, mut out, session) = staged_learning_dispatcher();
+        commit_second_kana_candidate(&mut dispatcher, session, &mut out);
+        send_keys(
+            &mut dispatcher,
+            session,
+            &[modified_named_key(KeyCode::Backspace, Modifiers::CTRL)],
+            &mut out,
+        );
+        assert_eq!(out.delete_before(), "加奈");
+        assert_eq!(
+            dispatcher.dispatch(&Request::UndoCommit { session, outcome }, &mut out),
+            Reply::Message(Response::Ok)
+        );
+
+        learning.confirm_all_staged();
+        assert_eq!(learned_kana_choice(&learning), expected, "{outcome:?}");
+    }
+}
+
+#[test]
+fn a_commit_kept_by_the_next_action_is_learned_without_another_conversion() {
+    type NextAction = fn(&mut Dispatcher, SessionId, &mut OutputBuf);
+    let actions: [(&str, NextAction); 11] = [
+        ("idle Right", |d, s, o| {
+            send_keys(d, s, &[named_key(KeyCode::Right)], o);
+        }),
+        ("idle Enter", |d, s, o| {
+            send_keys(d, s, &[named_key(KeyCode::Enter)], o);
+        }),
+        ("idle Space", |d, s, o| {
+            send_keys(d, s, &[named_key(KeyCode::Space)], o);
+        }),
+        ("idle Delete", |d, s, o| {
+            send_keys(d, s, &[named_key(KeyCode::Delete)], o);
+        }),
+        ("next commit", |d, s, o| {
+            type_word(d, s, "kana", o);
+            send_keys(d, s, &[named_key(KeyCode::Enter)], o);
+        }),
+        ("ResetDocumentContext", |d, s, o| {
+            assert_eq!(
+                d.dispatch(&Request::ResetDocumentContext { session: s }, o),
+                Reply::Message(Response::Ok)
+            );
+        }),
+        ("SetMode", |d, s, o| {
+            d.dispatch(
+                &Request::SetMode {
+                    session: s,
+                    mode: Mode::Katakana,
+                },
+                o,
+            );
+        }),
+        ("sensitive SetInputScope", |d, s, o| {
+            d.dispatch(
+                &Request::SetInputScope {
+                    session: s,
+                    scope: InputScope::Password,
+                },
+                o,
+            );
+        }),
+        ("DeleteSession", |d, s, o| {
+            assert_eq!(
+                d.dispatch(&Request::DeleteSession { session: s }, o),
+                Reply::Message(Response::Ok)
+            );
+        }),
+        ("connection reset", |d, _, _| d.reset()),
+        ("conversion start", |d, s, o| {
+            type_word(d, s, "ka", o);
+            send_keys(d, s, &[named_key(KeyCode::Space)], o);
+        }),
+    ];
+    for (name, action) in actions {
+        let (learning, mut dispatcher, mut out, session) = staged_learning_dispatcher();
+        commit_second_kana_candidate(&mut dispatcher, session, &mut out);
+        assert_eq!(learned_kana_choice(&learning), None, "{name}: staged first");
+
+        action(&mut dispatcher, session, &mut out);
+        assert_eq!(learned_kana_choice(&learning), Some(1), "{name}");
+    }
+}
+
+#[test]
+fn opening_the_next_reading_or_a_probe_decides_nothing() {
+    let (learning, mut dispatcher, mut out, session) = staged_learning_dispatcher();
+    commit_second_kana_candidate(&mut dispatcher, session, &mut out);
+    for key in [named_key(KeyCode::Backspace), named_key(KeyCode::Right)] {
+        dispatcher.dispatch(
+            &Request::ProbeKey {
+                session,
+                scope: InputScope::Normal,
+                fresh_context: false,
+                key,
+            },
+            &mut out,
+        );
+    }
+    type_word(&mut dispatcher, session, "a", &mut out);
+    assert_eq!(out.preedit_text(), "あ");
+    assert_eq!(
+        learned_kana_choice(&learning),
+        None,
+        "neither a probe nor the next reading confirms"
+    );
+
+    send_keys(
+        &mut dispatcher,
+        session,
+        &[named_key(KeyCode::Backspace)],
+        &mut out,
+    );
+    learning.confirm_all_staged();
+    assert_eq!(
+        learned_kana_choice(&learning),
+        Some(1),
+        "the probed Backspace did not discard, and the in-reading one erased only あ"
+    );
 }

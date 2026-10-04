@@ -15,7 +15,7 @@ use std::io::Write;
 #[cfg(all(test, windows))]
 use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender};
 use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::thread::{self, JoinHandle};
@@ -59,6 +59,12 @@ const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(5);
 /// context remains more specific, but an old one-off choice must not override
 /// the converter's current grammatical ranking indefinitely.
 const LEARNING_HALF_LIFE_DAYS: u32 = 30;
+/// Upper bound on commits waiting for their session's next action (#275).
+///
+/// A live session stages at most one. More than this means sessions vanished
+/// without a terminal request, so the oldest record is learned rather than
+/// silently dropped, which keeps memory bounded without losing evidence.
+const MAX_STAGED_COMMITS: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LearningPreference {
@@ -536,6 +542,17 @@ impl PredictionHistory {
     }
 }
 
+/// One commit whose learning waits until the user's next action shows whether
+/// the commit survived (#275). It is invisible to ranking and the log.
+#[derive(Debug)]
+struct StagedCommit {
+    owner: u64,
+    reading: Box<str>,
+    surface: Box<str>,
+    left_context: u16,
+    right_context: u16,
+}
+
 #[derive(Debug)]
 struct State {
     index: Index,
@@ -546,6 +563,39 @@ struct State {
     log: LearningLog,
     path: Option<PathBuf>,
     sequence: u64,
+    /// At most one record per owner, oldest first.
+    staged: Vec<StagedCommit>,
+}
+
+impl State {
+    /// Applies one learned commit to ranking and the log; `false` when the
+    /// log append failed and the commit lives only in memory.
+    fn learn(
+        &mut self,
+        reading: &str,
+        surface: &str,
+        left_context: u16,
+        right_context: u16,
+    ) -> bool {
+        let day = unix_day();
+        self.sequence = self.sequence.saturating_add(1);
+        let sequence = self.sequence;
+        self.index
+            .learn(left_context, right_context, reading, surface, day, sequence);
+        self.prediction_history
+            .learn(reading, surface, right_context, day, sequence);
+        self.log
+            .append(reading, surface, left_context, right_context, day)
+            .is_ok()
+    }
+
+    fn take_staged(&mut self, owner: u64) -> Option<StagedCommit> {
+        let index = self
+            .staged
+            .iter()
+            .position(|staged| staged.owner == owner)?;
+        Some(self.staged.remove(index))
+    }
 }
 
 struct PreparedLearning {
@@ -604,6 +654,9 @@ pub struct LearningService {
     /// this process-wide epoch to invalidate suggestions cached by a different
     /// connection without putting a shared lock on the keystroke fast path.
     generation: AtomicU64,
+    /// Mirror of `State::staged.len()`, so the keys that settle a stage skip
+    /// the shared lock when nothing is waiting.
+    staged_commits: AtomicUsize,
     skipped_writes: AtomicU64,
     recovered_tail_bytes: AtomicU64,
     maintenance_failures: AtomicU64,
@@ -664,8 +717,10 @@ impl LearningService {
                 log: LearningLog::memory(),
                 path: None,
                 sequence: 0,
+                staged: Vec::new(),
             }),
             generation: AtomicU64::new(0),
+            staged_commits: AtomicUsize::new(0),
             skipped_writes: AtomicU64::new(0),
             recovered_tail_bytes: AtomicU64::new(0),
             maintenance_failures: AtomicU64::new(0),
@@ -683,8 +738,10 @@ impl LearningService {
                 log,
                 path: Some(path.to_owned()),
                 sequence: prepared.sequence,
+                staged: Vec::new(),
             }),
             generation: AtomicU64::new(0),
+            staged_commits: AtomicUsize::new(0),
             skipped_writes: AtomicU64::new(0),
             recovered_tail_bytes: AtomicU64::new(receipt.recovered_tail_bytes),
             maintenance_failures: AtomicU64::new(receipt.maintenance_failure_delta),
@@ -695,25 +752,125 @@ impl LearningService {
         if reading.is_empty() || surface.is_empty() {
             return;
         }
-        let day = unix_day();
         let mut state = self.lock_state();
-        state.sequence = state.sequence.saturating_add(1);
-        let sequence = state.sequence;
-        state
-            .index
-            .learn(left_context, right_context, reading, surface, day, sequence);
-        state
-            .prediction_history
-            .learn(reading, surface, right_context, day, sequence);
-        if state
-            .log
-            .append(reading, surface, left_context, right_context, day)
-            .is_err()
-        {
-            self.skipped_writes.fetch_add(1, Ordering::Relaxed);
-        }
+        self.learn_locked(&mut state, reading, surface, left_context, right_context);
         drop(state);
         self.generation.fetch_add(1, Ordering::Release);
+    }
+
+    fn learn_locked(
+        &self,
+        state: &mut State,
+        reading: &str,
+        surface: &str,
+        left_context: u16,
+        right_context: u16,
+    ) {
+        if !state.learn(reading, surface, left_context, right_context) {
+            self.skipped_writes.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    fn learn_staged(&self, state: &mut State, staged: &StagedCommit) {
+        self.learn_locked(
+            state,
+            &staged.reading,
+            &staged.surface,
+            staged.left_context,
+            staged.right_context,
+        );
+    }
+
+    /// Holds one commit's learning until the owner's next action shows
+    /// whether the user kept it (#275). A commit erased or undone right away
+    /// is not evidence of preference, and learning it would let the wrong
+    /// surface keep winning the next conversion.
+    ///
+    /// A newer commit from the same owner proves the previous one survived,
+    /// so that record is learned first. `owner` is a process-unique session
+    /// identity; the record stays invisible to ranking until it is confirmed.
+    pub(crate) fn stage(
+        &self,
+        owner: u64,
+        reading: &str,
+        surface: &str,
+        left_context: u16,
+        right_context: u16,
+    ) {
+        let mut state = self.lock_state();
+        let mut learned = false;
+        if let Some(previous) = state.take_staged(owner) {
+            self.learn_staged(&mut state, &previous);
+            learned = true;
+        }
+        if !reading.is_empty() && !surface.is_empty() {
+            if state.staged.len() >= MAX_STAGED_COMMITS {
+                let oldest = state.staged.remove(0);
+                self.learn_staged(&mut state, &oldest);
+                learned = true;
+            }
+            state.staged.push(StagedCommit {
+                owner,
+                reading: reading.into(),
+                surface: surface.into(),
+                left_context,
+                right_context,
+            });
+        }
+        self.staged_commits
+            .store(state.staged.len(), Ordering::Release);
+        drop(state);
+        if learned {
+            self.generation.fetch_add(1, Ordering::Release);
+        }
+    }
+
+    /// Learns the owner's staged commit, if any: the user's next action kept
+    /// it in the document.
+    pub(crate) fn confirm_staged(&self, owner: u64) {
+        if self.staged_commits.load(Ordering::Acquire) == 0 {
+            return;
+        }
+        let mut state = self.lock_state();
+        let Some(staged) = state.take_staged(owner) else {
+            return;
+        };
+        self.learn_staged(&mut state, &staged);
+        self.staged_commits
+            .store(state.staged.len(), Ordering::Release);
+        drop(state);
+        self.generation.fetch_add(1, Ordering::Release);
+    }
+
+    /// Drops the owner's staged commit without learning it: the user erased
+    /// or undid the commit before doing anything else.
+    pub(crate) fn discard_staged(&self, owner: u64) {
+        if self.staged_commits.load(Ordering::Acquire) == 0 {
+            return;
+        }
+        let mut state = self.lock_state();
+        if state.take_staged(owner).is_some() {
+            self.staged_commits
+                .store(state.staged.len(), Ordering::Release);
+        }
+    }
+
+    /// Learns every staged commit. A conversion is about to rank candidates,
+    /// so commits that survived until now, in any session, must count.
+    pub(crate) fn confirm_all_staged(&self) {
+        if self.staged_commits.load(Ordering::Acquire) == 0 {
+            return;
+        }
+        let mut state = self.lock_state();
+        let staged = std::mem::take(&mut state.staged);
+        for commit in &staged {
+            self.learn_staged(&mut state, commit);
+        }
+        self.staged_commits.store(0, Ordering::Release);
+        drop(state);
+        if !staged.is_empty() {
+            self.generation.fetch_add(1, Ordering::Release);
+        }
     }
 
     /// Process-wide personalization epoch used for lock-free cache coherence.
@@ -833,6 +990,12 @@ impl LearningService {
             return Ok(ForgetPredictionOutcome::NotFound);
         }
         let mut state = self.lock_state();
+        // A staged copy of the pair would bring it back once confirmed.
+        state
+            .staged
+            .retain(|staged| *staged.reading != *reading || *staged.surface != *surface);
+        self.staged_commits
+            .store(state.staged.len(), Ordering::Release);
         let transaction = {
             let State {
                 index,
@@ -929,6 +1092,10 @@ impl LearningService {
     /// no caller can observe an empty in-memory index backed by the old log.
     pub fn clear(&self) -> io::Result<u64> {
         let mut state = self.lock_state();
+        // A commit staged before the request must not repopulate the store
+        // the user just asked to empty, whether or not the log clear succeeds.
+        state.staged.clear();
+        self.staged_commits.store(0, Ordering::Release);
         match state.log.clear(prepare_learning) {
             Ok((cleared_records, prepared, receipt)) => {
                 self.apply_receipt(receipt);
@@ -1001,6 +1168,9 @@ fn maintenance_loop(service: &LearningService, stop: Receiver<()>, interval: Dur
     loop {
         match stop.recv_timeout(interval) {
             Ok(()) | Err(RecvTimeoutError::Disconnected) => {
+                // Orderly shutdown: every commit still staged survived to the
+                // end of its session, so it is learned before the final flush.
+                service.confirm_all_staged();
                 let _ = service.maintain();
                 return;
             }
