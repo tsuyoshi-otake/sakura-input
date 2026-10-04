@@ -9996,6 +9996,193 @@ fn commit_undo_context_selects_the_contextual_homophone_and_rolls_it_back() {
 }
 
 #[test]
+fn plain_reading_commit_carries_its_lexical_context_to_the_next_conversion() {
+    let mut dispatcher = contextual_conversion_dispatcher();
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "context.exe");
+    type_word(&mut dispatcher, session, "ni", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Enter),
+        },
+        &mut out,
+    );
+    assert_eq!(out.commit_text(), Some("に"));
+    assert_eq!(
+        dispatcher
+            .sessions
+            .get(session)
+            .expect("session")
+            .carry_right_id(),
+        3,
+        "an unconverted particle still ends in its dictionary class"
+    );
+
+    type_word(&mut dispatcher, session, "itta", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Space),
+        },
+        &mut out,
+    );
+    assert_eq!(out.preedit_text(), "行った");
+}
+
+/// A shipped-size class table makes reading fallback edges carry the
+/// synthetic noun class (`DEFAULT_NOUN_ID`, 1,851, in sakura-core), so a
+/// commit that borrowed any candidate's right id would invent a noun context.
+fn noun_class_conversion_dispatcher() -> Dispatcher {
+    let source = "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nいった\t言った\t1\t1\t50\t50\t\tgeneric\nいった\t行った\t2\t2\t100\t100\t\tcontextual\n";
+    let entries = dictc_core::parse_entries("noun-class.tsv", source).expect("entries");
+    let matrix = dictc_core::parse_connection(
+        "matrix.tsv",
+        "# license: MIT\nclasses\t1852\ndefault\t0\n",
+        false,
+    )
+    .expect("matrix");
+    let image = Box::leak(
+        dictc_core::compile(&entries, &matrix)
+            .expect("image")
+            .into_boxed_slice(),
+    );
+    let conversion =
+        Arc::new(ConversionService::from_static_bytes(image).expect("conversion service fixture"));
+    Dispatcher::new_with_conversion(conversion).expect("shipped defaults")
+}
+
+#[test]
+fn plain_reading_commit_borrows_only_an_exact_lexical_right_id() {
+    let mut dispatcher = noun_class_conversion_dispatcher();
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "context.exe");
+    // `ぬ` is spelled only by a fallback edge, and `いった` only by fallback
+    // although lexical homophones exist. Neither may lend a right id.
+    for (word, surface) in [("nu", "ぬ"), ("itta", "いった")] {
+        type_word(&mut dispatcher, session, word, &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some(surface));
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("session")
+                .carry_right_id(),
+            0,
+            "{surface} has no lexical spelling"
+        );
+    }
+}
+
+fn assert_idle_key_retires_the_previous_commit_context(code: KeyCode) {
+    let mut dispatcher = contextual_conversion_dispatcher();
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "context.exe");
+    type_word(&mut dispatcher, session, "isha", &mut out);
+    for step in [KeyCode::Space, KeyCode::Enter] {
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(step),
+            },
+            &mut out,
+        );
+    }
+    assert_eq!(out.commit_text(), Some("医者"));
+    assert_eq!(
+        dispatcher
+            .sessions
+            .get(session)
+            .expect("session")
+            .carry_right_id(),
+        3
+    );
+
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(code),
+        },
+        &mut out,
+    );
+    assert_eq!(
+        dispatcher
+            .sessions
+            .get(session)
+            .expect("session")
+            .carry_right_id(),
+        0,
+        "{code:?} edits or leaves the text the context described"
+    );
+
+    type_word(&mut dispatcher, session, "itta", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Space),
+        },
+        &mut out,
+    );
+    assert_eq!(out.preedit_text(), "言った", "{code:?}");
+}
+
+#[test]
+fn idle_backspace_retires_the_previous_commit_context() {
+    assert_idle_key_retires_the_previous_commit_context(KeyCode::Backspace);
+}
+
+#[test]
+fn idle_caret_navigation_retires_the_previous_commit_context() {
+    assert_idle_key_retires_the_previous_commit_context(KeyCode::Left);
+}
+
+#[cfg(feature = "dev-fixtures")]
+#[test]
+fn probe_enter_of_a_plain_reading_spends_no_conversion_lookup() {
+    let mut dispatcher = contextual_conversion_dispatcher();
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "context.exe");
+    type_word(&mut dispatcher, session, "ni", &mut out);
+    take_conversion_lookup_count_for_test();
+
+    let mut probe = named_key(KeyCode::Enter);
+    probe.test_only = true;
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: probe,
+        },
+        &mut out,
+    );
+    assert_eq!(
+        take_conversion_lookup_count_for_test(),
+        0,
+        "OnTestKeyDown must not spend the conversion budget"
+    );
+
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Enter),
+        },
+        &mut out,
+    );
+    assert_eq!(out.commit_text(), Some("に"));
+    assert_eq!(
+        take_conversion_lookup_count_for_test(),
+        1,
+        "the applied plain commit looks its reading up exactly once"
+    );
+}
+
+#[test]
 fn password_scope_cannot_reach_persistent_learning() {
     let learning = LearningService::memory();
     let mut session = Session::new("password.exe");

@@ -45,9 +45,10 @@ use sakura_core::romaji::{Table, TableError};
 use sakura_core::width::Normalizer;
 use sakura_core::{
     contextual_punctuation_swap, default_app_profiles, resolve_context_preferences, transform_into,
-    AppProfile, CommitBridgeTail, ConversionCandidate, ConversionDiagnostics, ConversionMethod,
-    ConversionOptions, ConversionSegment, EntryFlags, Input, InputMethod, NeuralRerankerScope,
-    Preferences, SegmentTransform, ShiftSpaceBehavior, SpaceWidth, SuggestAccept, TextSink,
+    AppProfile, CandidateEvidence, CommitBridgeTail, ConversionCandidate, ConversionDiagnostics,
+    ConversionMethod, ConversionOptions, ConversionSegment, EntryFlags, Input, InputMethod,
+    NeuralRerankerScope, Preferences, SegmentTransform, ShiftSpaceBehavior, SpaceWidth,
+    SuggestAccept, TextSink,
 };
 use sakura_ipc::debug_trace;
 use sakura_proto::{
@@ -2476,6 +2477,48 @@ fn candidate_learning_key(candidate: &ConversionCandidate) -> (&str, u16) {
     )
 }
 
+/// Recovers the connection class that an unconverted reading commit leaves
+/// to its right, so a particle committed with Enter still conditions the next
+/// conversion (#273). The committed text never changes: only a lexical
+/// candidate that spells exactly `surface` may lend its last right id.
+/// Probe, a sensitive scope, no service, a busy pool, or no such candidate
+/// returns 0, which retires the carried context as before.
+fn plain_commit_right_id(
+    session: &Session,
+    conversion: Option<&ConversionService>,
+    policy: ExecutionPolicy,
+    surface: &str,
+) -> u16 {
+    let Some(service) = conversion else {
+        return 0;
+    };
+    if !policy.allows_dictionary_conversion() || scope_is_sensitive(session.scope) {
+        return 0;
+    }
+    let options = conversion_options(session, session.carry_right_id(), None);
+    with_session_candidates(
+        service,
+        None,
+        session.preedit.as_str(),
+        options,
+        |candidates| {
+            candidates
+                .iter()
+                .find(|candidate| {
+                    candidate.text() == surface
+                        && matches!(
+                            candidate.evidence_class(),
+                            CandidateEvidence::ExactSystem
+                                | CandidateEvidence::ExactUser
+                                | CandidateEvidence::CompositeLexical
+                        )
+                })
+                .map_or(0, |candidate| candidate_learning_key(candidate).1)
+        },
+    )
+    .unwrap_or(0)
+}
+
 /// Returns whether an action is allowed to leave normal Direct mode.
 ///
 /// Password fields are rejected before the key map is consulted. This helper
@@ -2564,11 +2607,15 @@ fn apply_key(
             .lookup(State::Predicting, key)
             .filter(|action| *action == Action::DeletePredictionHistory);
     }
-    // The bridge describes text immediately to the left of the host caret.
-    // An unclaimed idle named key or application shortcut can move that caret
-    // or edit the document outside the engine, while idle Space inserts a
-    // hard phrase boundary. Character input is the one unclaimed idle path
-    // that deliberately starts the adjacent next composition.
+    // The carried right id and the bridge both describe text immediately to
+    // the left of the host caret. An unclaimed idle named key or application
+    // shortcut can move that caret or edit the document outside the engine,
+    // while idle Space inserts a hard phrase boundary. TSF re-proves its
+    // one-shot commit adjacency before this key reaches the host, so it cannot
+    // see the edit or caret move that the key itself causes. Character input
+    // is the one unclaimed idle path that deliberately starts the adjacent
+    // next composition, so it is the only one that keeps the previous commit's
+    // context (#273).
     if state == State::Idle
         && action.is_none()
         && (key.ch.is_none()
@@ -2576,7 +2623,7 @@ fn apply_key(
             || key.modifiers.ctrl()
             || key.modifiers.alt())
     {
-        session.clear_cross_commit_bridge();
+        session.reset_carryover();
     }
     if session.mode == Mode::Direct && !is_mode_switch(action) {
         // Direct mode passes normal typing and all non-mode bindings through
@@ -5530,7 +5577,8 @@ fn commit_pending(
         if preserve_exact {
             session.record_current_commit_without_cache(scratch.as_str(), 0, 0, 0);
         } else {
-            session.record_current_commit(scratch.as_str(), 0, 0, 0);
+            let right_id = plain_commit_right_id(session, conversion, policy, scratch.as_str());
+            session.record_current_commit(scratch.as_str(), right_id, 0, 0);
         }
     }
     session.reset();
