@@ -49,3 +49,12 @@
   row, and `VK_CONVERT` is not delivered by `keybd_event`, so drive conversion
   with Space. Confirm a synthetic key actually reached the IME by logging
   `KeyDown` in the host: consumed keys arrive as `ProcessKey (229)`.
+
+- **A quoted Bash-tool heredoc can collapse `\\` to `\`.** Verified
+  2026-10-04 (#279): a Python script fed through `python - <<'EOF'` turned
+  the source text `\\release-signing` into `\release-signing`, so Python
+  wrote a carriage return into `.claude/memory/journal.md`. One lone CR makes
+  git treat the file as binary, skip the autocrlf conversion, and show the
+  whole file as changed. Write such a script with the file-writing tool, or
+  build backslashes and CRs from `bytes([92])` / `bytes([13])`, then confirm
+  `git diff --stat` shows only the appended lines.

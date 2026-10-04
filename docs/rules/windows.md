@@ -84,3 +84,10 @@
   real-process tests must accept an explicit path and check that fixed per-user
   install location instead of treating the isolated application-data root as
   the developer's tool root.
+
+- **Read a log that Inno Setup is still writing with `FileShare.ReadWrite`.**
+  `[IO.File]::ReadAllText` opens with `FileShare.Read`, so polling the `/LOG=`
+  file of a running installer throws a sharing violation (observed 2026-10-04
+  on the 2.0.10 reinstall; the installer itself finished normally). Open a
+  `FileStream` with `FileShare.ReadWrite -bor FileShare.Delete` and wait for
+  both `Installation process succeeded.` and `Log closed.`.
