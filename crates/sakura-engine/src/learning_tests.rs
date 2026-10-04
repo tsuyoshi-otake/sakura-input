@@ -1260,3 +1260,113 @@ fn repair_suppress_is_durable_and_hidden_from_snapshots() {
     );
     let _ = fs::remove_dir_all(path.parent().expect("parent"));
 }
+
+fn staged_preference(service: &LearningService) -> Option<usize> {
+    service
+        .preference("かな", 0, [("仮名", 0), ("加奈", 0)])
+        .exact
+}
+
+#[test]
+fn a_staged_commit_is_invisible_until_confirmed_and_dropped_when_discarded() {
+    let service = LearningService::memory();
+    let generation = service.generation();
+
+    service.stage(1, "かな", "加奈", 0, 0);
+    assert_eq!(staged_preference(&service), None, "staged is not learned");
+    assert!(!history_contains(&service, "かな", "加奈"));
+    assert_eq!(service.generation(), generation);
+
+    service.confirm_staged(1);
+    assert_eq!(staged_preference(&service), Some(1));
+    assert!(history_contains(&service, "かな", "加奈"));
+    assert_eq!(service.generation(), generation + 1);
+    service.confirm_staged(1);
+    assert_eq!(
+        service.generation(),
+        generation + 1,
+        "a record confirms once"
+    );
+
+    service.stage(1, "かな", "仮名", 0, 0);
+    service.discard_staged(1);
+    service.confirm_all_staged();
+    assert_eq!(
+        staged_preference(&service),
+        Some(1),
+        "a discarded commit never reaches the store"
+    );
+    assert_eq!(service.generation(), generation + 1);
+}
+
+#[test]
+fn a_newer_commit_confirms_only_its_own_owners_previous_record() {
+    let service = LearningService::memory();
+    service.stage(1, "かな", "加奈", 0, 0);
+    service.stage(2, "かな", "仮名", 0, 0);
+    let generation = service.generation();
+
+    service.stage(1, "かえる", "帰る", 0, 0);
+    assert_eq!(service.generation(), generation + 1);
+    assert_eq!(staged_preference(&service), Some(1), "owner 1's commit");
+
+    service.discard_staged(2);
+    service.confirm_all_staged();
+    assert_eq!(
+        staged_preference(&service),
+        Some(1),
+        "owner 2's discarded record never counted"
+    );
+    assert_eq!(
+        service
+            .preference("かえる", 0, [("蛙", 0), ("帰る", 0)])
+            .exact,
+        Some(1),
+        "confirm_all learns every remaining record"
+    );
+}
+
+#[test]
+fn staging_beyond_the_bound_learns_the_oldest_record() {
+    let service = LearningService::memory();
+    for owner in 0..MAX_STAGED_COMMITS as u64 {
+        service.stage(owner + 1, "かえる", "帰る", 0, 0);
+    }
+    let generation = service.generation();
+    service.stage(1_000, "かな", "加奈", 0, 0);
+
+    assert_eq!(service.generation(), generation + 1);
+    assert_eq!(
+        service.staged_commits.load(Ordering::Acquire),
+        MAX_STAGED_COMMITS
+    );
+    let state = service.lock_state();
+    assert_eq!(state.staged.len(), MAX_STAGED_COMMITS);
+    assert!(state.staged.iter().all(|staged| staged.owner != 1));
+    assert_eq!(state.staged.last().map(|staged| staged.owner), Some(1_000));
+}
+
+#[test]
+fn clearing_or_forgetting_drops_matching_staged_commits() {
+    let service = LearningService::memory();
+    service.stage(1, "かな", "加奈", 0, 0);
+    service.clear().expect("clear");
+    service.confirm_all_staged();
+    assert_eq!(staged_preference(&service), None, "clear drops staged");
+
+    service.stage(1, "かな", "加奈", 0, 0);
+    service.stage(2, "かな", "仮名", 0, 0);
+    // A memory service has no log to forget from, but still drops the staged copy.
+    assert_eq!(
+        service
+            .forget_prediction_exact("かな", "加奈")
+            .expect("forget"),
+        ForgetPredictionOutcome::Unavailable
+    );
+    service.confirm_all_staged();
+    assert_eq!(
+        staged_preference(&service),
+        Some(0),
+        "only the forgotten pair's staged copy is dropped"
+    );
+}

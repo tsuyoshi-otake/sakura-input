@@ -525,6 +525,13 @@ impl Dispatcher {
         self.connection_probe = None;
         self.ai_text.cancel_owner(self.ai_text_owner);
         self.ai_text_owner = self.ai_text.allocate_owner();
+        if let Some(learning) = self.learning.as_deref() {
+            // The connection ended with each session's last commit still in
+            // its document (#275).
+            for session in self.sessions.live_sessions() {
+                learning.confirm_staged(session.process_unique_id());
+            }
+        }
         self.sessions.clear();
         self.prediction_cache.clear();
     }
@@ -816,6 +823,10 @@ impl Dispatcher {
             // session would make the only terminal outcome unaddressable.
             return Reply::Message(Response::Error(ErrorCode::Busy));
         }
+        if let (Some(session), Some(learning)) = (self.sessions.get(id), self.learning.as_deref()) {
+            // The field is gone with its last commit still in it (#275).
+            learning.confirm_staged(session.process_unique_id());
+        }
         if self.sessions.delete(id) {
             self.release_composition_fence(id);
             self.ai_text.cancel_session(self.ai_text_owner, id);
@@ -890,7 +901,7 @@ impl Dispatcher {
     }
 
     fn set_input_scope(&mut self, id: SessionId, scope: InputScope) -> Reply {
-        let clear_cache = {
+        let (clear_cache, owner) = {
             let Some(session) = self.sessions.get_mut(id) else {
                 return Reply::Message(Response::Error(ErrorCode::UnknownSession));
             };
@@ -901,9 +912,18 @@ impl Dispatcher {
                 return Reply::Message(Response::Error(ErrorCode::Busy));
             }
             session.suppress_raw_provenance();
-            session.apply_input_scope(scope)
+            (
+                session.apply_input_scope(scope),
+                session.process_unique_id(),
+            )
         };
         if clear_cache {
+            // The session's personal context was cleared for a different kind
+            // of field, so no later key here can be read as erasing the last
+            // commit; it is learned as it stands (#275).
+            if let Some(learning) = self.learning.as_deref() {
+                learning.confirm_staged(owner);
+            }
             self.prediction_cache.clear_if_session(id);
         }
         Reply::Message(Response::Ok)
@@ -918,6 +938,12 @@ impl Dispatcher {
         };
         if session.undo_pending() || session.is_composing() {
             return Reply::Message(Response::Error(ErrorCode::Busy));
+        }
+        // No later key can be read as erasing the last commit once the caret
+        // is not proven to follow it, so the commit is learned as it stands
+        // (#275).
+        if let Some(learning) = self.learning.as_deref() {
+            learning.confirm_staged(session.process_unique_id());
         }
         session.reset_document_context();
         self.prediction_cache.clear_if_session(id);
@@ -945,6 +971,12 @@ impl Dispatcher {
         }
         session.suppress_raw_provenance();
         session.reset_carryover();
+        // The frontend drops its commit adjacency proof with this reset, so
+        // the last commit is learned as it stands, as after an idle mode key
+        // (#275).
+        if let Some(learning) = self.learning.as_deref() {
+            learning.confirm_staged(session.process_unique_id());
+        }
         session.mode = mode;
         Reply::Message(Response::InputMode { mode })
     }
@@ -1242,6 +1274,9 @@ impl Dispatcher {
                         out.mode.get_or_insert(restored);
                     }
                     schedule_long_conversion(id, session, &services);
+                    if state_before == State::Idle {
+                        settle_staged_learning_after_idle_key(session, services.learning, key, out);
+                    }
                     if let Some(history) = services
                         .input_history
                         .filter(|_| session.host_policy().allows_persistence())
@@ -1588,6 +1623,10 @@ impl Dispatcher {
         let Some(session) = self.sessions.get_mut(id) else {
             return Reply::Message(Response::Error(ErrorCode::UnknownSession));
         };
+        if let Some(learning) = self.learning.as_deref() {
+            // Ranking is about to read learning, as for any conversion (#275).
+            learning.confirm_all_staged();
+        }
         self.prediction_cache.clear_if_session(id);
         match build_reconversion(
             session,
@@ -1648,6 +1687,15 @@ impl Dispatcher {
         };
         if !terminal {
             return Reply::Message(Response::Error(ErrorCode::Busy));
+        }
+        if outcome != UndoCommitOutcome::Rejected {
+            // Undo is armed only until the next key after a commit, so the
+            // staged record is the commit just undone (#275). A rejection left
+            // it in the document; after an unknown outcome it may be gone, and
+            // dropping one correct +1 costs less than learning an undone one.
+            if let Some(learning) = self.learning.as_deref() {
+                learning.discard_staged(session.process_unique_id());
+            }
         }
         // The undo preview may have invalidated or filled a prediction entry;
         // every terminal outcome starts the cache from the reconciled session
@@ -2424,6 +2472,10 @@ fn session_cross_commit_bridge(
 /// Persists a commit while its reading and left context are still present in
 /// the session. Sensitive scopes never reach the store, even if a future
 /// frontend changes their composition policy.
+///
+/// Input history records the commit at once. Learning only stages it: the
+/// session's next action decides whether the commit is learned or, when the
+/// user erases or undoes it first, dropped (#275).
 fn record_learning(
     session: &Session,
     learning: Option<&LearningService>,
@@ -2459,12 +2511,42 @@ fn record_learning(
         return;
     }
     if let Some(service) = learning {
-        service.learn(
+        service.stage(
+            session.process_unique_id(),
             session.preedit.as_str(),
             surface,
             session.carry_right_id(),
             chosen_right_id,
         );
+    }
+}
+
+/// Decides the session's staged commit (#275) from an applied key that found
+/// the session idle and left it idle.
+///
+/// TSF re-proves its one-shot commit adjacency before the first key after a
+/// commit and sends `ResetDocumentContext` (which learns the commit) when the
+/// caret or text changed. A record still staged here therefore belongs to text
+/// directly left of the caret: an idle Backspace handed to the host erases it,
+/// so it is dropped, and any other key leaves it standing, so it is learned. A
+/// key that opens the next composition decides nothing; that composition's
+/// commit or conversion does.
+fn settle_staged_learning_after_idle_key(
+    session: &Session,
+    learning: Option<&LearningService>,
+    key: &KeyInput,
+    out: &OutputBuf,
+) {
+    let Some(learning) = learning else {
+        return;
+    };
+    if session.is_composing() {
+        return;
+    }
+    if key.code == KeyCode::Backspace && !out.consumed {
+        learning.discard_staged(session.process_unique_id());
+    } else {
+        learning.confirm_staged(session.process_unique_id());
     }
 }
 
@@ -3616,6 +3698,11 @@ fn apply_action(
         }
         Action::Convert => {
             if policy.allows_dictionary_conversion() {
+                // Ranking is about to read learning: commits that survived
+                // until now, in any session, must count (#275).
+                if let Some(learning) = services.learning {
+                    learning.confirm_all_staged();
+                }
                 session.hide_suggestions();
                 begin_conversion(
                     session_id,
@@ -3636,6 +3723,9 @@ fn apply_action(
         }
         Action::ConvertPrev => {
             if policy.allows_dictionary_conversion() {
+                if let Some(learning) = services.learning {
+                    learning.confirm_all_staged();
+                }
                 begin_conversion(
                     session_id,
                     session,
