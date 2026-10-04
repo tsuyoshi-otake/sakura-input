@@ -1329,11 +1329,16 @@ fn a_newer_commit_confirms_only_its_own_owners_previous_record() {
 #[test]
 fn staging_beyond_the_bound_learns_the_oldest_record() {
     let service = LearningService::memory();
+    let generation = service.generation();
     for owner in 0..MAX_STAGED_COMMITS as u64 {
         service.stage(owner + 1, "かえる", "帰る", 0, 0);
     }
-    let generation = service.generation();
-    service.stage(1_000, "かな", "加奈", 0, 0);
+    assert_eq!(
+        service.generation(),
+        generation,
+        "a full bound of live sessions learns nothing early (#277)"
+    );
+    service.stage(u64::MAX, "かな", "加奈", 0, 0);
 
     assert_eq!(service.generation(), generation + 1);
     assert_eq!(
@@ -1343,7 +1348,74 @@ fn staging_beyond_the_bound_learns_the_oldest_record() {
     let state = service.lock_state();
     assert_eq!(state.staged.len(), MAX_STAGED_COMMITS);
     assert!(state.staged.iter().all(|staged| staged.owner != 1));
-    assert_eq!(state.staged.last().map(|staged| staged.owner), Some(1_000));
+    assert_eq!(
+        state.staged.last().map(|staged| staged.owner),
+        Some(u64::MAX)
+    );
+}
+
+#[test]
+fn the_staging_bound_covers_every_session_the_process_can_hold() {
+    assert!(MAX_STAGED_COMMITS >= MAX_INSTANCES as usize * crate::session::MAX_SESSIONS);
+}
+
+#[test]
+fn a_held_record_waits_for_its_owner_through_bulk_confirmation() {
+    let service = LearningService::memory();
+    service.stage(1, "かな", "加奈", 0, 0);
+    service.stage(2, "かえる", "帰る", 0, 0);
+    service.hold_staged(1);
+
+    service.confirm_all_staged();
+    assert_eq!(staged_preference(&service), None, "the held record waits");
+    assert_eq!(
+        service
+            .preference("かえる", 0, [("蛙", 0), ("帰る", 0)])
+            .exact,
+        Some(1),
+        "every other record is learned"
+    );
+    assert_eq!(service.staged_commits.load(Ordering::Acquire), 1);
+
+    // An applied or unknown undo drops it.
+    service.discard_staged(1);
+    service.confirm_all_staged();
+    assert_eq!(staged_preference(&service), None);
+    assert_eq!(service.staged_commits.load(Ordering::Acquire), 0);
+
+    // A rejected undo returns it to an ordinary staged record.
+    service.stage(1, "かな", "加奈", 0, 0);
+    service.hold_staged(1);
+    service.confirm_all_staged();
+    assert_eq!(staged_preference(&service), None);
+    service.release_staged(1);
+    service.confirm_all_staged();
+    assert_eq!(staged_preference(&service), Some(1));
+}
+
+#[test]
+fn eviction_beyond_the_bound_skips_a_record_awaiting_its_undo_outcome() {
+    let service = LearningService::memory();
+    service.stage(1, "かな", "加奈", 0, 0);
+    service.hold_staged(1);
+    for owner in 2..=MAX_STAGED_COMMITS as u64 {
+        service.stage(owner, "かえる", "帰る", 0, 0);
+    }
+    service.stage(u64::MAX, "かえる", "帰る", 0, 0);
+
+    {
+        let state = service.lock_state();
+        assert_eq!(state.staged.len(), MAX_STAGED_COMMITS);
+        assert_eq!(state.staged.first().map(|staged| staged.owner), Some(1));
+        assert!(state.staged.iter().all(|staged| staged.owner != 2));
+    }
+    service.discard_staged(1);
+    service.confirm_all_staged();
+    assert_eq!(
+        staged_preference(&service),
+        None,
+        "the held record never counted"
+    );
 }
 
 #[test]

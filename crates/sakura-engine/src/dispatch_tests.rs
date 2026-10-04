@@ -10304,11 +10304,13 @@ fn password_scope_cannot_reach_persistent_learning() {
     record_learning(
         &session,
         Some(&learning),
+        true,
         None,
         ExecutionPolicy::Apply,
         "加奈",
         0,
     );
+    learning.confirm_all_staged();
 
     assert_eq!(
         learning.preference("かな", 0, [("仮名", 0), ("加奈", 0)]),
@@ -10948,4 +10950,117 @@ fn opening_the_next_reading_or_a_probe_decides_nothing() {
         Some(1),
         "the probed Backspace did not discard, and the in-reading one erased only あ"
     );
+}
+
+// #277: a commit that teaches nothing, an undo awaiting its outcome, and a
+// connection reset each settle the staged record the way the document does.
+
+#[test]
+fn a_commit_that_teaches_nothing_confirms_the_previous_one_before_its_erasure() {
+    type UnlearnedCommit = fn(&mut Dispatcher, SessionId, &mut OutputBuf) -> &'static str;
+    let commits: [(&str, UnlearnedCommit); 2] = [
+        ("temporary katakana transform", |d, s, o| {
+            type_word(d, s, "ka", o);
+            send_keys(
+                d,
+                s,
+                &[named_key(KeyCode::Muhenkan), named_key(KeyCode::Enter)],
+                o,
+            );
+            "\u{30ab}" // カ
+        }),
+        ("AI composition", |d, s, o| {
+            type_word(d, s, "ka", o);
+            assert_eq!(
+                d.dispatch(
+                    &Request::ApplyAiComposition {
+                        session: s,
+                        result: "外部結果".to_owned(),
+                    },
+                    o,
+                ),
+                Reply::Output
+            );
+            "外部結果"
+        }),
+    ];
+    for (name, commit) in commits {
+        let (learning, mut dispatcher, mut out, session) = staged_learning_dispatcher();
+        commit_second_kana_candidate(&mut dispatcher, session, &mut out);
+        let committed = commit(&mut dispatcher, session, &mut out);
+        assert_eq!(out.commit_text(), Some(committed), "{name}");
+
+        // The idle Backspace erases the newer commit, not 加奈 before it.
+        send_keys(
+            &mut dispatcher,
+            session,
+            &[named_key(KeyCode::Backspace)],
+            &mut out,
+        );
+        assert!(
+            !out.consumed,
+            "{name}: the idle Backspace belongs to the host"
+        );
+        learning.confirm_all_staged();
+        assert_eq!(learned_kana_choice(&learning), Some(1), "{name}");
+    }
+}
+
+#[test]
+fn a_connection_reset_during_a_pending_undo_does_not_learn_the_commit() {
+    let (learning, mut dispatcher, mut out, session) = staged_learning_dispatcher();
+    commit_second_kana_candidate(&mut dispatcher, session, &mut out);
+    send_keys(
+        &mut dispatcher,
+        session,
+        &[modified_named_key(KeyCode::Backspace, Modifiers::CTRL)],
+        &mut out,
+    );
+    assert_eq!(out.delete_before(), "加奈");
+
+    dispatcher.reset();
+    learning.confirm_all_staged();
+    assert_eq!(
+        learned_kana_choice(&learning),
+        None,
+        "the undo outcome never arrived, so the host may have deleted 加奈"
+    );
+}
+
+#[test]
+fn another_dispatchers_conversion_does_not_learn_a_commit_awaiting_its_undo_outcome() {
+    for (outcome, expected) in [
+        (UndoCommitOutcome::Applied, None),
+        (UndoCommitOutcome::Unknown, None),
+        (UndoCommitOutcome::Rejected, Some(1)),
+    ] {
+        let (learning, mut first, mut out, session) = staged_learning_dispatcher();
+        commit_second_kana_candidate(&mut first, session, &mut out);
+        send_keys(
+            &mut first,
+            session,
+            &[modified_named_key(KeyCode::Backspace, Modifiers::CTRL)],
+            &mut out,
+        );
+        assert_eq!(out.delete_before(), "加奈");
+
+        // Another data pipe starts a conversion before the outcome arrives.
+        let mut second = Dispatcher::new_with_services(conversion_fixture(), Arc::clone(&learning))
+            .expect("dispatcher");
+        let other = create_session(&mut second, &mut out, "other.exe");
+        type_word(&mut second, other, "ka", &mut out);
+        send_keys(&mut second, other, &[named_key(KeyCode::Space)], &mut out);
+        assert_eq!(
+            learned_kana_choice(&learning),
+            None,
+            "{outcome:?}: held until the outcome"
+        );
+
+        assert_eq!(
+            first.dispatch(&Request::UndoCommit { session, outcome }, &mut out),
+            Reply::Message(Response::Ok)
+        );
+        learning.confirm_all_staged();
+        assert_eq!(learned_kana_choice(&learning), expected, "{outcome:?}");
+    }
 }

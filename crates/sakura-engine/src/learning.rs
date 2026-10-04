@@ -21,7 +21,7 @@ use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use sakura_ipc::debug_trace;
+use sakura_ipc::{debug_trace, MAX_INSTANCES};
 use sakura_proto::{EngineTimingSite, FixedStr, MAX_PREEDIT_BYTES};
 pub use sakura_store::learning::{
     read_snapshot, LearningRecord, LearningSnapshot, LEARNING_FORMAT_VERSION,
@@ -38,7 +38,7 @@ use sakura_store::learning::{
     LearningLog, LogForget, LogMaintenance, OperationReceipt, ReplayEvent, ReplayView,
 };
 
-use crate::session::text_hash;
+use crate::session::{text_hash, MAX_SESSIONS};
 use crate::timing;
 
 const BUCKETS: usize = 32_768;
@@ -61,10 +61,13 @@ const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(5);
 const LEARNING_HALF_LIFE_DAYS: u32 = 30;
 /// Upper bound on commits waiting for their session's next action (#275).
 ///
-/// A live session stages at most one. More than this means sessions vanished
-/// without a terminal request, so the oldest record is learned rather than
-/// silently dropped, which keeps memory bounded without losing evidence.
-const MAX_STAGED_COMMITS: usize = 64;
+/// One service is shared by every data-pipe dispatcher in the process, and a
+/// live session stages at most one record, so the bound is the most sessions
+/// the process can hold at once (#277). More than this means sessions vanished
+/// without a terminal request, so the oldest record that is not awaiting an
+/// undo outcome is learned rather than silently dropped, which keeps memory
+/// bounded without losing evidence.
+const MAX_STAGED_COMMITS: usize = MAX_INSTANCES as usize * MAX_SESSIONS;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct LearningPreference {
@@ -551,6 +554,9 @@ struct StagedCommit {
     surface: Box<str>,
     left_context: u16,
     right_context: u16,
+    /// The owner asked the host to undo this commit and is waiting for the
+    /// outcome (#277); only the owner can settle the record then.
+    awaiting_undo: bool,
 }
 
 #[derive(Debug)]
@@ -805,9 +811,20 @@ impl LearningService {
         }
         if !reading.is_empty() && !surface.is_empty() {
             if state.staged.len() >= MAX_STAGED_COMMITS {
-                let oldest = state.staged.remove(0);
-                self.learn_staged(&mut state, &oldest);
-                learned = true;
+                // The host may already have deleted a commit awaiting its undo
+                // outcome, so it is never evicted into learning. Were only
+                // such records left, the oldest is dropped as an unknown
+                // outcome would drop it.
+                match state.staged.iter().position(|staged| !staged.awaiting_undo) {
+                    Some(index) => {
+                        let oldest = state.staged.remove(index);
+                        self.learn_staged(&mut state, &oldest);
+                        learned = true;
+                    }
+                    None => {
+                        state.staged.remove(0);
+                    }
+                }
             }
             state.staged.push(StagedCommit {
                 owner,
@@ -815,6 +832,7 @@ impl LearningService {
                 surface: surface.into(),
                 left_context,
                 right_context,
+                awaiting_undo: false,
             });
         }
         self.staged_commits
@@ -855,20 +873,52 @@ impl LearningService {
         }
     }
 
-    /// Learns every staged commit. A conversion is about to rank candidates,
-    /// so commits that survived until now, in any session, must count.
+    /// Marks the owner's staged commit as awaiting the host's undo outcome
+    /// (#277). The host may delete the commit at any moment until the outcome
+    /// arrives, so bulk confirmation and eviction leave the record alone. The
+    /// owner's own requests are refused while its undo is pending, so only
+    /// [`Self::discard_staged`] or [`Self::release_staged`] settles it.
+    pub(crate) fn hold_staged(&self, owner: u64) {
+        self.set_awaiting_undo(owner, true);
+    }
+
+    /// Returns a held commit to an ordinary staged record: the host rejected
+    /// the undo, so the commit is still in the document and the owner's next
+    /// action decides it as before (#277).
+    pub(crate) fn release_staged(&self, owner: u64) {
+        self.set_awaiting_undo(owner, false);
+    }
+
+    fn set_awaiting_undo(&self, owner: u64, awaiting_undo: bool) {
+        if self.staged_commits.load(Ordering::Acquire) == 0 {
+            return;
+        }
+        let mut state = self.lock_state();
+        if let Some(staged) = state.staged.iter_mut().find(|staged| staged.owner == owner) {
+            staged.awaiting_undo = awaiting_undo;
+        }
+    }
+
+    /// Learns every staged commit except those awaiting an undo outcome. A
+    /// conversion is about to rank candidates, so commits that survived until
+    /// now, in any session, must count; a commit the host may be deleting
+    /// right now has not survived yet (#277).
     pub(crate) fn confirm_all_staged(&self) {
         if self.staged_commits.load(Ordering::Acquire) == 0 {
             return;
         }
         let mut state = self.lock_state();
-        let staged = std::mem::take(&mut state.staged);
-        for commit in &staged {
+        let (held, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut state.staged)
+            .into_iter()
+            .partition(|staged| staged.awaiting_undo);
+        state.staged = held;
+        for commit in &kept {
             self.learn_staged(&mut state, commit);
         }
-        self.staged_commits.store(0, Ordering::Release);
+        self.staged_commits
+            .store(state.staged.len(), Ordering::Release);
         drop(state);
-        if !staged.is_empty() {
+        if !kept.is_empty() {
             self.generation.fetch_add(1, Ordering::Release);
         }
     }
@@ -1170,6 +1220,8 @@ fn maintenance_loop(service: &LearningService, stop: Receiver<()>, interval: Dur
             Ok(()) | Err(RecvTimeoutError::Disconnected) => {
                 // Orderly shutdown: every commit still staged survived to the
                 // end of its session, so it is learned before the final flush.
+                // One still awaiting its undo outcome is dropped, as an
+                // unknown outcome would drop it (#277).
                 service.confirm_all_staged();
                 let _ = service.maintain();
                 return;
