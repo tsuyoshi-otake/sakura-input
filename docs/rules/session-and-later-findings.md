@@ -306,16 +306,23 @@
   uses 1,852 classes and kills both the "no text match" (carry 1) and
   "fallback admitted" (carry 1851) mutants.
 
-- **Learning waits for the session's next action (#275).** `record_learning`
-  only stages a commit. The first applied key from `State::Idle` settles it:
-  composing again decides nothing, an unconsumed Backspace discards it, and
-  any other key confirms it; a commit undo reported `Applied` or `Unknown`
-  discards it. A new path that ends a session, or that proves its caret no
-  longer follows the last commit, must call `confirm_staged` for it, and a new
-  path that ranks with learning before the owner's next key must call
-  `confirm_all_staged` first.
+- **Learning waits for the session's next action (#275, #277).**
+  `record_learning` only stages a commit. The first applied key from
+  `State::Idle` settles it: composing again decides nothing, an unconsumed
+  Backspace discards it, and any other key confirms it. A commit undo holds
+  the record (`hold_staged`) until its outcome: `Applied` or `Unknown`
+  discards it and `Rejected` releases it. A new commit path that teaches
+  nothing (a kana transform, synthetic exact, raw repair, AI text) must still
+  confirm the owner's previous record, because the new text now sits between
+  the caret and it. A new path that ends a session, or that proves its caret
+  no longer follows the last commit, must call `confirm_staged` for it
+  (`discard_staged` while its undo is pending), and a new path that ranks
+  with learning before the owner's next key must call `confirm_all_staged`
+  first, which skips held records. The staging bound must cover every
+  session one process holds (`MAX_INSTANCES` x `MAX_SESSIONS`).
   `a_commit_kept_by_the_next_action_is_learned_without_another_conversion`
-  lists the current exits; making `stage` learn at once failed 9 tests.
+  lists the current exits; making `stage` learn at once failed 9 tests, and
+  the six #277 tests failed on the #275 code or under three learning mutants.
 
 - **One learned commit shows only in `LearningPreference::exact`.** `.general`
   stays None after a single commit, and a memory `LearningService` answers
