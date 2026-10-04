@@ -282,3 +282,26 @@
   *no bound*, not corruption: fold it into the absent case and rewrite it from
   the signature-verified input. Keep genuinely malformed bytes terminal, and
   put the file's full path in that message so the user can recover.
+
+- **TSF's one-shot commit adjacency proof cannot see what the proving key
+  itself does, so the engine must retire left-text state on idle unclaimed
+  named keys.** Verified 2026-10-04 (#273): `consume_document_adjacency`
+  revalidates the proof before the key reaches the host, so an idle Backspace
+  or caret key passes the check against the unchanged document and consumes the
+  proof, and the host then deletes or moves. Before the fix the idle branch of
+  `apply_key` cleared only the cross-commit bridge, and 380 + 73 conversions in
+  the owner's history ran with a carried right id that described erased text or
+  a former caret position. Any state that describes text immediately to the
+  left of the caret (`carry_right_id`, the bridge) must be retired together
+  through `reset_carryover`; `idle_backspace_retires_the_previous_commit_context`
+  and `idle_caret_navigation_retires_the_previous_commit_context` failed
+  (carry 3 vs 0) before it.
+
+- **A context id borrowed from a candidate must come from lexical evidence
+  only.** With a shipped-size class table (class count above
+  `DEFAULT_NOUN_ID` = 1851), reading fallback edges carry the synthetic noun
+  class, so "the candidate that spells the committed text" can be a fallback
+  that invents a noun context. A 4-class fixture hides this because its
+  fallback right id is 0; `plain_reading_commit_borrows_only_an_exact_lexical_right_id`
+  uses 1,852 classes and kills both the "no text match" (carry 1) and
+  "fallback admitted" (carry 1851) mutants.
