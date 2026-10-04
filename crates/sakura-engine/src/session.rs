@@ -27,6 +27,7 @@
 //! `crate::dispatch`'s module docs for how the dispatcher handles this seam.
 
 use std::mem;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use sakura_core::conversion::{
     ConversionInputClass, CrossCommitBridge, LiteralPolicy, RightContextId,
@@ -125,6 +126,8 @@ impl HostPolicy {
 
 /// Volatile recency window described by DESIGN §5.8.
 pub const COMMIT_CACHE_CAPACITY: usize = 8;
+/// Source of [`Session::process_unique_id`]; it only ever counts up.
+static NEXT_PROCESS_UNIQUE_ID: AtomicU64 = AtomicU64::new(1);
 /// Admission state for raw-key provenance.  This is deliberately smaller than
 /// a key log: it records only whether the current composition still proves an
 /// append-only Romaji path.  Any edit or context ambiguity moves it to
@@ -290,6 +293,10 @@ pub struct Session {
     pub(crate) scope_classified: bool,
     /// Stable identity used to correlate records across pipe connections.
     history_session_id: SessionId,
+    /// Process-wide identity of this session, never reused. Pipe-local
+    /// `SessionId`s repeat across dispatchers, so state shared between pipe
+    /// workers, such as the staged learning record (#275), keys on this.
+    process_unique_id: u64,
     /// The user-selected mode to restore after a sensitive field stops being
     /// focused. Sensitive scopes temporarily force direct pass-through, but a
     /// later scope-read failure or normal field must not strand the session in
@@ -440,6 +447,7 @@ impl Session {
             scope: InputScope::Normal,
             scope_classified: false,
             history_session_id: 0,
+            process_unique_id: NEXT_PROCESS_UNIQUE_ID.fetch_add(1, Ordering::Relaxed),
             sensitive_mode_restore: None,
             reconversion_mode_restore: None,
             mode_restored: false,
@@ -589,6 +597,10 @@ impl Session {
 
     pub(crate) fn history_session_id(&self) -> SessionId {
         self.history_session_id
+    }
+
+    pub(crate) fn process_unique_id(&self) -> u64 {
+        self.process_unique_id
     }
 
     pub(crate) fn remember_mode_before_sensitive(&mut self) {
@@ -1791,6 +1803,11 @@ impl SessionTable {
                 && session.is_composing()
                 && session.process_name().eq_ignore_ascii_case(process_name)
         })
+    }
+
+    /// Every live session, in slot order.
+    pub(crate) fn live_sessions(&self) -> impl Iterator<Item = &Session> {
+        self.slots.iter().flatten().map(|(_, session)| session)
     }
 
     /// Removes every session, without resetting the id counter.
