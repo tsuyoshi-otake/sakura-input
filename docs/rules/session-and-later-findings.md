@@ -305,3 +305,19 @@
   fallback right id is 0; `plain_reading_commit_borrows_only_an_exact_lexical_right_id`
   uses 1,852 classes and kills both the "no text match" (carry 1) and
   "fallback admitted" (carry 1851) mutants.
+
+- **Learning waits for the session's next action (#275).** `record_learning`
+  only stages a commit. The first applied key from `State::Idle` settles it:
+  composing again decides nothing, an unconsumed Backspace discards it, and
+  any other key confirms it; a commit undo reported `Applied` or `Unknown`
+  discards it. A new path that ends a session, or that proves its caret no
+  longer follows the last commit, must call `confirm_staged` for it, and a new
+  path that ranks with learning before the owner's next key must call
+  `confirm_all_staged` first.
+  `a_commit_kept_by_the_next_action_is_learned_without_another_conversion`
+  lists the current exits; making `stage` learn at once failed 9 tests.
+
+- **One learned commit shows only in `LearningPreference::exact`.** `.general`
+  stays None after a single commit, and a memory `LearningService` answers
+  `forget_prediction_exact` with `Unavailable`, not `NotFound`. Reading
+  `.general` made three #275 tests fail for the wrong reason.
