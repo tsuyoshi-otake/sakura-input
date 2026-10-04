@@ -526,10 +526,17 @@ impl Dispatcher {
         self.ai_text.cancel_owner(self.ai_text_owner);
         self.ai_text_owner = self.ai_text.allocate_owner();
         if let Some(learning) = self.learning.as_deref() {
-            // The connection ended with each session's last commit still in
-            // its document (#275).
             for session in self.sessions.live_sessions() {
-                learning.confirm_staged(session.process_unique_id());
+                if session.undo_pending() {
+                    // The undo outcome will never arrive, which is the
+                    // unknown outcome: the host may have deleted the commit
+                    // (#277).
+                    learning.discard_staged(session.process_unique_id());
+                } else {
+                    // The connection ended with the session's last commit
+                    // still in its document (#275).
+                    learning.confirm_staged(session.process_unique_id());
+                }
             }
         }
         self.sessions.clear();
@@ -1004,6 +1011,11 @@ impl Dispatcher {
             return Reply::Message(Response::Error(ErrorCode::TooLarge));
         }
         out.consumed = true;
+        // The AI text teaches nothing, but it now stands between the caret and
+        // the previous commit, which therefore survived (#277).
+        if let Some(learning) = self.learning.as_deref() {
+            learning.confirm_staged(session.process_unique_id());
+        }
         session.disarm_commit_undo();
         session.reset();
         if let Some(mode) = session.take_mode_restored() {
@@ -1688,12 +1700,14 @@ impl Dispatcher {
         if !terminal {
             return Reply::Message(Response::Error(ErrorCode::Busy));
         }
-        if outcome != UndoCommitOutcome::Rejected {
+        if let Some(learning) = self.learning.as_deref() {
             // Undo is armed only until the next key after a commit, so the
             // staged record is the commit just undone (#275). A rejection left
             // it in the document; after an unknown outcome it may be gone, and
             // dropping one correct +1 costs less than learning an undone one.
-            if let Some(learning) = self.learning.as_deref() {
+            if outcome == UndoCommitOutcome::Rejected {
+                learning.release_staged(session.process_unique_id());
+            } else {
                 learning.discard_staged(session.process_unique_id());
             }
         }
@@ -2475,10 +2489,14 @@ fn session_cross_commit_bridge(
 ///
 /// Input history records the commit at once. Learning only stages it: the
 /// session's next action decides whether the commit is learned or, when the
-/// user erases or undoes it first, dropped (#275).
+/// user erases or undoes it first, dropped (#275). A commit that teaches
+/// nothing (`learnable` false or a sensitive scope) still stands between the
+/// caret and the previous commit, so it learns that one instead of leaving it
+/// for the next key to misread as erased (#277).
 fn record_learning(
     session: &Session,
     learning: Option<&LearningService>,
+    learnable: bool,
     input_history: Option<&InputHistoryService>,
     policy: ExecutionPolicy,
     surface: &str,
@@ -2507,10 +2525,10 @@ fn record_learning(
             );
         }
     }
-    if scope_is_sensitive(session.scope) {
+    let Some(service) = learning else {
         return;
-    }
-    if let Some(service) = learning {
+    };
+    if learnable && !scope_is_sensitive(session.scope) {
         service.stage(
             session.process_unique_id(),
             session.preedit.as_str(),
@@ -2518,6 +2536,8 @@ fn record_learning(
             session.carry_right_id(),
             chosen_right_id,
         );
+    } else {
+        service.confirm_staged(session.process_unique_id());
     }
 }
 
@@ -2540,6 +2560,12 @@ fn settle_staged_learning_after_idle_key(
     let Some(learning) = learning else {
         return;
     };
+    if session.undo_pending() {
+        // The host was asked to delete the commit; its outcome settles the
+        // record, and no other session's conversion may learn it first (#277).
+        learning.hold_staged(session.process_unique_id());
+        return;
+    }
     if session.is_composing() {
         return;
     }
@@ -4440,14 +4466,10 @@ fn commit_candidate_surface(
         normalizer.normalize_into(text, session.mode, scratch)?;
     }
     out.set_commit(scratch.as_str())?;
-    let learnable = if meta.raw_repair || meta.synthetic_exact {
-        None
-    } else {
-        learning
-    };
     record_learning(
         session,
-        learnable,
+        learning,
+        !(meta.raw_repair || meta.synthetic_exact),
         input_history,
         policy,
         scratch.as_str(),
@@ -4824,14 +4846,10 @@ fn commit_converted_segments(
     // real store on this machine had `と` biased towards `ﾄ` after three such
     // commits. The commit still reaches the developer input history, which is a
     // faithful record of what happened, but never the learning store.
-    let learnable = if transformed || synthetic_exact_committed {
-        None
-    } else {
-        learning
-    };
     record_learning(
         session,
-        learnable,
+        learning,
+        !(transformed || synthetic_exact_committed),
         input_history,
         policy,
         scratch.as_str(),
@@ -5639,6 +5657,7 @@ fn commit_pending(
         record_learning(
             session,
             learning,
+            true,
             input_history,
             policy,
             surface.as_str(),
@@ -5684,7 +5703,8 @@ fn commit_pending(
         out.set_commit(scratch.as_str())?;
         record_learning(
             session,
-            if preserve_exact { None } else { learning },
+            learning,
+            !preserve_exact,
             input_history,
             policy,
             scratch.as_str(),
@@ -5963,6 +5983,7 @@ fn commit_suggestion_at(
     record_learning(
         session,
         learning,
+        true,
         input_history,
         policy,
         scratch.as_str(),
