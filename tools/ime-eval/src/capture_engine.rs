@@ -40,6 +40,9 @@ struct CapturedCase {
 /// A case whose engine list is longer than the capture-file bound keeps its
 /// leading `MAX_CANDIDATES_PER_SYSTEM` candidates and is named in
 /// `truncated_case_ids`; it does not fail the capture (Issue #297).
+///
+/// A `literal_token` case is not converted: its single candidate is the
+/// composition the engine shows after typing (Issue #303).
 pub fn capture_candidates(
     engine: &Path,
     dictionary: &Path,
@@ -159,6 +162,32 @@ fn bound_candidates(
     })
 }
 
+/// The candidate list of one `literal_token` case (Issue #303).
+///
+/// The engine keeps a typed ASCII token as a literal composition, where Space
+/// inserts a space instead of opening a candidate list. The case's single
+/// candidate is therefore the composition left after typing, which is exactly
+/// what the literal oracle compares with the reading. Text committed while
+/// typing, or no composition at all, fails the case rather than recording
+/// only part of the token.
+fn literal_candidates(
+    case_id: &str,
+    composition: &str,
+    committed: &str,
+) -> Result<Vec<String>, Error> {
+    if !committed.is_empty() {
+        return Err(err(format!(
+            "case {case_id} (literal_token) committed {committed:?} while typing"
+        )));
+    }
+    if composition.is_empty() {
+        return Err(err(format!(
+            "case {case_id} (literal_token) left no composition after typing"
+        )));
+    }
+    Ok(vec![composition.to_owned()])
+}
+
 #[cfg(windows)]
 mod windows {
     use std::fs;
@@ -170,11 +199,11 @@ mod windows {
 
     use sakura_ipc::{Client, Fault, PATIENT_CONNECT};
     use sakura_proto::{
-        InputScope, KeyCode, KeyInput, Mode, Modifiers, Request, Response, SessionId,
+        InputScope, KeyCode, KeyInput, Mode, Modifiers, Preedit, Request, Response, SessionId,
         PROTOCOL_VERSION,
     };
 
-    use super::{bound_candidates, CaptureInputMethod, CapturedCase};
+    use super::{bound_candidates, literal_candidates, CaptureInputMethod, CapturedCase};
     use crate::types::{err, Error, SemanticCase};
 
     const PIPE_PREFIX: &str = r"\\.\pipe\SakuraInputEngineTest-";
@@ -296,6 +325,8 @@ mod windows {
             )?;
             expect_input_mode(client, session, timeout)?;
 
+            let mut composition = String::new();
+            let mut committed = String::new();
             for character in typing.chars() {
                 let key = character_key(character)?;
                 match client
@@ -306,7 +337,12 @@ mod windows {
                             case.case_id, character
                         ))
                     })? {
-                    Response::Output(output) if output.consumed => {}
+                    Response::Output(output) if output.consumed => {
+                        composition = preedit_text(output.preedit.as_ref());
+                        if let Some(commit) = output.commit {
+                            committed.push_str(&commit);
+                        }
+                    }
                     Response::Output(output) => {
                         return Err(err(format!(
                             "case {} key {:?} was not consumed: {output:?}",
@@ -320,6 +356,11 @@ mod windows {
                         )));
                     }
                 }
+            }
+
+            if case.constraints.literal_token {
+                let candidates = literal_candidates(&case.case_id, &composition, &committed)?;
+                return bound_candidates(&case.case_id, candidates, input_method);
             }
 
             let output = match client
@@ -347,17 +388,7 @@ mod windows {
                 }
             };
             let candidates = output.candidates.ok_or_else(|| {
-                let preedit = output
-                    .preedit
-                    .as_ref()
-                    .map(|preedit| {
-                        preedit
-                            .segments
-                            .iter()
-                            .map(|segment| segment.text.as_str())
-                            .collect::<String>()
-                    })
-                    .unwrap_or_default();
+                let preedit = preedit_text(output.preedit.as_ref());
                 err(format!(
                     "case {} produced no candidate list (consumed={}, beep={}, preedit={preedit:?}, commit={:?})",
                     case.case_id, output.consumed, output.beep, output.commit
@@ -377,6 +408,19 @@ mod windows {
         let _ = client.call(&Request::Revert { session }, timeout);
         let _ = client.call(&Request::DeleteSession { session }, timeout);
         result
+    }
+
+    /// The composition text an engine output displays, or empty without one.
+    fn preedit_text(preedit: Option<&Preedit>) -> String {
+        preedit
+            .map(|preedit| {
+                preedit
+                    .segments
+                    .iter()
+                    .map(|segment| segment.text.as_str())
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     fn create_session(client: &mut Client, timeout: Duration) -> Result<SessionId, Error> {
@@ -694,5 +738,32 @@ mod tests {
         let error = bound_candidates("oversized", long, CaptureInputMethod::Romaji)
             .expect_err("an oversized candidate is malformed");
         assert!(error.0.contains("outside capture bounds"), "{error:?}");
+    }
+
+    #[test]
+    fn literal_case_records_its_composition_as_the_single_candidate() {
+        assert_eq!(
+            literal_candidates("spaced", "Claude Code", "").expect("a literal composition"),
+            ["Claude Code"]
+        );
+    }
+
+    #[test]
+    fn literal_case_without_its_whole_composition_fails() {
+        let error = literal_candidates("none", "", "")
+            .expect_err("no composition leaves nothing to compare");
+        assert!(
+            error.0.contains("none (literal_token) left no composition"),
+            "{error:?}"
+        );
+
+        let error = literal_candidates("split", "-512", "AVX")
+            .expect_err("a commit while typing would record only part of the token");
+        assert!(
+            error
+                .0
+                .contains("split (literal_token) committed \"AVX\" while typing"),
+            "{error:?}"
+        );
     }
 }

@@ -2,6 +2,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use sakura_ime_eval::capture::MAX_CANDIDATES_PER_SYSTEM;
@@ -57,15 +58,20 @@ fn test_dictionary(local_app_data: &Path, extra: Vec<dictc_core::SourceEntry>) -
 /// One owned fixture profile and runner temp root under the test target
 /// directory, so no test touches the user's profile or ambient pipe.
 fn owned_roots() -> (PathBuf, PathBuf) {
+    // Tests run in parallel threads that can read the same clock value, so
+    // the per-process sequence keeps their roots distinct.
+    static NEXT: AtomicU64 = AtomicU64::new(0);
     let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("sakura-ime-eval-capture");
     fs::create_dir_all(&root).expect("create capture fixture root");
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("system clock after Unix epoch")
         .as_nanos();
-    let profile = root.join(format!("fixture-{}-{nonce:x}", std::process::id()));
+    let sequence = NEXT.fetch_add(1, Ordering::Relaxed);
+    let owner = format!("{}-{sequence}-{nonce:x}", std::process::id());
+    let profile = root.join(format!("fixture-{owner}"));
     fs::create_dir(&profile).expect("create capture fixture profile");
-    let temp_root = root.join(format!("runner-{}-{nonce:x}", std::process::id()));
+    let temp_root = root.join(format!("runner-{owner}"));
     (profile, temp_root)
 }
 
@@ -88,6 +94,14 @@ fn romaji_case(case_id: &str, left: &str, reading: &str, typing: &str) -> Semant
         constraints: Constraints::default(),
         privacy_provenance: None,
     }
+}
+
+fn literal_case(case_id: &str, typed: &str) -> SemanticCase {
+    let mut case = romaji_case(case_id, "開発には", typed, typed);
+    case.family = Some("ascii-literal".to_owned());
+    case.context.right = "を使う".to_owned();
+    case.constraints.literal_token = true;
+    case
 }
 
 /// The quality runner must exercise the same real engine binary as the
@@ -163,4 +177,38 @@ fn real_engine_capture_keeps_leading_candidates_of_a_long_list() {
         outputs[0].candidates
     );
     assert_eq!(fixture_order, expected, "capture must keep engine order");
+}
+
+/// Issue #303: a `literal_token` case types an ASCII token that the engine
+/// keeps as a literal composition, so Space inserts a space instead of
+/// opening a candidate list. The capture records the typed composition as
+/// the case's single candidate and the ordinary case in the same run still
+/// converts.
+#[test]
+fn real_engine_capture_records_the_composition_of_literal_cases() {
+    let (profile, temp_root) = owned_roots();
+    let dictionary = test_dictionary(&profile, Vec::new());
+    let cases = [
+        literal_case("real-capture-literal-avx", "AVX-512"),
+        literal_case("real-capture-literal-spaced", "Claude Code"),
+        romaji_case("real-capture-kyou", "今日は", "きょう", "kyou"),
+    ];
+    let engine = PathBuf::from(env!("CARGO_BIN_EXE_ime_eval_sakura_engine"));
+    let result = capture_candidates(&engine, &dictionary, &cases, &temp_root, PATIENT);
+    let _ = fs::remove_dir_all(&profile);
+    let _ = fs::remove_dir_all(&temp_root);
+    let capture = result.expect("literal cases must not fail the capture");
+    assert!(capture.truncated_case_ids.is_empty());
+    let outputs = capture.outputs;
+    assert_eq!(outputs.len(), 3);
+    assert_eq!(outputs[0].candidates, ["AVX-512"]);
+    assert_eq!(outputs[1].candidates, ["Claude Code"]);
+    assert!(
+        outputs[2]
+            .candidates
+            .iter()
+            .any(|candidate| candidate == "今日"),
+        "ordinary case after literal cases must still convert: {:?}",
+        outputs[2].candidates
+    );
 }
