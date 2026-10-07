@@ -2656,3 +2656,28 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   - 4 new unit tests for the bound.
   - Locally: fmt, workspace clippy `-D warnings` with the CI feature set, dependency rules and facade (+SelfTest), and IRV SelfTest and compare all passed. The wrapped workspace tests passed, and process-clean found no surviving runners. Wrapped workspace tests took 122 s. An independent fresh-context verifier (rubric-verifier) passed all 10 rubric criteria. Not run: the `ime-eval capture` CLI end to end; the `cmd_capture` wiring is covered by reading and by the typed API only.
 - Learning: when a tool-side bound exists only to keep an output file bounded, cut the list and record the cut (`truncated`) rather than reject a valid engine result. Reuse the one owning constant, so its rationale cannot drift away from the wire cap.
+
+## 2026-10-07 Prepare Sakura Input 2.0.12 release (#299)
+
+- Owner asked to release after #297 merged (PR #298, `01d841f`). Since v2.0.11, main gained one code change: #297, where `ime-eval capture` keeps the leading 64 romaji candidates and records the cut. ime-eval is developer tooling that the installer does not package. The other changes are the 2.0.11 release and reinstall records (PRs #295, #296), which touched the journal only. The installed IME has no behavior change, and the release notes say so.
+- Version sites: the workspace version and Cargo.lock (28 workspace packages only; 0 non-version lock lines changed), `installer/setup.iss` (product version and versioned directory), the `release.yml` default tag, and `release-sequence.txt` 19 -> 20 (LF). New Japanese notes `docs/release-notes-v2.0.12.md`. They describe the ime-eval change, say the IME has no behavior change, say no on-screen check with the installed IME was made, and keep the unsigned-installer guidance.
+- Pre-publish checks (parallel):
+  - Lines added since v2.0.11 contain no email, UUID, user-path or token strings.
+  - The only author/committer identities since v2.0.11 are the existing owner identity and GitHub's merge committer.
+  - The repo is PUBLIC, with no `v2.0.12` tag or release.
+  - LICENSE is present.
+- Verification on this tree (220 s for the gate script):
+  - release-workflow policy (+SelfTest), fmt, clippy `-D warnings` with the release.yml feature set, dependency rules and facade (+SelfTest), dep-policy (+SelfTest), and IRV SelfTest and compare all passed. The IRV-HISTORY-STORE and IRV-CI WARNs were already present before this change.
+  - The five release.yml dictionary gates passed: non-initial allomorph, tate floor, `issue_84_`, `issue_282_`, `issue_291_`.
+    - They ran against the local `artifacts/release/system.dic` built for 2.0.11.
+    - Its build report matches the tracked `data/dictionary-build.report.json` at HEAD exactly, ignoring CR.
+    - No dictionary input changed since v2.0.11.
+    - release.yml rebuilds the dictionary from sources anyway.
+  - Release build passed (45 s). The TSF DLL is 440,832 bytes against a limit of 1,048,576.
+  - process-clean passed after each test group.
+- Failure on the way: the first wrapped `cargo test --workspace` in the gate script exited 101.
+  - Its log is lost. The gate wrapper piped each step through `Select-Object -Last 15`. When `ci/run-test-quiet.ps1` threw, the pipeline stopped, and the runner deleted its own log.
+  - A standalone rerun on the unchanged tree passed (112.9 s), and process-clean found no survivor.
+  - The failing test is therefore unidentified. Earlier timing flakes are recorded: `pad_protection` v4 actor (#273) and the TSF handshake under `--workspace`.
+- Learning: in a gate script, call `ci/run-test-quiet.ps1` without a downstream pipeline. Catch its exception outside the call, so the failure log it prints is kept.
+- Pending: merge the prep PR after CI. Tag `v2.0.12` only on the merged main commit (`git merge-base --is-ancestor`). Run release.yml, then publish with `scripts/publish-release.ps1` (key passed by path only).
