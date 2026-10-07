@@ -7,7 +7,10 @@ use crate::types::{err, CaptureFile, Error};
 /// Generic semantic captures retain their historical bounded-file limit so
 /// loading an older capture does not change behavior outside Stage 1. The
 /// quality lane applies its stricter 18-candidate production contract during
-/// capture and scoring (`QUALITY_CANDIDATE_LIMIT`).
+/// capture and scoring (`QUALITY_CANDIDATE_LIMIT`). Real lists can be longer
+/// (the wire allows `sakura_proto::MAX_CANDIDATES`), so `ime-eval capture`
+/// keeps their leading candidates and sets `CaptureRuntime.truncated`
+/// (Issue #297).
 pub const MAX_CANDIDATES_PER_SYSTEM: usize = 64;
 const MAX_CANDIDATE_BYTES: usize = 4096;
 const MAX_CAPTURE_BYTES: usize = 4 * 1024 * 1024;
