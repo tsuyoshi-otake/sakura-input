@@ -264,9 +264,9 @@
 - **A word cost is context-free, so a yield made for the reading converted
   alone reaches every phrase that contains it.** When the glossary edge and
   its owner share connection classes, lifting one flips the pair in every
-  context: 17 of 43 draft yields did. `くせがある` turned into `曲がある` until
-  a `癖` row in `data/conversion-priorities.tsv` fixed Mozc's same-class
-  price, and `ふさいがある` still converts to `夫妻がある`. A loanword spelled as its own reading
+  context: 17 of 43 draft yields did. `くせがある` turned into `曲がある` and
+  `ふさいがある` into `夫妻がある` until `癖` and `負債` rows in
+  `data/conversion-priorities.tsv` fixed Mozc's same-class prices. A loanword spelled as its own reading
   (`ヌル`, `リント`, `ラン`) composes into IT compounds, and lifting it lost
   `ナルポインタ`, `リントエラー` and `ワークフローラン`, so a phonetic edge
   keeps rank one. Diff multi-word phrases built from each yielded reading, not

@@ -2321,21 +2321,29 @@ fn issue_282_it_compounds_still_lead_after_the_yield() {
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
-/// Issue #282: Mozc prices `曲` below `癖` in the same class, which the
-/// glossary's discount used to hide. The yield exposed it in every phrase, so
-/// `data/conversion-priorities.tsv` re-prices `癖` ahead of `曲`.
+/// Issue #282: Mozc prices `曲` below `癖` and `夫妻` below `負債` in the same
+/// class, which the glossary's discount used to hide. The yield exposed both
+/// in every phrase, so `data/conversion-priorities.tsv` re-prices `癖` and
+/// `負債` ahead of them. The name-suffix `夫妻` edge is a different edge.
 #[test]
 #[ignore = "needs the built system dictionary in artifacts/release"]
-fn issue_282_kuse_leads_with_habit_in_every_context() {
-    let candidates = candidates_for("くせ");
-    assert_eq!(
-        candidates.first().map(String::as_str),
-        Some("癖"),
-        "くせ: expected 癖 to lead, got {candidates:?}"
-    );
+fn issue_282_repriced_homophones_lead_in_every_context() {
     let mut wrong = Vec::new();
-    for (reading, phrase) in [("くせがある", "癖がある"), ("くせになる", "癖になる")]
-    {
+    for (reading, leader) in [("くせ", "癖"), ("ふさい", "負債")] {
+        let candidates = candidates_for(reading);
+        if candidates.first().map(String::as_str) != Some(leader) {
+            wrong.push(format!(
+                "{reading}: expected {leader} to lead, got {candidates:?}"
+            ));
+        }
+    }
+    for (reading, phrase) in [
+        ("くせがある", "癖がある"),
+        ("くせになる", "癖になる"),
+        ("ふさいがある", "負債がある"),
+        ("ふさいをかかえる", "負債を抱える"),
+        ("やまだふさい", "山田夫妻"),
+    ] {
         let top = top_text(reading);
         if top != phrase {
             wrong.push(format!("{reading}: expected {phrase}, got {top}"));

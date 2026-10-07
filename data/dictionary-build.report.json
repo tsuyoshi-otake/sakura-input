@@ -165,8 +165,8 @@
     },
     "conversion_priorities": {
       "file": "conversion-priorities.tsv",
-      "bytes": 8570,
-      "sha256": "62aac9339a29bab842cec3abbe40e43ae1a80ea9f680e40f69175f805a9c0dfb"
+      "bytes": 8904,
+      "sha256": "f7d7c42b4f1a3c7b2ebd49131b7108334c777824d04e46b1ac5fa1f0a096d0e0"
     },
     "non_initial_boundary_policy": {
       "file": "non-initial-boundary-policy.tsv",
@@ -209,7 +209,7 @@
     "dictionary": {
       "file": "system.dic",
       "bytes": 37383796,
-      "sha256": "6dcb4bb7197db46ada6e21748f58aab9b8b9594fbd203e86d6f45808fc620d3d"
+      "sha256": "6dc9e21da4cc497312a635ee87d89a5500619d2c19b53edbf3b7733eaa47f8ac"
     },
     "wordnet_report": {
       "file": "wordnet.report.json",
@@ -285,7 +285,7 @@
       {
         "file": "11_IT・技術用語.tsv",
         "bytes": 2282367,
-        "sha256": "bdfb4ed72b79f5cfb17e9d98f4f6cba85af44ee1caa5f90d35e8f1ce32f2d42c"
+        "sha256": "271a7558922a624d698dd0d8aa0bbdaf1c7c1fa5b497868e9973624330053092"
       },
       {
         "file": "12_専門用語.tsv",
