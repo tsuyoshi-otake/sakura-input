@@ -220,7 +220,7 @@ fn cmd_capture(eval_root: &Path, flags: &Flags) -> Result<u8, Error> {
         .unwrap_or_else(|| std::env::temp_dir().join("sakura-ime-eval-capture"));
 
     let baseline_started = Instant::now();
-    let baseline_candidates = capture_candidates(
+    let baseline = capture_candidates(
         &baseline_engine,
         &baseline_dictionary,
         &cases,
@@ -229,7 +229,7 @@ fn cmd_capture(eval_root: &Path, flags: &Flags) -> Result<u8, Error> {
     )?;
     let baseline_capture = crate::types::CaptureRuntime {
         terminal: "completed".to_owned(),
-        truncated: false,
+        truncated: report_truncated_cases("baseline", &baseline.truncated_case_ids),
         elapsed_us: Some(
             baseline_started
                 .elapsed()
@@ -238,7 +238,7 @@ fn cmd_capture(eval_root: &Path, flags: &Flags) -> Result<u8, Error> {
         ),
     };
     let candidate_started = Instant::now();
-    let candidate_candidates = capture_candidates(
+    let candidate = capture_candidates(
         &candidate_engine,
         &candidate_dictionary,
         &cases,
@@ -247,7 +247,7 @@ fn cmd_capture(eval_root: &Path, flags: &Flags) -> Result<u8, Error> {
     )?;
     let candidate_capture = crate::types::CaptureRuntime {
         terminal: "completed".to_owned(),
-        truncated: false,
+        truncated: report_truncated_cases("candidate", &candidate.truncated_case_ids),
         elapsed_us: Some(
             candidate_started
                 .elapsed()
@@ -255,6 +255,8 @@ fn cmd_capture(eval_root: &Path, flags: &Flags) -> Result<u8, Error> {
                 .min(u128::from(u64::MAX)) as u64,
         ),
     };
+    let baseline_candidates = baseline.outputs;
+    let candidate_candidates = candidate.outputs;
     if baseline_candidates.len() != cases.len() || candidate_candidates.len() != cases.len() {
         return Err(err("candidate capture returned an unexpected case count"));
     }
@@ -285,6 +287,21 @@ fn cmd_capture(eval_root: &Path, flags: &Flags) -> Result<u8, Error> {
     fs::write(&out, bytes).map_err(|error| err(format!("write {}: {error}", out.display())))?;
     println!("{}", out.display());
     Ok(0)
+}
+
+/// Names on stderr the cases whose real list was cut to the capture-file
+/// bound, and returns whether any were, for that side's `CaptureRuntime`.
+fn report_truncated_cases(side: &str, case_ids: &[String]) -> bool {
+    if case_ids.is_empty() {
+        return false;
+    }
+    eprintln!(
+        "{side} capture kept the first {} candidates of {} case(s): {}",
+        crate::capture::MAX_CANDIDATES_PER_SYSTEM,
+        case_ids.len(),
+        case_ids.join(", ")
+    );
+    true
 }
 
 fn cmd_quality_capture(flags: &Flags) -> Result<u8, Error> {
