@@ -1,7 +1,11 @@
 use std::path::Path;
 use std::time::Duration;
 
-use crate::types::{Error, SemanticCase, SystemOutput};
+use crate::capture::MAX_CANDIDATES_PER_SYSTEM;
+use crate::quality::QUALITY_CANDIDATE_LIMIT;
+use crate::types::{err, Error, SemanticCase, SystemOutput};
+
+const MAX_CANDIDATE_BYTES: usize = 4096;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CaptureInputMethod {
@@ -9,32 +13,67 @@ pub enum CaptureInputMethod {
     Kana,
 }
 
+/// Romaji capture of one engine artifact, ready for a schema-v1 capture file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CandidateCapture {
+    /// One output per requested case, in request order. Each holds at most
+    /// `MAX_CANDIDATES_PER_SYSTEM` candidates in engine order.
+    pub outputs: Vec<SystemOutput>,
+    /// Cases whose engine list was longer than `MAX_CANDIDATES_PER_SYSTEM`
+    /// and was cut to its leading candidates, in request order.
+    pub truncated_case_ids: Vec<String>,
+}
+
+/// One captured case after its lane's candidate bound was applied.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CapturedCase {
+    output: SystemOutput,
+    truncated: bool,
+}
+
 /// Captures conversion candidates from one owned engine artifact.
 ///
 /// The Windows implementation launches the supplied engine on a private test
 /// pipe and private `LOCALAPPDATA` tree. Other platforms fail closed because
 /// the shipping engine and its named-pipe contract are Windows-only.
+///
+/// A case whose engine list is longer than the capture-file bound keeps its
+/// leading `MAX_CANDIDATES_PER_SYSTEM` candidates and is named in
+/// `truncated_case_ids`; it does not fail the capture (Issue #297).
 pub fn capture_candidates(
     engine: &Path,
     dictionary: &Path,
     cases: &[SemanticCase],
     temp_root: &Path,
     timeout: Duration,
-) -> Result<Vec<SystemOutput>, Error> {
-    capture_candidates_with_input_method(
+) -> Result<CandidateCapture, Error> {
+    let captured = capture_candidates_with_input_method(
         engine,
         dictionary,
         cases,
         temp_root,
         timeout,
         CaptureInputMethod::Romaji,
-    )
+    )?;
+    let truncated_case_ids = cases
+        .iter()
+        .zip(&captured)
+        .filter(|(_, captured)| captured.truncated)
+        .map(|(case, _)| case.case_id.clone())
+        .collect();
+    Ok(CandidateCapture {
+        outputs: captured.into_iter().map(|case| case.output).collect(),
+        truncated_case_ids,
+    })
 }
 
 /// Capture direct kana cases in an isolated profile. This is used by the
 /// deterministic quality fixture because its source contract supplies kana
 /// readings, not a user-specific romaji spelling. The profile is temporary,
 /// so it cannot touch learning or user-dictionary state.
+///
+/// A list longer than the quality lane's 18-candidate production contract
+/// (`QUALITY_CANDIDATE_LIMIT`) fails the capture; it is never cut.
 pub fn capture_kana_candidates(
     engine: &Path,
     dictionary: &Path,
@@ -42,14 +81,15 @@ pub fn capture_kana_candidates(
     temp_root: &Path,
     timeout: Duration,
 ) -> Result<Vec<SystemOutput>, Error> {
-    capture_candidates_with_input_method(
+    let captured = capture_candidates_with_input_method(
         engine,
         dictionary,
         cases,
         temp_root,
         timeout,
         CaptureInputMethod::Kana,
-    )
+    )?;
+    Ok(captured.into_iter().map(|case| case.output).collect())
 }
 
 fn capture_candidates_with_input_method(
@@ -59,7 +99,7 @@ fn capture_candidates_with_input_method(
     temp_root: &Path,
     timeout: Duration,
     input_method: CaptureInputMethod,
-) -> Result<Vec<SystemOutput>, Error> {
+) -> Result<Vec<CapturedCase>, Error> {
     #[cfg(windows)]
     {
         windows::capture_candidates(engine, dictionary, cases, temp_root, timeout, input_method)
@@ -68,10 +108,55 @@ fn capture_candidates_with_input_method(
     #[cfg(not(windows))]
     {
         let _ = (engine, dictionary, cases, temp_root, timeout, input_method);
-        Err(crate::types::err(
+        Err(err(
             "real engine candidate capture is only supported on Windows",
         ))
     }
+}
+
+/// Applies one lane's candidate bound to an engine list, kept in engine order.
+///
+/// The wire allows up to `sakura_proto::MAX_CANDIDATES` candidates, and real
+/// readings often return more than 64. Romaji capture writes schema-v1 capture
+/// files, which accept at most `MAX_CANDIDATES_PER_SYSTEM` candidates per
+/// system, so a longer list keeps its leading candidates and reports the cut.
+/// Kana capture feeds the quality lane, whose production contract rejects
+/// lists longer than `QUALITY_CANDIDATE_LIMIT` instead. In both lanes an empty
+/// list, or an empty or oversized candidate anywhere in the list, fails.
+fn bound_candidates(
+    case_id: &str,
+    mut candidates: Vec<String>,
+    input_method: CaptureInputMethod,
+) -> Result<CapturedCase, Error> {
+    if candidates.is_empty() {
+        return Err(err(format!("case {case_id} produced no candidates")));
+    }
+    let outside_bounds = || {
+        err(format!(
+            "case {case_id} produced candidates outside capture bounds"
+        ))
+    };
+    if candidates
+        .iter()
+        .any(|candidate| candidate.is_empty() || candidate.len() > MAX_CANDIDATE_BYTES)
+    {
+        return Err(outside_bounds());
+    }
+    let truncated = match input_method {
+        CaptureInputMethod::Romaji => {
+            let truncated = candidates.len() > MAX_CANDIDATES_PER_SYSTEM;
+            candidates.truncate(MAX_CANDIDATES_PER_SYSTEM);
+            truncated
+        }
+        CaptureInputMethod::Kana if candidates.len() > QUALITY_CANDIDATE_LIMIT => {
+            return Err(outside_bounds());
+        }
+        CaptureInputMethod::Kana => false,
+    };
+    Ok(CapturedCase {
+        output: SystemOutput { candidates },
+        truncated,
+    })
 }
 
 #[cfg(windows)]
@@ -89,18 +174,12 @@ mod windows {
         PROTOCOL_VERSION,
     };
 
-    use super::CaptureInputMethod;
-    use crate::types::{err, Error, SemanticCase, SystemOutput};
+    use super::{bound_candidates, CaptureInputMethod, CapturedCase};
+    use crate::types::{err, Error, SemanticCase};
 
     const PIPE_PREFIX: &str = r"\\.\pipe\SakuraInputEngineTest-";
     const CONNECT_SLICE: Duration = Duration::from_millis(100);
     const MAX_TYPING_BYTES: usize = 4096;
-    // Generic semantic capture retains its historical bounded-file limit;
-    // the production wire decoder itself is capped at 18. Quality capture
-    // uses the explicit Stage 1/production limit below.
-    const MAX_GENERIC_CANDIDATES: usize = 64;
-    const MAX_QUALITY_CANDIDATES: usize = 18;
-    const MAX_CANDIDATE_BYTES: usize = 4096;
     static NEXT_ID: AtomicU64 = AtomicU64::new(0);
 
     pub(super) fn capture_candidates(
@@ -110,7 +189,7 @@ mod windows {
         temp_root: &Path,
         timeout: Duration,
         input_method: CaptureInputMethod,
-    ) -> Result<Vec<SystemOutput>, Error> {
+    ) -> Result<Vec<CapturedCase>, Error> {
         if cases.is_empty() {
             return Err(err("candidate capture has no semantic cases"));
         }
@@ -141,9 +220,9 @@ mod windows {
     }
 
     fn drop_client_before_cleanup(
-        result: Result<Vec<SystemOutput>, Error>,
+        result: Result<Vec<CapturedCase>, Error>,
         owned: &mut OwnedEngine,
-    ) -> Result<Vec<SystemOutput>, Error> {
+    ) -> Result<Vec<CapturedCase>, Error> {
         let cleanup = owned.cleanup();
         match (result, cleanup) {
             (Ok(captured), Ok(())) => Ok(captured),
@@ -178,7 +257,7 @@ mod windows {
         case: &SemanticCase,
         timeout: Duration,
         input_method: CaptureInputMethod,
-    ) -> Result<SystemOutput, Error> {
+    ) -> Result<CapturedCase, Error> {
         let typing = case.input.typing.as_deref().ok_or_else(|| {
             err(format!(
                 "case {} has no input.typing capture sequence",
@@ -284,30 +363,15 @@ mod windows {
                     case.case_id, output.consumed, output.beep, output.commit
                 ))
             })?;
-            if candidates.items.is_empty() {
-                return Err(err(format!("case {} produced no candidates", case.case_id)));
-            }
-            let candidate_limit = match input_method {
-                CaptureInputMethod::Romaji => MAX_GENERIC_CANDIDATES,
-                CaptureInputMethod::Kana => MAX_QUALITY_CANDIDATES,
-            };
-            if candidates.items.len() > candidate_limit
-                || candidates.items.iter().any(|candidate| {
-                    candidate.text.is_empty() || candidate.text.len() > MAX_CANDIDATE_BYTES
-                })
-            {
-                return Err(err(format!(
-                    "case {} produced candidates outside capture bounds",
-                    case.case_id
-                )));
-            }
-            Ok(SystemOutput {
-                candidates: candidates
+            bound_candidates(
+                &case.case_id,
+                candidates
                     .items
                     .into_iter()
                     .map(|candidate| candidate.text)
                     .collect(),
-            })
+                input_method,
+            )
         })();
 
         let _ = client.call(&Request::Revert { session }, timeout);
@@ -555,5 +619,80 @@ mod windows {
                 let _ = self.cleanup();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn numbered(count: usize) -> Vec<String> {
+        (0..count).map(|index| format!("候補{index:03}")).collect()
+    }
+
+    #[test]
+    fn romaji_list_over_the_file_bound_keeps_leading_candidates_and_flags_the_cut() {
+        let captured = bound_candidates("long", numbered(106), CaptureInputMethod::Romaji)
+            .expect("a long romaji list is cut, not rejected");
+        assert!(captured.truncated);
+        assert_eq!(
+            captured.output.candidates,
+            numbered(MAX_CANDIDATES_PER_SYSTEM)
+        );
+    }
+
+    #[test]
+    fn romaji_list_at_the_file_bound_is_kept_whole_and_not_flagged() {
+        let captured = bound_candidates(
+            "exact",
+            numbered(MAX_CANDIDATES_PER_SYSTEM),
+            CaptureInputMethod::Romaji,
+        )
+        .expect("a list at the bound is valid");
+        assert!(!captured.truncated);
+        assert_eq!(
+            captured.output.candidates,
+            numbered(MAX_CANDIDATES_PER_SYSTEM)
+        );
+    }
+
+    #[test]
+    fn kana_list_keeps_the_quality_production_contract() {
+        let captured = bound_candidates(
+            "quality",
+            numbered(QUALITY_CANDIDATE_LIMIT),
+            CaptureInputMethod::Kana,
+        )
+        .expect("a list at the quality limit is valid");
+        assert!(!captured.truncated);
+        assert_eq!(captured.output.candidates.len(), QUALITY_CANDIDATE_LIMIT);
+
+        let error = bound_candidates(
+            "quality-long",
+            numbered(QUALITY_CANDIDATE_LIMIT + 1),
+            CaptureInputMethod::Kana,
+        )
+        .expect_err("the quality lane never cuts a list");
+        assert!(error.0.contains("outside capture bounds"), "{error:?}");
+    }
+
+    #[test]
+    fn malformed_lists_fail_in_both_lanes() {
+        for method in [CaptureInputMethod::Romaji, CaptureInputMethod::Kana] {
+            let error = bound_candidates("none", Vec::new(), method)
+                .expect_err("an empty list has nothing to score");
+            assert!(error.0.contains("produced no candidates"), "{error:?}");
+
+            let error = bound_candidates("blank", vec!["今日".to_owned(), String::new()], method)
+                .expect_err("an empty candidate is malformed");
+            assert!(error.0.contains("outside capture bounds"), "{error:?}");
+        }
+        // An oversized candidate beyond the cut still fails: truncation never
+        // hides malformed engine output.
+        let mut long = numbered(MAX_CANDIDATES_PER_SYSTEM + 1);
+        long.push("x".repeat(MAX_CANDIDATE_BYTES + 1));
+        let error = bound_candidates("oversized", long, CaptureInputMethod::Romaji)
+            .expect_err("an oversized candidate is malformed");
+        assert!(error.0.contains("outside capture bounds"), "{error:?}");
     }
 }
