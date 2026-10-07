@@ -6,7 +6,10 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use dictc_core::glossary::{parse_part, ImportResult, Importer, OverlayDefaults};
-use dictc_core::{entries_to_tsv, parse_mozc_entries, MOZC_UPSTREAM_COMMIT};
+use dictc_core::segmenter::parse_mozc_pos_features;
+use dictc_core::{
+    entries_to_tsv, parse_entries, parse_mozc_connection, parse_mozc_entries, MOZC_UPSTREAM_COMMIT,
+};
 
 const GLOSSARY_REPOSITORY: &str =
     "https://github.com/systemexe-research-and-development/smile-chat";
@@ -23,6 +26,9 @@ struct Config {
     glossary_parts: Vec<PathBuf>,
     glossary_directory: Option<PathBuf>,
     mozc_shards: Vec<PathBuf>,
+    upstream_systems: Vec<PathBuf>,
+    mozc_connection: PathBuf,
+    mozc_id_def: PathBuf,
     output: PathBuf,
     report: PathBuf,
     glossary_revision: String,
@@ -46,11 +52,16 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     config.glossary_parts.dedup();
     config.mozc_shards.sort();
     config.mozc_shards.dedup();
+    config.upstream_systems.sort();
+    config.upstream_systems.dedup();
     if config.glossary_parts.is_empty() {
         return Err("at least one --glossary or a non-empty --glossary-dir is required".into());
     }
     if config.mozc_shards.is_empty() {
         return Err("at least one --mozc-system file is required".into());
+    }
+    if config.upstream_systems.is_empty() {
+        return Err("at least one --upstream-system file is required".into());
     }
 
     let mut terms = Vec::new();
@@ -68,7 +79,36 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
         let shard = parse_mozc_entries(&source, &text).map_err(|error| error.to_string())?;
         importer.match_mozc(&shard);
     }
-    let imported = importer.finish();
+    // Matched glossary edges are ranked against the pre-overlay dictionary
+    // the image actually ships (trimmed Mozc plus generated inflections),
+    // not against the raw shards they were matched in.
+    for path in &config.upstream_systems {
+        let source = path.display().to_string();
+        let text = read_utf8(path)?;
+        let entries = parse_entries(&source, &text).map_err(|error| error.to_string())?;
+        importer.observe_upstream(&entries);
+    }
+    let connection = parse_mozc_connection(
+        &config.mozc_connection.display().to_string(),
+        &read_utf8(&config.mozc_connection)?,
+        true,
+    )
+    .map_err(|error| error.to_string())?;
+    let pos_features = parse_mozc_pos_features(
+        &config.mozc_id_def.display().to_string(),
+        &read_utf8(&config.mozc_id_def)?,
+    )
+    .map_err(|error| error.to_string())?;
+    if pos_features.len() != usize::from(connection.class_count()) {
+        return Err(format!(
+            "{} names {} classes but {} has {}; they must come from one Mozc revision",
+            config.mozc_id_def.display(),
+            pos_features.len(),
+            config.mozc_connection.display(),
+            connection.class_count()
+        ));
+    }
+    let imported = importer.finish(&connection, &pos_features);
     let tsv =
         entries_to_tsv(&imported.entries, OUTPUT_LICENSE).map_err(|error| error.to_string())?;
     let report = report_json(&config, &imported)?;
@@ -76,11 +116,12 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     replacing_write(&config.output, tsv.as_bytes())?;
     replacing_write(&config.report, report.as_bytes())?;
     println!(
-        "wrote {} overlay entries ({} ASCII aliases, {} ASCII-only terms, {} Mozc matches, {} defaults, {} gaps) in {:.2}s",
+        "wrote {} overlay entries ({} ASCII aliases, {} ASCII-only terms, {} Mozc matches, {} yielded to upstream leaders, {} defaults, {} gaps) in {:.2}s",
         imported.report.surfaces,
         imported.report.ascii_aliases,
         imported.report.ascii_only_terms,
         imported.report.matched_to_mozc,
+        imported.report.upstream_yields.len(),
         imported.report.defaulted,
         imported.report.gaps.len(),
         started.elapsed().as_secs_f64()
@@ -92,6 +133,9 @@ fn parse_args(args: impl Iterator<Item = OsString>) -> Result<Config, String> {
     let mut glossary_parts = Vec::new();
     let mut glossary_directory = None;
     let mut mozc_shards = Vec::new();
+    let mut upstream_systems = Vec::new();
+    let mut mozc_connection = None;
+    let mut mozc_id_def = None;
     let mut output = None;
     let mut report = None;
     let mut glossary_revision = None;
@@ -112,6 +156,19 @@ fn parse_args(args: impl Iterator<Item = OsString>) -> Result<Config, String> {
                 "glossary directory",
             )?,
             Some("--mozc-system") => mozc_shards.push(next_path(&mut args, &argument)?),
+            Some("--upstream-system") => {
+                upstream_systems.push(next_path(&mut args, &argument)?);
+            }
+            Some("--mozc-connection") => set_once(
+                &mut mozc_connection,
+                next_path(&mut args, &argument)?,
+                "Mozc connection",
+            )?,
+            Some("--mozc-id-def") => set_once(
+                &mut mozc_id_def,
+                next_path(&mut args, &argument)?,
+                "Mozc id.def taxonomy",
+            )?,
             Some("--output") => set_once(&mut output, next_path(&mut args, &argument)?, "output")?,
             Some("--report") => set_once(&mut report, next_path(&mut args, &argument)?, "report")?,
             Some("--glossary-revision") => {
@@ -139,7 +196,7 @@ fn parse_args(args: impl Iterator<Item = OsString>) -> Result<Config, String> {
             }
             Some("--help" | "-h") => {
                 println!(
-                    "Usage: glossary-import (--glossary FILE | --glossary-dir DIR) \\\n+                     --mozc-system FILE... --glossary-revision SHA \\\n+                     --output FILE --report FILE [default-id/cost options]"
+                    "Usage: glossary-import (--glossary FILE | --glossary-dir DIR) \\\n+                     --mozc-system FILE... --upstream-system FILE... \\\n+                     --mozc-connection FILE --mozc-id-def FILE \\\n+                     --glossary-revision SHA \\\n+                     --output FILE --report FILE [default-id/cost options]"
                 );
                 std::process::exit(0);
             }
@@ -151,6 +208,9 @@ fn parse_args(args: impl Iterator<Item = OsString>) -> Result<Config, String> {
         glossary_parts,
         glossary_directory,
         mozc_shards,
+        upstream_systems,
+        mozc_connection: mozc_connection.ok_or("--mozc-connection is required")?,
+        mozc_id_def: mozc_id_def.ok_or("--mozc-id-def is required")?,
         output: output.ok_or("--output is required")?,
         report: report.ok_or("--report is required")?,
         glossary_revision: glossary_revision.ok_or("--glossary-revision is required")?,
@@ -198,9 +258,10 @@ fn report_json(config: &Config, imported: &ImportResult) -> Result<String, Strin
     .map_err(|error| error.to_string())?;
     writeln!(
         &mut output,
-        "  \"glossary_parts\": {},\n  \"mozc_shards\": {},\n  \"terms\": {},\n  \"surfaces\": {},\n  \"ascii_aliases\": {},\n  \"ascii_only_terms\": {},\n  \"matched_to_mozc\": {},\n  \"defaulted\": {},\n  \"duplicate_surfaces\": {},",
+        "  \"glossary_parts\": {},\n  \"mozc_shards\": {},\n  \"upstream_systems\": {},\n  \"terms\": {},\n  \"surfaces\": {},\n  \"ascii_aliases\": {},\n  \"ascii_only_terms\": {},\n  \"matched_to_mozc\": {},\n  \"defaulted\": {},\n  \"duplicate_surfaces\": {},",
         config.glossary_parts.len(),
         config.mozc_shards.len(),
+        config.upstream_systems.len(),
         imported.report.terms,
         imported.report.surfaces,
         imported.report.ascii_aliases,
@@ -210,18 +271,29 @@ fn report_json(config: &Config, imported: &ImportResult) -> Result<String, Strin
         imported.report.duplicate_surfaces
     )
     .map_err(|error| error.to_string())?;
-    writeln!(&mut output, "  \"gaps\": [").map_err(|error| error.to_string())?;
-    for (index, gap) in imported.report.gaps.iter().enumerate() {
-        let comma = if index + 1 == imported.report.gaps.len() {
-            ""
-        } else {
-            ","
-        };
-        writeln!(&mut output, "    {}{comma}", json_string(gap))
-            .map_err(|error| error.to_string())?;
-    }
-    output.push_str("  ]\n}\n");
+    write_string_array(
+        &mut output,
+        "upstream_yields",
+        &imported.report.upstream_yields,
+        ",",
+    )?;
+    write_string_array(&mut output, "gaps", &imported.report.gaps, "")?;
+    output.push_str("}\n");
     Ok(output)
+}
+
+fn write_string_array(
+    output: &mut String,
+    name: &str,
+    values: &[String],
+    trailer: &str,
+) -> Result<(), String> {
+    writeln!(output, "  {}: [", json_string(name)).map_err(|error| error.to_string())?;
+    for (index, value) in values.iter().enumerate() {
+        let comma = if index + 1 == values.len() { "" } else { "," };
+        writeln!(output, "    {}{comma}", json_string(value)).map_err(|error| error.to_string())?;
+    }
+    writeln!(output, "  ]{trailer}").map_err(|error| error.to_string())
 }
 
 fn json_string(value: &str) -> String {

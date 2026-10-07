@@ -13,7 +13,7 @@ a diff, something has gone wrong.
 | `mozc-trim.report.json` | 2 | Machine-readable result of the pinned Mozc trim |
 | `non-initial-boundary-policy.tsv` | 2 | Exhaustive review of every reading/surface pair that the raw allomorph classifier would otherwise hide completely at an initial conversion boundary |
 | `it-terms.tsv` | 2 | Generated MIT-licensed IT overlay from the pinned smile-chat glossary, including deterministic ASCII readings for Shift+English conversion |
-| `it-terms.report.json` | 2 | Import counts, ASCII-only term counts, and the explicit missing-reading gap list |
+| `it-terms.report.json` | 2 | Import counts, ASCII-only term counts, how many pre-overlay dictionary files decided reading ownership (`upstream_systems`), every edge re-priced behind the word that owns its reading (`upstream_yields`), and the explicit missing-reading gap list |
 | `curated-terms.tsv` | 2 | Project-authored MIT overlay for canonical casing and high-value terms missing from the generated glossary |
 | `conversion-priorities.tsv` | 2 | Project-authored calibration overlay for context-free top-1 conversion; re-prices existing lattice edges and may add missing IT/business compounds such as Issue #62's 機能紹介 |
 
@@ -78,6 +78,13 @@ typed as a continuous ASCII run begun with Shift. Multi-word surfaces also recei
 reading and a first-word reading, so `CLAUDE` can select both `Claude` and
 `Claude Code`. Terms with no kana reading but a safe ASCII surface are tracked
 as `ascii_only_terms` rather than silently dropped.
+
+A glossary surface that Mozc also carries keeps Mozc's classes at a discount.
+Where that discount would take rank one from the word that owns the reading in
+the pre-overlay dictionary (`移行` over `以降`), the importer prices the
+glossary edges just behind that word instead (Issue #282). A surface spelled as
+the reading's own katakana (`ヌル`) keeps its rank, because IT compounds are
+built from it.
 
 `curated-terms.tsv` is a small, reviewable complement to that generated data.
 Its lower-case ASCII readings let one continuous ASCII run begun with Shift convert forms such

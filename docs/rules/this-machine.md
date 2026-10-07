@@ -58,3 +58,11 @@
   whole file as changed. Write such a script with the file-writing tool, or
   build backslashes and CRs from `bytes([92])` / `bytes([13])`, then confirm
   `git diff --stat` shows only the appended lines.
+
+- **The Edit tool strips trailing tabs from the lines it writes.** Verified
+  2026-10-07 (#282): adding a row to `data/conversion-priorities.tsv` dropped
+  the schema-required final tab of the empty annotation column from the new
+  row and from the neighbouring row quoted as the anchor. After editing a
+  `data/*.tsv` row, print the raw bytes of the changed rows (Python
+  `repr()` on the CRLF-split line) and confirm `git diff` shows only the
+  intended lines.

@@ -247,6 +247,33 @@
   fragments, so an absolute guard fails on 500 harmless rows. Pin the measured
   collisions instead.
 
+- **The generated glossary breaks the same rule through its Mozc-match
+  discount, so the importer enforces it (#282).** A glossary surface that
+  Mozc also carries is priced at Mozc cost - 400, which put `移行` ahead of
+  `以降` and `社債` ahead of `車載`. `glossary-import` now finds the word that
+  ranks each glossary reading first in the pre-overlay dictionary (trimmed
+  Mozc plus inflections) and prices such a discounted edge 60 behind it; the
+  report lists every re-priced edge under `upstream_yields` (33 on the pinned
+  sources). Ownership is a lattice question, not an entry-list one: a leader
+  that is a particle-initial fragment (`でグレード`), a noun's hiragana echo,
+  a proper noun or a verb form that needs a following word (`転ん`) does not
+  own the reading, and a cheaper split with another spelling (`た今` for
+  `たいま`, or `か`+`ラム` built from a shorter glossary reading) means there is
+  no owner to step back for.
+
+- **A word cost is context-free, so a yield made for the reading converted
+  alone reaches every phrase that contains it.** When the glossary edge and
+  its owner share connection classes, lifting one flips the pair in every
+  context: 17 of 43 draft yields did. `くせがある` turned into `曲がある` until
+  a `癖` row in `data/conversion-priorities.tsv` fixed Mozc's same-class
+  price, and `ふさいがある` still converts to `夫妻がある`. A loanword spelled as its own reading
+  (`ヌル`, `リント`, `ラン`) composes into IT compounds, and lifting it lost
+  `ナルポインタ`, `リントエラー` and `ワークフローラン`, so a phonetic edge
+  keeps rank one. Diff multi-word phrases built from each yielded reading, not
+  only the reading itself. Confining a yield to standalone conversion needs a
+  runtime signal; the build rejects a second `(reading, surface, left_id,
+  right_id)` edge, so a separately priced standalone-only entry is impossible.
+
 - **Comparing rank one is not enough: an exact entry prunes the whole fuzzy
   expansion beneath it.** Adding one row collapses the reading's candidate list
   -- `じーぴーゆー` went from 108 candidates to two -- because the engine stops

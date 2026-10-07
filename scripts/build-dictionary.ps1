@@ -419,7 +419,17 @@ function Invoke-BuildPass {
     foreach ($shard in $shards) {
         $glossaryArguments += @('--mozc-system', $shard)
     }
-    $glossaryArguments += @('--output', $overlayTsv, '--report', $overlayReport)
+    # A glossary reading must not take rank one from the word that owned it
+    # in the pre-overlay dictionary (trimmed Mozc + inflections); the POS
+    # taxonomy tells an owning word from a fragment or a kana echo.
+    $glossaryArguments += @(
+        '--upstream-system', $systemTsv,
+        '--upstream-system', $inflectionTsv,
+        '--mozc-connection', $ConnectionPath,
+        '--mozc-id-def', $MozcPosPath,
+        '--output', $overlayTsv,
+        '--report', $overlayReport
+    )
     Invoke-Rtk -Arguments $glossaryArguments
 
     $categoryArguments = @(
