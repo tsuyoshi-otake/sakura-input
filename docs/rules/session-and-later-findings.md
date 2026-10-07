@@ -370,3 +370,17 @@
   stays None after a single commit, and a memory `LearningService` answers
   `forget_prediction_exact` with `Unavailable`, not `NotFound`. Reading
   `.general` made three #275 tests fail for the wrong reason.
+
+- **A `--test-pipe` client outruns the neural reranker (#299).** Conversion
+  consumes a rerank result only if it has already arrived; otherwise local
+  ranking stays final (`crates/sakura-engine/src/long_conversion.rs`). A test
+  client that sends Space right after its last key therefore measures a
+  timing-dependent mix of the two. With the owner's
+  `neural-reranker-scope = "all-normal-conversions"`, 11 zero-pause runs on
+  the 2.0.11 and 2.0.12 engines showed the reranker's inline choice for 1 to 3
+  of the 4 affected readings per run, while 16 runs that paused 50 to 1000 ms
+  before Space showed it for all 4, byte-identical across both engines.
+  The 2.0.11 reinstall entry drew a wrong conclusion from zero-pause runs. To
+  observe what a person sees, pause at least 100 ms before Space and read
+  `CandidateList.selected` as well as the order; a zero-pause run is not
+  evidence that a reading keeps its owner's choice.
