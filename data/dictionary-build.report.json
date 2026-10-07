@@ -40,8 +40,8 @@
         "inputs": [
           {
             "file": "curated-phrases.tsv",
-            "bytes": 101128,
-            "sha256": "ff58d24d65d061ddb660aefbeeaa24f31664f38f776aa3371c3e2570083bea8d"
+            "bytes": 100644,
+            "sha256": "72b6e61e569fb0a84f34b66f430970e998433c70f9957248d1a139937a0eb660"
           },
           {
             "file": "curated-general-details.tsv",
@@ -50,8 +50,8 @@
           },
           {
             "file": "curated-homophone-details.tsv",
-            "bytes": 123472,
-            "sha256": "f2df18a7cefb8298a85aa68da854a3b1a04e5a0b5e73e67828eb7201362d9cbf"
+            "bytes": 123461,
+            "sha256": "a746f945080203b56cb9a19d75f0dc91dc81e638f7c87f59994164be5aa51dd4"
           }
         ]
       },
@@ -139,8 +139,8 @@
     },
     "curated_phrases": {
       "file": "curated-phrases.tsv",
-      "bytes": 101128,
-      "sha256": "ff58d24d65d061ddb660aefbeeaa24f31664f38f776aa3371c3e2570083bea8d"
+      "bytes": 100644,
+      "sha256": "72b6e61e569fb0a84f34b66f430970e998433c70f9957248d1a139937a0eb660"
     },
     "curated_general_details": {
       "file": "curated-general-details.tsv",
@@ -149,34 +149,29 @@
     },
     "curated_homophone_details": {
       "file": "curated-homophone-details.tsv",
-      "bytes": 123472,
-      "sha256": "f2df18a7cefb8298a85aa68da854a3b1a04e5a0b5e73e67828eb7201362d9cbf"
+      "bytes": 123461,
+      "sha256": "a746f945080203b56cb9a19d75f0dc91dc81e638f7c87f59994164be5aa51dd4"
     },
     "curated_homophone_system_details": null,
     "curated_phrase_target_entries": {
       "file": "curated-phrase-target-entries.tsv",
-      "bytes": 1195,
-      "sha256": "eac0833461f6b102ed49163262f5a4b18a86395c516ba31c81b35c053637040b"
+      "bytes": 1178,
+      "sha256": "e5fe3b302f3a4276154ca59eda1553fe9f54629c0327d0c16aede4809ae81507"
     },
     "curated_general_target_entries": {
       "file": "curated-general-target-entries.tsv",
-      "bytes": 383,
-      "sha256": "be464bcf9e4f60a8c7fc3131072565fc98bf879487ddaaaf959c4dde3a646c00"
+      "bytes": 377,
+      "sha256": "c31931f2a5ff5c25f9c2b241cfcf0b493d659194ca66a05d2d0c1fbf338712ec"
     },
     "conversion_priorities": {
       "file": "conversion-priorities.tsv",
-      "bytes": 7111,
-      "sha256": "9991e1a038beba391224b1395adc5fd4f4367ae5bc97cd5e75b6e7c51dd0ad9a"
+      "bytes": 8570,
+      "sha256": "62aac9339a29bab842cec3abbe40e43ae1a80ea9f680e40f69175f805a9c0dfb"
     },
     "non_initial_boundary_policy": {
       "file": "non-initial-boundary-policy.tsv",
-      "bytes": 20516,
-      "sha256": "d371b7b2538c2576463fabc7dee658419ef56f13fb5ccf7bcab18f4f4ea41028"
-    },
-    "non_initial_boundary_policy": {
-      "file": "non-initial-boundary-policy.tsv",
-      "bytes": 20516,
-      "sha256": "d371b7b2538c2576463fabc7dee658419ef56f13fb5ccf7bcab18f4f4ea41028"
+      "bytes": 20809,
+      "sha256": "304f66395c6cc0ae6dfd79b13907e07b6f42a76ea10fb843db5d1f1ca0070359"
     },
     "system_category_dictionary": null
   },
@@ -189,17 +184,17 @@
     "trim_report": {
       "file": "mozc-trim.report.json",
       "bytes": 1028,
-      "sha256": "598ed727148eca396107d09134ca832be9614a5e248ed5accd70cc9f89cb752a"
+      "sha256": "f1f7617383c56eda54509021e01df77fd19f1b710699a37f87133651d7d3ea57"
     },
     "overlay_tsv": {
       "file": "it-terms.tsv",
       "bytes": 2232237,
-      "sha256": "d3d207db79803ed131cccf808249fcd23c0077a70ee0f8a16f61118423992ba8"
+      "sha256": "79ff209152d7bc7340567a7bd4fb66f0bee606b45ca223146e99818ce759aafc"
     },
     "overlay_report": {
       "file": "it-terms.report.json",
-      "bytes": 4126,
-      "sha256": "e8b4854abffeba63ad9ce29ac167b54dddaec7e4784672a65ea3dbf07f8d6592"
+      "bytes": 6146,
+      "sha256": "c81c6f25440d4102487c1a809f0e8e66ddbf0ed17c2cc1ff185a49bbd0116a00"
     },
     "inflection_tsv": {
       "file": "inflection.tsv",
@@ -213,8 +208,8 @@
     },
     "dictionary": {
       "file": "system.dic",
-      "bytes": 37383196,
-      "sha256": "ca1b24fc7f3113998fc73e2722a10865ce36f1eae7f39d7e16170a333febb63f"
+      "bytes": 37383796,
+      "sha256": "6dcb4bb7197db46ada6e21748f58aab9b8b9594fbd203e86d6f45808fc620d3d"
     },
     "wordnet_report": {
       "file": "wordnet.report.json",
@@ -240,7 +235,7 @@
       {
         "file": "01_文法・機能語.tsv",
         "bytes": 1862058,
-        "sha256": "bc2ec304748c92432a425a40dbc3452d0d7218fd868796251d24ec2a9e9fa617"
+        "sha256": "f44ac32d664c1a956f21b5c44b31a921562d2e09becd7ccedf089791cdbce4cd"
       },
       {
         "file": "02_活用語.tsv",
@@ -249,8 +244,8 @@
       },
       {
         "file": "03_一般語.tsv",
-        "bytes": 6201447,
-        "sha256": "3da7794be2859d1df4623808a510be1949499fc52ea9cb39deb79373764ccb3a"
+        "bytes": 6201505,
+        "sha256": "5ff89c2406beb5c2cec07aa5c67aa8350943d1ca12b44f4fb90743fe4bdd3dfe"
       },
       {
         "file": "04_慣用句・定型表現.tsv",
@@ -280,7 +275,7 @@
       {
         "file": "09_外来語・カタカナ語.tsv",
         "bytes": 2477938,
-        "sha256": "3ef6561bd47408f18b9bcb2b0ab9945c64a73ed4511f054580056dfb6357ee0b"
+        "sha256": "5ef043ed0b10547e8088beb72627adb36f3183def8f03d6349aa88fe9a794067"
       },
       {
         "file": "10_略語・英数字.tsv",
@@ -289,8 +284,8 @@
       },
       {
         "file": "11_IT・技術用語.tsv",
-        "bytes": 2282236,
-        "sha256": "fcc44a38a2c3a6059084725577802a9c95a31b4c808f093d392cf03515728067"
+        "bytes": 2282367,
+        "sha256": "bdfb4ed72b79f5cfb17e9d98f4f6cba85af44ee1caa5f90d35e8f1ce32f2d42c"
       },
       {
         "file": "12_専門用語.tsv",

@@ -49,6 +49,15 @@
 # source and the final entry to agree on cost and flags. Pricing them here
 # would replace the edge that file describes and break that check, so the
 # edge keeps one owner and the numbers live next to the description.
+#
+# くせ (癖) follows the same homophone rule for Issue #282. Upstream prices
+# 曲 (4216) below 癖 (4832) in one noun class, and the glossary's discounted
+# 癖 edge used to hide that. Once glossary edges yield rank one to the word
+# that owns the reading, 曲 led くせ and, because a word cost holds in every
+# context, every phrase built from it (くせがある offered 曲がある). This row
+# replaces the glossary edge, so it keeps that edge's `it` flag: its lattice
+# total after the shipped 10% IT reduction lands 60 below 曲, and a higher
+# recent-IT bias only widens the lead.
 # Issues #60/#108: preserve ordinary lexical units instead of memorizing
 # complete logged sentences. Restore upstream 漢字 pricing so the ordinary
 # noun 感じ is not displaced after adjectival modifiers. Supply the missing
@@ -97,6 +106,7 @@ reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
 きのうようぼう	機能要望	1851	1851	3600	4800	it,predict	
 きゅう	9	2044	2044	5531	6731	predict	
 きんそく	禁則	1851	1851	6776	-		
+くせ	癖	1851	1851	4617	5817	it,predict	
 けっさいしゃ	決裁者	1841	1986	3600	4800	predict	
 けっさいしょ	決裁書	1851	1851	3600	4800	predict	
 けんしゅうかんりょう	検収完了	1851	1851	3600	4800	it,predict	

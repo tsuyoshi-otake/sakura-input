@@ -1,9 +1,16 @@
 //! Import of smile-chat's Japanese glossary into Sakura overlay entries.
 
+mod reading_owner;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
-use super::{validate_text, Error, SourceDetail, SourceDetailRelation, SourceEntry};
+use reading_owner::{standalone_total, Owner, ReadingOwners};
+
+use super::{
+    validate_text, ConnectionMatrix, Error, SourceDetail, SourceDetailRelation, SourceEntry,
+};
+use sakura_core::conversion::ConversionOptions;
 use sakura_core::dictionary::DetailRelationKind;
 use sakura_core::dictionary::EntryFlags;
 
@@ -18,6 +25,14 @@ const UNMATCHED_ASCII_COST: i32 = 2_000;
 /// the same glossary concept. Keep the adjustment bounded and inside the
 /// overlay layer so user/profile/learning costs can still take precedence.
 const PHONETIC_SURFACE_BONUS: i32 = 3_000;
+/// A glossary reading may take rank two, never rank one, from the word that
+/// owns the reading in the pre-overlay dictionary (see
+/// `yield_to_upstream_leader`). The first yielding edge's standalone lattice
+/// total lands this far above that word -- the margin
+/// `data/conversion-priorities.tsv` uses for its homophone rows -- which is
+/// less than the extra IT reduction a session with IT context adds, so IT
+/// context can still put the glossary word first.
+const UPSTREAM_LEADER_MARGIN: i64 = 60;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlossarySense {
@@ -56,6 +71,10 @@ pub struct ImportReport {
     pub defaulted: usize,
     pub duplicate_surfaces: usize,
     pub gaps: Vec<String>,
+    /// Glossary edges re-priced to yield rank one to the word that owns the
+    /// reading before the overlay, as `reading/surface: from -> to, below
+    /// owner`.
+    pub upstream_yields: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -73,15 +92,21 @@ pub fn parse_part(source: &str, text: &str) -> Result<Vec<GlossaryTerm>, Error> 
 ///
 /// Exact `(reading, surface)` matches inherit Mozc's grammatical ids and
 /// corpus-derived cost. The remainder use explicit shape-specific defaults;
-/// the report makes every fallback and missing reading observable.
+/// the report makes every fallback and missing reading observable. A
+/// one-shot import treats `mozc_entries` as the pre-overlay dictionary whose
+/// reading owners the overlay must not overturn; see
+/// [`Importer::observe_upstream`] and [`Importer::finish`].
 pub fn import(
     terms: &[GlossaryTerm],
     mozc_entries: &[SourceEntry],
+    connection: &ConnectionMatrix,
+    pos_features: &[String],
     defaults: OverlayDefaults,
 ) -> Result<ImportResult, Error> {
     let mut importer = Importer::new(terms, defaults)?;
     importer.match_mozc(mozc_entries);
-    Ok(importer.finish())
+    importer.observe_upstream(mozc_entries);
+    Ok(importer.finish(connection, pos_features))
 }
 
 /// Builds sparse exact-entry detail records from smile-chat's licensed source.
@@ -154,6 +179,9 @@ pub fn detail_sources(terms: &[GlossaryTerm], entries: &[SourceEntry]) -> Vec<So
 #[derive(Debug)]
 pub struct Importer {
     pending: BTreeMap<String, BTreeMap<String, Pending>>,
+    /// Pre-overlay edges that decide which word owns each glossary reading,
+    /// the word the glossary must not displace from rank one.
+    upstream: ReadingOwners,
     report: ImportReport,
     defaults: OverlayDefaults,
 }
@@ -250,8 +278,10 @@ impl Importer {
             }
         }
 
+        let upstream = ReadingOwners::new(pending.keys().map(String::as_str));
         Ok(Self {
             pending,
+            upstream,
             report,
             defaults,
         })
@@ -280,78 +310,140 @@ impl Importer {
         }
     }
 
-    pub fn finish(mut self) -> ImportResult {
+    /// Retains the pre-overlay dictionary entries (the trimmed Mozc lexicon
+    /// and its generated inflections) that spell a glossary reading or part
+    /// of one, from which [`Self::finish`] decides who owns each reading.
+    /// Like [`Self::match_mozc`] it can be called once per file in any order.
+    pub fn observe_upstream(&mut self, entries: &[SourceEntry]) {
+        self.upstream.observe(entries);
+    }
+
+    /// Prices the overlay. `connection` is the matrix the image ships with
+    /// and `pos_features` the Mozc `id.def` taxonomy indexed by class; they
+    /// rank each reading's glossary edges against its observed upstream
+    /// edges exactly as a context-free conversion of the whole reading would.
+    /// Every reading is priced before any yields, so whether one reading has
+    /// an owner never depends on the order in which the others yield.
+    pub fn finish(self, connection: &ConnectionMatrix, pos_features: &[String]) -> ImportResult {
+        let Self {
+            pending,
+            mut upstream,
+            mut report,
+            defaults,
+        } = self;
+        let options = ConversionOptions::default();
+        let readings: Vec<(String, Vec<PricedEdge>)> = pending
+            .into_iter()
+            .map(|(reading, surfaces)| {
+                let priced = price_reading(surfaces, &defaults, &mut report);
+                (reading, priced)
+            })
+            .collect();
+        for (reading, priced) in &readings {
+            for edge in priced {
+                upstream.observe_overlay(
+                    reading,
+                    &edge.surface,
+                    edge.left_id,
+                    edge.right_id,
+                    edge.word_cost,
+                );
+            }
+        }
         let mut entries = Vec::new();
-        for (reading, surfaces) in self.pending {
-            for (surface, candidate) in surfaces {
-                // A mechanical katakana rendering is only vocabulary evidence
-                // when the pinned language corpus independently contains it.
-                // Otherwise native Japanese readings such as `へんすう` would
-                // acquire misleading `ヘンスウ` overlay entries.
-                if candidate.synthetic_phonetic && candidate.matched.is_none() {
-                    continue;
-                }
-                let (left_id, right_id, base_word_cost) = if let Some(matched) = candidate.matched {
-                    self.report.matched_to_mozc += 1;
-                    (
-                        matched.left_id,
-                        matched.right_id,
-                        matched.word_cost.saturating_sub(400).max(0),
-                    )
-                } else {
-                    self.report.defaulted += 1;
-                    let (left_id, right_id) = if surface.is_ascii() {
-                        (self.defaults.ascii_left_id, self.defaults.ascii_right_id)
-                    } else {
-                        (
-                            self.defaults.katakana_left_id,
-                            self.defaults.katakana_right_id,
-                        )
-                    };
-                    let length_cost = i32::try_from(surface.chars().count().min(20))
-                        .unwrap_or(20)
-                        .saturating_mul(35);
-                    let alias_cost = if candidate.alias { 120 } else { 0 };
-                    let shape_cost = if surface.is_ascii() {
-                        UNMATCHED_ASCII_COST
-                    } else {
-                        0
-                    };
-                    (
-                        left_id,
-                        right_id,
-                        self.defaults
-                            .base_word_cost
-                            .saturating_add(length_cost)
-                            .saturating_add(alias_cost)
-                            .saturating_add(shape_cost),
-                    )
-                };
-                let word_cost = if candidate.phonetic {
-                    base_word_cost.saturating_sub(PHONETIC_SURFACE_BONUS).max(0)
-                } else {
-                    base_word_cost
-                };
+        for (reading, mut priced) in readings {
+            let owner = upstream.owner(&reading, connection, pos_features, &options);
+            report.upstream_yields.extend(yield_to_upstream_leader(
+                &reading,
+                &mut priced,
+                owner.as_ref(),
+                connection,
+                &options,
+            ));
+            for edge in priced {
                 entries.push(SourceEntry {
                     reading: reading.clone(),
-                    surface,
-                    left_id,
-                    right_id,
-                    word_cost,
-                    prediction_cost: word_cost.saturating_add(300),
+                    surface: edge.surface,
+                    left_id: edge.left_id,
+                    right_id: edge.right_id,
+                    word_cost: edge.word_cost,
+                    prediction_cost: edge.word_cost.saturating_add(300),
                     flags: EntryFlags::IT | EntryFlags::PREDICTION,
-                    annotation: candidate.annotation,
-                    source: candidate.source,
-                    line: candidate.line,
+                    annotation: edge.candidate.annotation,
+                    source: edge.candidate.source,
+                    line: edge.candidate.line,
                 });
             }
         }
-        self.report.surfaces = entries.len();
-        ImportResult {
-            entries,
-            report: self.report,
-        }
+        report.surfaces = entries.len();
+        ImportResult { entries, report }
     }
+}
+
+/// Shape and phonetic pricing of one reading's glossary surfaces: a Mozc
+/// match keeps its classes at a discount, anything else takes the overlay
+/// defaults.
+fn price_reading(
+    surfaces: BTreeMap<String, Pending>,
+    defaults: &OverlayDefaults,
+    report: &mut ImportReport,
+) -> Vec<PricedEdge> {
+    let mut priced = Vec::with_capacity(surfaces.len());
+    for (surface, candidate) in surfaces {
+        // A mechanical katakana rendering is only vocabulary evidence
+        // when the pinned language corpus independently contains it.
+        // Otherwise native Japanese readings such as `へんすう` would
+        // acquire misleading `ヘンスウ` overlay entries.
+        if candidate.synthetic_phonetic && candidate.matched.is_none() {
+            continue;
+        }
+        let (left_id, right_id, base_word_cost) = if let Some(matched) = candidate.matched {
+            report.matched_to_mozc += 1;
+            (
+                matched.left_id,
+                matched.right_id,
+                matched.word_cost.saturating_sub(400).max(0),
+            )
+        } else {
+            report.defaulted += 1;
+            let (left_id, right_id) = if surface.is_ascii() {
+                (defaults.ascii_left_id, defaults.ascii_right_id)
+            } else {
+                (defaults.katakana_left_id, defaults.katakana_right_id)
+            };
+            let length_cost = i32::try_from(surface.chars().count().min(20))
+                .unwrap_or(20)
+                .saturating_mul(35);
+            let alias_cost = if candidate.alias { 120 } else { 0 };
+            let shape_cost = if surface.is_ascii() {
+                UNMATCHED_ASCII_COST
+            } else {
+                0
+            };
+            (
+                left_id,
+                right_id,
+                defaults
+                    .base_word_cost
+                    .saturating_add(length_cost)
+                    .saturating_add(alias_cost)
+                    .saturating_add(shape_cost),
+            )
+        };
+        let word_cost = if candidate.phonetic {
+            base_word_cost.saturating_sub(PHONETIC_SURFACE_BONUS).max(0)
+        } else {
+            base_word_cost
+        };
+        priced.push(PricedEdge {
+            surface,
+            candidate,
+            left_id,
+            right_id,
+            word_cost,
+        });
+    }
+    priced
 }
 
 /// Canonicalizes glossary pronunciations to the hiragana reading keyed by the
@@ -534,6 +626,118 @@ struct Matched {
     left_id: u16,
     right_id: u16,
     word_cost: i32,
+}
+
+/// One glossary edge after shape and phonetic pricing, before the rank-two
+/// rule in [`yield_to_upstream_leader`] has seen its reading.
+struct PricedEdge {
+    surface: String,
+    candidate: Pending,
+    left_id: u16,
+    right_id: u16,
+    word_cost: i32,
+}
+
+impl PricedEdge {
+    /// Total at `word_cost`; every glossary edge is tagged `IT`.
+    fn total(
+        &self,
+        word_cost: i32,
+        connection: &ConnectionMatrix,
+        options: &ConversionOptions,
+    ) -> i64 {
+        standalone_total(
+            connection,
+            self.left_id,
+            self.right_id,
+            i64::from(word_cost).saturating_sub(options.it_boost(word_cost)),
+        )
+    }
+}
+
+/// Applies the rank-two rule to one reading. It acts only when the reading
+/// has an owner (see [`ReadingOwners::owner`]) under a surface the glossary
+/// does not supply, and the reading's cheapest glossary edge is a Mozc match
+/// that ranks at or above it -- the case where the glossary discount on an
+/// upstream word, not a glossary-only term, decides rank one. A phonetic
+/// cheapest edge, the reading's own sound in katakana (`ヌル`, `リント`),
+/// keeps rank one: such a loanword composes into longer IT terms
+/// (`ヌルチェック`, `リントエラー`), and a lifted word cost reaches every
+/// such composition, not only the reading converted alone. The glossary
+/// edges still ranking ahead of [`UPSTREAM_LEADER_MARGIN`] past the owner are
+/// then lifted, in their own order, to consecutive totals from that point:
+/// the owner keeps rank one, the glossary keeps its internal order right
+/// behind it, and an edge already further back is untouched. Returns one
+/// report line per re-priced edge.
+fn yield_to_upstream_leader(
+    reading: &str,
+    priced: &mut [PricedEdge],
+    owner: Option<&Owner>,
+    connection: &ConnectionMatrix,
+    options: &ConversionOptions,
+) -> Vec<String> {
+    let Some(owner) = owner else {
+        return Vec::new();
+    };
+    if priced.iter().any(|edge| edge.surface == owner.surface) {
+        return Vec::new();
+    }
+    let mut order: Vec<(i64, usize)> = priced
+        .iter()
+        .enumerate()
+        .map(|(index, edge)| (edge.total(edge.word_cost, connection, options), index))
+        .collect();
+    order.sort_by(|(left, a), (right, b)| {
+        left.cmp(right)
+            .then_with(|| priced[*a].surface.cmp(&priced[*b].surface))
+    });
+    if order.first().is_none_or(|&(total, index)| {
+        let candidate = &priced[index].candidate;
+        total > owner.total || candidate.matched.is_none() || candidate.phonetic
+    }) {
+        return Vec::new();
+    }
+    let mut slot = owner.total.saturating_add(UPSTREAM_LEADER_MARGIN);
+    let mut yields = Vec::new();
+    for (total, index) in order {
+        if total >= slot {
+            break;
+        }
+        let edge = &mut priced[index];
+        let lifted = cheapest_cost_at_or_above(edge.word_cost, |word_cost| {
+            edge.total(word_cost, connection, options) >= slot
+        });
+        yields.push(format!(
+            "{reading}/{}: {} -> {lifted}, below {}",
+            edge.surface, edge.word_cost, owner.surface
+        ));
+        edge.word_cost = lifted;
+        slot = edge.total(lifted, connection, options).saturating_add(1);
+    }
+    yields
+}
+
+/// The cheapest word cost at or above `from` that satisfies `ranks_below`,
+/// or the type's ceiling when none does. A total never decreases as the
+/// word cost rises (the IT reduction is a capped fraction of it), so
+/// bisection between `from` and the ceiling finds it.
+fn cheapest_cost_at_or_above(from: i32, ranks_below: impl Fn(i32) -> bool) -> i32 {
+    if ranks_below(from) {
+        return from;
+    }
+    if !ranks_below(i32::MAX) {
+        return i32::MAX;
+    }
+    let (mut cheap, mut yielding) = (from, i32::MAX);
+    while yielding - cheap > 1 {
+        let middle = cheap + (yielding - cheap) / 2;
+        if ranks_below(middle) {
+            yielding = middle;
+        } else {
+            cheap = middle;
+        }
+    }
+    yielding
 }
 
 struct Parser<'a> {
