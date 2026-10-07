@@ -168,6 +168,10 @@ jobs:
         shell: pwsh
         run: ./ci/run-test-quiet.ps1 -Name 'short-reading upstream leader gate' -Command { cargo test -p sakura-engine --features dev-fixtures --test shipped_dictionary_ranking issue_282_ -- --ignored --nocapture }
 
+      - name: Gate yielded readings against runtime IT coherence
+        shell: pwsh
+        run: ./ci/run-test-quiet.ps1 -Name 'yielded reading owner gate' -Command { cargo test -p sakura-engine --features dev-fixtures --test shipped_dictionary_ranking issue_291_ -- --ignored --nocapture }
+
       - name: Prove dictionary integration test runners exited
         if: always()
         shell: pwsh

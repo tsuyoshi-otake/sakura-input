@@ -425,6 +425,74 @@ fn bounded_it_completion_coherence_resolves_a_compound_homophone() {
     assert_eq!(technical[0].text(), "構成依存");
 }
 
+/// Rank-one text for `reading` with default options, from a dictionary of
+/// `rows` (TSV body lines without the header).
+fn default_top(rows: &str, reading: &str) -> String {
+    let entries = parse_entries(
+        "yield.tsv",
+        &format!(
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n{rows}"
+        ),
+    )
+    .expect("entries");
+    let matrix = parse_connection(
+        "yield-matrix.tsv",
+        "# license: MIT\nclasses\t3\ndefault\t0\n",
+        false,
+    )
+    .expect("matrix");
+    let image = compile(&entries, &matrix).expect("image");
+    let dictionary = Dictionary::parse(&image).expect("dictionary");
+    let mut converter = Converter::new();
+    let candidates = converter
+        .convert(&dictionary, reading, ConversionOptions::default())
+        .expect("conversion");
+    candidates[0].text().to_owned()
+}
+
+#[test]
+fn completion_coherence_leaves_a_whole_query_yield_behind_its_owner() {
+    // 境界 is priced behind 協会 even after its IT boost, but the longer IT
+    // term 境界意識 is completion evidence worth more than the gap.
+    let rows = |flags: &str| {
+        format!(
+            "きょうかい\t協会\t1\t1\t1000\t-\t\t\n\
+             きょうかい\t境界\t1\t1\t1200\t1500\t{flags}\t\n\
+             きょうかいいしき\t境界意識\t1\t1\t5000\t5000\tit,predict\t\n"
+        )
+    };
+    assert_eq!(default_top(&rows("it,predict"), "きょうかい"), "境界");
+    assert_eq!(default_top(&rows("it,predict,yield"), "きょうかい"), "協会");
+    assert_eq!(
+        default_top(&rows("it,predict,yield"), "きょうかいいしき"),
+        "境界意識"
+    );
+}
+
+#[test]
+fn compound_coherence_leaves_a_whole_query_yield_behind_its_owner() {
+    let rows = |flags: &str| {
+        format!(
+            "しはらいさいと\t支払いサイト\t1\t1\t1000\t-\t\t\n\
+             しはらいさいと\t支払サイト\t1\t1\t1200\t1500\t{flags}\t\n\
+             を\tを\t1\t1\t100\t-\t\t\n"
+        )
+    };
+    assert_eq!(
+        default_top(&rows("it,predict"), "しはらいさいと"),
+        "支払サイト"
+    );
+    assert_eq!(
+        default_top(&rows("it,predict,yield"), "しはらいさいと"),
+        "支払いサイト"
+    );
+    // Inside a longer query the yielded word is ordinary IT evidence again.
+    assert_eq!(
+        default_top(&rows("it,predict,yield"), "しはらいさいとを"),
+        "支払サイトを"
+    );
+}
+
 #[test]
 fn every_option_and_arena_bound_has_an_explicit_error_or_fallback() {
     let bytes = fixture();

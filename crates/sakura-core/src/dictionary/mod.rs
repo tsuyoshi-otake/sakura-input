@@ -55,6 +55,12 @@ impl EntryFlags {
     /// A lexical fragment that is valid after preceding text but must not be
     /// offered at the beginning of an independent conversion query.
     pub const NON_INITIAL: Self = Self(1 << 3);
+    /// An edge priced to rank behind the word that owns its whole reading
+    /// (the glossary importer's yield, Issue #282). The IT coherence passes
+    /// leave a candidate that is this one word alone, so the owner keeps
+    /// rank one when the reading is converted by itself (Issue #291); inside
+    /// a longer query it is an ordinary dictionary word.
+    pub const READING_YIELD: Self = Self(1 << 4);
 
     pub const fn from_bits(bits: u16) -> Self {
         Self(bits)

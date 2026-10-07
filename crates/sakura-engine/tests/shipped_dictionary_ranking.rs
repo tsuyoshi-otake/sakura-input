@@ -2351,3 +2351,77 @@ fn issue_282_repriced_homophones_lead_in_every_context() {
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
+
+/// Issue #291: `(reading, yielded glossary surface, owner)` for every edge the
+/// glossary importer priced behind the word that owns its reading, read from
+/// the checked-in report so a new yield is covered without editing this file.
+fn issue_291_upstream_yields() -> Vec<(&'static str, &'static str, &'static str)> {
+    include_str!("../../../data/it-terms.report.json")
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim().trim_end_matches(',').strip_prefix('"')?;
+            let line = line.strip_suffix('"')?;
+            let (edge, owner) = line.split_once(", below ")?;
+            let (reading, rest) = edge.split_once('/')?;
+            let (surface, _) = rest.split_once(": ")?;
+            Some((reading, surface, owner))
+        })
+        .collect()
+}
+
+/// Issue #291: the IT coherence passes used to lift a yielded glossary edge
+/// back over its owner whenever the reading was converted by itself
+/// (`きょうかい` -> `境界` instead of `協会`). Every yielded reading now leads
+/// with its owner, unless `data/conversion-priorities.tsv` re-prices the
+/// yielded surface itself (`癖`, `負債`), which then decides rank one.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_291_yielded_readings_lead_with_their_owner_alone() {
+    let priorities = include_str!("../../../data/conversion-priorities.tsv");
+    let repriced = |reading: &str, surface: &str| {
+        priorities.lines().any(|line| {
+            let mut columns = line.split('\t');
+            columns.next() == Some(reading) && columns.next() == Some(surface)
+        })
+    };
+    let yields = issue_291_upstream_yields();
+    assert!(
+        yields.len() >= 30,
+        "the report no longer lists the upstream yields: {yields:?}"
+    );
+    let mut wrong = Vec::new();
+    for (reading, surface, owner) in yields {
+        if repriced(reading, surface) {
+            continue;
+        }
+        let candidates = candidates_for(reading);
+        if candidates.first().map(String::as_str) != Some(owner) {
+            wrong.push(format!(
+                "{reading}: expected {owner} ahead of the yielded {surface}, got {candidates:?}"
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// Issue #291: inside a longer reading a yielded word is ordinary IT
+/// evidence, so the compounds and phrases built from it keep leading.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_291_compounds_of_yielded_words_still_lead() {
+    let mut wrong = Vec::new();
+    for (reading, compound) in [
+        ("きょうかいいしき", "境界意識"),
+        ("じょうちょうか", "冗長化"),
+        ("したうけほう", "下請法"),
+        ("けっかんみつど", "欠陥密度"),
+        ("ていけいぶん", "定型文"),
+        ("ちょうかきんむ", "超過勤務"),
+    ] {
+        let top = top_text(reading);
+        if top != compound {
+            wrong.push(format!("{reading}: expected {compound}, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}

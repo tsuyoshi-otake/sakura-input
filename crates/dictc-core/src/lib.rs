@@ -374,6 +374,16 @@ impl std::error::Error for Error {}
 const TSV_HEADER: &str =
     "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation";
 
+/// Every entry flag the TSV `flags` column can spell, in the order the
+/// writer emits them. The parser and the writer both read this one table.
+const TSV_FLAGS: [(EntryFlags, &str); 5] = [
+    (EntryFlags::IT, "it"),
+    (EntryFlags::PREDICTION, "predict"),
+    (EntryFlags::SPELLING_CORRECTION, "correction"),
+    (EntryFlags::NON_INITIAL, "non-initial"),
+    (EntryFlags::READING_YIELD, "yield"),
+];
+
 /// Parses a licensed dictionary TSV source.
 pub fn parse_entries(source: &str, text: &str) -> Result<Vec<SourceEntry>, Error> {
     parse_sakura_entries(source, text, true)
@@ -1106,10 +1116,9 @@ fn write_tsv_body(output: &mut String, entries: &[SourceEntry]) -> Result<(), Er
                 "TSV fields must not contain tabs or newlines",
             ));
         }
-        let known_flags = EntryFlags::IT.bits()
-            | EntryFlags::PREDICTION.bits()
-            | EntryFlags::SPELLING_CORRECTION.bits()
-            | EntryFlags::NON_INITIAL.bits();
+        let known_flags = TSV_FLAGS
+            .iter()
+            .fold(0, |bits, (flag, _)| bits | flag.bits());
         if entry.flags.bits() & !known_flags != 0 {
             return Err(Error::at(
                 &entry.source,
@@ -1117,20 +1126,12 @@ fn write_tsv_body(output: &mut String, entries: &[SourceEntry]) -> Result<(), Er
                 "entry has flags the TSV schema cannot represent",
             ));
         }
-        let mut flags = Vec::with_capacity(4);
-        if entry.flags.contains(EntryFlags::IT) {
-            flags.push("it");
-        }
-        if entry.flags.contains(EntryFlags::PREDICTION) {
-            flags.push("predict");
-        }
-        if entry.flags.contains(EntryFlags::SPELLING_CORRECTION) {
-            flags.push("correction");
-        }
-        if entry.flags.contains(EntryFlags::NON_INITIAL) {
-            flags.push("non-initial");
-        }
-        let flags = flags.join(",");
+        let flags = TSV_FLAGS
+            .iter()
+            .filter(|(flag, _)| entry.flags.contains(*flag))
+            .map(|(_, name)| *name)
+            .collect::<Vec<_>>()
+            .join(",");
         let prediction = if entry.prediction_cost == i32::MAX {
             "-".to_string()
         } else {
@@ -1930,12 +1931,8 @@ fn parse_flags(source: &str, line: usize, value: &str) -> Result<EntryFlags, Err
         return Ok(flags);
     }
     for flag in value.split(',') {
-        let parsed = match flag {
-            "it" => EntryFlags::IT,
-            "predict" => EntryFlags::PREDICTION,
-            "correction" => EntryFlags::SPELLING_CORRECTION,
-            "non-initial" => EntryFlags::NON_INITIAL,
-            _ => return Err(Error::at(source, line, format!("unknown flag '{flag}'"))),
+        let Some(&(parsed, _)) = TSV_FLAGS.iter().find(|(_, name)| *name == flag) else {
+            return Err(Error::at(source, line, format!("unknown flag '{flag}'")));
         };
         if flags.contains(parsed) {
             return Err(Error::at(source, line, format!("duplicate flag '{flag}'")));

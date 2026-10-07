@@ -18074,7 +18074,7 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 いくじたんじかんきんむ	育児短時間勤務	1841	1841	6273	6573	it,predict	
 いくせいけいかく	育成計画	1841	1841	6677	6977	it,predict	
 いぐざくとりーわんす	Exactly once	1851	1851	7220	7520	it,predict	
-いこう	移行	1841	1841	3841	4141	it,predict	
+いこう	移行	1841	1841	3841	4141	it,predict,yield	
 いこうたいしょういちらん	移行対象一覧	1851	1851	5010	5310	it,predict	
 いこうほうしん	移行方針	1851	1851	4940	5240	it,predict	
 いこうりはーさる	移行リハーサル	1851	1851	5045	5345	it,predict	
@@ -20271,10 +20271,10 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 かいしゃがいよう	会社概要	1851	1851	5305	5605	it,predict	
 かいしゃほう	Companies Act	1851	1851	7375	7675	it,predict	
 かいしゃほう	会社法	1851	1949	5937	6237	it,predict	
-かいしゅう	enhancement	1851	1851	7305	7605	it,predict	
-かいしゅう	修正	1851	1851	4990	5290	it,predict	
-かいしゅう	改修	1841	1841	4374	4674	it,predict	
-かいしゅう	機能改修	1851	1851	5060	5360	it,predict	
+かいしゅう	enhancement	1851	1851	7305	7605	it,predict,yield	
+かいしゅう	修正	1851	1851	4990	5290	it,predict,yield	
+かいしゅう	改修	1841	1841	4374	4674	it,predict,yield	
+かいしゅう	機能改修	1851	1851	5060	5360	it,predict,yield	
 かいしゅうさいくる	Collection Cycle	1851	1851	7480	7780	it,predict	
 かいしゅうさいくる	回収サイクル	1851	1851	5010	5310	it,predict	
 かいしゅうさいと	回収サイト	1851	1851	4975	5275	it,predict	
@@ -20508,8 +20508,8 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 かたあんぜんせい	型安全性	1851	1970	7261	7561	it,predict	
 かたえいりあす	Type Alias	1851	1851	7270	7570	it,predict	
 かたえいりあす	型エイリアス	1851	1851	5010	5310	it,predict	
-かたがき	Job Title	1851	1851	7235	7535	it,predict	
-かたがき	肩書き	1851	1851	6067	6367	it,predict	
+かたがき	Job Title	1851	1851	7235	7535	it,predict,yield	
+かたがき	肩書き	1851	1851	6067	6367	it,predict,yield	
 かたがーど	Type Guard	1851	1851	7270	7570	it,predict	
 かたがーど	型ガード	1851	1851	4940	5240	it,predict	
 かたきょうせい	Implicit Coercion	1851	1851	7515	7815	it,predict	
@@ -20757,7 +20757,7 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 かんさんけっかんすう	重み付け欠陥数	1851	1851	5165	5465	it,predict	
 かんさんけっかんりつ	換算欠陥率	1851	1851	4975	5275	it,predict	
 かんさんけっかんりつ	重み付け欠陥率	1851	1851	5165	5465	it,predict	
-かんし	監視	1841	1841	4164	4464	it,predict	
+かんし	監視	1841	1841	4164	4464	it,predict,yield	
 かんしぎょうむ	Monitoring Operations	1851	1851	7620	7920	it,predict	
 かんしぎょうむ	監視業務	1851	1851	4940	5240	it,predict	
 かんしこうもく	Monitoring Items	1851	1851	7480	7780	it,predict	
@@ -20768,8 +20768,8 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 かんしせっけい	監視設計	1851	1851	4940	5240	it,predict	
 かんしだっしゅぼーど	監視ダッシュボード	1851	1851	5115	5415	it,predict	
 かんしゃしゃぱたーん	監視者パターン	1851	1851	5045	5345	it,predict	
-かんしゅう	Convention	1851	1851	7270	7570	it,predict	
-かんしゅう	慣習	1851	1851	5125	5425	it,predict	
+かんしゅう	Convention	1851	1851	7270	7570	it,predict,yield	
+かんしゅう	慣習	1851	1851	5125	5425	it,predict,yield	
 かんしんじのぶんり	Separation of Concerns	1851	1851	7620	7920	it,predict	
 かんしんじのぶんり	関心事の分離	1851	1851	5010	5310	it,predict	
 かんしんのぶんり	関心の分離	1851	1851	4975	5275	it,predict	
@@ -21058,7 +21058,7 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 きみつくぶん	機密区分	1851	1851	4940	5240	it,predict	
 きみつじょうほう	Confidential Information	1851	1851	7620	7920	it,predict	
 きみつじょうほう	機密情報	1851	1851	5539	5839	it,predict	
-きみつせい	機密性	1851	1970	6857	7157	it,predict	
+きみつせい	機密性	1851	1970	6857	7157	it,predict,yield	
 きみつそうさしょうにん	機密操作承認	1851	1851	5010	5310	it,predict	
 きみつでーたますきんぐ	Confidential Data Masking	1851	1851	7620	7920	it,predict	
 きみつでーたますきんぐ	機密データマスキング	1851	1851	5150	5450	it,predict	
@@ -21124,8 +21124,8 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 きゅうぎょうほしょう	Absence Compensation	1851	1851	7620	7920	it,predict	
 きゅうぎょうほしょう	Work Absence Pay	1851	1851	7480	7780	it,predict	
 きゅうぎょうほしょう	休業補償	1841	1841	6309	6609	it,predict	
-きゅうしょく	Leave of Absence	1851	1851	7480	7780	it,predict	
-きゅうしょく	休職	1841	1841	4753	5053	it,predict	
+きゅうしょく	Leave of Absence	1851	1851	7480	7780	it,predict,yield	
+きゅうしょく	休職	1841	1841	4753	5053	it,predict,yield	
 きゅうじつしゅっきん	Holiday Work	1851	1851	7340	7640	it,predict	
 きゅうじつしゅっきん	休日出勤	1851	1851	4940	5240	it,predict	
 きゅうりょう	Salary	1851	1851	7130	7430	it,predict	
@@ -21172,7 +21172,7 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 きょういもでりんぐ	脅威モデリング	1851	1851	5045	5345	it,predict	
 きょういもでりんぐぶんせき	Threat Analysis	1851	1851	7445	7745	it,predict	
 きょういもでりんぐぶんせき	脅威モデリング分析	1851	1851	5115	5415	it,predict	
-きょうかい	境界	1851	1851	4474	4774	it,predict	
+きょうかい	境界	1851	1851	4474	4774	it,predict,yield	
 きょうかいいしき	境界意識	1851	1851	4940	5240	it,predict	
 きょうかいいしきのせっけい	Boundary Awareness	1851	1851	7550	7850	it,predict	
 きょうかいいしきのせっけい	境界意識の設計	1851	1851	5045	5345	it,predict	
@@ -21766,8 +21766,8 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 くじょうしょりきてい	Customer Complaint Processing Policy	1851	1851	7620	7920	it,predict	
 くじょうしょりきてい	Grievance Management Regulations	1851	1851	7620	7920	it,predict	
 くじょうしょりきてい	苦情処理規程	1851	1851	5010	5310	it,predict	
-くせ	くせ	2065	2065	0	300	it,predict	
-くせ	癖	1851	1851	4751	5051	it,predict	
+くせ	くせ	2065	2065	0	300	it,predict,yield	
+くせ	癖	1851	1851	4751	5051	it,predict,yield	
 くっきー	Cookie	1851	1851	7010	7310	it,predict	
 くっきー	クッキー	1851	1851	860	1160	it,predict	
 くっきーぞくせい	Cookie Attributes	1851	1851	7515	7815	it,predict	
@@ -22240,8 +22240,8 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 けだ	ケダ	1851	1851	4507	4807	it,predict	
 けっか	結果	1918	1918	0	300	it,predict	
 けっかせいごうせい	結果整合性	1851	1851	4975	5275	it,predict	
-けっかん	デフェクト	1851	1851	5095	5395	it,predict	
-けっかん	欠陥	1851	1851	5066	5366	it,predict	
+けっかん	デフェクト	1851	1851	5095	5395	it,predict,yield	
+けっかん	欠陥	1851	1851	5066	5366	it,predict,yield	
 けっかんみつど	欠陥密度	1851	1851	4940	5240	it,predict	
 けっかんらいふさいくる	欠陥ライフサイクル	1851	1851	5115	5415	it,predict	
 けっきん	Unauthorized Work Absence	1851	1851	7620	7920	it,predict	
@@ -22434,8 +22434,8 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 げんせんちょうしゅう	源泉徴収	1851	1841	6128	6428	it,predict	
 げんせんちょうしゅうぜい	Withholding Tax	1851	1851	7445	7745	it,predict	
 げんせんちょうしゅうぜい	源泉徴収税	1851	1851	4975	5275	it,predict	
-げんそん	Impairment	1851	1851	7270	7570	it,predict	
-げんそん	減損	1841	1841	5746	6046	it,predict	
+げんそん	Impairment	1851	1851	7270	7570	it,predict,yield	
+げんそん	減損	1841	1841	5746	6046	it,predict,yield	
 げんちほうじん	Local Corporation	1851	1851	7515	7815	it,predict	
 げんちほうじん	現地法人	1841	1851	6099	6399	it,predict	
 げんば	現場	1851	1851	3137	3437	it,predict	
@@ -22479,8 +22479,8 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 こうかいほすとさーびす	OHS	1851	1851	7025	7325	it,predict	
 こうかいほすとさーびす	Open Host Service	1851	1851	7515	7815	it,predict	
 こうかいほすとさーびす	公開ホストサービス	1851	1851	5115	5415	it,predict	
-こうかく	Demotion	1851	1851	7200	7500	it,predict	
-こうかく	降格	1841	1841	5742	6042	it,predict	
+こうかく	Demotion	1851	1851	7200	7500	it,predict,yield	
+こうかく	降格	1841	1841	5742	6042	it,predict,yield	
 こうかそきゅう	効果訴求	1851	1851	4940	5240	it,predict	
 こうかそくてい	効果測定	1851	1841	5721	6021	it,predict	
 こうきげんはんてい	効期限判定	1851	1851	4975	5275	it,predict	
@@ -23278,8 +23278,8 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 さくひん	work	1851	1851	7060	7360	it,predict	
 さくひん	作品	1851	1851	2679	2979	it,predict	
 さける	避ける	680	680	2474	2774	it,predict	
-さしもどし	Rejection	1851	1851	7555	7855	it,predict	
-さしもどし	差戻し	842	842	6015	6315	it,predict	
+さしもどし	Rejection	1851	1851	7555	7855	it,predict,yield	
+さしもどし	差戻し	842	842	6015	6315	it,predict,yield	
 さすえすしーえすえす	CSS プリプロセッサ	1851	1851	5305	5605	it,predict	
 さすえすしーえすえす	SCSS	1851	1851	7060	7360	it,predict	
 さすえすしーえすえす	Sass	1851	1851	7060	7360	it,predict	
@@ -23634,7 +23634,7 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 しぜんなひょうげん	自然な表現	1851	1851	4975	5275	it,predict	
 しぜんなもでる	Natural Model	1851	1851	7375	7675	it,predict	
 しぜんなもでる	自然なモデル	1851	1851	5010	5310	it,predict	
-したうけ	下請	1841	1841	5947	6247	it,predict	
+したうけ	下請	1841	1841	5947	6247	it,predict,yield	
 したうけほう	Subcontractor Protection Law	1851	1851	7620	7920	it,predict	
 したうけほう	下請法	1841	1949	6385	6685	it,predict	
 したくきん	Relocation Preparation Payment	1851	1851	7620	7920	it,predict	
@@ -23669,7 +23669,7 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 しはらいいらい	支払依頼	1851	1851	4940	5240	it,predict	
 しはらいさいくる	Payment Cycle	1851	1851	7375	7675	it,predict	
 しはらいさいくる	支払いサイクル	1851	1851	5045	5345	it,predict	
-しはらいさいと	支払サイト	1841	1851	8435	8735	it,predict	
+しはらいさいと	支払サイト	1841	1851	8435	8735	it,predict,yield	
 しはらいしんせいしょ	Expenditure Approval Request	1851	1851	7620	7920	it,predict	
 しはらいしんせいしょ	Payment Request Form	1851	1851	7620	7920	it,predict	
 しはらいしんせいしょ	支払申請書	1851	1851	4975	5275	it,predict	
@@ -23719,9 +23719,9 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 しゃがいひ	社外秘	1851	1851	6496	6796	it,predict	
 しゃくようちぇっか	Borrow Checker	1851	1851	7410	7710	it,predict	
 しゃくようちぇっか	借用チェッカ	1851	1851	5010	5310	it,predict	
-しゃさい	Company Issued Bond	1851	1851	7585	7885	it,predict	
-しゃさい	Corporate Bond	1851	1851	7410	7710	it,predict	
-しゃさい	社債	1851	1851	5898	6198	it,predict	
+しゃさい	Company Issued Bond	1851	1851	7585	7885	it,predict,yield	
+しゃさい	Corporate Bond	1851	1851	7410	7710	it,predict,yield	
+しゃさい	社債	1851	1851	5898	6198	it,predict,yield	
 しゃたく	Company Housing	1851	1851	7445	7745	it,predict	
 しゃたく	Employer-Provided Housing	1851	1851	7620	7920	it,predict	
 しゃたく	社宅	1851	1851	4954	5254	it,predict	
@@ -23833,7 +23833,7 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 しょうがいかんりふろー	Defect Management Flow	1851	1851	7620	7920	it,predict	
 しょうがいかんりふろー	障害管理フロー	1851	1851	5045	5345	it,predict	
 しょうがいしき	障害指揮	1851	1851	4940	5240	it,predict	
-しょうがいじ	障害時	1851	2007	7227	7527	it,predict	
+しょうがいじ	障害時	1851	2007	7227	7527	it,predict,yield	
 しょうがいじょうほうこうかいぺーじ	Status Page	1851	1851	7305	7605	it,predict	
 しょうがいじょうほうこうかいぺーじ	障害情報公開ページ	1851	1851	5115	5415	it,predict	
 しょうがいぜんていせっけい	Design for Failure	1851	1851	7550	7850	it,predict	
@@ -24402,7 +24402,7 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 じしゃかぶがい	stock repurchase	1851	1851	7480	7780	it,predict	
 じしゃかぶがい	自社株買い	1851	1851	4975	5275	it,predict	
 じしょこうげき	辞書攻撃	1851	1851	4940	5240	it,predict	
-じしん	自信	1851	1851	3618	3918	it,predict	
+じしん	自信	1851	1851	3618	3918	it,predict,yield	
 じじつかくにん	事実確認	1851	1851	4940	5240	it,predict	
 じすといんでっくす	Generalized Search Tree	1851	1851	7620	7920	it,predict	
 じすといんでっくす	GiST Index	1851	1851	7270	7570	it,predict	
@@ -24645,7 +24645,7 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 じょうたいばくはつ	状態爆発	1851	1851	4940	5240	it,predict	
 じょうたいばくはつのもんだい	State Explosion	1851	1851	7445	7745	it,predict	
 じょうたいばくはつのもんだい	状態爆発の問題	1851	1851	5045	5345	it,predict	
-じょうちょう	冗長	1931	1931	5238	5538	it,predict	
+じょうちょう	冗長	1931	1931	5238	5538	it,predict,yield	
 じょうちょうか	Redundancy	1851	1851	7270	7570	it,predict	
 じょうちょうか	冗長化	1931	1941	5784	6084	it,predict	
 じょうちょうこうせい	冗長構成	1851	1851	4940	5240	it,predict	
@@ -24682,8 +24682,8 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 じょうほうれんけい	data linkage	1851	1851	7340	7640	it,predict	
 じょうほうれんけい	information coordination	1851	1851	7620	7920	it,predict	
 じょうほうれんけい	情報連携	1851	1841	6694	6994	it,predict	
-じょうほうろうえい	Information Leakage	1851	1851	7585	7885	it,predict	
-じょうほうろうえい	情報漏えい	1851	1841	6938	7238	it,predict	
+じょうほうろうえい	Information Leakage	1851	1851	7585	7885	it,predict,yield	
+じょうほうろうえい	情報漏えい	1851	1841	6938	7238	it,predict,yield	
 じょうよきん	Corporate Surplus Funds	1851	1851	7620	7920	it,predict	
 じょうよきん	Retained Surplus	1851	1851	7480	7780	it,predict	
 じょうよきん	剰余金	1851	1949	6866	7166	it,predict	
@@ -25728,9 +25728,9 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 そうしゅうえき	総収益	1851	1851	4905	5205	it,predict	
 そうぞうしゃ	creator	1851	1851	7165	7465	it,predict	
 そうぞうしゃ	創造者	1841	1986	6417	6717	it,predict	
-そうたい	Early Departure	1851	1851	7445	7745	it,predict	
-そうたい	Leaving Work Early	1851	1851	7550	7850	it,predict	
-そうたい	早退	1841	1841	5332	5632	it,predict	
+そうたい	Early Departure	1851	1851	7445	7745	it,predict,yield	
+そうたい	Leaving Work Early	1851	1851	7550	7850	it,predict,yield	
+そうたい	早退	1841	1841	5332	5632	it,predict,yield	
 そうだん	相談	1841	1841	2499	2799	it,predict	
 そうだんまどぐち	Consultation Desk	1851	1851	7515	7815	it,predict	
 そうだんまどぐち	相談窓口	1841	1851	5361	5661	it,predict	
@@ -25868,9 +25868,9 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 たいいきはば	バンド幅	1851	1851	5060	5360	it,predict	
 たいいきはば	帯域幅	1851	1851	5996	6296	it,predict	
 たいきゅうてすと	耐久テスト	1851	1851	4975	5275	it,predict	
-たいきん	Clocking Out	1851	1851	7340	7640	it,predict	
-たいきん	End of Work Day	1851	1851	7445	7745	it,predict	
-たいきん	退勤	1841	1841	5852	6152	it,predict	
+たいきん	Clocking Out	1851	1851	7340	7640	it,predict,yield	
+たいきん	End of Work Day	1851	1851	7445	7745	it,predict,yield	
+たいきん	退勤	1841	1841	5852	6152	it,predict,yield	
 たいけんひんしつ	体験品質	1851	1851	4940	5240	it,predict	
 たいさくきじゅん	Security Standards	1851	1851	7550	7850	it,predict	
 たいさくきじゅん	対策基準	1851	1851	4940	5240	it,predict	
@@ -26021,9 +26021,9 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 たっちぽいんと	タッチポイント	1922	1851	2379	2679	it,predict	
 たっぷ	tap	1851	1851	6905	7205	it,predict	
 たっぷ	タップ	1841	1841	459	759	it,predict	
-たてかえ	Out-of-Pocket Expense	1851	1851	7620	7920	it,predict	
-たてかえ	Personal Expense Reimbursement	1851	1851	7620	7920	it,predict	
-たてかえ	立替	1841	1841	6303	6603	it,predict	
+たてかえ	Out-of-Pocket Expense	1851	1851	7620	7920	it,predict,yield	
+たてかえ	Personal Expense Reimbursement	1851	1851	7620	7920	it,predict,yield	
+たてかえ	立替	1841	1841	6303	6603	it,predict,yield	
 たとえ	たとえ	12	12	0	300	it,predict	
 たとえ	アナロジー	1851	1851	5095	5395	it,predict	
 たとえ	比喩	1851	1851	4990	5290	it,predict	
@@ -26336,8 +26336,8 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 ちゅうもんうけしょ	注文請書	1851	1851	4940	5240	it,predict	
 ちゅうもんしょ	注文書	1851	1851	4905	5205	it,predict	
 ちゅーとりある	チュートリアル	1841	1841	1409	1709	it,predict	
-ちょうか	Overage	1851	1851	7165	7465	it,predict	
-ちょうか	超過	1841	1841	5499	5799	it,predict	
+ちょうか	Overage	1851	1851	7165	7465	it,predict,yield	
+ちょうか	超過	1841	1841	5499	5799	it,predict,yield	
 ちょうかい	懲戒	1841	1841	4662	4962	it,predict	
 ちょうかいかいこ	Dismissal for Cause	1851	1851	7585	7885	it,predict	
 ちょうかいかいこ	懲戒解雇	1841	1841	6030	6330	it,predict	
@@ -26570,10 +26570,10 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 ていぎ	Definition	1851	1851	7270	7570	it,predict	
 ていぎ	定義	1841	1841	3359	3659	it,predict	
 ていぎとういつ	定義統一	1851	1851	4940	5240	it,predict	
-ていけい	Standard Form	1851	1851	7375	7675	it,predict	
-ていけい	Standard Format	1851	1851	7445	7745	it,predict	
-ていけい	Template Form	1851	1851	7375	7675	it,predict	
-ていけい	定型	1851	1851	4909	5209	it,predict	
+ていけい	Standard Form	1851	1851	7375	7675	it,predict,yield	
+ていけい	Standard Format	1851	1851	7445	7745	it,predict,yield	
+ていけい	Template Form	1851	1851	7375	7675	it,predict,yield	
+ていけい	定型	1851	1851	4909	5209	it,predict,yield	
 ていけいかいとう	Standard Response	1851	1851	7515	7815	it,predict	
 ていけいかいとう	定型回答	1851	1851	4940	5240	it,predict	
 ていけいじっそう	Boilerplate Implementation	1851	1851	7620	7920	it,predict	
@@ -28015,7 +28015,7 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 はかいてき	destructive	1851	1851	7305	7605	it,predict	
 はかいてき	破壊的	1841	2032	5595	5895	it,predict	
 はかいてきへんこう	破壊的変更	1841	1841	7333	7633	it,predict	
-はかりやすい	測りやすい	842	2527	6186	6486	it,predict	
+はかりやすい	測りやすい	842	2527	6186	6486	it,predict,yield	
 はくほうどうでぃーわいほーるでぃんぐす	Hakuhodo DY	1851	1851	7305	7605	it,predict	
 はくほうどうでぃーわいほーるでぃんぐす	博報堂DYHD	1851	1851	5165	5465	it,predict	
 はくほうどうでぃーわいほーるでぃんぐす	株式会社博報堂DYホールディングス	1851	1851	5395	5695	it,predict	
@@ -29220,9 +29220,9 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 ふぐあいひょう	バグ票	1851	1851	5025	5325	it,predict	
 ふぐあいひょう	不具合票	1851	1851	4940	5240	it,predict	
 ふぐあいひょう	障害票	1851	1851	5025	5325	it,predict	
-ふさい	Debt	1851	1851	7060	7360	it,predict	
-ふさい	Technical Debt	1851	1851	7410	7710	it,predict	
-ふさい	負債	1851	1851	5646	5946	it,predict	
+ふさい	Debt	1851	1851	7060	7360	it,predict,yield	
+ふさい	Technical Debt	1851	1851	7410	7710	it,predict,yield	
+ふさい	負債	1851	1851	5646	5946	it,predict,yield	
 ふじふいるむびじねすいのべーしょん	富士フイルムBI	1851	1851	5200	5500	it,predict	
 ふじふいるむびじねすいのべーしょん	富士フイルムビジネスイノベーション株式会社	1851	1851	5500	5800	it,predict	
 ふじふいるむびじねすいのべーしょん	旧富士ゼロックス	1851	1851	5200	5500	it,predict	
@@ -29246,7 +29246,7 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 ふへんおぶじぇくと	immutable object	1851	1851	7480	7780	it,predict	
 ふへんおぶじぇくと	イミュータブル	1851	1851	5165	5465	it,predict	
 ふへんおぶじぇくと	不変オブジェクト	1851	1851	5080	5380	it,predict	
-ふへんせい	不変性	1851	1970	7128	7428	it,predict	
+ふへんせい	不変性	1851	1970	7128	7428	it,predict,yield	
 ふべん	不便	1931	1931	3282	3582	it,predict	
 ふみこむ	踏み込む	837	837	3781	4081	it,predict	
 ふみだいさーば	踏み台サーバ	1851	1851	5010	5310	it,predict	
@@ -30121,9 +30121,9 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 ほわいとぼっくすかんし	ホワイトボックス監視	1851	1851	5150	5450	it,predict	
 ほわいとぼっくすもにたりんぐ	White-Box Monitoring	1851	1851	7620	7920	it,predict	
 ほわいとぼっくすもにたりんぐ	ホワイトボックスモニタリング	1851	1851	2290	2590	it,predict	
-ほんし	Original Document	1851	1851	7515	7815	it,predict	
-ほんし	Principal Copy	1851	1851	7410	7710	it,predict	
-ほんし	本紙	1851	1851	5973	6273	it,predict	
+ほんし	Original Document	1851	1851	7515	7815	it,predict,yield	
+ほんし	Principal Copy	1851	1851	7410	7710	it,predict,yield	
+ほんし	本紙	1851	1851	5973	6273	it,predict,yield	
 ほんしつ	本質	1851	1851	3935	4235	it,predict	
 ほんばん	本番	1841	1841	3844	4144	it,predict	
 ほんばんかくにんこうもく	本番確認項目	1851	1851	5010	5310	it,predict	
@@ -30483,9 +30483,9 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 みかいけつこうもく	未解決項目	1851	1851	4975	5275	it,predict	
 みかいけつじこう	Open Items	1851	1851	7270	7570	it,predict	
 みかいけつじこう	未解決事項	1851	1851	4975	5275	it,predict	
-みかた	見方	1841	1841	4409	4709	it,predict	
-みかた	視点	1851	1851	4990	5290	it,predict	
-みかた	観点	1851	1851	4990	5290	it,predict	
+みかた	見方	1841	1841	4409	4709	it,predict,yield	
+みかた	視点	1851	1851	4990	5290	it,predict,yield	
+みかた	観点	1851	1851	4990	5290	it,predict,yield	
 みけいけん	未経験	2624	1841	974	1274	it,predict	
 みこみこきゃく	Prospect	1851	1851	7200	7500	it,predict	
 みこみこきゃく	見込み顧客	842	1851	5476	5776	it,predict	
@@ -30506,8 +30506,8 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 みついふどうさん	三井不動産株式会社	1851	1851	5115	5415	it,predict	
 みつけやすい	見つけやすい	701	2527	4242	4542	it,predict	
 みつけんさく	密検索	1851	1851	4905	5205	it,predict	
-みつもり	Estimate	1851	1851	7200	7500	it,predict	
-みつもり	見積	1841	1841	5168	5468	it,predict	
+みつもり	Estimate	1851	1851	7200	7500	it,predict,yield	
+みつもり	見積	1841	1841	5168	5468	it,predict,yield	
 みつもりきたいせいど	見積もり期待精度	1851	1851	5080	5380	it,predict	
 みつもりしょ	Quotation	1851	1851	7235	7535	it,predict	
 みつもりしょ	見積書	1851	1851	5037	5337	it,predict	
@@ -31069,7 +31069,7 @@ zypper	zypper	1851	1851	7010	7310	it,predict
 ようはいりょこじんじょうほう	要配慮個人情報	1851	1851	5045	5345	it,predict	
 ようぼう	要望	1841	1841	3486	3786	it,predict	
 ようぼうせいり	要望整理	1851	1851	4940	5240	it,predict	
-ようやく	要約	1841	1841	4598	4898	it,predict	
+ようやく	要約	1841	1841	4598	4898	it,predict,yield	
 ようりょうけいかく	容量計画	1851	1851	4940	5240	it,predict	
 ようりょうしきいち	容量しきい値	1851	1851	5010	5310	it,predict	
 ようりょうよそく	容量予測	1851	1851	4940	5240	it,predict	

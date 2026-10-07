@@ -473,6 +473,11 @@ fn glossary_discount_yields_rank_one_to_the_upstream_owner() {
     );
     let yielded = overlay_entry(&imported, "いこう", "移行");
     assert_eq!((yielded.word_cost, yielded.prediction_cost), (4_511, 4_811));
+    assert_eq!(
+        yielded.flags,
+        EntryFlags::IT | EntryFlags::PREDICTION | EntryFlags::READING_YIELD,
+        "the runtime needs to know this edge yielded (Issue #291)"
+    );
 }
 
 #[test]
@@ -495,6 +500,14 @@ fn yielding_edges_keep_their_order_right_behind_the_owner() {
         6_435,
         "an edge already behind the owner keeps its price"
     );
+    for surface in ["移行", "移行処理", "Migration"] {
+        assert!(
+            overlay_entry(&imported, "いこう", surface)
+                .flags
+                .contains(EntryFlags::READING_YIELD),
+            "every glossary edge of a yielded reading stays behind the owner at runtime: {surface}"
+        );
+    }
 }
 
 #[test]
@@ -506,7 +519,9 @@ fn a_glossary_edge_already_behind_the_owner_does_not_yield() {
     );
 
     assert!(imported.report.upstream_yields.is_empty());
-    assert_eq!(overlay_entry(&imported, "いこう", "移行").word_cost, 4_600);
+    let kept = overlay_entry(&imported, "いこう", "移行");
+    assert_eq!(kept.word_cost, 4_600);
+    assert_eq!(kept.flags, EntryFlags::IT | EntryFlags::PREDICTION);
 }
 
 #[test]
