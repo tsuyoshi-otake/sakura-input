@@ -1376,7 +1376,7 @@ Memory budgets (steady state, measured in CI on the reference VM):
 | Optional neural worker private working set / model and runtime size | Working set not yet measured and excluded from the engine budget; 2026-08-10 x64 artifacts: worker 0.39 MiB, ORT DLL 15.08 MiB, model 40.37 MiB |
 | Renderer private working set                  | ≤ 10 MB |
 | Heap allocations per keystroke (steady state, kana + conversion + prediction hand-off) | 0 |
-| Dictionary image on disk                      | ≤ 35 MB |
+| Dictionary image on disk                      | ≤ 128 MiB (release gate; the 35 MB target was withdrawn in #3) |
 | — of which exact compressed connection matrix (2,672 classes, §5.2) | ≤ 4 MB |
 | Learning index in memory (≤ 64 B × 100 k, §5.4) | ≤ 8 MB |
 
