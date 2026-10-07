@@ -485,6 +485,7 @@ fn render(entry: &SourceEntry) -> String {
         (EntryFlags::PREDICTION, "predict"),
         (EntryFlags::SPELLING_CORRECTION, "correction"),
         (EntryFlags::NON_INITIAL, "non-initial"),
+        (EntryFlags::READING_YIELD, "yield"),
     ] {
         if entry.flags.contains(flag) {
             if !flags.is_empty() {
@@ -576,7 +577,15 @@ fn well_formed_columns(random: &mut Random) -> Vec<String> {
         random.usize(3).to_string(),
         word_cost.to_string(),
         prediction,
-        ["", "predict", "it,predict", "it", "correction"][random.usize(5)].to_owned(),
+        [
+            "",
+            "predict",
+            "it,predict",
+            "it",
+            "correction",
+            "it,predict,yield",
+        ][random.usize(6)]
+        .to_owned(),
         SAFE_ANNOTATIONS[random.usize(SAFE_ANNOTATIONS.len())].to_owned(),
     ]
 }

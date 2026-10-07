@@ -280,11 +280,14 @@
   800 off a candidate whose text prefixes an IT entry for a longer reading,
   from four reading characters up: `境界` (`境界意識`), `欠陥`, `下請`,
   `冗長`, `超過` and `定型`. Compound coherence takes 1200 per IT word from
-  seven characters up: `支払サイト` and `情報漏えい`. All 8 led on main as
-  well, so the yield did not regress them. Raising their build price further
-  would push the glossary word down in every phrase that contains it, so this
-  needs a runtime signal too (#291). Measure the runtime leader of every yielded
-  reading; the importer report alone does not show it.
+  seven characters up: `支払サイト` and `情報漏えい`. Raising their build price
+  further would push the glossary word down in every phrase that contains it,
+  so the importer now flags every edge of a yielded reading `READING_YIELD`
+  and both passes skip a candidate that is one such word covering the whole
+  query (#291). Flag every edge, not only the lifted ones: an alias already
+  behind the owner (`Information Leakage`) was lifted over `情報漏洩` by the
+  same pass once `情報漏えい` stopped leading. Measure the runtime leader of
+  every yielded reading; the importer report alone does not show it.
 
 - **Comparing rank one is not enough: an exact entry prunes the whole fuzzy
   expansion beneath it.** Adding one row collapses the reading's candidate list
