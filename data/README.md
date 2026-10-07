@@ -85,6 +85,11 @@ the pre-overlay dictionary (`移行` over `以降`), the importer prices the
 glossary edges just behind that word instead (Issue #282). A surface spelled as
 the reading's own katakana (`ヌル`) keeps its rank, because IT compounds are
 built from it.
+The yield is a build-time lattice price. At runtime, completion coherence
+and compound coherence still lower a glossary term that prefixes a longer IT
+entry, or a long reading's IT word, so 8 of the 33 yielded readings (`境界`
+for `きょうかい`, `情報漏えい` for `じょうほうろうえい`) keep the glossary
+term at rank one, as they did before the yield (#291).
 
 `curated-terms.tsv` is a small, reviewable complement to that generated data.
 Its lower-case ASCII readings let one continuous ASCII run begun with Shift convert forms such

@@ -274,6 +274,18 @@
   runtime signal; the build rejects a second `(reading, surface, left_id,
   right_id)` edge, so a separately priced standalone-only entry is impossible.
 
+- **A build-time yield is a lattice price; two runtime IT rules can still
+  undo it.** Converting each of the 33 yielded readings with default options
+  (2026-10-07) left 8 glossary terms at rank one. Completion coherence takes
+  800 off a candidate whose text prefixes an IT entry for a longer reading,
+  from four reading characters up: `境界` (`境界意識`), `欠陥`, `下請`,
+  `冗長`, `超過` and `定型`. Compound coherence takes 1200 per IT word from
+  seven characters up: `支払サイト` and `情報漏えい`. All 8 led on main as
+  well, so the yield did not regress them. Raising their build price further
+  would push the glossary word down in every phrase that contains it, so this
+  needs a runtime signal too (#291). Measure the runtime leader of every yielded
+  reading; the importer report alone does not show it.
+
 - **Comparing rank one is not enough: an exact entry prunes the whole fuzzy
   expansion beneath it.** Adding one row collapses the reading's candidate list
   -- `じーぴーゆー` went from 108 candidates to two -- because the engine stops
