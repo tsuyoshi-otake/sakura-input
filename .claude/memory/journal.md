@@ -2681,3 +2681,20 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   - The failing test is therefore unidentified. Earlier timing flakes are recorded: `pad_protection` v4 actor (#273) and the TSF handshake under `--workspace`.
 - Learning: in a gate script, call `ci/run-test-quiet.ps1` without a downstream pipeline. Catch its exception outside the call, so the failure log it prints is kept.
 - Pending: merge the prep PR after CI. Tag `v2.0.12` only on the merged main commit (`git merge-base --is-ancestor`). Run release.yml, then publish with `scripts/publish-release.ps1` (key passed by path only).
+
+## 2026-10-07 Sakura Input 2.0.12 tagged, built and published (#299)
+
+- Merge: prep PR #300 was merged as `67a54cb` by auto-merge (merge commit) after CI passed 8 checks with 0 failures (2 skipped). The local gates for that tree are in the prep entry above.
+- Tag: annotated `v2.0.12` on `67a54cb`, created only after `git merge-base --is-ancestor` confirmed it was on main.
+- release.yml run 37614983287 succeeded, 11:34:23 -> 11:50:46 UTC (about 16 min; 2.0.11 took about 11 min). Both jobs passed: build and sign/package.
+- Release candidate:
+  - `sakura_setup.exe`: SHA-256 `f8ae361513462ca8bbb266081255ace8a1c975be32051b95ee132965793c3483`, size 24,762,164 bytes.
+  - Manifest fields: `release_sequence=20`, `source_commit=67a54cb43043da169529e467cbfe5a3b44ef1ae8`, `authenticode=unsigned`.
+  - `gh attestation verify` with the release.yml signer and the source digest exited 0 for both the installer and the manifest.
+- Publish: `scripts/publish-release.ps1 -Publish` exited 0 in 33 s. It ran with `-NonInteractive`, stdin from `/dev/null`, and the key passed by path only.
+  - https://github.com/tsuyoshi-otake/sakura-input/releases/tag/v2.0.12 was published 2026-10-07T11:52:39Z. It is not a draft and is marked Latest.
+  - Assets: `release-manifest-v2.sig` 348 bytes, `release-manifest-v2.txt` 519 bytes, `sakura_setup.exe` 24,762,164 bytes.
+  - 1 valid pinned signature, both locally and on the read-back.
+  - The script removed its read-back directory itself.
+- Waiting on CI: the owner approved a background `gh run watch` (60 s interval, 20 min cap) for this release's release.yml run only. The owner sent 「続けて」 once while PR #300 CI ran.
+- Not reinstalled on this PC; the owner asked for the release only. The IME has no behavior change from 2.0.11, so the auto-update path from 2.0.11 to 2.0.12 can still be exercised here as a pure update-path check. Not verified: an on-screen check on 2.0.12.
