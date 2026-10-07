@@ -2631,3 +2631,18 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Publish: `scripts/publish-release.ps1 -Publish` (`-NonInteractive`, stdin from `/dev/null`, key passed by path only) exit 0 in 32 s; https://github.com/tsuyoshi-otake/sakura-input/releases/tag/v2.0.11 published 2026-10-07T09:31:08Z, not a draft, marked Latest. Assets: `release-manifest-v2.sig` 348, `release-manifest-v2.txt` 519, `sakura_setup.exe` 24,759,160 bytes; 1 valid pinned signature locally and on the read-back.
 - Waiting on CI: the desktop app forbids the agent from polling PR checks, so the owner had to send 「続けて」 three times while PR #294 CI ran. The owner then approved a background `gh run watch` (60 s interval, 40 min cap) for the rest of this release. Learning: at the start of a release, ask once whether the agent may wait on CI and release.yml with a bounded background `gh run watch`; the approval is per release, not standing.
 - Not reinstalled on this PC (the owner asked for the release only), so the auto-update path from 2.0.10 to 2.0.11 can still be exercised here. Not verified: an on-screen conversion check on 2.0.11.
+
+## 2026-10-07 ime-eval romaji capture keeps the leading 64 candidates instead of failing (#297)
+
+- Symptom: during the 2.0.11 reinstall check (#293), the `ime-eval` romaji capture failed the whole run with `case … produced candidates outside capture bounds`. The failing readings were `しはらいさいと` (106 candidates) and `きょうかいいしき` (108). The comment beside `MAX_GENERIC_CANDIDATES = 64` said the wire decoder is capped at 18. In fact `sakura_proto::MAX_CANDIDATES` is 768; #95 raised it from 18.
+- Root cause: the capture step treated the capture-file bound (`capture::MAX_CANDIDATES_PER_SYSTEM = 64`, which `load_capture` also enforces) as a reason to reject the list instead of cutting it. The step also kept its own copy of the constant, with a stale rationale. Separately, `cmd_capture` hard-coded `CaptureRuntime.truncated = false`.
+- Fix (a specification change): `bound_candidates` in `tools/ime-eval/src/capture_engine.rs` now owns the per-lane bound.
+  - Romaji capture keeps the leading 64 candidates in engine order and reports the cut. `capture_candidates` returns `CandidateCapture { outputs, truncated_case_ids }`. `cmd_capture` sets `truncated` for that side and names the cut cases on stderr.
+  - The kana quality lane still rejects lists longer than `QUALITY_CANDIDATE_LIMIT = 18`.
+  - Both duplicated constants now reuse `MAX_CANDIDATES_PER_SYSTEM` and `QUALITY_CANDIDATE_LIMIT`.
+  - The file format, the 64 bound and the 4 MiB cap are unchanged.
+- Verification:
+  - New real-engine test `real_engine_capture_keeps_leading_candidates_of_a_long_list` (70 fixture surfaces for `こうほ`). Before the fix it failed with the exact `outside capture bounds` error (1 passed, 1 failed). After the fix it passes, keeping 64 candidates in engine order and reporting the case as truncated.
+  - 4 new unit tests for the bound.
+  - Locally: fmt, workspace clippy `-D warnings` with the CI feature set, dependency rules and facade (+SelfTest), and IRV SelfTest and compare all passed. The wrapped workspace tests passed, and process-clean found no surviving runners. Wrapped workspace tests took 122 s. An independent fresh-context verifier (rubric-verifier) passed all 10 rubric criteria. Not run: the `ime-eval capture` CLI end to end; the `cmd_capture` wiring is covered by reading and by the typed API only.
+- Learning: when a tool-side bound exists only to keep an output file bounded, cut the list and record the cut (`truncated`) rather than reject a valid engine result. Reuse the one owning constant, so its rationale cannot drift away from the wire cap.
