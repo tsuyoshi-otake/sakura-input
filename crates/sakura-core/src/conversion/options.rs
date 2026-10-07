@@ -96,3 +96,15 @@ impl Default for ConversionOptions {
         }
     }
 }
+
+impl ConversionOptions {
+    /// Lattice reduction for one dictionary edge tagged `IT`: the
+    /// proportional share of its word cost, capped at `max_it_boost`.
+    /// Untagged edges receive no reduction; callers check the flag. The
+    /// dictionary compiler prices glossary edges against this same rule.
+    pub fn it_boost(&self, word_cost: i32) -> i64 {
+        let proportional =
+            i64::from(word_cost.max(0)).saturating_mul(i64::from(self.it_bias_per_mille)) / 1_000;
+        proportional.min(i64::from(self.max_it_boost))
+    }
+}

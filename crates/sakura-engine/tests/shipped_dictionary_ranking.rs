@@ -2245,3 +2245,109 @@ fn issue_101_curated_kana_readings_are_well_formed() {
         );
     }
 }
+
+/// Issue #282: `(reading, the word that must lead it, the IT glossary term
+/// that must stay right behind)`. The glossary's discount on a Mozc match
+/// (`移行` at Mozc cost - 400) used to outrank the word Mozc itself ranks
+/// first; the importer now prices such a term just behind that word.
+const ISSUE_282_SHORT_READINGS: &[(&str, &str, Option<&str>)] = &[
+    ("いこう", "以降", Some("移行")),
+    ("しゃさい", "車載", Some("社債")),
+    ("かいぎょう", "改行", None),
+    ("してき", "指摘", None),
+];
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_282_short_readings_lead_with_the_upstream_word() {
+    let mut wrong = Vec::new();
+    for &(reading, leader, glossary_term) in ISSUE_282_SHORT_READINGS {
+        let candidates = candidates_for(reading);
+        if candidates.first().map(String::as_str) != Some(leader) {
+            wrong.push(format!(
+                "{reading}: expected {leader} to lead, got {candidates:?}"
+            ));
+        }
+        if let Some(glossary_term) = glossary_term {
+            if candidates.get(1).map(String::as_str) != Some(glossary_term) {
+                wrong.push(format!(
+                    "{reading}: expected {glossary_term} right behind {leader}, got {candidates:?}"
+                ));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// Issue #282: `漢字` and `欲しい` trail a kana-spelled or ordinary leader
+/// (`感じ`, the auxiliary `ほしい`) that the rule deliberately leaves alone;
+/// learning promotes them after one selection. They must stay one step away.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_282_learned_short_words_stay_one_step_from_the_top() {
+    for (reading, surface) in [("かんじ", "漢字"), ("ほしい", "欲しい")] {
+        let candidates = candidates_for(reading);
+        let rank = candidates.iter().position(|candidate| candidate == surface);
+        assert!(
+            rank.is_some_and(|rank| rank <= 1),
+            "{reading}: expected {surface} in the first two, got {candidates:?}"
+        );
+    }
+}
+
+/// Issue #282: a yielded glossary term keeps leading the IT compounds it
+/// belongs to, and a loanword spelled as its reading (`ヌル`/`ナル`, `リント`,
+/// `ラン`) does not yield at all, because a lifted word cost would reach every
+/// compound built from it.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_282_it_compounds_still_lead_after_the_yield() {
+    let mut wrong = Vec::new();
+    for (reading, compound) in [
+        ("でーたいこう", "データ移行"),
+        ("いこうさぎょう", "移行作業"),
+        ("しゃさいきき", "車載機器"),
+        ("ぬるちぇっく", "ナルチェック"),
+        ("ぬるぽいんた", "ナルポインタ"),
+        ("りんとえらー", "リントエラー"),
+        ("らんかんすう", "ラン関数"),
+        ("わーくふろーらん", "ワークフローラン"),
+    ] {
+        let top = top_text(reading);
+        if top != compound {
+            wrong.push(format!("{reading}: expected {compound}, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// Issue #282: Mozc prices `曲` below `癖` and `夫妻` below `負債` in the same
+/// class, which the glossary's discount used to hide. The yield exposed both
+/// in every phrase, so `data/conversion-priorities.tsv` re-prices `癖` and
+/// `負債` ahead of them. The name-suffix `夫妻` edge is a different edge.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_282_repriced_homophones_lead_in_every_context() {
+    let mut wrong = Vec::new();
+    for (reading, leader) in [("くせ", "癖"), ("ふさい", "負債")] {
+        let candidates = candidates_for(reading);
+        if candidates.first().map(String::as_str) != Some(leader) {
+            wrong.push(format!(
+                "{reading}: expected {leader} to lead, got {candidates:?}"
+            ));
+        }
+    }
+    for (reading, phrase) in [
+        ("くせがある", "癖がある"),
+        ("くせになる", "癖になる"),
+        ("ふさいがある", "負債がある"),
+        ("ふさいをかかえる", "負債を抱える"),
+        ("やまだふさい", "山田夫妻"),
+    ] {
+        let top = top_text(reading);
+        if top != phrase {
+            wrong.push(format!("{reading}: expected {phrase}, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}

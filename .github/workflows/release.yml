@@ -164,6 +164,10 @@ jobs:
         shell: pwsh
         run: ./ci/run-test-quiet.ps1 -Name 'learned homophone cross-commit gate' -Command { cargo test -p sakura-engine --features dev-fixtures --test shipped_dictionary_ranking issue_84_ -- --ignored --nocapture }
 
+      - name: Gate upstream words ahead of glossary terms on short readings
+        shell: pwsh
+        run: ./ci/run-test-quiet.ps1 -Name 'short-reading upstream leader gate' -Command { cargo test -p sakura-engine --features dev-fixtures --test shipped_dictionary_ranking issue_282_ -- --ignored --nocapture }
+
       - name: Prove dictionary integration test runners exited
         if: always()
         shell: pwsh

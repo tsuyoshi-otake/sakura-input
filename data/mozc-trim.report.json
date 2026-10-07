@@ -8,7 +8,7 @@
   "max_surfaces_per_reading": null,
   "candidate_cap_unit": "surface",
   "legacy_row_evidence_cap": 12,
-  "non_initial_policy_sha256": "d371b7b2538c2576463fabc7dee658419ef56f13fb5ccf7bcab18f4f4ea41028",
+  "non_initial_policy_sha256": "304f66395c6cc0ae6dfd79b13907e07b6f42a76ea10fb843db5d1f1ca0070359",
   "input_entries": 1289076,
   "cost_eligible": 467976,
   "duplicate_entries": 8247,
