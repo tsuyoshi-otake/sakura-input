@@ -187,7 +187,7 @@ Exit criteria:
 |---|---|---|
 | Accuracy | held-out corpus vs checked-in Mozc baseline | top-1 ≥ 80 % of Mozc; IT slice ≥ 95 % (interim ≥ 90 % acceptable with a tracked reading-variant gap list; ratchets to 95 % by Phase 4) |
 | Latency | bench | conversion p99 ≤ 20 ms (30-char reading) |
-| Footprint | CI measurement | image ≤ 128 MiB (`crates/sakura-engine/tests/resource_budget.rs`; the original 35 MB target was withdrawn in #3); engine private WS ≤ 15 MB |
+| Footprint | image: `dictc` refuses to write and the engine refuses to load an image over `MAX_DICTIONARY_IMAGE_BYTES`, so the release dictionary build enforces it; both limits: ignored `crates/sakura-engine/tests/resource_budget.rs` via `scripts/verify-phase2.ps1` (not run by CI) | image ≤ 128 MiB (the original 35 MB target was withdrawn in #3); engine private WS ≤ 15 MB |
 | Robustness | dict-image fuzzer | no crash on hostile image |
 | Candidates | manual + UIA script | window follows caret, paging works, UI-less mode serves data |
 
