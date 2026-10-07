@@ -223,10 +223,7 @@ impl Converter {
                     }
                     candidates_for_length += 1;
                     let boost = if matched.entry.flags.contains(EntryFlags::IT) {
-                        let proportional = i64::from(matched.entry.word_cost.max(0))
-                            .saturating_mul(i64::from(options.it_bias_per_mille))
-                            / 1_000;
-                        proportional.min(i64::from(options.max_it_boost))
+                        options.it_boost(matched.entry.word_cost)
                     } else {
                         0
                     };
@@ -537,10 +534,7 @@ impl Converter {
                 return false;
             }
             let boost = if matched.entry.flags.contains(EntryFlags::IT) {
-                let proportional = i64::from(matched.entry.word_cost.max(0))
-                    .saturating_mul(i64::from(options.it_bias_per_mille))
-                    / 1_000;
-                proportional.min(i64::from(options.max_it_boost))
+                options.it_boost(matched.entry.word_cost)
             } else {
                 0
             };
@@ -621,10 +615,7 @@ impl Converter {
                     return true;
                 }
                 let boost = if matched.entry.flags.contains(EntryFlags::IT) {
-                    let proportional = i64::from(matched.entry.word_cost.max(0))
-                        .saturating_mul(i64::from(options.it_bias_per_mille))
-                        / 1_000;
-                    proportional.min(i64::from(options.max_it_boost))
+                    options.it_boost(matched.entry.word_cost)
                 } else {
                     0
                 };

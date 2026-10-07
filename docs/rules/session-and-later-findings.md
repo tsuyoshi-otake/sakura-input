@@ -247,6 +247,45 @@
   fragments, so an absolute guard fails on 500 harmless rows. Pin the measured
   collisions instead.
 
+- **The generated glossary breaks the same rule through its Mozc-match
+  discount, so the importer enforces it (#282).** A glossary surface that
+  Mozc also carries is priced at Mozc cost - 400, which put `移行` ahead of
+  `以降` and `社債` ahead of `車載`. `glossary-import` now finds the word that
+  ranks each glossary reading first in the pre-overlay dictionary (trimmed
+  Mozc plus inflections) and prices such a discounted edge 60 behind it; the
+  report lists every re-priced edge under `upstream_yields` (33 on the pinned
+  sources). Ownership is a lattice question, not an entry-list one: a leader
+  that is a particle-initial fragment (`でグレード`), a noun's hiragana echo,
+  a proper noun or a verb form that needs a following word (`転ん`) does not
+  own the reading, and a cheaper split with another spelling (`た今` for
+  `たいま`, or `か`+`ラム` built from a shorter glossary reading) means there is
+  no owner to step back for.
+
+- **A word cost is context-free, so a yield made for the reading converted
+  alone reaches every phrase that contains it.** When the glossary edge and
+  its owner share connection classes, lifting one flips the pair in every
+  context: 17 of 43 draft yields did. `くせがある` turned into `曲がある` and
+  `ふさいがある` into `夫妻がある` until `癖` and `負債` rows in
+  `data/conversion-priorities.tsv` fixed Mozc's same-class prices. A loanword spelled as its own reading
+  (`ヌル`, `リント`, `ラン`) composes into IT compounds, and lifting it lost
+  `ナルポインタ`, `リントエラー` and `ワークフローラン`, so a phonetic edge
+  keeps rank one. Diff multi-word phrases built from each yielded reading, not
+  only the reading itself. Confining a yield to standalone conversion needs a
+  runtime signal; the build rejects a second `(reading, surface, left_id,
+  right_id)` edge, so a separately priced standalone-only entry is impossible.
+
+- **A build-time yield is a lattice price; two runtime IT rules can still
+  undo it.** Converting each of the 33 yielded readings with default options
+  (2026-10-07) left 8 glossary terms at rank one. Completion coherence takes
+  800 off a candidate whose text prefixes an IT entry for a longer reading,
+  from four reading characters up: `境界` (`境界意識`), `欠陥`, `下請`,
+  `冗長`, `超過` and `定型`. Compound coherence takes 1200 per IT word from
+  seven characters up: `支払サイト` and `情報漏えい`. All 8 led on main as
+  well, so the yield did not regress them. Raising their build price further
+  would push the glossary word down in every phrase that contains it, so this
+  needs a runtime signal too (#291). Measure the runtime leader of every yielded
+  reading; the importer report alone does not show it.
+
 - **Comparing rank one is not enough: an exact entry prunes the whole fuzzy
   expansion beneath it.** Adding one row collapses the reading's candidate list
   -- `じーぴーゆー` went from 108 candidates to two -- because the engine stops
