@@ -2,7 +2,7 @@ use sakura_values::{FixedStr, MAX_PREEDIT_BYTES};
 
 use crate::dictionary::{Dictionary, EntryFlags};
 
-use super::super::{ConversionError, ConversionOptions, Converter};
+use super::super::{ConversionCandidate, ConversionError, ConversionOptions, Converter};
 
 const MIN_COMPLETION_COHERENCE_CHARS: usize = 4;
 const COMPLETION_NODE_BUDGET: usize = 256;
@@ -52,6 +52,7 @@ impl Converter {
                     for (index, candidate) in self.candidates.iter_mut().enumerate() {
                         let bit = 1u32.checked_shl(u32::try_from(index).unwrap_or(u32::MAX));
                         if bit.is_none_or(|bit| boosted & bit != 0)
+                            || is_whole_query_yield(candidate)
                             || completion.len() <= candidate.text().len()
                             || !completion.as_str().starts_with(candidate.text())
                         {
@@ -88,6 +89,9 @@ impl Converter {
         }
 
         for candidate in &mut self.candidates {
+            if is_whole_query_yield(candidate) {
+                continue;
+            }
             let evidence = candidate.path_evidence();
             if evidence.fallback_edges != 0
                 || evidence.generated_edges != 0
@@ -107,4 +111,17 @@ impl Converter {
             candidate.cost = candidate.cost.saturating_sub(boost);
         }
     }
+}
+
+/// A candidate that is one [`EntryFlags::READING_YIELD`] word covering the
+/// whole query. The dictionary priced that word behind the word that owns
+/// this reading, so IT evidence from the coherence passes must not lift it
+/// back over that word (Issue #291). Inside a longer query the yielded word
+/// is still ordinary IT evidence.
+fn is_whole_query_yield(candidate: &ConversionCandidate) -> bool {
+    matches!(
+        candidate.segments(),
+        [segment] if segment.word_count == 1
+            && segment.flags.contains(EntryFlags::READING_YIELD)
+    )
 }

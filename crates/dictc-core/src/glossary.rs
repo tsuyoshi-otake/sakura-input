@@ -368,7 +368,11 @@ impl Importer {
                     right_id: edge.right_id,
                     word_cost: edge.word_cost,
                     prediction_cost: edge.word_cost.saturating_add(300),
-                    flags: EntryFlags::IT | EntryFlags::PREDICTION,
+                    flags: if edge.yielded {
+                        EntryFlags::IT | EntryFlags::PREDICTION | EntryFlags::READING_YIELD
+                    } else {
+                        EntryFlags::IT | EntryFlags::PREDICTION
+                    },
                     annotation: edge.candidate.annotation,
                     source: edge.candidate.source,
                     line: edge.candidate.line,
@@ -441,6 +445,7 @@ fn price_reading(
             left_id,
             right_id,
             word_cost,
+            yielded: false,
         });
     }
     priced
@@ -636,6 +641,10 @@ struct PricedEdge {
     left_id: u16,
     right_id: u16,
     word_cost: i32,
+    /// Set on every edge of a reading whose owner [`yield_to_upstream_leader`]
+    /// keeps first, lifted or not; the entry then carries
+    /// [`EntryFlags::READING_YIELD`].
+    yielded: bool,
 }
 
 impl PricedEdge {
@@ -667,8 +676,11 @@ impl PricedEdge {
 /// edges still ranking ahead of [`UPSTREAM_LEADER_MARGIN`] past the owner are
 /// then lifted, in their own order, to consecutive totals from that point:
 /// the owner keeps rank one, the glossary keeps its internal order right
-/// behind it, and an edge already further back is untouched. Returns one
-/// report line per re-priced edge.
+/// behind it, and an edge already further back keeps its price. Every edge
+/// of such a reading, lifted or already behind, is marked so its entry
+/// carries [`EntryFlags::READING_YIELD`]: the runtime IT coherence passes
+/// would otherwise lift any of them back over the owner when the reading is
+/// converted alone (Issue #291). Returns one report line per re-priced edge.
 fn yield_to_upstream_leader(
     reading: &str,
     priced: &mut [PricedEdge],
@@ -696,6 +708,9 @@ fn yield_to_upstream_leader(
         total > owner.total || candidate.matched.is_none() || candidate.phonetic
     }) {
         return Vec::new();
+    }
+    for edge in priced.iter_mut() {
+        edge.yielded = true;
     }
     let mut slot = owner.total.saturating_add(UPSTREAM_LEADER_MARGIN);
     let mut yields = Vec::new();
