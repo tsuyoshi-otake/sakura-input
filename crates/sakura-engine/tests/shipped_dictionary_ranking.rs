@@ -2425,3 +2425,204 @@ fn issue_291_compounds_of_yielded_words_still_lead() {
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
+
+/// Issue #307: the first entry is a preservation case; the other three need
+/// whole-word calibration or restoration after the Mozc cost trim.
+const ISSUE_307_LOANWORDS: &[(&str, &str, &str)] = &[
+    ("menshonn", "めんしょん", "メンション"),
+    ("anninsuto-ru", "あんいんすとーる", "アンインストール"),
+    (
+        "kontoribyu-shonn",
+        "こんとりびゅーしょん",
+        "コントリビューション",
+    ),
+    ("mainanba-", "まいなんばー", "マイナンバー"),
+];
+
+fn issue_307_candidate_costs(candidates: &[sakura_core::ConversionCandidate]) -> String {
+    candidates
+        .iter()
+        .enumerate()
+        .map(|(index, candidate)| {
+            format!(
+                "{index}: {:?} cost={} evidence={:?}",
+                candidate.text(),
+                candidate.cost,
+                candidate.evidence_class()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn issue_307_check_lexical_top(
+    conversion: &sakura_engine::dictionary::ConversionService,
+    reading: &str,
+    expected: &str,
+    options: ConversionOptions,
+    failures: &mut Vec<String>,
+) {
+    conversion
+        .with_candidates(reading, options, |candidates| {
+            let correct = candidates.first().is_some_and(|candidate| {
+                candidate.text() == expected
+                    && candidate.evidence_class() == sakura_core::CandidateEvidence::ExactSystem
+                    && candidate.origin() == sakura_core::conversion::CandidateOrigin::Direct
+                    && candidate.has_full_system_coverage(reading.len())
+            });
+            if !correct {
+                failures.push(format!(
+                    "{reading}: expected whole exact-system {expected}; options={options:?}\n{}",
+                    issue_307_candidate_costs(candidates)
+                ));
+            }
+        })
+        .unwrap_or_else(|error| panic!("{reading}: conversion failed: {error}"));
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_307_loanwords_lead_as_whole_lexical_words() {
+    let conversion = open_conversion();
+    let mut failures = Vec::new();
+    for &(_, reading, expected) in ISSUE_307_LOANWORDS {
+        issue_307_check_lexical_top(
+            &conversion,
+            reading,
+            expected,
+            ConversionOptions::default(),
+            &mut failures,
+        );
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_307_loanwords_remain_whole_through_commit() {
+    let conversion = open_conversion();
+    let mut failures = Vec::new();
+    for &(romaji, reading, expected) in ISSUE_307_LOANWORDS {
+        // A new memory-only learning store and session prevent one case's
+        // commit or domain context from changing the next case's selection.
+        let mut dispatcher = open_dispatcher_with_input_method(InputMethod::Romaji);
+        let session = create_normal_session(&mut dispatcher, "issue-307-loanwords.exe");
+        let typed = type_romaji(&mut dispatcher, session, romaji).to_output();
+        let composed: String = typed
+            .preedit
+            .as_ref()
+            .map(|preedit| {
+                preedit
+                    .segments
+                    .iter()
+                    .map(|segment| segment.text.as_str())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let converted = send_key(&mut dispatcher, session, space_key()).to_output();
+        let preedit: String = converted
+            .preedit
+            .as_ref()
+            .map(|preedit| {
+                preedit
+                    .segments
+                    .iter()
+                    .map(|segment| segment.text.as_str())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let committed = send_key(&mut dispatcher, session, enter_key()).to_output();
+        if composed != reading
+            || preedit != expected
+            || committed.commit.as_deref() != Some(expected)
+        {
+            // The wire candidates expose surfaces, not costs. Print them
+            // together with the full core list and its actual ranking costs.
+            let costs = conversion
+                .with_candidates(
+                    reading,
+                    ConversionOptions::default(),
+                    issue_307_candidate_costs,
+                )
+                .expect("loanword cost diagnostics");
+            failures.push(format!(
+                "{romaji}: expected reading={reading}, surface={expected}; \
+                 composed={composed:?}, preedit={preedit:?}, commit={:?}, \
+                 wire_candidates={:?}\ncore candidates:\n{costs}",
+                committed.commit, converted.candidates
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_307_does_not_reprice_constituents_or_japanese_words() {
+    let conversion = open_conversion();
+    let mut failures = Vec::new();
+    for it_bias_per_mille in [0, 100] {
+        let options = ConversionOptions {
+            it_bias_per_mille,
+            ..ConversionOptions::default()
+        };
+        for (reading, expected) in [
+            ("いんすとーる", "インストール"),
+            ("なんばー", "ナンバー"),
+            ("めんてなー", "メンテナー"),
+            ("あんない", "案内"),
+            ("まいにち", "毎日"),
+            ("めんせき", "面積"),
+            ("しょうかい", "紹介"),
+            ("しょうめん", "正面"),
+        ] {
+            conversion
+                .with_candidates(reading, options, |candidates| {
+                    if candidates.first().map(|candidate| candidate.text()) != Some(expected) {
+                        failures.push(format!(
+                            "{reading}: expected {expected}; IT bias={it_bias_per_mille}\n{}",
+                            issue_307_candidate_costs(candidates)
+                        ));
+                    }
+                })
+                .unwrap_or_else(|error| panic!("{reading}: {error}"));
+        }
+        // Preserve full inventories in RED/GREEN logs for comparison without
+        // inventing leaders for these ambiguous standalone constituents.
+        for reading in ["めん", "あん", "まい", "とり"] {
+            conversion
+                .with_candidates(reading, options, |candidates| {
+                    eprintln!(
+                        "#307 constituent {reading}, IT bias={it_bias_per_mille}:\n{}",
+                        issue_307_candidate_costs(candidates)
+                    );
+                    if candidates.is_empty() {
+                        failures.push(format!("{reading}: no constituent candidates; {options:?}"));
+                    }
+                })
+                .unwrap_or_else(|error| panic!("{reading}: {error}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_307_loanwords_survive_it_bias_and_search_limits() {
+    let conversion = open_conversion();
+    let mut failures = Vec::new();
+    for it_bias_per_mille in [0, 100, 1_000] {
+        for max_candidates in [18, ConversionOptions::default().max_candidates] {
+            let options = ConversionOptions {
+                it_bias_per_mille,
+                max_it_boost: 800,
+                max_candidates,
+                ..ConversionOptions::default()
+            };
+            for &(_, reading, expected) in ISSUE_307_LOANWORDS {
+                issue_307_check_lexical_top(&conversion, reading, expected, options, &mut failures);
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
