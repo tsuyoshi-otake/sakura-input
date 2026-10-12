@@ -2753,6 +2753,12 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   - Held-out corpus-eval, old vs new: Sakura 59/60, IT 30/30 on both, with p99 at 2.642 and 2.681 ms (single runs).
   - candidate-sweep over 48 readings (targets, controls, prefixes, containing phrases, tuning corpus), with IT on and off: only the 3 target readings changed top-1.
   - Full candidate dump: every ExactSystem and Fallback candidate remains. The 107 removed candidates are all composites or repairs of the 3 targets, pruned by the exact-quality gate as documented.
+  - An independent fresh-context verifier passed 8 of 8 rubric criteria on 9ef1f4b:
+    - it reran RED on the old image (1 passed, 3 failed) and GREEN on the new one (4 passed; the full shipped file 50 passed);
+    - the priorities contract passed 8 of 8;
+    - the report hashes and sizes match the new image and the TSV;
+    - only the 4 intended files changed, and no personal data was added;
+    - held-out scores were equal, and process-clean passed.
 - Learning:
   - Check the overlay's own contract test before choosing a prediction policy for a priorities row.
   - `-UpdateCheckedInData` rewrites unchanged generated files with LF; compare with `--ignore-cr-at-eol` and restore pure line-ending changes.
