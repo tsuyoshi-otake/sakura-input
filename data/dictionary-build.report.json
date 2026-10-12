@@ -165,8 +165,8 @@
     },
     "conversion_priorities": {
       "file": "conversion-priorities.tsv",
-      "bytes": 8904,
-      "sha256": "f7d7c42b4f1a3c7b2ebd49131b7108334c777824d04e46b1ac5fa1f0a096d0e0"
+      "bytes": 9585,
+      "sha256": "e1fbcefe127aec0d601c58ed1ee217fae1e88f1f68e0b55597dd8a75798f2dfa"
     },
     "non_initial_boundary_policy": {
       "file": "non-initial-boundary-policy.tsv",
@@ -208,8 +208,8 @@
     },
     "dictionary": {
       "file": "system.dic",
-      "bytes": 37383796,
-      "sha256": "6659f5799bb496480ae4dc40d41736b52f7baf05d58f0e73db061e3a41e3e671"
+      "bytes": 37382740,
+      "sha256": "1a40a469634054294e8c8589bb304ec2d658c5625893fc68ce79feba61e8fbcd"
     },
     "wordnet_report": {
       "file": "wordnet.report.json",
@@ -274,8 +274,8 @@
       },
       {
         "file": "09_外来語・カタカナ語.tsv",
-        "bytes": 2477938,
-        "sha256": "5ef043ed0b10547e8088beb72627adb36f3183def8f03d6349aa88fe9a794067"
+        "bytes": 2478086,
+        "sha256": "087f84e674640fbb60003cce31b4e2a45d213589f552c3771cd682cfa4ca2b73"
       },
       {
         "file": "10_略語・英数字.tsv",
