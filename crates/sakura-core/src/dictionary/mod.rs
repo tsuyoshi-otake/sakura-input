@@ -61,6 +61,9 @@ impl EntryFlags {
     /// rank one when the reading is converted by itself (Issue #291); inside
     /// a longer query it is an ordinary dictionary word.
     pub const READING_YIELD: Self = Self(1 << 4);
+    /// A boundary-preferred alias: available initially, but inside a query
+    /// only with exact whole-reading system evidence (#306).
+    pub const BOUNDARY_ALIAS: Self = Self(1 << 5);
 
     pub const fn from_bits(bits: u16) -> Self {
         Self(bits)

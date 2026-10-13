@@ -68,6 +68,15 @@
 # that lost to a shorter homophone splice. Keep POS identities and alternate
 # spellings; the ね/値 correction affects only that suffix reading, not ち/値.
 reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
+# Issue #307: whole loanwords beat lexical splits without repricing their parts.
+# アンインストール totals 5740 vs 案+インストール 6161 (default IT bonus).
+# コントリビューション restores the trimmed 7471 edge:
+# total 8537 vs 今+鳥+ビュー+ション 17912.
+# マイナンバー totals 5566 vs 枚+ナンバー 6603. Rows priced <= 6000 follow
+# the overlay's prediction contract: predict flag and word cost + 1200.
+あんいんすとーる	アンインストール	1841	1841	4500	5700	predict	
+こんとりびゅーしょん	コントリビューション	1851	1851	7471	-		
+まいなんばー	マイナンバー	1851	1851	4500	5700	predict	
 かんじへんかん	漢字変換	1841	1841	4500	5700	it,predict	
 くろっく	クロック	1841	1841	3500	4700	predict	
 こうていてき	肯定的	1841	2032	4200	5400	predict	

@@ -2730,3 +2730,129 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   - Local CI gates all passed: fmt, clippy `-D warnings` with the CI feature set, dependency rules and facade (+SelfTest), dep-policy (+SelfTest), IRV SelfTest and compare (only the two existing WARNs, IRV-HISTORY-STORE and IRV-CI), wrapped workspace tests (116 s), and process-clean.
   - An independent fresh-context verifier (rubric-verifier) passed 7 of 8 rubric criteria. It ran the tests 3 times, the full-corpus capture and oracle, fmt and clippy itself. The 8th criterion (public-repo hygiene) failed only because the rubric's `token` grep alternative matched the `literal_token` field and the prose word "token". The personal-data patterns themselves returned nothing, so the rubric was wrong, not the code.
 - Learning: derive a case family's capture outcome from the oracle that consumes it. The literal oracle compares top-1 with the reading, so the capture records what the engine would insert instead of forcing a conversion key. Separately, a clock nonce is not unique across parallel test threads on Windows; add a per-process atomic sequence to fixture names.
+
+## 2026-10-13 Conversion-history audit of this PC (30-day history window up to 2.0.12); no code change
+
+- Request: analyze this PC's conversion history and find what needs improvement. Read-only: `sakura_settings.exe history export` (34 s, 24 MB TSV), `history mine`, and `learning export`, analyzed with throwaway Python in the session scratchpad. The raw exports were deleted at the end; nothing personal was written to the repository.
+- Baseline: top-1 accepted without candidate moves in 94.8% of converted-and-committed compositions, 93.4-97.3% per version. This overstates quality. The owner usually commits implicitly by typing the next phrase, so an unnoticed wrong top-1 counts as accepted.
+- Finding 1 (highest impact): wrong top-1 candidates reinforce themselves through learning, and #275 does not cover the owner's typing style.
+  - #275 (v2.0.10) stages a commit and learns it when the next commit is staged. When the wrong word and the next phrase are both committed before the owner notices, or the text is sent without noticing, the wrong word is still learned.
+  - Learning store after 2.0.10: へんしん→変身 learned again twice on 10-05 (both sent unnoticed: the next phrase plus Enter), ずみ→ズミ on 10-05 and 10-07, じりつえーじぇんと→自立エージェント on 10-07, めもり→目盛り on 10-11.
+  - At left context 0 the store holds へんしん→変身 15 times (14 before 2.0.10) against 返信 4; 返信 has 8 more entries only under left context 1841. On 10-08 (2.0.12) 変身 still led, and 返信 took 3 candidate moves.
+  - Corrections are stored under the erased word's right id (1841/1922), not the real left context, so they do not compete with the wrong entry at context 0.
+- Finding 2: context-insensitive suffix choice. ずみ after a noun leads with ズミ (3-6 moves to 済/済み). `data/non-initial-boundary-policy.tsv` already allows 済/済み initially, so this is ranking, not boundary policy. がわ after a noun gives 川 instead of 側.
+- Finding 3: loanword readings split into kanji + katakana fragments (面ション, 案インストール, 混んとりビューション, 毎ナンバー, 税ラム). めんしょん led with メンション on 10-08, so learning can mask it, but the split is still a ranking issue.
+- Finding 4: mode friction. 353 IME toggle round-trips to type a direct-mode word (191 all-lowercase: file names, branch names, commands), 29 wrong-mode retypes (192 wasted keys), 61 commits with romaji residue, 477 full-width spaces from idle Space (`space-width = same-as-input`).
+- Finding 5: history pollution. Three key-hold bursts (`;` 23,354 keys on 09-17, `n`/`k` about 4,100 on 09-27) each created one session per key, 14% of key records, not flagged test_only.
+- Not verified: whether 変身/ズミ still lead today (no on-screen or `--test-pipe` check with the owner's learning store); the rank scoring that lets the context-0 count win was not traced in code.
+- Learning: an implicit-commit typist accepts and sends text without looking. "Committed and not erased" is weak evidence of correctness, so learning needs a signal that survives one more commit (for example an erase within N commits or seconds, or a read-time cap for entries that were corrected later).
+
+## 2026-10-13 Latest conflicting exact learning choice wins (#305 item 2)
+
+- Symptom (from the conversion-history audit above): after the owner corrects a wrong top-1, the wrong word keeps leading. At left context 0 the store held へんしん→変身 15 times against 返信 4, and on 2.0.12 変身 still led.
+- Root cause: `Index::best_candidate` ranks by (decayed frequency, sequence) and caps the candidate index by strength. Repeated implicit commits of the wrong word, which #275 staging does not stop when the next phrase is committed before the owner looks, out-count any later correction under the same reading and left context. The #305 premise that the left context stays at the erased word's right ID is false since #273 (v2.0.10); the issue comment records that.
+- Fix (a specification change; owner direction on #305 = implement item 2 now, defer items 1 and 3):
+  - In `crates/sakura-engine/src/learning.rs`, when at least two distinct non-identity offered surfaces have unexpired exact evidence for the same reading and left context, the newest exact choice wins, even beyond the strength index gate.
+  - In the same query, general evidence for another surface is ignored unless it postdates that exact choice.
+  - Without a conflict, ranking and bounds are unchanged. The same surface under different right IDs is not a conflict. Format 3, replay and compaction are unchanged.
+  - `best_candidate` returns `PreferenceSelection`. The doc comment says the rule is an inference, not proof that the older spelling was wrong.
+- Workflow: Codex (tmux pane `%3`, YOLO) wrote the plan, the RED tests and the GREEN change from task files under `~/tmp/sakura-input-codex-20261013/`. Claude reviewed each diff and ran every build and test (the hybrid pattern).
+- Verification:
+  - RED before the learning.rs change: 6 of 7 new lib/dispatch tests failed with the old spelling winning (for example `left: Some(0) right: Some(3)`; the dispatch test committed 仮名 instead of 候補04). The shipped henshin test failed with `("変身", Some("変身"))` instead of `("返信", Some("返信"))`.
+  - GREEN, 14 wrapped steps in 232.9 s, all PASS: fmt, focused issue_305 tests, engine lib, shipped ranking `--ignored` (release), clippy `-D warnings` with the CI feature set, workspace tests (148.8 s), dependency rules, facade, dep-policy (+SelfTest), IRV SelfTest and compare, `git diff --check`, process-clean.
+  - The existing compaction test now expects the corrected spelling (加奈); its comment marks this as the intended #305 change.
+  - An independent fresh-context verifier (rubric-verifier) passed 8 of 8 criteria. It ran the 6 issue_305 lib/dispatch tests and the 48 shipped ranking tests itself, read the diff to confirm the no-conflict path equals the old `best` and that conflict detection is order-independent, and found no personal data in added lines. It also confirmed that fmt, clippy and process-clean pass.
+- Not verified: an on-screen check with the owner's real learning store. Items 1 (restore the pre-erase left context) and 3 (longer staging window) are deferred until this change is measured.
+- Learning: in sakura-tmux, `send-keys -t %3 '<text>' Enter` leaves the text in Codex's input box. Send the text, wait 1 s, then send `Enter` as a separate `send-keys`. `new-session`/`new-window` are `unsupported-surface` and `list-panes -F` is `format-error`; use plain `list-panes -a` and an existing pane.
+
+## 2026-10-13 Whole loanwords lead over kanji + katakana splits (#307)
+
+- Symptom (conversion-history audit, same day): loanword readings split into a kanji plus a katakana fragment, for example 案インストール, 今鳥ビューション and 枚ナンバー.
+- Root cause, from Codex's read-only plan and confirmed by the RED costs:
+  - めんしょん: メンション already leads with no learning (7211 against 面ション 11135). The audit's 面ション was not reproduced on current HEAD; the issue's "still wrong without learning" premise was wrong.
+  - あんいんすとーる: the exact アンインストール (6208) loses by 47 to 案+インストール (6161). The compound IT coherence bonus is -1200 for queries of 7 or more characters, and インストール is a cheap glossary tail.
+  - こんとりびゅーしょん and まいなんばー: the whole words are absent. Their upstream Mozc costs (7471 and 7933) exceed the 6900 trim ceiling.
+- Fix (data only, `data/conversion-priorities.tsv`):
+  - アンインストール 1841/1841: 4500, `predict` at 5700.
+  - コントリビューション 1851/1851: 7471, conversion-only.
+  - マイナンバー 1851/1851: 4500, `predict` at 5700.
+  - `data/dictionary-build.report.json` was regenerated with `-UpdateCheckedInData`.
+  - No glossary or runtime scoring change, and no "loanword-shaped" heuristic. #41's general split problem stays open.
+- Contract found during review: `dictc-core/tests/conversion_priorities.rs::every_row_keeps_the_prediction_status_its_own_cost_earns` requires every priorities row at or below 6000 to carry `predict` with word cost + 1200. マイナンバー must stay at or below 5537 to beat 枚ナンバー (6603), so it cannot be conversion-only. The rule in `docs/rules/session-and-later-findings.md` that curated kana rows are conversion-only belongs to curated-terms, not to this overlay.
+- Verification:
+  - RED against the main image (`6659f579…`): 3 of 4 new `issue_307_*` tests failed with the split leading. The control test passed. The run took 26 s.
+  - Build: `build-dictionary.ps1 -OutputDirectory <task dir> -UpdateCheckedInData`, 91 s with the two-pass determinism check. New image `1a40a469…`, 37,382,740 bytes.
+  - `-UpdateCheckedInData` rewrote `it-terms.tsv`, `it-terms.report.json` and `mozc-trim.report.json` with LF line endings only (`git diff --ignore-cr-at-eol` was empty), so they were restored. In the report, only the priorities input, category 09 and the image changed.
+  - GREEN, 196 s, all PASS: fmt, the priorities contract, `issue_307_*`, the full shipped suite `--ignored` (release) and the non-initial allomorph gate on the new image, clippy `-D warnings`, wrapped workspace tests, IRV SelfTest, `git diff --check`, process-clean.
+  - Held-out corpus-eval, old vs new: Sakura 59/60, IT 30/30 on both, with p99 at 2.642 and 2.681 ms (single runs).
+  - candidate-sweep over 48 readings (targets, controls, prefixes, containing phrases, tuning corpus), with IT on and off: only the 3 target readings changed top-1.
+  - Full candidate dump: every ExactSystem and Fallback candidate remains. The 107 removed candidates are all composites or repairs of the 3 targets, pruned by the exact-quality gate as documented.
+  - An independent fresh-context verifier passed 8 of 8 rubric criteria on 9ef1f4b:
+    - it reran RED on the old image (1 passed, 3 failed) and GREEN on the new one (4 passed; the full shipped file 50 passed);
+    - the priorities contract passed 8 of 8;
+    - the report hashes and sizes match the new image and the TSV;
+    - only the 4 intended files changed, and no personal data was added;
+    - held-out scores were equal, and process-clean passed.
+- Learning:
+  - Check the overlay's own contract test before choosing a prediction policy for a priorities row.
+  - `-UpdateCheckedInData` rewrites unchanged generated files with LF; compare with `--ignore-cr-at-eol` and restore pure line-ending changes.
+  - The image can shrink when entries are added: 1,056 bytes here, with 3 rows added.
+
+## 2026-10-13 The がわ/川 boundary alias no longer wins inside phrases that have no exact reading (#306)
+
+- Symptom: the conversion-history audit found productive 〜側 compounds committed as 川, for example サーバーがわ → サーバー川. The same happened for クライアント, ユーザー, 利用者, 運用, 管理者 and ホスト, bare and before の/を/に/で.
+- Root cause: `data/non-initial-boundary-policy.tsv` approves がわ/川 as `allow-initial`, so the compiler generates an initial-safe alias from the unvoiced base かわ/川 with the general-noun identity 1851/1851 (cost 1667). The alias exists so 川 stays available after a composition boundary, but the lattice admitted it at every position. After a noun (right id 2653) its connection cost is 569, against 7221 for the native suffix row 川 2019, so サーバー+ー+川 (7129) beat サーバー(1851)+側(1949) (9302).
+- Rejected designs (measured, not guessed):
+  - a post-search coherence pass: 296 exact-word regressions in the 1,817-reading sweep, and readings followed by a particle stayed wrong;
+  - plan-306b (a second search with witness storage and a penalty kept consistent across `add_node`, `compute_suffix_costs` and N-best): too heavy and cross-cutting for one homophone preference;
+  - a strict initial-only alias: fails R1 for 21 whole words (石川-type names).
+- Fix (plan-306c's recommended variant, chosen by Claude as director; Codex implemented it, Claude built and measured):
+  - New policy decision `prefer-boundary`, accepted only for がわ/川.
+  - `EntryFlags::BOUNDARY_ALIAS` (bit 5, TSV token `boundary-alias`) is set on the generated 1851/1851 alias only. The compiler fails if the decision would hit a released native row or another identity.
+  - The lattice computes once per query whether any system entry consumes the whole reading. At start > 0 a BOUNDARY_ALIAS entry is admitted only with that evidence. Start 0 keeps the NON_INITIAL rule. Local repairs use the same predicate `admits_system_boundary`.
+  - The trim report gains the additive `boundary_alias_entries` (schema 4 unchanged). No cost, score or search change. Older engines ignore bit 5.
+  - Residual risk, stated at the predicate: the guard is query-level, so a protected name inside a longer phrase (あおがわのほとり) can still lose its internal alias edge.
+- Verification:
+  - New image: exactly 1 `boundary-alias` row (がわ 川 1851 1851); trim report 58 generated / 2 released / 1 boundary alias.
+  - Unit tests: sakura-core 5, dictc-core 2 (+ image and overlay tests), sakura-engine 1, all pass.
+  - Shipped groups (IT bias 0/100/1000 × limits 18/default): 5/5 pass on new engine + new image. Productive and Appendix B groups fail on old engine + old image, old engine + new image, and new engine + old image. Phrase and 済み groups pass everywhere.
+  - Only 9 of the 16 Appendix B readings fail before the fix through the engine; 7 already lead with 側 on main and act as preservation controls. The core sweep changes all 16.
+  - R1 correction: ちがわ at IT bias 1000 ranks 値川 first on main too (pre-existing, outside #306), so ちがわ→違わ is asserted at IT 0/100 only.
+  - Mutation: dropping `|| has_exact_system_reading` fails 3 core unit tests and the R1 group (20 Appendix C names flip).
+  - Sweep, 1,847 readings × IT on/off: 46 top-1 changes, all X川→X側 targets; 0 changes where the old leader was an exact (reading, surface) pair from the 562,197 release pairs. Tuning corpus: 0 of 20 changed. Held-out corpus-eval: 59/60 and IT 30/30 before and after.
+  - Local CI gates on the new image, 18 of 18 PASS in 242 s: fmt, clippy `-D warnings` (release feature set), workspace tests, dependency rules, facade, dep-policy (+SelfTest), IRV SelfTest/compare, `git diff --check`, process-clean.
+  - An independent fresh-context verifier (rubric-verifier) passed 9 of 9 criteria. It reran the image and report checks, the focused and shipped tests (5/5 on the new image; productive and Appendix B fail on the old image), four sweeps (46 changes per mode, 0 exact-leader changes), held-out on both images, the scope review and a public-repo hygiene scan, and found no surviving processes.
+- Measurement failure caught during this work: restoring `lattice.rs` with PowerShell `Copy-Item` kept its old mtime, so Cargo skipped rebuilding `sakura-core`. The first "new engine + old image" run and the first "new" sweep silently used the old engine. Both were rerun after `touch` with `Compiling sakura-core` confirmed. Rule added to `docs/rules/this-machine.md`.
+- Follow-ups outside this issue: おがわ leads with お川; ちがわ at IT bias 1000 leads with 値川.
+- IRV: the reason for change stays in the boundary-policy owner (`category.rs` + policy TSV) and one lattice admission predicate with a truth-table test. The next boundary-alias issue reads `admits_system_boundary`, its truth table and the policy decision values, not the search or ranking internals.
+
+## 2026-10-13 Held keys become one engine session per key through the shared cancellation terminal; repeat bursts stay excluded from mining (#309)
+
+- Symptom (from the 2026-10-13 conversion-history audit): two key-hold bursts were stored as one developer-history session per key, 13.7% of key records, and the store sits at its 64 MiB cap.
+- Investigation (Codex planned in three rounds; Claude supplied aggregate-only counts from a fresh `history export` and from `ipc-disconnects.bin`, then deleted the export):
+  - Every burst key is `repeat=true`, idle → composing with a new preedit, no commit, no delete, no drop, 28 ms apart. Auto-repeat alone does not split sessions: the other 12,263 repeats share 306 sessions.
+  - The disconnect log filled its 32,768-event capacity during the first burst. In that window it holds one `CancelledStateTerminalized` disconnect per held key, on one host thread, and no other reason.
+  - `terminalize_cancelled_state` disconnects the TSF engine link, so the next key creates a fresh engine session and a fresh history session id. Two entries fit the evidence: (A) a pending async composition-start write cancelled when the next key arrives in a different context identity; (B) the host refusing both sync and async edit sessions, rejected inside the same key callback. The logged `detail` is 0, so the data cannot pick one, and IME bug versus legitimate host churn stays open.
+  - The path is identical in v2.0.3, v2.0.7 and HEAD (`text_service.rs` blob unchanged except #271's AI result code).
+- First plan rejected: it assumed one history session per `CreateSession` and proposed a single-connection burst as the cause test. The real data contradicted it, and that test would have passed without proving anything.
+- Decision (Claude as director): take the Issue's "excludable by analysis" acceptance branch. The stored `repeat` flag and `history mine` interval rejection already exclude these bursts. No production, store-format, protocol or owner-decision change. No speculative COM host double for an unobservable host. Capacity reduction (store v3) is not pursued: the bursts are about 12% of the store and leave the 30-day window by 10-27.
+- Change: `mine_single_key_repeat_sessions_do_not_taint_later_clean_commit` (256 single-key repeat sessions in the real shape; no-commit, commit-bearing and mixed same-session variants); the engine admission test now proves real repeats are stored with `repeat=true` and that the scope and test_only exclusions hold for repeats; `verification/developer-history/repeat-session-lifecycle.md` records the path, the candidates and the residual risks.
+- Verification:
+  - The new mining test passes; removing the production `|| key.repeat` guard makes it fail at candidate equality (an extra repeat-derived candidate), and the restored source passes again after a confirmed rebuild.
+  - Local CI gates on the integrated tree: fmt (after `cargo fmt` rewrapped the new test), clippy `-D warnings` with the CI feature set, wrapped workspace tests (137 s), dependency rules, facade, dep-policy (+SelfTest), IRV SelfTest and compare, `git diff --check` and process-clean all pass.
+  - An independent fresh-context verifier (rubric-verifier) passed 8 of 8 criteria. It reran both tests, the repeat-guard mutation with a byte-for-byte restore, fmt, clippy, the document's blob ids against `git rev-parse` and the public-repo hygiene checks, and found no surviving processes.
+- Follow-up: #313 (keep recent disconnect diagnostics within the byte cap and record the CST trigger class in `detail`), so the next burst can decide between A and B.
+- Learning: check an audit's structural claim against both the store and the existing diagnostics before planning around the code's intended contract. Here the code's contract (one history session per `CreateSession`) was true, and the per-key sessions came from per-key engine reconnects that only the disconnect log revealed.
+
+## 2026-10-13 Prepare Sakura Input 2.0.13 release (#315)
+
+- Owner asked to release and reinstall after #305 (item 2), #306, #307 and #309 were ready. Per the 2026-09-15 owner instruction, PRs #310, #311, #312 and #314 were merged locally, in that order, on one branch `claude/315-release-2.0.13` from `origin/main` (`44bb75c`), in the existing checkout (no worktree). The release prep rides on the same branch so the integrated tree needs one CI run.
+- Conflicts:
+  - `.claude/memory/journal.md` (three merges): kept both sides and restored the blank line between entries.
+  - `crates/sakura-engine/tests/shipped_dictionary_ranking.rs`: #307 and #306 each appended an independent block after `issue_291_compounds_of_yielded_words_still_lead`. The file is the #307 side followed by the #306 block verbatim.
+  - `data/dictionary-build.report.json`: regenerated with `scripts/build-dictionary.ps1 -UpdateCheckedInData` on the integrated sources (96 s). `system.dic` is 37,382,740 bytes (the #307 size; #306 keeps the size and changes content), SHA-256 `68f93939…dec0ef`. Files rewritten only in line endings (`it-terms.*`, `mozc-trim.report.json`) were restored.
+- Version sites: workspace version and Cargo.lock (28 workspace packages only; 0 non-version lock lines changed), `installer/setup.iss` (product version and versioned directory), `release.yml` default tag, `release-sequence.txt` 20 -> 21 (LF). New Japanese notes `docs/release-notes-v2.0.13.md` describe #305, #307, #306 (with the known in-phrase name residual and the engine+image pairing) and #309 (tests only), say no on-screen check was made, and keep the unsigned-installer guidance.
+- Pre-publish checks (parallel): no email/UUID/user-path/token strings in lines added since v2.0.12; the only identities since v2.0.12 are the owner identity and GitHub's merge committer; repo PUBLIC with no `v2.0.13` tag or release; LICENSE present. Note: the 2026-10-13 audit entry carried in by #310 names example readings from the owner's learning store; the same examples are already public in Issue #305, so this merge adds no new exposure.
+- Verification on the integrated tree, one gate script under TKW (28 steps, all PASS, 305 s): release-workflow policy (+SelfTest), fmt, clippy `-D warnings` with the release.yml feature set, dependency rules and facade (+SelfTest), dep-policy (+SelfTest), IRV SelfTest and compare (only the existing IRV-HISTORY-STORE and IRV-CI WARNs), run-test-quiet SelfTest, wrapped workspace tests (155 s), the five release.yml dictionary gates plus the `issue_305_`, `issue_306_` and `issue_307_` shipped groups against the integrated `system.dic` (`SAKURA_PHASE2_DICTIONARY` and `SAKURA_SYSTEM_DIC` set as release.yml sets the former), release build (42 s), TSF DLL 440,832 bytes (limit 1,048,576), and process-clean after each test group. No tracked `verification/` file changed.
+- Learning: a gate script that calls `ci/run-test-quiet.ps1` directly, collects PASS/FAIL per step and prints one summary at the end gives one compact result under TKW; replaying the integrated dictionary through `SAKURA_SYSTEM_DIC` covers the new shipped groups that release.yml does not gate.
+- Pending: one integration PR and its CI, merge with a merge commit, tag `v2.0.13` only on the merged main commit, release.yml, publish with `scripts/publish-release.ps1` (key passed by path only), then reinstall on this PC.

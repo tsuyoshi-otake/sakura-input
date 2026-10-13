@@ -24,6 +24,29 @@ fn image() -> Vec<u8> {
     compile(&entries, &connection).expect("compile fixture")
 }
 
+#[test]
+fn issue_306_boundary_alias_survives_v2_compile_and_lookup() {
+    let bytes = compile_text("alias.tsv", "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nがわ\t川\t1\t1\t1667\t2867\tpredict,boundary-alias\t\n").expect("compile");
+    assert_eq!(read_u16(&bytes, 8), format::VERSION_V2);
+    let dictionary = Dictionary::parse(&bytes).expect("v2 image");
+    let mut seen = 0;
+    dictionary
+        .common_prefix_search("がわ", |matched| {
+            assert_eq!(
+                matched.entry.flags,
+                EntryFlags::PREDICTION | EntryFlags::BOUNDARY_ALIAS
+            );
+            assert_eq!(
+                (matched.entry.word_cost, matched.entry.prediction_cost),
+                (1667, 2867)
+            );
+            seen += 1;
+            true
+        })
+        .expect("lookup");
+    assert_eq!(seen, 1);
+}
+
 fn read_u16(bytes: &[u8], at: usize) -> u16 {
     u16::from_le_bytes(bytes[at..at + 2].try_into().expect("u16 bytes"))
 }
