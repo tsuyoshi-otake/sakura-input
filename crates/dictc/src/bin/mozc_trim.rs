@@ -184,7 +184,7 @@ fn report_json(
     .map_err(|error| error.to_string())?;
     writeln!(
         &mut output,
-        "  \"source_shards\": {},\n  \"max_word_cost\": {},\n  \"max_surfaces_per_reading\": {},\n  \"candidate_cap_unit\": \"surface\",\n  \"legacy_row_evidence_cap\": {},\n  \"non_initial_policy_sha256\": {},\n  \"input_entries\": {},\n  \"cost_eligible\": {},\n  \"duplicate_entries\": {},\n  \"legacy_row_capped_entries\": {},\n  \"capped_entries\": {},\n  \"capped_surfaces\": {},\n  \"surface_cap_rescued_entries\": {},\n  \"surface_cap_rescued_surfaces\": {},\n  \"raw_non_initial_entries\": {},\n  \"raw_non_initial_pairs\": {},\n  \"already_initial_pairs\": {},\n  \"audited_blocked_pairs\": {},\n  \"allowed_initial_pairs\": {},\n  \"retained_non_initial_pairs\": {},\n  \"released_non_initial_entries\": {},\n  \"generated_initial_alias_entries\": {},\n  \"non_initial_entries\": {},\n  \"output_entries\": {}\n}}",
+        "  \"source_shards\": {},\n  \"max_word_cost\": {},\n  \"max_surfaces_per_reading\": {},\n  \"candidate_cap_unit\": \"surface\",\n  \"legacy_row_evidence_cap\": {},\n  \"non_initial_policy_sha256\": {},\n  \"input_entries\": {},\n  \"cost_eligible\": {},\n  \"duplicate_entries\": {},\n  \"legacy_row_capped_entries\": {},\n  \"capped_entries\": {},\n  \"capped_surfaces\": {},\n  \"surface_cap_rescued_entries\": {},\n  \"surface_cap_rescued_surfaces\": {},\n  \"raw_non_initial_entries\": {},\n  \"raw_non_initial_pairs\": {},\n  \"already_initial_pairs\": {},\n  \"audited_blocked_pairs\": {},\n  \"allowed_initial_pairs\": {},\n  \"retained_non_initial_pairs\": {},\n  \"released_non_initial_entries\": {},\n  \"generated_initial_alias_entries\": {},\n  \"boundary_alias_entries\": {},\n  \"non_initial_entries\": {},\n  \"output_entries\": {}\n}}",
         config.shards.len(),
         config.policy.max_word_cost,
         config
@@ -209,6 +209,7 @@ fn report_json(
         boundary.retained_non_initial_pairs,
         boundary.released_non_initial_entries,
         boundary.generated_initial_alias_entries,
+        boundary.boundary_alias_entries,
         report.non_initial_entries,
         report.output_entries
     )

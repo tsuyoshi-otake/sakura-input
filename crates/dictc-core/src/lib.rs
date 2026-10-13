@@ -376,11 +376,12 @@ const TSV_HEADER: &str =
 
 /// Every entry flag the TSV `flags` column can spell, in the order the
 /// writer emits them. The parser and the writer both read this one table.
-const TSV_FLAGS: [(EntryFlags, &str); 5] = [
+const TSV_FLAGS: [(EntryFlags, &str); 6] = [
     (EntryFlags::IT, "it"),
     (EntryFlags::PREDICTION, "predict"),
     (EntryFlags::SPELLING_CORRECTION, "correction"),
     (EntryFlags::NON_INITIAL, "non-initial"),
+    (EntryFlags::BOUNDARY_ALIAS, "boundary-alias"),
     (EntryFlags::READING_YIELD, "yield"),
 ];
 
