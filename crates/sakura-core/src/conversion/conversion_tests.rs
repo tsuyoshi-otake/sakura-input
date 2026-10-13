@@ -1553,6 +1553,87 @@ fn classified_literal_inputs_validate_only_their_checked_policy_pair() {
 }
 
 #[test]
+fn exact_literal_surface_preserves_candidate_metadata() {
+    let bytes = synthetic_dictionary(&[fixture_entry("かな", "仮名", 1, EntryFlags::NONE)]);
+    let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+    let mut converter = Converter::new();
+    let result = converter
+        .convert_input_detailed(
+            &dictionary,
+            ConversionInput::new(
+                "なzか",
+                "なzか",
+                ConversionInputClass::MixedUnresolvedLatin,
+                LiteralPolicy::ExactOnly,
+            ),
+            ConversionOptions::default(),
+        )
+        .expect("exact-only conversion");
+    let original = &result.candidates()[0];
+    assert!(original.is_synthetic_exact());
+    assert_eq!(original.segments().len(), 1);
+    let surface = "nazka";
+    let replaced = original
+        .with_exact_literal_surface(surface)
+        .expect("single-segment synthetic literal accepts a new surface");
+    assert_eq!(replaced.text(), surface);
+    assert_eq!(replaced.segments()[0].text_start, 0);
+    assert_eq!(usize::from(replaced.segments()[0].text_end), surface.len());
+
+    // Whole-value equality covers all current and future metadata fields,
+    // including the reading range, provenance, cost and learning authority.
+    let mut expected = original.clone();
+    expected.text.clear();
+    expected.text.push_str(surface).expect("expected surface");
+    let segment = expected.segments.get_mut(0).expect("single segment");
+    segment.text_start = 0;
+    segment.text_end = u16::try_from(surface.len()).expect("surface length");
+    assert_eq!(replaced, expected);
+    assert_eq!(original.text(), "なzか", "source candidate stays unchanged");
+}
+
+#[test]
+fn exact_literal_surface_rejects_lexical_empty_and_multisegment_candidates() {
+    let bytes = synthetic_dictionary(&[fixture_entry("かな", "仮名", 1, EntryFlags::NONE)]);
+    let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+    let mut converter = Converter::new();
+    let lexical = converter
+        .convert(&dictionary, "かな", ConversionOptions::default())
+        .expect("dictionary conversion")
+        .iter()
+        .find(|candidate| candidate.text() == "仮名")
+        .expect("dictionary candidate");
+    assert!(!lexical.is_synthetic_exact());
+    assert!(lexical.system_entry_index().is_some());
+    assert_eq!(lexical.with_exact_literal_surface("kana"), None);
+
+    let result = converter
+        .convert_input_detailed(
+            &dictionary,
+            ConversionInput::new(
+                "なzか",
+                "なzか",
+                ConversionInputClass::MixedUnresolvedLatin,
+                LiteralPolicy::ExactOnly,
+            ),
+            ConversionOptions::default(),
+        )
+        .expect("exact-only conversion");
+    let literal = &result.candidates()[0];
+    assert!(literal.is_synthetic_exact());
+    assert_eq!(literal.with_exact_literal_surface(""), None);
+
+    // Production ExactOnly emits one segment. Construct a synthetic
+    // multi-segment shape here to isolate that independent rejection guard.
+    let mut multisegment = literal.clone();
+    let segment = multisegment.segments()[0];
+    multisegment.segments.push(segment).expect("second segment");
+    assert_eq!(multisegment.segments().len(), 2);
+    assert!(multisegment.is_synthetic_exact());
+    assert_eq!(multisegment.with_exact_literal_surface("nazka"), None);
+}
+
+#[test]
 fn exact_only_returns_one_literal_and_consumes_one_shot_state() {
     let bytes = synthetic_dictionary(&[
         fixture_entry("こんにちは", "こんにちは", 1, EntryFlags::NONE),
