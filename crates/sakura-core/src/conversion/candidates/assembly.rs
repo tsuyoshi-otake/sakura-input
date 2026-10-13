@@ -89,6 +89,21 @@ impl ConversionCandidate {
         self.synthetic_exact
     }
 
+    /// Copies a whole-reading synthetic literal with a caller-owned surface.
+    /// Lexical candidates cannot acquire synthetic authority through this API.
+    pub fn with_exact_literal_surface(&self, surface: &str) -> Option<Self> {
+        if !self.synthetic_exact || self.segments.len() != 1 || surface.is_empty() {
+            return None;
+        }
+        let mut candidate = self.clone();
+        candidate.text.clear();
+        candidate.text.push_str(surface).ok()?;
+        let segment = candidate.segments.get_mut(0)?;
+        segment.text_start = 0;
+        segment.text_end = u16::try_from(surface.len()).ok()?;
+        Some(candidate)
+    }
+
     pub const fn origin(&self) -> CandidateOrigin {
         self.origin
     }
