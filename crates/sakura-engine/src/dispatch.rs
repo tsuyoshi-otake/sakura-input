@@ -1973,14 +1973,68 @@ pub(crate) fn take_conversion_lookup_count_for_test() -> u64 {
     TEST_CONVERSION_LOOKUPS.with(|count| count.replace(0))
 }
 
-fn with_session_conversion_input<R>(
+#[derive(Clone, Copy)]
+struct SessionConversionInput<'a> {
+    input: ConversionInput<'a>,
+    raw_ascii: Option<&'a str>,
+}
+
+impl<'a> From<ConversionInput<'a>> for SessionConversionInput<'a> {
+    fn from(input: ConversionInput<'a>) -> Self {
+        Self {
+            input,
+            raw_ascii: None,
+        }
+    }
+}
+
+/// The engine alone owns raw-key admission and candidate ordering. Keep the
+/// core's ExactOnly contract unchanged and reuse synthetic literal metadata.
+fn consume_session_candidates<R>(
+    input: SessionConversionInput<'_>,
+    candidates: &[ConversionCandidate],
+    diagnostics: ConversionDiagnostics,
+    consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
+) -> R {
+    let Some(raw) = input.raw_ascii else {
+        return consume(candidates, diagnostics);
+    };
+    if candidates
+        .first()
+        .is_some_and(|candidate| candidate.text() == raw)
+    {
+        return consume(candidates, diagnostics);
+    }
+    let Some(literal) = candidates
+        .first()
+        .and_then(|candidate| candidate.with_exact_literal_surface(raw))
+    else {
+        return consume(candidates, diagnostics);
+    };
+    let mut ordered = Vec::with_capacity(candidates.len() + 1);
+    ordered.push(literal);
+    ordered.extend(
+        candidates
+            .iter()
+            .filter(|candidate| candidate.text() != raw)
+            .cloned(),
+    );
+    consume(&ordered, diagnostics)
+}
+
+fn with_session_conversion_input<'a, R>(
     conversion: &ConversionService,
     learning: Option<&LearningService>,
-    input: ConversionInput<'_>,
+    input: impl Into<SessionConversionInput<'a>>,
     options: ConversionOptions,
     bridge: Option<CrossCommitBridge<'_>>,
     consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
 ) -> Result<R, crate::dictionary::ConvertFailure> {
+    let session_input = input.into();
+    let input = session_input.input;
+    let consume = |candidates: &[ConversionCandidate], diagnostics| {
+        consume_session_candidates(session_input, candidates, diagnostics, consume)
+    };
     let hints = if input.literal_policy == LiteralPolicy::Ranked {
         commit_repair_readings_for(input.lookup_reading, learning, options)
     } else {
@@ -2002,7 +2056,7 @@ fn with_session_conversion_input<R>(
 fn session_conversion_input<'a>(
     session: &'a Session,
     lookup_reading: &'a str,
-) -> ConversionInput<'a> {
+) -> SessionConversionInput<'a> {
     let exact_surface = if session.conversion_exact_surface().is_empty() {
         lookup_reading
     } else {
@@ -2024,9 +2078,10 @@ fn session_conversion_input<'a>(
                 lookup_reading,
                 ConversionInputClass::MixedUnresolvedLatin,
                 LiteralPolicy::ExactOnly,
-            );
+            )
+            .into();
         }
-        return ConversionInput::ordinary(lookup_reading);
+        return ConversionInput::ordinary(lookup_reading).into();
     }
     if session.literal_policy() == LiteralPolicy::ExactTop1
         && !session.staged_exact_surface_matches_current()
@@ -2037,30 +2092,43 @@ fn session_conversion_input<'a>(
                 lookup_reading,
                 ConversionInputClass::OpaqueAsciiIdentifier,
                 LiteralPolicy::ExactTop1,
-            );
+            )
+            .into();
         }
-        return ConversionInput::ordinary(lookup_reading);
+        return ConversionInput::ordinary(lookup_reading).into();
     }
-    ConversionInput::new(
+    let input = ConversionInput::new(
         lookup_reading,
         exact_surface,
         session.conversion_input_class(),
         session.literal_policy(),
-    )
+    );
+    let raw = session.raw_input.as_str();
+    let raw_ascii = (session.mode == Mode::Hiragana
+        && !session.shifted_ascii
+        && session.input_method == InputMethod::Romaji
+        && session.literal_policy() == LiteralPolicy::ExactOnly
+        && session.raw_provenance() == RawProvenanceState::AppendOnly
+        && lookup_reading == session.preedit.as_str()
+        && !raw.is_empty()
+        && raw.is_ascii())
+    .then_some(raw);
+    SessionConversionInput { input, raw_ascii }
 }
 
 /// Input-aware one-slot conversion. The dictionary service keeps the slot
 /// through both direct and corrected passes; this helper never recursively
 /// calls a second `ConversionService` lookup.
-fn with_session_raw_conversion<R>(
+fn with_session_raw_conversion<'a, R>(
     conversion: &ConversionService,
     learning: Option<&LearningService>,
-    input: ConversionInput<'_>,
+    input: impl Into<SessionConversionInput<'a>>,
     plans: &[RawRepairPlan],
     options: ConversionOptions,
     bridge: Option<CrossCommitBridge<'_>>,
     consume: impl FnOnce(&[ConversionCandidate], ConversionDiagnostics) -> R,
 ) -> Result<R, crate::dictionary::ConvertFailure> {
+    let session_input = input.into();
     // A normal conversion has no corrected pass to run.  Keep it on the
     // ordinary one-slot path instead of entering the raw-repair multipass
     // frame merely to perform its direct lookup.  Besides avoiding needless
@@ -2068,9 +2136,15 @@ fn with_session_raw_conversion<R>(
     // the raw helper is reserved for requests that actually admitted a plan.
     if plans.is_empty() {
         return with_session_conversion_input(
-            conversion, learning, input, options, bridge, consume,
+            conversion,
+            learning,
+            session_input,
+            options,
+            bridge,
+            consume,
         );
     }
+    let input = session_input.input;
     let hints = if input.literal_policy == LiteralPolicy::Ranked {
         commit_repair_readings_for(input.lookup_reading, learning, options)
     } else {
@@ -2079,13 +2153,21 @@ fn with_session_raw_conversion<R>(
     let hint_refs: Vec<&str> = hints.iter().map(FixedStr::as_str).collect();
     #[cfg(test)]
     record_conversion_lookup_for_test();
-    conversion.with_raw_repair_conversion_input_hints(input, plans, options, &hint_refs, consume)
+    conversion.with_raw_repair_conversion_input_hints(
+        input,
+        plans,
+        options,
+        &hint_refs,
+        |candidates, diagnostics| {
+            consume_session_candidates(session_input, candidates, diagnostics, consume)
+        },
+    )
 }
 
-fn with_session_candidates_input<R>(
+fn with_session_candidates_input<'a, R>(
     conversion: &ConversionService,
     learning: Option<&LearningService>,
-    input: ConversionInput<'_>,
+    input: impl Into<SessionConversionInput<'a>>,
     options: ConversionOptions,
     consume: impl FnOnce(&[ConversionCandidate]) -> R,
 ) -> Result<R, crate::dictionary::ConvertFailure> {
@@ -4056,7 +4138,7 @@ fn commit_numbered_candidate(
             let input = if full_span {
                 session_conversion_input(session, reading)
             } else {
-                ConversionInput::ordinary(reading)
+                ConversionInput::ordinary(reading).into()
             };
             let mut choose = |candidates: &[ConversionCandidate]| -> Result<Option<i16>, Overflow> {
                 if candidates.is_empty() {
@@ -4746,7 +4828,7 @@ fn commit_converted_segments(
         let input = if full_span {
             session_conversion_input(session, reading)
         } else {
-            ConversionInput::ordinary(reading)
+            ConversionInput::ordinary(reading).into()
         };
         let mut selected_surface = FixedStr::<MAX_PREEDIT_BYTES>::new();
         let mut render_candidate =
@@ -6627,7 +6709,7 @@ fn render_converted_segments(
         let input = if full_span {
             session_conversion_input(session, reading)
         } else {
-            ConversionInput::ordinary(reading)
+            ConversionInput::ordinary(reading).into()
         };
         let mut render_candidates = |candidates: &[ConversionCandidate]| -> Result<
             Option<(i16, usize, CommitSegmentMeta)>,
