@@ -2764,3 +2764,35 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   - An independent fresh-context verifier (rubric-verifier) passed 8 of 8 criteria. It ran the 6 issue_305 lib/dispatch tests and the 48 shipped ranking tests itself, read the diff to confirm the no-conflict path equals the old `best` and that conflict detection is order-independent, and found no personal data in added lines. It also confirmed that fmt, clippy and process-clean pass.
 - Not verified: an on-screen check with the owner's real learning store. Items 1 (restore the pre-erase left context) and 3 (longer staging window) are deferred until this change is measured.
 - Learning: in sakura-tmux, `send-keys -t %3 '<text>' Enter` leaves the text in Codex's input box. Send the text, wait 1 s, then send `Enter` as a separate `send-keys`. `new-session`/`new-window` are `unsupported-surface` and `list-panes -F` is `format-error`; use plain `list-panes -a` and an existing pane.
+## 2026-10-13 Whole loanwords lead over kanji + katakana splits (#307)
+
+- Symptom (conversion-history audit, same day): loanword readings split into a kanji plus a katakana fragment, for example 案インストール, 今鳥ビューション and 枚ナンバー.
+- Root cause, from Codex's read-only plan and confirmed by the RED costs:
+  - めんしょん: メンション already leads with no learning (7211 against 面ション 11135). The audit's 面ション was not reproduced on current HEAD; the issue's "still wrong without learning" premise was wrong.
+  - あんいんすとーる: the exact アンインストール (6208) loses by 47 to 案+インストール (6161). The compound IT coherence bonus is -1200 for queries of 7 or more characters, and インストール is a cheap glossary tail.
+  - こんとりびゅーしょん and まいなんばー: the whole words are absent. Their upstream Mozc costs (7471 and 7933) exceed the 6900 trim ceiling.
+- Fix (data only, `data/conversion-priorities.tsv`):
+  - アンインストール 1841/1841: 4500, `predict` at 5700.
+  - コントリビューション 1851/1851: 7471, conversion-only.
+  - マイナンバー 1851/1851: 4500, `predict` at 5700.
+  - `data/dictionary-build.report.json` was regenerated with `-UpdateCheckedInData`.
+  - No glossary or runtime scoring change, and no "loanword-shaped" heuristic. #41's general split problem stays open.
+- Contract found during review: `dictc-core/tests/conversion_priorities.rs::every_row_keeps_the_prediction_status_its_own_cost_earns` requires every priorities row at or below 6000 to carry `predict` with word cost + 1200. マイナンバー must stay at or below 5537 to beat 枚ナンバー (6603), so it cannot be conversion-only. The rule in `docs/rules/session-and-later-findings.md` that curated kana rows are conversion-only belongs to curated-terms, not to this overlay.
+- Verification:
+  - RED against the main image (`6659f579…`): 3 of 4 new `issue_307_*` tests failed with the split leading. The control test passed. The run took 26 s.
+  - Build: `build-dictionary.ps1 -OutputDirectory <task dir> -UpdateCheckedInData`, 91 s with the two-pass determinism check. New image `1a40a469…`, 37,382,740 bytes.
+  - `-UpdateCheckedInData` rewrote `it-terms.tsv`, `it-terms.report.json` and `mozc-trim.report.json` with LF line endings only (`git diff --ignore-cr-at-eol` was empty), so they were restored. In the report, only the priorities input, category 09 and the image changed.
+  - GREEN, 196 s, all PASS: fmt, the priorities contract, `issue_307_*`, the full shipped suite `--ignored` (release) and the non-initial allomorph gate on the new image, clippy `-D warnings`, wrapped workspace tests, IRV SelfTest, `git diff --check`, process-clean.
+  - Held-out corpus-eval, old vs new: Sakura 59/60, IT 30/30 on both, with p99 at 2.642 and 2.681 ms (single runs).
+  - candidate-sweep over 48 readings (targets, controls, prefixes, containing phrases, tuning corpus), with IT on and off: only the 3 target readings changed top-1.
+  - Full candidate dump: every ExactSystem and Fallback candidate remains. The 107 removed candidates are all composites or repairs of the 3 targets, pruned by the exact-quality gate as documented.
+  - An independent fresh-context verifier passed 8 of 8 rubric criteria on 9ef1f4b:
+    - it reran RED on the old image (1 passed, 3 failed) and GREEN on the new one (4 passed; the full shipped file 50 passed);
+    - the priorities contract passed 8 of 8;
+    - the report hashes and sizes match the new image and the TSV;
+    - only the 4 intended files changed, and no personal data was added;
+    - held-out scores were equal, and process-clean passed.
+- Learning:
+  - Check the overlay's own contract test before choosing a prediction policy for a priorities row.
+  - `-UpdateCheckedInData` rewrites unchanged generated files with LF; compare with `--ignore-cr-at-eol` and restore pure line-ending changes.
+  - The image can shrink when entries are added: 1,056 bytes here, with 3 rows added.
