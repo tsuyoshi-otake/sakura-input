@@ -66,3 +66,13 @@
   `data/*.tsv` row, print the raw bytes of the changed rows (Python
   `repr()` on the CRLF-split line) and confirm `git diff` shows only the
   intended lines.
+
+- **Restoring a swapped source file with its old mtime hides it from Cargo.**
+  Verified 2026-10-13 (#306): a fail-before run copied origin/main's
+  `lattice.rs` over the working file and later restored the new file with
+  PowerShell `Copy-Item`, which keeps the source's LastWriteTime. The restored
+  mtime predated the old-engine build outputs, so Cargo's mtime fingerprint
+  did not rebuild `sakura-core`. The "new engine" shipped tests and candidate
+  sweep that followed silently ran the old engine. After restoring a swapped
+  file, `touch` it (or copy with bash `cp` without `-p`), and confirm that the
+  next build prints `Compiling <crate>` before trusting the run.

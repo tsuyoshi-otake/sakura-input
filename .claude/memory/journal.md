@@ -2797,3 +2797,31 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   - Check the overlay's own contract test before choosing a prediction policy for a priorities row.
   - `-UpdateCheckedInData` rewrites unchanged generated files with LF; compare with `--ignore-cr-at-eol` and restore pure line-ending changes.
   - The image can shrink when entries are added: 1,056 bytes here, with 3 rows added.
+
+## 2026-10-13 The がわ/川 boundary alias no longer wins inside phrases that have no exact reading (#306)
+
+- Symptom: the conversion-history audit found productive 〜側 compounds committed as 川, for example サーバーがわ → サーバー川. The same happened for クライアント, ユーザー, 利用者, 運用, 管理者 and ホスト, bare and before の/を/に/で.
+- Root cause: `data/non-initial-boundary-policy.tsv` approves がわ/川 as `allow-initial`, so the compiler generates an initial-safe alias from the unvoiced base かわ/川 with the general-noun identity 1851/1851 (cost 1667). The alias exists so 川 stays available after a composition boundary, but the lattice admitted it at every position. After a noun (right id 2653) its connection cost is 569, against 7221 for the native suffix row 川 2019, so サーバー+ー+川 (7129) beat サーバー(1851)+側(1949) (9302).
+- Rejected designs (measured, not guessed):
+  - a post-search coherence pass: 296 exact-word regressions in the 1,817-reading sweep, and readings followed by a particle stayed wrong;
+  - plan-306b (a second search with witness storage and a penalty kept consistent across `add_node`, `compute_suffix_costs` and N-best): too heavy and cross-cutting for one homophone preference;
+  - a strict initial-only alias: fails R1 for 21 whole words (石川-type names).
+- Fix (plan-306c's recommended variant, chosen by Claude as director; Codex implemented it, Claude built and measured):
+  - New policy decision `prefer-boundary`, accepted only for がわ/川.
+  - `EntryFlags::BOUNDARY_ALIAS` (bit 5, TSV token `boundary-alias`) is set on the generated 1851/1851 alias only. The compiler fails if the decision would hit a released native row or another identity.
+  - The lattice computes once per query whether any system entry consumes the whole reading. At start > 0 a BOUNDARY_ALIAS entry is admitted only with that evidence. Start 0 keeps the NON_INITIAL rule. Local repairs use the same predicate `admits_system_boundary`.
+  - The trim report gains the additive `boundary_alias_entries` (schema 4 unchanged). No cost, score or search change. Older engines ignore bit 5.
+  - Residual risk, stated at the predicate: the guard is query-level, so a protected name inside a longer phrase (あおがわのほとり) can still lose its internal alias edge.
+- Verification:
+  - New image: exactly 1 `boundary-alias` row (がわ 川 1851 1851); trim report 58 generated / 2 released / 1 boundary alias.
+  - Unit tests: sakura-core 5, dictc-core 2 (+ image and overlay tests), sakura-engine 1, all pass.
+  - Shipped groups (IT bias 0/100/1000 × limits 18/default): 5/5 pass on new engine + new image. Productive and Appendix B groups fail on old engine + old image, old engine + new image, and new engine + old image. Phrase and 済み groups pass everywhere.
+  - Only 9 of the 16 Appendix B readings fail before the fix through the engine; 7 already lead with 側 on main and act as preservation controls. The core sweep changes all 16.
+  - R1 correction: ちがわ at IT bias 1000 ranks 値川 first on main too (pre-existing, outside #306), so ちがわ→違わ is asserted at IT 0/100 only.
+  - Mutation: dropping `|| has_exact_system_reading` fails 3 core unit tests and the R1 group (20 Appendix C names flip).
+  - Sweep, 1,847 readings × IT on/off: 46 top-1 changes, all X川→X側 targets; 0 changes where the old leader was an exact (reading, surface) pair from the 562,197 release pairs. Tuning corpus: 0 of 20 changed. Held-out corpus-eval: 59/60 and IT 30/30 before and after.
+  - Local CI gates on the new image, 18 of 18 PASS in 242 s: fmt, clippy `-D warnings` (release feature set), workspace tests, dependency rules, facade, dep-policy (+SelfTest), IRV SelfTest/compare, `git diff --check`, process-clean.
+  - An independent fresh-context verifier (rubric-verifier) passed 9 of 9 criteria. It reran the image and report checks, the focused and shipped tests (5/5 on the new image; productive and Appendix B fail on the old image), four sweeps (46 changes per mode, 0 exact-leader changes), held-out on both images, the scope review and a public-repo hygiene scan, and found no surviving processes.
+- Measurement failure caught during this work: restoring `lattice.rs` with PowerShell `Copy-Item` kept its old mtime, so Cargo skipped rebuilding `sakura-core`. The first "new engine + old image" run and the first "new" sweep silently used the old engine. Both were rerun after `touch` with `Compiling sakura-core` confirmed. Rule added to `docs/rules/this-machine.md`.
+- Follow-ups outside this issue: おがわ leads with お川; ちがわ at IT bias 1000 leads with 値川.
+- IRV: the reason for change stays in the boundary-policy owner (`category.rs` + policy TSV) and one lattice admission predicate with a truth-table test. The next boundary-alias issue reads `admits_system_boundary`, its truth table and the policy decision values, not the search or ranking internals.
