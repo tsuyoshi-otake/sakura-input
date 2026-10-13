@@ -1990,13 +1990,11 @@ fn developer_history_captures_real_keys_but_not_test_unclassified_or_sensitive_k
         },
         &mut out,
     );
-    dispatcher.dispatch(
-        &Request::SendKey {
-            session,
-            key: char_key('u'),
-        },
-        &mut out,
-    );
+    for repeat in [false, true] {
+        let mut key = char_key('u');
+        key.repeat = repeat;
+        dispatcher.dispatch(&Request::SendKey { session, key }, &mut out);
+    }
     dispatcher.dispatch(
         &Request::SetInputScope {
             session,
@@ -2018,10 +2016,28 @@ fn developer_history_captures_real_keys_but_not_test_unclassified_or_sensitive_k
         },
         &mut out,
     );
+    let mut repeat_key = char_key('a');
+    repeat_key.repeat = true;
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: repeat_key,
+        },
+        &mut out,
+    );
     dispatcher.dispatch(
         &Request::SendKey {
             session,
             key: test_only_char_key('x'),
+        },
+        &mut out,
+    );
+    let mut repeat_probe = test_only_char_key('x');
+    repeat_probe.repeat = true;
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: repeat_probe,
         },
         &mut out,
     );
@@ -2039,13 +2055,11 @@ fn developer_history_captures_real_keys_but_not_test_unclassified_or_sensitive_k
         (InputScope::Digits, 'd'),
     ] {
         dispatcher.dispatch(&Request::SetInputScope { session, scope }, &mut out);
-        dispatcher.dispatch(
-            &Request::SendKey {
-                session,
-                key: char_key(character),
-            },
-            &mut out,
-        );
+        for repeat in [false, true] {
+            let mut key = char_key(character);
+            key.repeat = repeat;
+            dispatcher.dispatch(&Request::SendKey { session, key }, &mut out);
+        }
     }
     history.flush().expect("flush");
 
@@ -2058,10 +2072,10 @@ fn developer_history_captures_real_keys_but_not_test_unclassified_or_sensitive_k
             _ => None,
         })
         .collect();
-    assert_eq!(keys.len(), 2);
+    assert_eq!(keys.len(), 3);
     let stats = history.stats().snapshot();
-    assert_eq!(stats.excluded_unclassified_events, 1);
-    assert_eq!(stats.excluded_sensitive_events, 4);
+    assert_eq!(stats.excluded_unclassified_events, 2);
+    assert_eq!(stats.excluded_sensitive_events, 8);
     // Probe evaluation is deliberately side-effect free. The history
     // service still exposes a defensive test-only admission counter, but
     // a real Probe never reaches that admission boundary.
@@ -2070,10 +2084,18 @@ fn developer_history_captures_real_keys_but_not_test_unclassified_or_sensitive_k
     assert_eq!(record.character, Some('k'));
     assert_eq!(record.scope, HistoryScope::Normal);
     assert_eq!(record.session, 1);
+    assert!(!record.repeat);
     let next = keys[1];
     assert_eq!(next.character, Some('a'));
+    assert!(!next.repeat);
     assert_eq!(next.preedit_before, record.preedit_after);
     assert_ne!(next.preedit_before, "ka");
+    let repeat = keys[2];
+    assert_eq!(repeat.character, Some('a'));
+    assert!(repeat.repeat);
+    assert_eq!(repeat.scope, HistoryScope::Normal);
+    assert_eq!(repeat.session, record.session);
+    assert_eq!(repeat.preedit_before, next.preedit_after);
     history.stop().expect("stop");
     let _ = std::fs::remove_file(path);
 }
@@ -9693,6 +9715,110 @@ fn process_shared_learning_reselects_a_homophone_in_a_new_session() {
             .exact,
         Some(1)
     );
+}
+
+#[test]
+fn issue_305_one_correction_beats_repeated_wrong_commits_in_a_fresh_session() {
+    // #305: one explicit correction beats repeated wrong commits, including beyond
+    // the weak index gate, in a fresh session with no correcting-session cache.
+    let conversion = conversion_fixture();
+    let mut observations = Vec::new();
+    for count in [1, 4, 15, 100] {
+        let learning = Arc::new(LearningService::memory());
+        let mut dispatcher =
+            Dispatcher::new_with_services(Arc::clone(&conversion), Arc::clone(&learning))
+                .expect("isolated learning dispatcher");
+        let mut out = OutputBuf::new();
+        let first = create_session(&mut dispatcher, &mut out, "issue-305-choice.exe");
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::SetInputScope {
+                    session: first,
+                    scope: InputScope::Normal,
+                },
+                &mut out,
+            ),
+            Reply::Message(Response::Ok)
+        );
+        for _ in 0..count {
+            type_word(&mut dispatcher, first, "kana", &mut out);
+            send_keys(
+                &mut dispatcher,
+                first,
+                &[named_key(KeyCode::Space), named_key(KeyCode::Enter)],
+                &mut out,
+            );
+            assert_eq!(out.commit_text(), Some("仮名"));
+            learning.confirm_all_staged();
+        }
+        type_word(&mut dispatcher, first, "kana", &mut out);
+        send_keys(
+            &mut dispatcher,
+            first,
+            &[named_key(KeyCode::Space)],
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "仮名");
+        assert_eq!(out.candidate(3).map(|(surface, _)| surface), Some("候補04"));
+        send_keys(
+            &mut dispatcher,
+            first,
+            &[
+                named_key(KeyCode::Down),
+                named_key(KeyCode::Down),
+                named_key(KeyCode::Down),
+            ],
+            &mut out,
+        );
+        assert_eq!(
+            out.preedit_text(),
+            "候補04",
+            "explicit selection for k={count}"
+        );
+        send_keys(
+            &mut dispatcher,
+            first,
+            &[named_key(KeyCode::Enter)],
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("候補04"));
+        learning.confirm_all_staged();
+
+        let fresh = create_session(&mut dispatcher, &mut out, "issue-305-fresh.exe");
+        assert_ne!(first, fresh);
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::SetInputScope {
+                    session: fresh,
+                    scope: InputScope::Normal,
+                },
+                &mut out,
+            ),
+            Reply::Message(Response::Ok)
+        );
+        type_word(&mut dispatcher, fresh, "kana", &mut out);
+        send_keys(
+            &mut dispatcher,
+            fresh,
+            &[named_key(KeyCode::Space)],
+            &mut out,
+        );
+        let selected = out.preedit_text().to_owned();
+        send_keys(
+            &mut dispatcher,
+            fresh,
+            &[named_key(KeyCode::Enter)],
+            &mut out,
+        );
+        observations.push((count, selected, out.commit_text().map(str::to_owned)));
+    }
+    for (count, selected, committed) in observations {
+        assert_eq!(
+            (selected.as_str(), committed.as_deref()),
+            ("候補04", Some("候補04")),
+            "one correction after k={count} wrong commits must select and commit the correction"
+        );
+    }
 }
 
 #[test]

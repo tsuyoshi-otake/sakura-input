@@ -47,6 +47,17 @@ suppressed. The schema-4 trim report records the raw classifier totals, all 287
 audited blocked pairs, the 60 approved pairs, the retained pairs, the released
 and generated initial-entry counts, and the policy SHA-256.
 
+For #306, `prefer-boundary` is restricted to `がわ → 川`: only its generated
+1851/1851 alias carries `boundary-alias` (bit 5). It remains eligible at the
+start of conversion and prediction. Inside a conversion query it is excluded
+unless some system entry consumes the exact whole reading. This query-level
+exception preserves whole-reading names and compounds; it does not protect
+each word embedded in a longer phrase. Original suffix identities and the
+other 57 generated aliases are unchanged. Engine and dictionary image must
+ship together: older engines can parse the bit but ignore its admission rule.
+The additive `boundary_alias_entries` report field counts these flagged aliases;
+the existing schema-4 totals still count all 58 generated and two released rows.
+
 The dictionary compiler also expands Mozc 基本形 verbs and i-adjectives into fused conjugations (`来て`, `書いて`, `行って`, `高くて`, …) at build time. Sakura stores static lattice edges and does not inflect at runtime, so the Mozc trim can keep `来る` while dropping `来て`. `inflection-expand` reads the trimmed system TSV plus pinned `id.def`, emits only missing `(reading, surface)` pairs, and keeps Mozc connection ids. The generated overlay is `LicenseRef-Mozc-Dictionary` and is not checked in; `scripts/build-dictionary.ps1` rebuilds it every pass.
 
 The Sakura system dictionary is maintained as fourteen canonical category

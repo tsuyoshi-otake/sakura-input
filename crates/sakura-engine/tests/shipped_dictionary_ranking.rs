@@ -2295,6 +2295,115 @@ fn issue_282_learned_short_words_stay_one_step_from_the_top() {
     }
 }
 
+// #305: one 返信 correction must displace accumulated 変身 learning in a fresh
+// session; both exact right IDs come from the built dictionary.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_305_henshin_correction_beats_accumulated_learning() {
+    let conversion = open_conversion();
+    let keys = conversion
+        .with_candidates("へんしん", ConversionOptions::default(), |candidates| {
+            ["変身", "返信"].map(|surface| {
+                let right_id = candidates
+                    .iter()
+                    .find(|candidate| candidate.text() == surface)
+                    .and_then(|candidate| candidate.segments().last())
+                    .unwrap_or_else(|| panic!("missing {surface} in the built dictionary"))
+                    .right_id;
+                (surface, right_id)
+            })
+        })
+        .expect("へんしん conversion");
+    let learning = Arc::new(LearningService::memory());
+    for _ in 0..15 {
+        learning.learn("へんしん", keys[0].0, 0, keys[0].1);
+    }
+    let mut dispatcher = Dispatcher::new_with_services(conversion, Arc::clone(&learning))
+        .expect("isolated learning dispatcher");
+    let first = create_normal_session(&mut dispatcher, "issue-305-henshin-choice.exe");
+    assert_eq!(
+        commit_named_converted_romaji(&mut dispatcher, first, "hennshinn", "返信"),
+        "返信"
+    );
+    assert!(matches!(
+        dispatcher.dispatch(
+            &Request::ResetDocumentContext { session: first },
+            &mut OutputBuf::new(),
+        ),
+        Reply::Message(Response::Ok)
+    ));
+    let exact = learning.preference("へんしん", 0, keys).exact;
+    let fresh = create_normal_session(&mut dispatcher, "issue-305-henshin-fresh.exe");
+    assert_ne!(first, fresh);
+    type_romaji(&mut dispatcher, fresh, "hennshinn");
+    let selected = send_key(&mut dispatcher, fresh, space_key())
+        .preedit_text()
+        .to_owned();
+    let committed = send_key(&mut dispatcher, fresh, enter_key())
+        .to_output()
+        .commit;
+    assert_eq!(
+        (selected.as_str(), committed.as_deref()),
+        ("返信", Some("返信"))
+    );
+    assert_eq!(
+        exact,
+        Some(1),
+        "the dictionary's exact right ID must match learning"
+    );
+}
+
+// #305/#282: a single near-candidate choice must be selected and committed on
+// repetition in a fresh session, not just remain present in the candidate list.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_305_one_kannji_selection_is_selected_and_committed_next_time() {
+    for (reading, romaji, surface) in [("かんじ", "kannji", "漢字"), ("ほしい", "hoshii", "欲しい")]
+    {
+        let conversion = open_conversion();
+        let rank = conversion
+            .with_candidates(reading, ConversionOptions::default(), |candidates| {
+                candidates
+                    .iter()
+                    .position(|candidate| candidate.text() == surface)
+            })
+            .expect("short-reading conversion");
+        assert!(
+            rank.is_some_and(|rank| rank <= 1),
+            "#282 near-candidate floor: {reading}"
+        );
+        let learning = Arc::new(LearningService::memory());
+        let mut dispatcher = Dispatcher::new_with_services(conversion, learning)
+            .expect("isolated learning dispatcher");
+        let first = create_normal_session(&mut dispatcher, "issue-305-short-choice.exe");
+        assert_eq!(
+            commit_named_converted_romaji(&mut dispatcher, first, romaji, surface),
+            surface
+        );
+        assert!(matches!(
+            dispatcher.dispatch(
+                &Request::ResetDocumentContext { session: first },
+                &mut OutputBuf::new(),
+            ),
+            Reply::Message(Response::Ok)
+        ));
+        let fresh = create_normal_session(&mut dispatcher, "issue-305-short-fresh.exe");
+        assert_ne!(first, fresh);
+        type_romaji(&mut dispatcher, fresh, romaji);
+        let selected = send_key(&mut dispatcher, fresh, space_key())
+            .preedit_text()
+            .to_owned();
+        let committed = send_key(&mut dispatcher, fresh, enter_key())
+            .to_output()
+            .commit;
+        assert_eq!(
+            (selected.as_str(), committed.as_deref()),
+            (surface, Some(surface)),
+            "{reading}: a learned near choice must reach the document"
+        );
+    }
+}
+
 /// Issue #282: a yielded glossary term keeps leading the IT compounds it
 /// belongs to, and a loanword spelled as its reading (`ヌル`/`ナル`, `リント`,
 /// `ラン`) does not yield at all, because a lifted word cost would reach every
@@ -2424,4 +2533,434 @@ fn issue_291_compounds_of_yielded_words_still_lead() {
         }
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// Issue #307: the first entry is a preservation case; the other three need
+/// whole-word calibration or restoration after the Mozc cost trim.
+const ISSUE_307_LOANWORDS: &[(&str, &str, &str)] = &[
+    ("menshonn", "めんしょん", "メンション"),
+    ("anninsuto-ru", "あんいんすとーる", "アンインストール"),
+    (
+        "kontoribyu-shonn",
+        "こんとりびゅーしょん",
+        "コントリビューション",
+    ),
+    ("mainanba-", "まいなんばー", "マイナンバー"),
+];
+
+fn issue_307_candidate_costs(candidates: &[sakura_core::ConversionCandidate]) -> String {
+    candidates
+        .iter()
+        .enumerate()
+        .map(|(index, candidate)| {
+            format!(
+                "{index}: {:?} cost={} evidence={:?}",
+                candidate.text(),
+                candidate.cost,
+                candidate.evidence_class()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn issue_307_check_lexical_top(
+    conversion: &sakura_engine::dictionary::ConversionService,
+    reading: &str,
+    expected: &str,
+    options: ConversionOptions,
+    failures: &mut Vec<String>,
+) {
+    conversion
+        .with_candidates(reading, options, |candidates| {
+            let correct = candidates.first().is_some_and(|candidate| {
+                candidate.text() == expected
+                    && candidate.evidence_class() == sakura_core::CandidateEvidence::ExactSystem
+                    && candidate.origin() == sakura_core::conversion::CandidateOrigin::Direct
+                    && candidate.has_full_system_coverage(reading.len())
+            });
+            if !correct {
+                failures.push(format!(
+                    "{reading}: expected whole exact-system {expected}; options={options:?}\n{}",
+                    issue_307_candidate_costs(candidates)
+                ));
+            }
+        })
+        .unwrap_or_else(|error| panic!("{reading}: conversion failed: {error}"));
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_307_loanwords_lead_as_whole_lexical_words() {
+    let conversion = open_conversion();
+    let mut failures = Vec::new();
+    for &(_, reading, expected) in ISSUE_307_LOANWORDS {
+        issue_307_check_lexical_top(
+            &conversion,
+            reading,
+            expected,
+            ConversionOptions::default(),
+            &mut failures,
+        );
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_307_loanwords_remain_whole_through_commit() {
+    let conversion = open_conversion();
+    let mut failures = Vec::new();
+    for &(romaji, reading, expected) in ISSUE_307_LOANWORDS {
+        // A new memory-only learning store and session prevent one case's
+        // commit or domain context from changing the next case's selection.
+        let mut dispatcher = open_dispatcher_with_input_method(InputMethod::Romaji);
+        let session = create_normal_session(&mut dispatcher, "issue-307-loanwords.exe");
+        let typed = type_romaji(&mut dispatcher, session, romaji).to_output();
+        let composed: String = typed
+            .preedit
+            .as_ref()
+            .map(|preedit| {
+                preedit
+                    .segments
+                    .iter()
+                    .map(|segment| segment.text.as_str())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let converted = send_key(&mut dispatcher, session, space_key()).to_output();
+        let preedit: String = converted
+            .preedit
+            .as_ref()
+            .map(|preedit| {
+                preedit
+                    .segments
+                    .iter()
+                    .map(|segment| segment.text.as_str())
+                    .collect()
+            })
+            .unwrap_or_default();
+        let committed = send_key(&mut dispatcher, session, enter_key()).to_output();
+        if composed != reading
+            || preedit != expected
+            || committed.commit.as_deref() != Some(expected)
+        {
+            // The wire candidates expose surfaces, not costs. Print them
+            // together with the full core list and its actual ranking costs.
+            let costs = conversion
+                .with_candidates(
+                    reading,
+                    ConversionOptions::default(),
+                    issue_307_candidate_costs,
+                )
+                .expect("loanword cost diagnostics");
+            failures.push(format!(
+                "{romaji}: expected reading={reading}, surface={expected}; \
+                 composed={composed:?}, preedit={preedit:?}, commit={:?}, \
+                 wire_candidates={:?}\ncore candidates:\n{costs}",
+                committed.commit, converted.candidates
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_307_does_not_reprice_constituents_or_japanese_words() {
+    let conversion = open_conversion();
+    let mut failures = Vec::new();
+    for it_bias_per_mille in [0, 100] {
+        let options = ConversionOptions {
+            it_bias_per_mille,
+            ..ConversionOptions::default()
+        };
+        for (reading, expected) in [
+            ("いんすとーる", "インストール"),
+            ("なんばー", "ナンバー"),
+            ("めんてなー", "メンテナー"),
+            ("あんない", "案内"),
+            ("まいにち", "毎日"),
+            ("めんせき", "面積"),
+            ("しょうかい", "紹介"),
+            ("しょうめん", "正面"),
+        ] {
+            conversion
+                .with_candidates(reading, options, |candidates| {
+                    if candidates.first().map(|candidate| candidate.text()) != Some(expected) {
+                        failures.push(format!(
+                            "{reading}: expected {expected}; IT bias={it_bias_per_mille}\n{}",
+                            issue_307_candidate_costs(candidates)
+                        ));
+                    }
+                })
+                .unwrap_or_else(|error| panic!("{reading}: {error}"));
+        }
+        // Preserve full inventories in RED/GREEN logs for comparison without
+        // inventing leaders for these ambiguous standalone constituents.
+        for reading in ["めん", "あん", "まい", "とり"] {
+            conversion
+                .with_candidates(reading, options, |candidates| {
+                    eprintln!(
+                        "#307 constituent {reading}, IT bias={it_bias_per_mille}:\n{}",
+                        issue_307_candidate_costs(candidates)
+                    );
+                    if candidates.is_empty() {
+                        failures.push(format!("{reading}: no constituent candidates; {options:?}"));
+                    }
+                })
+                .unwrap_or_else(|error| panic!("{reading}: {error}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_307_loanwords_survive_it_bias_and_search_limits() {
+    let conversion = open_conversion();
+    let mut failures = Vec::new();
+    for it_bias_per_mille in [0, 100, 1_000] {
+        for max_candidates in [18, ConversionOptions::default().max_candidates] {
+            let options = ConversionOptions {
+                it_bias_per_mille,
+                max_it_boost: 800,
+                max_candidates,
+                ..ConversionOptions::default()
+            };
+            for &(_, reading, expected) in ISSUE_307_LOANWORDS {
+                issue_307_check_lexical_top(&conversion, reading, expected, options, &mut failures);
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+// #306: measured old leaders from sweep306-old-on.tsv, with 小川 read こがわ.
+const ISSUE_306_R1_CONTROLS: &[(&str, &str)] = &[
+    ("いしがわ", "石川"),
+    ("いちがわ", "市川"),
+    ("たまがわ", "多摩川"),
+    ("きそがわ", "木曽川"),
+    ("こがわ", "小川"),
+    ("たつがわ", "立川"),
+    ("まちがわ", "間違わ"),
+    ("ねがわ", "願わ"),
+    ("にじがわ", "二次側"),
+    ("がわ", "川"),
+    ("えどがわ", "江戸川"),
+    ("よどがわ", "淀川"),
+    ("うちがわ", "内側"),
+    ("そとがわ", "外側"),
+    ("みぎがわ", "右側"),
+    ("あおがわ", "青川"),
+    ("ありまがわ", "有馬川"),
+    ("いちのせがわ", "一ノ瀬川"),
+    ("いちばんがわ", "一番川"),
+    ("いろがわ", "色川"),
+    ("おとがわ", "音川"),
+    ("おとこがわ", "男川"),
+    ("おんせんがわ", "温泉川"),
+    ("かみがわ", "神川"),
+    ("じょうげがわ", "上下川"),
+    ("すがたがわ", "姿川"),
+    ("たちばがわ", "立場川"),
+    ("なかのがわ", "中の川"),
+    ("なかまがわ", "仲間川"),
+    ("ながのがわ", "長野川"),
+    ("なつがわ", "夏川"),
+    ("にゅうがわ", "入川"),
+    ("はながわ", "花川"),
+    ("ひがわ", "日川"),
+    ("まがわ", "真川"),
+    ("めがわ", "目川"),
+];
+
+// Through the engine, 9 of 16 fail before #306; 7 already lead on main and are preservation controls.
+const ISSUE_306_APPENDIX_B: &[(&str, &str)] = &[
+    ("こちらがわ", "こちら側"),
+    ("ゆーざーがわ", "ユーザー側"),
+    ("さーばーがわのせってい", "サーバー側の設定"),
+    ("くらいあんとがわでしょり", "クライアント側で処理"),
+    ("ていきょうがわ", "提供側"),
+    ("ろうどうしゃがわ", "労働者側"),
+    ("しようしゃがわ", "使用者側"),
+    ("はっちゅうしゃがわ", "発注者側"),
+    ("じゅちゅうがわ", "受注側"),
+    ("りようしゃがわ", "利用者側"),
+    ("うんようがわ", "運用側"),
+    ("かんりしゃがわ", "管理者側"),
+    ("ほすとがわ", "ホスト側"),
+    ("げすとがわ", "ゲスト側"),
+    ("ふろんとえんどがわ", "フロントエンド側"),
+    ("ばっくえんどがわ", "バックエンド側"),
+];
+
+const ISSUE_306_PHRASE_CONTROLS: &[(&str, &str)] = &[
+    ("なかがわさんにれんらく", "中川さんに連絡"),
+    ("しながわえきでまつ", "品川駅で待つ"),
+    ("えどがわくやくしょ", "江戸川区役所"),
+    ("かがわけんのうどん", "香川県のうどん"),
+    ("たにがわだけ", "谷川岳"),
+];
+
+fn issue_306_candidate_costs(candidates: &[sakura_core::ConversionCandidate]) -> String {
+    candidates
+        .iter()
+        .enumerate()
+        .map(|(index, candidate)| {
+            format!(
+                "{index}: {:?} cost={} evidence={:?}",
+                candidate.text(),
+                candidate.cost,
+                candidate.evidence_class()
+            )
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn issue_306_check_top(
+    conversion: &sakura_engine::dictionary::ConversionService,
+    reading: &str,
+    expected: &str,
+    options: ConversionOptions,
+    failures: &mut Vec<String>,
+) {
+    conversion
+        .with_candidates(reading, options, |candidates| {
+            if candidates.first().map(|candidate| candidate.text()) != Some(expected) {
+                failures.push(format!(
+                    "{reading}: expected {expected}; options={options:?}\n{}",
+                    issue_306_candidate_costs(candidates)
+                ));
+            }
+        })
+        .unwrap_or_else(|error| panic!("{reading}: {error}"));
+}
+
+fn issue_306_check_matrix(cases: &[(&str, &str)]) {
+    let conversion = open_conversion();
+    let mut failures = Vec::new();
+    for it_bias_per_mille in [0, 100, 1_000] {
+        for max_candidates in [18, ConversionOptions::default().max_candidates] {
+            let options = ConversionOptions {
+                it_bias_per_mille,
+                max_it_boost: 800,
+                max_candidates,
+                ..ConversionOptions::default()
+            };
+            for &(reading, expected) in cases {
+                issue_306_check_top(&conversion, reading, expected, options, &mut failures);
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_306_productive_gawa_phrases_survive_it_bias_and_candidate_limits() {
+    let mut cases = Vec::new();
+    for (reading, surface) in [
+        ("さーばー", "サーバー"),
+        ("くらいあんと", "クライアント"),
+        ("ゆーざー", "ユーザー"),
+        ("りようしゃ", "利用者"),
+        ("うんよう", "運用"),
+        ("かんりしゃ", "管理者"),
+        ("ほすと", "ホスト"),
+    ] {
+        for particle in ["", "の", "を", "に", "で"] {
+            cases.push((
+                format!("{reading}がわ{particle}"),
+                format!("{surface}側{particle}"),
+            ));
+        }
+    }
+    cases.push((
+        "さーばーがわのせってい".to_owned(),
+        "サーバー側の設定".to_owned(),
+    ));
+    cases.push((
+        "くらいあんとがわでしょり".to_owned(),
+        "クライアント側で処理".to_owned(),
+    ));
+    assert_eq!(cases.len(), 37);
+    let borrowed: Vec<_> = cases
+        .iter()
+        .map(|(reading, surface)| (reading.as_str(), surface.as_str()))
+        .collect();
+    issue_306_check_matrix(&borrowed);
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_306_appendix_b_productive_changes() {
+    assert_eq!(ISSUE_306_APPENDIX_B.len(), 16);
+    issue_306_check_matrix(ISSUE_306_APPENDIX_B);
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_306_r1_whole_readings_keep_measured_leaders() {
+    assert_eq!(ISSUE_306_R1_CONTROLS.len(), 36);
+    issue_306_check_matrix(ISSUE_306_R1_CONTROLS);
+    // At IT bias 1000 main already ranks 値川 first: pre-existing, outside #306.
+    let conversion = open_conversion();
+    let mut failures = Vec::new();
+    for it_bias_per_mille in [0, 100] {
+        for max_candidates in [18, ConversionOptions::default().max_candidates] {
+            issue_306_check_top(
+                &conversion,
+                "ちがわ",
+                "違わ",
+                ConversionOptions {
+                    it_bias_per_mille,
+                    max_candidates,
+                    ..ConversionOptions::default()
+                },
+                &mut failures,
+            );
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n\n"));
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_306_names_inside_phrases_keep_measured_leaders() {
+    issue_306_check_matrix(ISSUE_306_PHRASE_CONTROLS);
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_306_zumi_and_standalone_candidates_are_preserved() {
+    issue_306_check_matrix(&[
+        ("かくにんずみ", "確認済み"),
+        ("たいおうずみ", "対応済み"),
+        ("しょりずみ", "処理済み"),
+        ("こうにゅうずみ", "購入済み"),
+        ("ずみ", "済み"),
+        ("がわ", "川"),
+    ]);
+    let conversion = open_conversion();
+    for (reading, surfaces) in [
+        ("ずみ", &["済み", "済", "ズミ"][..]),
+        ("がわ", &["川", "側"][..]),
+    ] {
+        conversion
+            .with_candidates(reading, ConversionOptions::default(), |candidates| {
+                for surface in surfaces {
+                    assert!(
+                        candidates
+                            .iter()
+                            .any(|candidate| candidate.text() == *surface),
+                        "{reading}: missing {surface}\n{}",
+                        issue_306_candidate_costs(candidates)
+                    );
+                }
+            })
+            .expect("standalone candidates");
+    }
 }

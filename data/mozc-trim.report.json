@@ -8,7 +8,7 @@
   "max_surfaces_per_reading": null,
   "candidate_cap_unit": "surface",
   "legacy_row_evidence_cap": 12,
-  "non_initial_policy_sha256": "304f66395c6cc0ae6dfd79b13907e07b6f42a76ea10fb843db5d1f1ca0070359",
+  "non_initial_policy_sha256": "cbe7fd29af43528c7736fc3367b03ab69dd093912fcb1545c11f3d6d08152084",
   "input_entries": 1289076,
   "cost_eligible": 467976,
   "duplicate_entries": 8247,
@@ -25,6 +25,7 @@
   "retained_non_initial_pairs": 227,
   "released_non_initial_entries": 2,
   "generated_initial_alias_entries": 58,
+  "boundary_alias_entries": 1,
   "non_initial_entries": 369,
   "output_entries": 459787
 }

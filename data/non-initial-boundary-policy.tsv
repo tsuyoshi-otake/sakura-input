@@ -29,7 +29,7 @@ reading	surface	decision	evidence
 がらみ	絡み	allow-initial	bccwj-short-exact
 がり	刈り	allow-initial	bccwj-short-exact
 がり	狩り	retain-non-initial	reviewed-no-common-boundary-evidence
-がわ	川	allow-initial	bccwj-long-ending-ge-1000
+がわ	川	prefer-boundary	bccwj-long-ending-ge-1000
 がわ	皮	retain-non-initial	reviewed-no-common-boundary-evidence
 がわり	代り	retain-non-initial	reviewed-no-common-boundary-evidence
 がわり	代わり	retain-non-initial	reviewed-no-common-boundary-evidence

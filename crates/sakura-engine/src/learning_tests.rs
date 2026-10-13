@@ -17,6 +17,27 @@ fn temporary_log(name: &str) -> PathBuf {
     directory.join("log.bin")
 }
 
+struct TemporaryLearningLog(PathBuf);
+
+impl TemporaryLearningLog {
+    fn new(name: &str) -> Self {
+        Self(temporary_log(name))
+    }
+}
+
+impl Drop for TemporaryLearningLog {
+    fn drop(&mut self) {
+        let directory = self.0.parent().expect("temporary log parent");
+        if let Err(error) = fs::remove_dir_all(directory) {
+            if std::thread::panicking() {
+                eprintln!("temporary learning cleanup failed: {error}");
+            } else {
+                panic!("temporary learning cleanup failed: {error}");
+            }
+        }
+    }
+}
+
 fn history_contains(service: &LearningService, reading: &str, surface: &str) -> bool {
     let mut found = false;
     service.visit_prediction_history(reading, |candidate_reading, candidate_surface, _, _| {
@@ -184,6 +205,294 @@ fn learning_strength_rejects_one_off_far_choices_and_decays_stale_context() {
 
     // Three 30-day half-lives reduce three confirmations to zero evidence.
     assert_eq!(index.preference("reading", 7, candidates, 190).exact, None);
+}
+
+// #305: a later conflicting exact choice overrides frequency and the weak index gate;
+// an older general preference must not restore the superseded spelling.
+#[test]
+fn issue_305_latest_conflicting_exact_choice_overrides_frequency() {
+    let mut index = Index::new();
+    let candidates = [("変身", 11), ("変心", 12), ("変針", 13), ("返信", 14)];
+    for sequence in 1..=15 {
+        index.learn(0, 11, "へんしん", "変身", 100, sequence);
+    }
+    index.learn(0, 14, "へんしん", "返信", 100, 16);
+
+    let preference = index.preference("へんしん", 0, candidates, 100);
+    assert_eq!(preference.exact, Some(3));
+    assert_eq!(
+        preference.general, None,
+        "old general evidence is neutralized"
+    );
+    for reordered in [
+        [("変心", 12), ("変身", 11), ("変針", 13), ("返信", 14)],
+        [("返信", 14), ("変心", 12), ("変身", 11), ("変針", 13)],
+    ] {
+        let selected = index
+            .preference("へんしん", 0, reordered, 100)
+            .exact
+            .map(|position| reordered[position].0);
+        assert_eq!(selected, Some("返信"), "candidate order is not recency");
+    }
+
+    let mut same_surface = Index::new();
+    for sequence in 1..=15 {
+        same_surface.learn(0, 11, "へんしん", "変身", 100, sequence);
+    }
+    same_surface.learn(0, 14, "へんしん", "変身", 100, 16);
+    assert_eq!(
+        same_surface
+            .preference(
+                "へんしん",
+                0,
+                [("変身", 11), ("変心", 12), ("変針", 13), ("変身", 14)],
+                100,
+            )
+            .exact,
+        Some(0),
+        "different right IDs for one spelling are not a correction"
+    );
+}
+
+// #305: later choices in another left context cannot replace this context's choice;
+// one subsequent correction in this context can.
+#[test]
+fn issue_305_other_context_choices_do_not_replace_exact_preference() {
+    let mut index = Index::new();
+    let candidates = [("変身", 11), ("変心", 12), ("変針", 13), ("返信", 14)];
+    for sequence in 1..=4 {
+        index.learn(0, 14, "へんしん", "返信", 100, sequence);
+    }
+    for sequence in 5..=19 {
+        index.learn(0, 11, "へんしん", "変身", 100, sequence);
+    }
+    for sequence in 20..=27 {
+        index.learn(1841, 14, "へんしん", "返信", 100, sequence);
+    }
+    assert_eq!(
+        index.preference("へんしん", 0, candidates, 100).exact,
+        Some(0)
+    );
+    assert_eq!(
+        index.preference("へんしん", 1841, candidates, 100).exact,
+        Some(3)
+    );
+
+    index.learn(0, 14, "へんしん", "返信", 100, 28);
+    assert_eq!(
+        index.preference("へんしん", 0, candidates, 100).exact,
+        Some(3)
+    );
+    assert_eq!(
+        index.preference("へんしん", 1841, candidates, 100).exact,
+        Some(3),
+        "correcting context 0 must not rewrite context 1841"
+    );
+}
+
+// #305: the conflict exception does not relax lone-choice/general bounds or use
+// expired, identity, or absent spellings as evidence of a competing choice.
+#[test]
+fn issue_305_correction_exception_keeps_unrelated_learning_bounds() {
+    let candidates = [
+        ("top", 9),
+        ("near", 9),
+        ("third", 9),
+        ("fourth", 9),
+        ("fifth", 9),
+        ("sixth", 9),
+        ("far", 9),
+    ];
+    for (frequency, exact_limit, general_limit) in [(1, 1, 0), (2, 3, 2), (3, 6, 5)] {
+        for (position, &(surface, right_id)) in candidates.iter().enumerate() {
+            let mut index = Index::new();
+            for sequence in 1..=frequency {
+                index.learn(7, right_id, "reading", surface, 100, sequence);
+            }
+            let same_context = index.preference("reading", 7, candidates, 100);
+            assert_eq!(
+                same_context.exact,
+                (position <= exact_limit).then_some(position)
+            );
+            assert_eq!(
+                same_context.general,
+                (position <= general_limit).then_some(position)
+            );
+            let other_context = index.preference("reading", 8, candidates, 100);
+            assert_eq!(other_context.exact, None);
+            assert_eq!(other_context.general, same_context.general);
+        }
+    }
+
+    let mut expired = Index::new();
+    for sequence in 1..=15 {
+        expired.learn(7, 9, "reading", "top", 1, sequence);
+    }
+    expired.learn(7, 9, "reading", "far", 200, 16);
+    assert_eq!(
+        expired.preference("reading", 7, candidates, 200).exact,
+        None
+    );
+
+    let mut expired_correction = Index::new();
+    for sequence in 1..=15 {
+        expired_correction.learn(7, 9, "reading", "top", 100, sequence);
+    }
+    expired_correction.learn(7, 9, "reading", "far", 100, 16);
+    assert_eq!(
+        expired_correction
+            .preference("reading", 7, candidates, 190)
+            .exact,
+        Some(0)
+    );
+
+    let mut identity = Index::new();
+    identity.learn(7, 9, "reading", "reading", 100, 1);
+    identity.learn(7, 9, "reading", "far", 100, 2);
+    let identity_candidates = [
+        ("reading", 9),
+        ("near", 9),
+        ("third", 9),
+        ("fourth", 9),
+        ("fifth", 9),
+        ("sixth", 9),
+        ("far", 9),
+    ];
+    assert_eq!(
+        identity
+            .preference("reading", 7, identity_candidates, 100)
+            .exact,
+        None
+    );
+
+    let mut absent = Index::new();
+    for sequence in 1..=15 {
+        absent.learn(7, 9, "reading", "top", 100, sequence);
+    }
+    absent.learn(7, 9, "reading", "far", 100, 16);
+    assert_eq!(
+        absent
+            .preference("reading", 7, [("top", 9), ("near", 9)], 100)
+            .exact,
+        Some(0),
+        "an absent correction cannot fabricate a candidate index"
+    );
+}
+
+// #305: recency is a reversible preference, not a permanent blacklist;
+// choosing the older spelling again makes that spelling current.
+#[test]
+fn issue_305_newest_conflicting_spelling_can_change_again() {
+    let mut index = Index::new();
+    let candidates = [("仮名", 4), ("加奈", 5)];
+    for sequence in 1..=15 {
+        index.learn(3, 4, "かな", "仮名", 100, sequence);
+    }
+    index.learn(3, 5, "かな", "加奈", 100, 16);
+    let corrected = index.preference("かな", 3, candidates, 100).exact;
+    index.learn(3, 4, "かな", "仮名", 100, 17);
+    let changed_back = index.preference("かな", 3, candidates, 100).exact;
+    assert_eq!((corrected, changed_back), (Some(1), Some(0)));
+}
+
+// #305: existing format-3 record order must reproduce the corrected preference
+// through reopen/compaction, while forget and clear retain their public effects.
+#[test]
+fn issue_305_format_three_replay_and_compaction_preserve_correction_order() {
+    let temporary = TemporaryLearningLog::new("issue-305-replay");
+    let path = &temporary.0;
+    let candidates = [("仮名", 4), ("別名", 6), ("仮字", 7), ("加奈", 5)];
+    let mut observed = Vec::new();
+    let service = LearningService::open(path).expect("open isolated learning");
+    for _ in 0..15 {
+        service.learn("かな", "仮名", 3, 4);
+    }
+    service.learn("かな", "加奈", 3, 5);
+    service.maintain().expect("flush initial learning");
+    observed.push(service.preference("かな", 3, candidates).exact);
+    let original = read_snapshot(path).expect("format-3 snapshot");
+    assert_eq!(original.format_version, 3);
+    assert_eq!(original.records.len(), 16);
+    assert!(original.records[..15].iter().all(|record| {
+        record.reading == "かな"
+            && record.surface == "仮名"
+            && record.left_context == 3
+            && record.right_context == 4
+    }));
+    let correction = original.records.last().expect("correction record");
+    assert_eq!(
+        (correction.reading.as_str(), correction.surface.as_str()),
+        ("かな", "加奈")
+    );
+    assert_eq!((correction.left_context, correction.right_context), (3, 5));
+    assert!(original
+        .records
+        .windows(2)
+        .all(|pair| pair[0].sequence < pair[1].sequence));
+    drop(service);
+
+    let reopened = LearningService::open(path).expect("reopen isolated learning");
+    observed.push(reopened.preference("かな", 3, candidates).exact);
+    {
+        let mut state = reopened
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        compact_state(&mut state, 1_024, 10).expect("compact isolated learning");
+        assert!(state.log.test_records() <= 10);
+        assert!(state.log.test_bytes() <= 1_024 + HEADER_LEN as u64);
+    }
+    observed.push(reopened.preference("かな", 3, candidates).exact);
+    drop(reopened);
+
+    let compacted = LearningService::open(path).expect("reopen compacted learning");
+    observed.push(compacted.preference("かな", 3, candidates).exact);
+    let retained = read_snapshot(path).expect("compacted format-3 snapshot");
+    assert_eq!(retained.format_version, 3);
+    assert_eq!(retained.records.len(), 10);
+    for (before, after) in original.records[6..].iter().zip(&retained.records) {
+        assert_eq!(
+            (
+                &before.reading,
+                &before.surface,
+                before.left_context,
+                before.right_context,
+                before.day
+            ),
+            (
+                &after.reading,
+                &after.surface,
+                after.left_context,
+                after.right_context,
+                after.day
+            )
+        );
+    }
+    assert_eq!(
+        compacted
+            .forget_prediction_exact("かな", "加奈")
+            .expect("forget correction"),
+        ForgetPredictionOutcome::Removed
+    );
+    assert_eq!(compacted.preference("かな", 3, candidates).exact, Some(0));
+    compacted.clear().expect("clear isolated learning");
+    assert_eq!(
+        compacted.preference("かな", 3, candidates),
+        LearningPreference {
+            exact: None,
+            general: None
+        }
+    );
+    assert!(read_snapshot(path)
+        .expect("cleared snapshot")
+        .records
+        .is_empty());
+    drop(compacted);
+    assert_eq!(
+        observed,
+        vec![Some(3); 4],
+        "live, reopened, compacted, reopened again"
+    );
 }
 
 #[test]
@@ -485,8 +794,9 @@ fn second_previous_format_preserves_left_context_and_existing_backup() {
 
 #[test]
 fn compaction_keeps_a_bounded_recent_source_of_truth_across_restart() {
-    let path = temporary_log("compact");
-    let service = LearningService::open(&path).expect("open");
+    let temporary = TemporaryLearningLog::new("compact");
+    let path = &temporary.0;
+    let service = LearningService::open(path).expect("open");
     for sequence in 0..100 {
         let surface = if sequence == 99 { "加奈" } else { "仮名" };
         service.learn("かな", surface, 3, 4);
@@ -502,17 +812,15 @@ fn compaction_keeps_a_bounded_recent_source_of_truth_across_restart() {
     }
     drop(service);
 
-    let reopened = LearningService::open(&path).expect("restart");
-    // Compaction retains the bounded recent records. The nine retained
-    // normal choices are stronger evidence than the one last anomalous
-    // choice, so the frequency-aware preference is the base candidate.
+    let reopened = LearningService::open(path).expect("restart");
+    // #305 intentionally changes the ranking spec: the latest conflicting
+    // exact spelling (加奈) wins even against nine retained 仮名 records.
     assert_eq!(
         reopened
             .preference("かな", 3, [("仮名", 4), ("加奈", 4)])
             .exact,
-        Some(0)
+        Some(1)
     );
-    let _ = fs::remove_dir_all(path.parent().expect("parent"));
 }
 
 #[test]
