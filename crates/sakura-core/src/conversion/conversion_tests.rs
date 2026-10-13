@@ -1770,6 +1770,150 @@ fn bos_filters_non_initial_fragments_but_compound_paths_can_use_them() {
 }
 
 #[test]
+fn issue_306_exact_system_evidence_controls_only_internal_alias_admission() {
+    for exact_flags in [
+        None,
+        Some(EntryFlags::NONE),
+        Some(EntryFlags::NON_INITIAL),
+        Some(EntryFlags::SPELLING_CORRECTION),
+    ] {
+        let mut rows = vec![
+            fixture_entry("な", "名", 100, EntryFlags::NONE),
+            fixture_entry("がわ", "川", 100, EntryFlags::BOUNDARY_ALIAS),
+            fixture_entry("がわ", "側", 200, EntryFlags::NONE),
+        ];
+        if let Some(flags) = exact_flags {
+            rows.push(fixture_entry("ながわ", "名川", 5000, flags));
+        }
+        let bytes = synthetic_dictionary(&rows);
+        let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+        let mut converter = Converter::new();
+        for (reading, expected) in [
+            ("がわ", true),
+            ("ながわ", exact_flags.is_some()),
+            ("ながわの", false),
+        ] {
+            converter.reset(reading.len());
+            converter
+                .build_lattice(
+                    &dictionary,
+                    None,
+                    reading,
+                    ConversionOptions::default(),
+                    &[],
+                )
+                .expect("lattice");
+            let alias_present = converter.nodes.iter().any(|node| matches!(node.surface, super::Surface::Dictionary { entry, .. } if entry.flags.contains(EntryFlags::BOUNDARY_ALIAS)));
+            assert_eq!(
+                alias_present, expected,
+                "reading={reading} exact={exact_flags:?}"
+            );
+        }
+        // A whole-word conversion must still admit the boundary alias in
+        // single-segment mode, which has no internal starts.
+        let candidates = converter
+            .convert(
+                &dictionary,
+                "がわ",
+                ConversionOptions {
+                    method: ConversionMethod::SingleSegment,
+                    ..ConversionOptions::default()
+                },
+            )
+            .expect("single segment");
+        assert!(candidates.iter().any(|candidate| candidate.text() == "川"));
+    }
+}
+
+#[test]
+fn issue_306_boundary_alias_survives_v1_image_round_trip() {
+    let flags = EntryFlags::BOUNDARY_ALIAS | EntryFlags::PREDICTION;
+    let bytes = synthetic_dictionary(&[fixture_entry("がわ", "川", 1667, flags)]);
+    assert_eq!(u16::from_le_bytes(bytes[8..10].try_into().unwrap()), 1);
+    let dictionary = Dictionary::parse(&bytes).expect("v1 image");
+    let mut seen = 0;
+    dictionary
+        .common_prefix_search("がわ", |matched| {
+            assert_eq!(matched.entry.flags, flags);
+            assert_eq!(matched.entry.word_cost, 1667);
+            seen += 1;
+            true
+        })
+        .expect("lookup");
+    assert_eq!(seen, 1);
+}
+
+#[test]
+fn issue_306_user_word_does_not_grant_system_exact_reading_exception() {
+    let bytes = synthetic_dictionary(&[
+        fixture_entry("な", "名", 100, EntryFlags::NONE),
+        fixture_entry("がわ", "川", 100, EntryFlags::BOUNDARY_ALIAS),
+        fixture_entry("がわ", "側", 200, EntryFlags::NONE),
+    ]);
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let user = UserDictionary::parse_tsv("reading\tsurface\tpos\tcomment\nながわ\t名川\tnoun\t\n")
+        .expect("user dictionary");
+    let mut converter = Converter::new();
+    converter.reset("ながわ".len());
+    converter
+        .build_lattice(
+            &dictionary,
+            Some(&user),
+            "ながわ",
+            ConversionOptions::default(),
+            &[],
+        )
+        .expect("lattice");
+    assert!(converter
+        .nodes
+        .iter()
+        .any(|node| matches!(node.surface, super::Surface::User(_))));
+    assert!(converter.nodes.iter().all(|node| !matches!(node.surface, super::Surface::Dictionary { entry, .. } if entry.flags.contains(EntryFlags::BOUNDARY_ALIAS))));
+}
+
+#[test]
+fn issue_306_repaired_alias_uses_the_same_boundary_admission() {
+    let bytes =
+        synthetic_dictionary(&[fixture_entry("がわ", "川", 100, EntryFlags::BOUNDARY_ALIAS)]);
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+    for (start, exact, expected) in [(0, false, 1), (0, true, 1), (3, false, 0), (3, true, 1)] {
+        converter.reset(start + "がわ".len());
+        if start > 0 {
+            converter
+                .add_node(
+                    &dictionary,
+                    super::NodeSpec {
+                        start: 0,
+                        end: start,
+                        left_id: 0,
+                        right_id: 0,
+                        local_cost: 0,
+                        surface: super::Surface::Reading,
+                    },
+                )
+                .expect("prefix");
+        }
+        let before = converter.nodes.len();
+        let added = converter
+            .add_repaired_dictionary_edges(
+                &dictionary,
+                "がわ",
+                start,
+                start + "がわ".len(),
+                100,
+                1,
+                ConversionOptions::default(),
+                RepairKind::Rule,
+                exact,
+            )
+            .expect("repair admission");
+        assert_eq!(added, expected, "start={start} exact={exact}");
+        assert_eq!(converter.nodes.len() - before, expected);
+    }
+}
+
+#[test]
 fn trustworthy_exact_word_suppresses_unconfirmed_repairs_and_costly_mosaics() {
     let bytes = synthetic_dictionary(&[
         fixture_entry("ずかい", "図解", 1_000, EntryFlags::NONE),

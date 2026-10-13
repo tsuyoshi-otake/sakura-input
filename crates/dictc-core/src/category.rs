@@ -108,6 +108,7 @@ impl MozcPosCatalog {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum InitialBoundaryDecision {
     AllowInitial,
+    PreferBoundary,
     RetainNonInitial,
 }
 
@@ -130,6 +131,7 @@ pub struct NonInitialBoundaryReport {
     pub retained_non_initial_pairs: usize,
     pub released_non_initial_entries: usize,
     pub generated_initial_alias_entries: usize,
+    pub boundary_alias_entries: usize,
     pub remaining_non_initial_entries: usize,
 }
 
@@ -205,6 +207,9 @@ pub fn parse_non_initial_boundary_policy(
         }
         let decision = match columns[2] {
             "allow-initial" => InitialBoundaryDecision::AllowInitial,
+            "prefer-boundary" if reading == "がわ" && surface == "川" => {
+                InitialBoundaryDecision::PreferBoundary
+            }
             "retain-non-initial" => InitialBoundaryDecision::RetainNonInitial,
             value => {
                 return Err(format!(
@@ -405,7 +410,7 @@ pub fn mark_non_initial_allomorphs_with_boundary_policy(
     let mut initial_aliases = Vec::new();
     for (pair, decision) in &policy.decisions {
         match decision {
-            InitialBoundaryDecision::AllowInitial => {
+            InitialBoundaryDecision::AllowInitial | InitialBoundaryDecision::PreferBoundary => {
                 let best_index = entries
                     .iter()
                     .enumerate()
@@ -444,6 +449,9 @@ pub fn mark_non_initial_allomorphs_with_boundary_policy(
                         && entry.right_id == target_identity.1
                 }) {
                     let entry = &mut entries[existing_index];
+                    if *decision == InitialBoundaryDecision::PreferBoundary {
+                        return Err("prefer-boundary requires a generated alias".to_owned());
+                    }
                     entry.flags =
                         EntryFlags::from_bits(entry.flags.bits() & !EntryFlags::NON_INITIAL.bits());
                     released_non_initial_entries = released_non_initial_entries.saturating_add(1);
@@ -453,6 +461,12 @@ pub fn mark_non_initial_allomorphs_with_boundary_policy(
                     alias.right_id = target_identity.1;
                     alias.flags =
                         EntryFlags::from_bits(alias.flags.bits() & !EntryFlags::NON_INITIAL.bits());
+                    if *decision == InitialBoundaryDecision::PreferBoundary {
+                        if target_identity != (1851, 1851) {
+                            return Err("prefer-boundary requires the 1851/1851 alias".to_owned());
+                        }
+                        alias.flags = alias.flags | EntryFlags::BOUNDARY_ALIAS;
+                    }
                     initial_aliases.push(alias);
                     generated_initial_alias_entries =
                         generated_initial_alias_entries.saturating_add(1);
@@ -485,13 +499,14 @@ pub fn mark_non_initial_allomorphs_with_boundary_policy(
     });
 
     for (pair, decision) in &policy.decisions {
-        if *decision == InitialBoundaryDecision::AllowInitial
-            && !entries.iter().any(|entry| {
-                entry.reading == pair.0
-                    && entry.surface == pair.1
-                    && !entry.flags.contains(EntryFlags::NON_INITIAL)
-            })
-        {
+        if matches!(
+            decision,
+            InitialBoundaryDecision::AllowInitial | InitialBoundaryDecision::PreferBoundary
+        ) && !entries.iter().any(|entry| {
+            entry.reading == pair.0
+                && entry.surface == pair.1
+                && !entry.flags.contains(EntryFlags::NON_INITIAL)
+        }) {
             return Err(format!(
                 "approved initial pair {}/{} remained unavailable",
                 pair.0, pair.1
@@ -512,6 +527,10 @@ pub fn mark_non_initial_allomorphs_with_boundary_policy(
         retained_non_initial_pairs,
         released_non_initial_entries,
         generated_initial_alias_entries,
+        boundary_alias_entries: entries
+            .iter()
+            .filter(|entry| entry.flags.contains(EntryFlags::BOUNDARY_ALIAS))
+            .count(),
         remaining_non_initial_entries,
     })
 }
@@ -1231,6 +1250,104 @@ mod tests {
         )
         .expect_err("non-canonical order must fail");
         assert!(unsorted.contains("strictly sorted"));
+    }
+
+    #[test]
+    fn issue_306_policy_preserves_58_generated_and_two_released_entries() {
+        let policy = parse_non_initial_boundary_policy(
+            "policy.tsv",
+            include_str!("../../../data/non-initial-boundary-policy.tsv"),
+            "3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732",
+        )
+        .expect("repository policy");
+        let catalog = parse_mozc_pos_catalog(
+            "id.def",
+            "829 動詞,自立,*,*,*,連用形,*\n1851 名詞,一般,*,*,*,*,*\n1949 名詞,接尾,一般,*,*,*,*\n",
+        )
+        .expect("catalog");
+        // Use the entire review table with minimal source rows. Preset raw
+        // classifier results isolate policy behavior from the upstream trim.
+        let mut entries = Vec::new();
+        for ((reading, surface), decision) in &policy.decisions {
+            let release = matches!(
+                (reading.as_str(), surface.as_str()),
+                ("づかい", "遣い") | ("ぱなし", "放し")
+            );
+            let id = if release { 829 } else { 1949 };
+            let mut raw = lexical_entry(reading, surface, id);
+            raw.flags = raw.flags | EntryFlags::NON_INITIAL;
+            entries.push(raw);
+            if *decision != super::InitialBoundaryDecision::RetainNonInitial {
+                let base = super::unvoiced_initial_readings(reading)
+                    .next()
+                    .expect("unvoiced base");
+                entries.push(lexical_entry(
+                    &base,
+                    surface,
+                    if release { 829 } else { 1851 },
+                ));
+            }
+        }
+        let before = entries.clone();
+        let report = mark_non_initial_allomorphs_with_boundary_policy(
+            &mut entries,
+            &vec![true; before.len()],
+            &catalog,
+            &policy,
+        )
+        .expect("policy");
+        assert_eq!(report.allowed_initial_pairs, 60);
+        assert_eq!(report.generated_initial_alias_entries, 58);
+        assert_eq!(report.released_non_initial_entries, 2);
+        assert_eq!(report.boundary_alias_entries, 1);
+        let flagged: Vec<_> = entries
+            .iter()
+            .filter(|entry| entry.flags.contains(EntryFlags::BOUNDARY_ALIAS))
+            .collect();
+        assert_eq!(flagged.len(), 1);
+        assert_eq!(
+            (
+                flagged[0].reading.as_str(),
+                flagged[0].surface.as_str(),
+                flagged[0].left_id,
+                flagged[0].right_id
+            ),
+            ("がわ", "川", 1851, 1851)
+        );
+        assert!(!flagged[0].flags.contains(EntryFlags::NON_INITIAL));
+        for original in &before {
+            let current = entries
+                .iter()
+                .find(|entry| {
+                    entry.reading == original.reading
+                        && entry.surface == original.surface
+                        && entry.left_id == original.left_id
+                        && entry.right_id == original.right_id
+                })
+                .expect("original identity retained");
+            assert_eq!(current.word_cost, original.word_cost);
+            assert_eq!(current.prediction_cost, original.prediction_cost);
+            let released = matches!(
+                (original.reading.as_str(), original.surface.as_str()),
+                ("づかい", "遣い") | ("ぱなし", "放し")
+            );
+            let expected_flags = if released {
+                EntryFlags::from_bits(original.flags.bits() & !EntryFlags::NON_INITIAL.bits())
+            } else {
+                original.flags
+            };
+            assert_eq!(
+                current.flags, expected_flags,
+                "{}/{}",
+                original.reading, original.surface
+            );
+        }
+    }
+
+    #[test]
+    fn issue_306_prefer_boundary_is_not_a_general_policy_escape() {
+        let result = parse_non_initial_boundary_policy("bad.tsv", "# schema_version: 1\n# mozc_revision: test\nreading\tsurface\tdecision\tevidence\nずみ\t済み\tprefer-boundary\ttest\n", "test");
+        assert!(result.is_err());
     }
 
     #[test]

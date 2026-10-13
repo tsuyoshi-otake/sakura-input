@@ -29,6 +29,32 @@ const PARSER_CONDITIONS: usize = 32;
 /// Number of merge conditions, same rule.
 const MERGE_CONDITIONS: usize = 12;
 
+#[test]
+fn issue_306_boundary_alias_tsv_round_trip_and_rejected_tokens() {
+    let text = doc("がわ\t川\t1\t1\t1667\t2867\tpredict,boundary-alias\t\n");
+    let entries = parse_entries("alias.tsv", &text).expect("flag parses");
+    assert!(entries[0].flags.contains(EntryFlags::BOUNDARY_ALIAS));
+    let encoded = entries_to_category_tsv(&entries).expect("serialize flag");
+    let decoded = parse_category_entries("category.tsv", &encoded).expect("round trip");
+    assert_eq!(decoded[0].flags, entries[0].flags);
+    assert_eq!(entries_to_category_tsv(&decoded).unwrap(), encoded);
+    for (flags, error) in [
+        ("boundary-alias,unknown", "unknown flag"),
+        ("boundary-alias,boundary-alias", "duplicate flag"),
+    ] {
+        let text = doc(&format!("がわ\t川\t1\t1\t1667\t-\t{flags}\t\n"));
+        for result in [
+            parse_entries("invalid.tsv", &text),
+            parse_category_entries("invalid.tsv", text.strip_prefix(LICENSE).unwrap()),
+        ] {
+            assert!(result
+                .expect_err("invalid flag")
+                .to_string()
+                .contains(error));
+        }
+    }
+}
+
 /// Which public entry point the case goes through. The two differ only in
 /// `require_license`, which is itself one of the conditions under test.
 #[derive(Clone, Copy, Debug)]
