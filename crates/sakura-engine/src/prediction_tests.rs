@@ -637,6 +637,26 @@ fn independent_prediction_omits_non_initial_dictionary_fragments() {
 }
 
 #[test]
+fn issue_306_boundary_alias_remains_eligible_for_independent_prediction() {
+    let conversion = prediction_fixture_conversion(
+        "がわ\t川\t0\t0\t100\t100\tpredict,boundary-alias\t\n\
+         がわ\t側\t0\t0\t200\t200\tpredict\t\n\
+         がわ\t非初期\t0\t0\t1\t1\tpredict,non-initial,boundary-alias\t\n",
+    );
+    for prefix in ["が", "がわ"] {
+        let result = predict_fixture(&conversion, prefix, None);
+        assert!(result
+            .candidates()
+            .iter()
+            .any(|candidate| candidate.surface() == "川"));
+        assert!(result
+            .candidates()
+            .iter()
+            .all(|candidate| candidate.surface() != "非初期"));
+    }
+}
+
+#[test]
 fn direct_user_provenance_wins_over_a_system_repair() {
     let conversion =
         prediction_fixture_conversion("いが\tシステム補正\t0\t0\t1\t1000\tpredict\tadvanced\n");

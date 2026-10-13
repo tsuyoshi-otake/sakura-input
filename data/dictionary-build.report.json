@@ -170,21 +170,21 @@
     },
     "non_initial_boundary_policy": {
       "file": "non-initial-boundary-policy.tsv",
-      "bytes": 20809,
-      "sha256": "304f66395c6cc0ae6dfd79b13907e07b6f42a76ea10fb843db5d1f1ca0070359"
+      "bytes": 20811,
+      "sha256": "cbe7fd29af43528c7736fc3367b03ab69dd093912fcb1545c11f3d6d08152084"
     },
     "system_category_dictionary": null
   },
   "artifacts": {
     "system_tsv": {
       "file": "mozc-system.tsv",
-      "bytes": 23565078,
-      "sha256": "f7b32d9229a8408633792f60a688d071cb19dfe5ad933f394352ae54e5b925d7"
+      "bytes": 23565093,
+      "sha256": "a560e5d4b4df20cf7cbb083dc01d3d41bf609022b706266d5382e6432517faa9"
     },
     "trim_report": {
       "file": "mozc-trim.report.json",
-      "bytes": 1028,
-      "sha256": "f1f7617383c56eda54509021e01df77fd19f1b710699a37f87133651d7d3ea57"
+      "bytes": 1059,
+      "sha256": "1437036fc22302ce16e9c7835b2cebe68b78122ba10c36f8a975e26374aa793f"
     },
     "overlay_tsv": {
       "file": "it-terms.tsv",
@@ -209,7 +209,7 @@
     "dictionary": {
       "file": "system.dic",
       "bytes": 37382740,
-      "sha256": "1a40a469634054294e8c8589bb304ec2d658c5625893fc68ce79feba61e8fbcd"
+      "sha256": "68f9393925788eba31ddf17f18143fe62d2295aea3d9d0db595cc75899dec0ef"
     },
     "wordnet_report": {
       "file": "wordnet.report.json",
@@ -244,8 +244,8 @@
       },
       {
         "file": "03_一般語.tsv",
-        "bytes": 6201505,
-        "sha256": "5ff89c2406beb5c2cec07aa5c67aa8350943d1ca12b44f4fb90743fe4bdd3dfe"
+        "bytes": 6201520,
+        "sha256": "d0a39b17711efbf4550e4e2abd62e292e1ac965a1033f7924a0ff5a340b04ac0"
       },
       {
         "file": "04_慣用句・定型表現.tsv",

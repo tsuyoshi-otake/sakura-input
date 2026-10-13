@@ -124,6 +124,16 @@ struct CharRun {
     chars: usize,
 }
 
+fn admits_system_boundary(flags: EntryFlags, start: usize, has_exact_system_reading: bool) -> bool {
+    // #306: this is a query-level guard, not a per-span guard. A protected
+    // word inside a longer phrase (e.g. あおがわのほとり) may still change.
+    if start == 0 {
+        !flags.contains(EntryFlags::NON_INITIAL)
+    } else {
+        !flags.contains(EntryFlags::BOUNDARY_ALIAS) || has_exact_system_reading
+    }
+}
+
 fn char_run(reading: &str, start: usize) -> CharRun {
     let mut characters = reading[start..].char_indices();
     let Some((_, first)) = characters.next() else {
@@ -181,6 +191,16 @@ impl Converter {
             0
         };
         let mut previous_class = None;
+        let mut has_exact_system_reading = false;
+        dictionary
+            .common_prefix_search(reading, |matched| {
+                if matched.matched_bytes == reading.len() {
+                    has_exact_system_reading = true;
+                    return false;
+                }
+                true
+            })
+            .map_err(ConversionError::Dictionary)?;
         // One slot-owned budget for the whole lattice, reset per reading
         // start: a fresh one per start cost a 1,040-byte stack construction
         // per character before #94/#95, and a heap one would allocate.
@@ -209,8 +229,11 @@ impl Converter {
                         options.input_support,
                         options.skip_input_repair,
                         matched.entry.flags,
-                    ) || (start == 0 && matched.entry.flags.contains(EntryFlags::NON_INITIAL))
-                    {
+                    ) || !admits_system_boundary(
+                        matched.entry.flags,
+                        start,
+                        has_exact_system_reading,
+                    ) {
                         return true;
                     }
                     if matched.matched_bytes != last_length {
@@ -264,6 +287,7 @@ impl Converter {
                 start,
                 candidates_for_length,
                 options,
+                has_exact_system_reading,
             );
 
             if let Some(user_dictionary) = user_dictionary {
@@ -400,6 +424,7 @@ impl Converter {
     /// always carries an explicit penalty. Lattice exhaustion drops repair edges
     /// without failing the conversion. Commit-history hints are handled by
     /// [`Self::add_commit_repair_edges_for_whole_query`].
+    #[allow(clippy::too_many_arguments)]
     pub(in crate::conversion) fn add_local_repair_edges(
         &mut self,
         dictionary: &Dictionary<'_>,
@@ -407,6 +432,7 @@ impl Converter {
         start: usize,
         exact_edges_for_length: usize,
         options: ConversionOptions,
+        has_exact_system_reading: bool,
     ) -> Result<(), ConversionError> {
         let mut support = options.input_support;
         if !support.is_active() || options.skip_input_repair || typed_suffix.is_empty() {
@@ -437,6 +463,7 @@ impl Converter {
                 remaining_slots,
                 options,
                 variant.kind,
+                has_exact_system_reading,
             )?;
             remaining_slots = remaining_slots.saturating_sub(added);
         }
@@ -452,6 +479,7 @@ impl Converter {
                     remaining_slots,
                     options,
                     RepairKind::EnglishSpelling,
+                    has_exact_system_reading,
                 )?;
             }
         }
@@ -495,6 +523,7 @@ impl Converter {
                 remaining_slots,
                 options,
                 RepairKind::CommitHistory,
+                false, // Whole-query repairs always start at zero.
             )?;
             remaining_slots = remaining_slots.saturating_sub(added);
         }
@@ -512,6 +541,7 @@ impl Converter {
         remaining_slots: usize,
         options: ConversionOptions,
         repair: RepairKind,
+        has_exact_system_reading: bool,
     ) -> Result<usize, ConversionError> {
         if remaining_slots == 0 || repaired.is_empty() {
             return Ok(0);
@@ -526,7 +556,7 @@ impl Converter {
                 options.input_support,
                 options.skip_input_repair,
                 matched.entry.flags,
-            ) || (start == 0 && matched.entry.flags.contains(EntryFlags::NON_INITIAL))
+            ) || !admits_system_boundary(matched.entry.flags, start, has_exact_system_reading)
             {
                 return true;
             }
@@ -648,7 +678,8 @@ impl Converter {
         if let Some(error) = failure {
             return Err(error);
         }
-        let _ = self.add_local_repair_edges(dictionary, reading, 0, exact_edges_added, options);
+        let _ =
+            self.add_local_repair_edges(dictionary, reading, 0, exact_edges_added, options, false);
         let _ = self.add_commit_repair_edges_for_whole_query(
             dictionary,
             reading,
@@ -868,5 +899,36 @@ impl Converter {
         (best != NONE)
             .then_some(best)
             .ok_or(ConversionError::NoPath)
+    }
+}
+
+#[cfg(test)]
+mod boundary_tests {
+    use super::{admits_system_boundary, EntryFlags};
+
+    #[test]
+    fn issue_306_admission_truth_table() {
+        // All 16 combinations, including both bits set. NON_INITIAL owns
+        // start zero; BOUNDARY_ALIAS owns nonzero starts independently.
+        for (flags, expected) in [
+            (EntryFlags::NONE, [true, true, true, true]),
+            (EntryFlags::NON_INITIAL, [false, false, true, true]),
+            (EntryFlags::BOUNDARY_ALIAS, [true, true, false, true]),
+            (
+                EntryFlags::NON_INITIAL | EntryFlags::BOUNDARY_ALIAS,
+                [false, false, false, true],
+            ),
+        ] {
+            for ((start, exact), expected) in [(0, false), (0, true), (3, false), (3, true)]
+                .into_iter()
+                .zip(expected)
+            {
+                assert_eq!(
+                    admits_system_boundary(flags, start, exact),
+                    expected,
+                    "flags={flags:?} start={start} exact={exact}"
+                );
+            }
+        }
     }
 }
