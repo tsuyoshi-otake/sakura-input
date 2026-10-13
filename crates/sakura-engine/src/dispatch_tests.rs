@@ -307,6 +307,140 @@ fn raw_repair_conversion_dispatcher() -> Dispatcher {
 }
 
 #[test]
+fn unresolved_latin_ascii_is_selected_and_commits_halfwidth() {
+    for fullwidth in [false, true] {
+        let mut dispatcher = raw_repair_conversion_dispatcher();
+        let mut preferences = Preferences::default();
+        if fullwidth {
+            preferences.normalizer.width.alnum = Width::Full;
+        }
+        dispatcher
+            .apply_runtime_configuration(preferences, Arc::from([]))
+            .expect("width configuration");
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "unresolved-ascii.exe");
+        type_word(&mut dispatcher, session, "git", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert_eq!(out.selected_candidate(), Some(0));
+        assert_eq!(out.candidate(0).map(|(text, _)| text), Some("git"));
+        assert_eq!(out.candidate(1).map(|(text, _)| text), Some("ぎt"));
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("git"));
+    }
+}
+
+#[test]
+fn resolved_romaji_does_not_offer_raw_ascii() {
+    for raw in [
+        "nihon",
+        "kanji",
+        "konnichiha",
+        "tte",
+        "nn",
+        "-",
+        ".",
+        "make",
+    ] {
+        let mut dispatcher = raw_repair_conversion_dispatcher();
+        let mut out = OutputBuf::new();
+        let session = create_session(&mut dispatcher, &mut out, "resolved-romaji.exe");
+        type_word(&mut dispatcher, session, raw, &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("session")
+                .conversion_input_class(),
+            ConversionInputClass::Ordinary,
+            "{raw}"
+        );
+        assert_ne!(out.candidate(0).map(|(text, _)| text), Some(raw), "{raw}");
+    }
+}
+
+#[test]
+fn unresolved_latin_caret_edit_does_not_offer_stale_ascii() {
+    let mut dispatcher = raw_repair_conversion_dispatcher();
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "edited-ascii.exe");
+    type_word(&mut dispatcher, session, "git", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Left),
+        },
+        &mut out,
+    );
+    type_word(&mut dispatcher, session, "a", &mut out);
+    let live = dispatcher.sessions.get(session).expect("session");
+    assert_eq!(live.raw_provenance(), RawProvenanceState::Suppressed);
+    let edited_raw = live.raw_input.as_str().to_owned();
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Space),
+        },
+        &mut out,
+    );
+    assert!((0..out.candidate_count())
+        .filter_map(|index| out.candidate(index).map(|(text, _)| text))
+        .all(|text| text != "git" && text != edited_raw));
+}
+
+#[test]
+fn unresolved_latin_identical_raw_literal_is_not_duplicated() {
+    let mut dispatcher = raw_repair_conversion_dispatcher();
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "identical-ascii.exe");
+    type_word(&mut dispatcher, session, "q", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Space),
+        },
+        &mut out,
+    );
+    assert_eq!(out.selected_candidate(), Some(0));
+    assert_eq!(out.candidate_count(), 1);
+    assert_eq!(out.candidate(0).map(|(text, _)| text), Some("q"));
+}
+
+#[test]
+fn unresolved_latin_enter_without_conversion_keeps_preedit() {
+    let mut dispatcher = raw_repair_conversion_dispatcher();
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "unconverted-ascii.exe");
+    type_word(&mut dispatcher, session, "git", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Enter),
+        },
+        &mut out,
+    );
+    assert_eq!(out.commit_text(), Some("ぎt"));
+}
+
+#[test]
 fn phase1_session_and_dispatcher_layout_stay_small_for_worker_stack() {
     let session_bytes = std::mem::size_of::<Session>();
     let dispatcher_bytes = std::mem::size_of::<Dispatcher>();
@@ -345,7 +479,8 @@ fn local_raw_completion_candidates_stay_direct_first_and_commit_repair() {
     );
     assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
     assert_eq!(out.selected_candidate(), Some(0));
-    assert_eq!(out.candidate(0).map(|(text, _)| text), Some("なzか"));
+    assert_eq!(out.candidate(0).map(|(text, _)| text), Some("nazka"));
+    assert_eq!(out.candidate(1).map(|(text, _)| text), Some("なzか"));
     let live = dispatcher.sessions.get(session).expect("live conversion");
     assert_eq!(
         live.conversion_input_class(),
@@ -363,7 +498,15 @@ fn local_raw_completion_candidates_stay_direct_first_and_commit_repair() {
         },
         &mut out,
     );
-    assert_eq!(out.selected_candidate(), Some(1));
+
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Down),
+        },
+        &mut out,
+    );
+    assert_eq!(out.selected_candidate(), Some(2));
     dispatcher.dispatch(
         &Request::SendKey {
             session,
@@ -389,10 +532,18 @@ fn local_raw_completion_candidates_stay_direct_first_and_commit_repair() {
         &mut out,
     );
     assert_eq!(out.candidate_kind(), Some(CandidateKind::Conversion));
-    assert_eq!(out.candidate(0).map(|(text, _)| text), Some("ないkにいく"));
+    assert_eq!(out.candidate(0).map(|(text, _)| text), Some("naikniiku"));
+    assert_eq!(out.candidate(1).map(|(text, _)| text), Some("ないkにいく"));
     assert!((0..out.candidate_count())
         .filter_map(|index| out.candidate(index).map(|(text, _)| text))
         .any(|text| text.contains("内科")));
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Down),
+        },
+        &mut out,
+    );
     dispatcher.dispatch(
         &Request::SendKey {
             session,
@@ -458,6 +609,13 @@ fn identical_runtime_snapshot_before_each_key_preserves_raw_admission() {
     assert!((0..out.candidate_count())
         .filter_map(|index| out.candidate(index).map(|(text, _)| text))
         .any(|text| text == "なぜか"));
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Down),
+        },
+        &mut out,
+    );
     dispatcher.dispatch(
         &Request::SendKey {
             session,
@@ -974,6 +1132,13 @@ fn selected_raw_repair_uses_original_reading_for_f9_and_f10() {
             },
             &mut out,
         );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Down),
+            },
+            &mut out,
+        );
         assert!(dispatcher
             .sessions
             .get(session)
@@ -1014,6 +1179,13 @@ fn explicit_raw_repair_commit_does_not_advance_learning_generation() {
         &Request::SendKey {
             session,
             key: named_key(KeyCode::Space),
+        },
+        &mut out,
+    );
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Down),
         },
         &mut out,
     );
@@ -1522,6 +1694,13 @@ fn selected_raw_repair_uses_corrected_reading_for_kana_transform() {
     dispatcher.dispatch(
         &Request::SendKey {
             session,
+            key: named_key(KeyCode::Down),
+        },
+        &mut out,
+    );
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
             key: named_key(KeyCode::F7),
         },
         &mut out,
@@ -1541,6 +1720,13 @@ fn selected_raw_repair_uses_corrected_reading_for_kana_transform() {
         &Request::SendKey {
             session,
             key: named_key(KeyCode::Space),
+        },
+        &mut out,
+    );
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Down),
         },
         &mut out,
     );
