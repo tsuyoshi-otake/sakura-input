@@ -2764,6 +2764,7 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   - An independent fresh-context verifier (rubric-verifier) passed 8 of 8 criteria. It ran the 6 issue_305 lib/dispatch tests and the 48 shipped ranking tests itself, read the diff to confirm the no-conflict path equals the old `best` and that conflict detection is order-independent, and found no personal data in added lines. It also confirmed that fmt, clippy and process-clean pass.
 - Not verified: an on-screen check with the owner's real learning store. Items 1 (restore the pre-erase left context) and 3 (longer staging window) are deferred until this change is measured.
 - Learning: in sakura-tmux, `send-keys -t %3 '<text>' Enter` leaves the text in Codex's input box. Send the text, wait 1 s, then send `Enter` as a separate `send-keys`. `new-session`/`new-window` are `unsupported-surface` and `list-panes -F` is `format-error`; use plain `list-panes -a` and an existing pane.
+
 ## 2026-10-13 Whole loanwords lead over kanji + katakana splits (#307)
 
 - Symptom (conversion-history audit, same day): loanword readings split into a kanji plus a katakana fragment, for example 案インストール, 今鳥ビューション and 枚ナンバー.
