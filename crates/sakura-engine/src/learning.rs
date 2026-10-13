@@ -96,6 +96,12 @@ struct PreferenceQuery {
     exact: bool,
 }
 
+struct PreferenceSelection<'a> {
+    candidate_index: Option<usize>,
+    /// The chosen exact surface and sequence, only when exact spellings conflict.
+    exact_conflict: Option<(&'a str, u64)>,
+}
+
 /// How much evidence a learned choice has after recency decay.
 ///
 /// Candidate indices are the converter's unpersonalized order, so this is a
@@ -306,6 +312,16 @@ impl Index {
         };
     }
 
+    /// Rank offered candidates using decayed evidence and strength bounds.
+    ///
+    /// When at least two distinct non-identity surfaces have positive exact
+    /// evidence for this reading and left context (each with its own right ID),
+    /// infer "latest conflicting exact choice wins" before the strength gate.
+    /// This is not proof that the older spelling was wrong. The newest exact
+    /// choice may exceed the usual index bound; competing general evidence
+    /// must postdate it. Without that conflict, frequency and bounds are unchanged.
+    /// Both passes probe only the candidates' fixed buckets, with constant local
+    /// state and no additional allocation.
     fn preference<'a>(
         &self,
         reading: &str,
@@ -331,6 +347,7 @@ impl Index {
             },
             reading,
             candidates.clone(),
+            None,
         );
         let general = self.best_candidate(
             PreferenceQuery {
@@ -343,8 +360,12 @@ impl Index {
             },
             reading,
             candidates,
+            exact.exact_conflict,
         );
-        LearningPreference { exact, general }
+        LearningPreference {
+            exact: exact.candidate_index,
+            general: general.candidate_index,
+        }
     }
 
     fn best_candidate<'a>(
@@ -352,8 +373,11 @@ impl Index {
         query: PreferenceQuery,
         reading: &str,
         candidates: impl IntoIterator<Item = (&'a str, u16)>,
-    ) -> Option<usize> {
+        superseding_exact: Option<(&str, u64)>,
+    ) -> PreferenceSelection<'a> {
         let mut best = None::<(usize, u64, u64)>;
+        let mut latest_exact = None::<(usize, &'a str, u64)>;
+        let mut exact_conflict = false;
         let mut skipped_identity = 0u64;
         for (candidate_index, (surface, right_context)) in candidates.into_iter().enumerate() {
             if surface == reading {
@@ -387,15 +411,30 @@ impl Index {
             else {
                 continue;
             };
+            // Detect conflict before the index gate. Different right IDs for
+            // the same surface are not competing spellings.
+            if query.exact {
+                if let Some((_, previous_surface, _)) = latest_exact {
+                    exact_conflict |= surface != previous_surface;
+                }
+                if latest_exact.is_none_or(|(_, _, sequence)| slot.sequence > sequence) {
+                    latest_exact = Some((candidate_index, surface, slot.sequence));
+                }
+            }
+            if query.general
+                && superseding_exact.is_some_and(|(exact_surface, exact_sequence)| {
+                    surface != exact_surface && slot.sequence <= exact_sequence
+                })
+            {
+                continue;
+            }
             if candidate_index > strength.maximum_candidate_index(query.exact) {
                 continue;
             }
 
-            // Frequency (after decay) wins before recency.  The old
-            // exact-context path used sequence alone, which let one unusual
-            // confirmation unconditionally beat the base converter forever.
-            // A repeated choice is stronger evidence; sequence still makes the
-            // latest choice deterministic when evidence is tied.
+            // Outside the exact-conflict exception, frequency (after decay)
+            // wins before recency. A repeated choice is stronger evidence;
+            // sequence makes the latest choice deterministic when tied.
             let ranked = (
                 candidate_index,
                 u64::from(effective_frequency),
@@ -407,17 +446,30 @@ impl Index {
                 best = Some(ranked);
             }
         }
+        let selection = match latest_exact.filter(|_| exact_conflict) {
+            Some((candidate_index, surface, sequence)) => PreferenceSelection {
+                candidate_index: Some(candidate_index),
+                exact_conflict: Some((surface, sequence)),
+            },
+            None => PreferenceSelection {
+                candidate_index: best.map(|(index, _, _)| index),
+                exact_conflict: None,
+            },
+        };
         debug_trace::emit(sakura_ipc::debug_trace::TraceEvent {
             component: "engine",
             instance: 0,
             event: "identity_pref",
             decision: if query.exact { "exact" } else { "general" },
             k0: skipped_identity,
-            k1: best.map(|(index, _, _)| index as u64 + 1).unwrap_or(0),
+            k1: selection
+                .candidate_index
+                .map(|index| index as u64 + 1)
+                .unwrap_or(0),
             k2: u64::from(query.left_context),
             k3: u64::from(query.general),
         });
-        best.map(|(index, _, _)| index)
+        selection
     }
 }
 

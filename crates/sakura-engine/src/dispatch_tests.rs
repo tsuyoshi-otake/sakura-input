@@ -9696,6 +9696,110 @@ fn process_shared_learning_reselects_a_homophone_in_a_new_session() {
 }
 
 #[test]
+fn issue_305_one_correction_beats_repeated_wrong_commits_in_a_fresh_session() {
+    // #305: one explicit correction beats repeated wrong commits, including beyond
+    // the weak index gate, in a fresh session with no correcting-session cache.
+    let conversion = conversion_fixture();
+    let mut observations = Vec::new();
+    for count in [1, 4, 15, 100] {
+        let learning = Arc::new(LearningService::memory());
+        let mut dispatcher =
+            Dispatcher::new_with_services(Arc::clone(&conversion), Arc::clone(&learning))
+                .expect("isolated learning dispatcher");
+        let mut out = OutputBuf::new();
+        let first = create_session(&mut dispatcher, &mut out, "issue-305-choice.exe");
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::SetInputScope {
+                    session: first,
+                    scope: InputScope::Normal,
+                },
+                &mut out,
+            ),
+            Reply::Message(Response::Ok)
+        );
+        for _ in 0..count {
+            type_word(&mut dispatcher, first, "kana", &mut out);
+            send_keys(
+                &mut dispatcher,
+                first,
+                &[named_key(KeyCode::Space), named_key(KeyCode::Enter)],
+                &mut out,
+            );
+            assert_eq!(out.commit_text(), Some("仮名"));
+            learning.confirm_all_staged();
+        }
+        type_word(&mut dispatcher, first, "kana", &mut out);
+        send_keys(
+            &mut dispatcher,
+            first,
+            &[named_key(KeyCode::Space)],
+            &mut out,
+        );
+        assert_eq!(out.preedit_text(), "仮名");
+        assert_eq!(out.candidate(3).map(|(surface, _)| surface), Some("候補04"));
+        send_keys(
+            &mut dispatcher,
+            first,
+            &[
+                named_key(KeyCode::Down),
+                named_key(KeyCode::Down),
+                named_key(KeyCode::Down),
+            ],
+            &mut out,
+        );
+        assert_eq!(
+            out.preedit_text(),
+            "候補04",
+            "explicit selection for k={count}"
+        );
+        send_keys(
+            &mut dispatcher,
+            first,
+            &[named_key(KeyCode::Enter)],
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some("候補04"));
+        learning.confirm_all_staged();
+
+        let fresh = create_session(&mut dispatcher, &mut out, "issue-305-fresh.exe");
+        assert_ne!(first, fresh);
+        assert_eq!(
+            dispatcher.dispatch(
+                &Request::SetInputScope {
+                    session: fresh,
+                    scope: InputScope::Normal,
+                },
+                &mut out,
+            ),
+            Reply::Message(Response::Ok)
+        );
+        type_word(&mut dispatcher, fresh, "kana", &mut out);
+        send_keys(
+            &mut dispatcher,
+            fresh,
+            &[named_key(KeyCode::Space)],
+            &mut out,
+        );
+        let selected = out.preedit_text().to_owned();
+        send_keys(
+            &mut dispatcher,
+            fresh,
+            &[named_key(KeyCode::Enter)],
+            &mut out,
+        );
+        observations.push((count, selected, out.commit_text().map(str::to_owned)));
+    }
+    for (count, selected, committed) in observations {
+        assert_eq!(
+            (selected.as_str(), committed.as_deref()),
+            ("候補04", Some("候補04")),
+            "one correction after k={count} wrong commits must select and commit the correction"
+        );
+    }
+}
+
+#[test]
 fn one_off_far_learning_does_not_override_base_conversion_but_repetition_does() {
     let conversion = conversion_fixture();
     let learning = Arc::new(LearningService::memory());
