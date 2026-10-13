@@ -2295,6 +2295,115 @@ fn issue_282_learned_short_words_stay_one_step_from_the_top() {
     }
 }
 
+// #305: one 返信 correction must displace accumulated 変身 learning in a fresh
+// session; both exact right IDs come from the built dictionary.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_305_henshin_correction_beats_accumulated_learning() {
+    let conversion = open_conversion();
+    let keys = conversion
+        .with_candidates("へんしん", ConversionOptions::default(), |candidates| {
+            ["変身", "返信"].map(|surface| {
+                let right_id = candidates
+                    .iter()
+                    .find(|candidate| candidate.text() == surface)
+                    .and_then(|candidate| candidate.segments().last())
+                    .unwrap_or_else(|| panic!("missing {surface} in the built dictionary"))
+                    .right_id;
+                (surface, right_id)
+            })
+        })
+        .expect("へんしん conversion");
+    let learning = Arc::new(LearningService::memory());
+    for _ in 0..15 {
+        learning.learn("へんしん", keys[0].0, 0, keys[0].1);
+    }
+    let mut dispatcher = Dispatcher::new_with_services(conversion, Arc::clone(&learning))
+        .expect("isolated learning dispatcher");
+    let first = create_normal_session(&mut dispatcher, "issue-305-henshin-choice.exe");
+    assert_eq!(
+        commit_named_converted_romaji(&mut dispatcher, first, "hennshinn", "返信"),
+        "返信"
+    );
+    assert!(matches!(
+        dispatcher.dispatch(
+            &Request::ResetDocumentContext { session: first },
+            &mut OutputBuf::new(),
+        ),
+        Reply::Message(Response::Ok)
+    ));
+    let exact = learning.preference("へんしん", 0, keys).exact;
+    let fresh = create_normal_session(&mut dispatcher, "issue-305-henshin-fresh.exe");
+    assert_ne!(first, fresh);
+    type_romaji(&mut dispatcher, fresh, "hennshinn");
+    let selected = send_key(&mut dispatcher, fresh, space_key())
+        .preedit_text()
+        .to_owned();
+    let committed = send_key(&mut dispatcher, fresh, enter_key())
+        .to_output()
+        .commit;
+    assert_eq!(
+        (selected.as_str(), committed.as_deref()),
+        ("返信", Some("返信"))
+    );
+    assert_eq!(
+        exact,
+        Some(1),
+        "the dictionary's exact right ID must match learning"
+    );
+}
+
+// #305/#282: a single near-candidate choice must be selected and committed on
+// repetition in a fresh session, not just remain present in the candidate list.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_305_one_kannji_selection_is_selected_and_committed_next_time() {
+    for (reading, romaji, surface) in [("かんじ", "kannji", "漢字"), ("ほしい", "hoshii", "欲しい")]
+    {
+        let conversion = open_conversion();
+        let rank = conversion
+            .with_candidates(reading, ConversionOptions::default(), |candidates| {
+                candidates
+                    .iter()
+                    .position(|candidate| candidate.text() == surface)
+            })
+            .expect("short-reading conversion");
+        assert!(
+            rank.is_some_and(|rank| rank <= 1),
+            "#282 near-candidate floor: {reading}"
+        );
+        let learning = Arc::new(LearningService::memory());
+        let mut dispatcher = Dispatcher::new_with_services(conversion, learning)
+            .expect("isolated learning dispatcher");
+        let first = create_normal_session(&mut dispatcher, "issue-305-short-choice.exe");
+        assert_eq!(
+            commit_named_converted_romaji(&mut dispatcher, first, romaji, surface),
+            surface
+        );
+        assert!(matches!(
+            dispatcher.dispatch(
+                &Request::ResetDocumentContext { session: first },
+                &mut OutputBuf::new(),
+            ),
+            Reply::Message(Response::Ok)
+        ));
+        let fresh = create_normal_session(&mut dispatcher, "issue-305-short-fresh.exe");
+        assert_ne!(first, fresh);
+        type_romaji(&mut dispatcher, fresh, romaji);
+        let selected = send_key(&mut dispatcher, fresh, space_key())
+            .preedit_text()
+            .to_owned();
+        let committed = send_key(&mut dispatcher, fresh, enter_key())
+            .to_output()
+            .commit;
+        assert_eq!(
+            (selected.as_str(), committed.as_deref()),
+            (surface, Some(surface)),
+            "{reading}: a learned near choice must reach the document"
+        );
+    }
+}
+
 /// Issue #282: a yielded glossary term keeps leading the IT compounds it
 /// belongs to, and a loanword spelled as its reading (`ヌル`/`ナル`, `リント`,
 /// `ラン`) does not yield at all, because a lifted word cost would reach every
