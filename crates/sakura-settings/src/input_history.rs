@@ -880,6 +880,106 @@ mod tests {
     }
 
     #[test]
+    fn mine_single_key_repeat_sessions_do_not_taint_later_clean_commit() {
+        const BURST_SESSIONS: u64 = 256;
+        let repeat_key = |sequence, session| {
+            let InputHistoryRecord::Key(mut record) =
+                key(sequence, session, Some('r'), HistoryScope::Normal)
+            else {
+                panic!("key fixture must produce a key record");
+            };
+            record.key_code = sakura_proto::KeyCode::Char as u16;
+            record.repeat = true;
+            record.state_after = 1;
+            record.mode_before = 1;
+            record.mode_after = 1;
+            record.preedit_after = "r".to_owned();
+            record.action = "char".to_owned();
+            InputHistoryRecord::Key(record)
+        };
+        let clean_session = BURST_SESSIONS + 1;
+        let clean_records = vec![
+            key(513, clean_session, Some('t'), HistoryScope::Normal),
+            key(514, clean_session, Some('e'), HistoryScope::Normal),
+            commit(515, clean_session, HistoryScope::Normal, "て", "合成前"),
+            key(519, clean_session, Some('s'), HistoryScope::Normal),
+            key(520, clean_session, Some('u'), HistoryScope::Normal),
+            commit(521, clean_session, HistoryScope::Normal, "す", "合成後"),
+        ];
+        let baseline = mine_snapshot(&InputHistorySnapshot {
+            format_version: INPUT_HISTORY_FORMAT_VERSION,
+            records: clean_records.clone(),
+            ignored_tail_bytes: 0,
+        });
+        assert_eq!(baseline.candidates.len(), 2);
+        assert_eq!(baseline.stats.accepted_commits, 2);
+        assert_eq!(baseline.stats.excluded_unreconstructable, 0);
+        assert!(baseline
+            .candidates
+            .iter()
+            .any(|candidate| candidate.reading == "て" && candidate.typing == "te"));
+        assert!(baseline
+            .candidates
+            .iter()
+            .any(|candidate| candidate.reading == "す" && candidate.typing == "su"));
+
+        // Commit-bearing variants make repeat rejection observable; keys alone
+        // cannot produce candidates even if the repeat guard is removed.
+        for (burst_commits, mixed_interval, expected_excluded) in
+            [(false, false, 0), (true, false, 16), (true, true, 17)]
+        {
+            let mut records = Vec::new();
+            for session in 1..=BURST_SESSIONS {
+                records.push(repeat_key(session * 2 - 1, session));
+                if burst_commits && session % 16 == 0 {
+                    records.push(commit(
+                        session * 2,
+                        session,
+                        HistoryScope::Normal,
+                        "りぴーと",
+                        "反復候補",
+                    ));
+                }
+            }
+            let mut later_records = clean_records.clone();
+            if mixed_interval {
+                later_records.insert(3, repeat_key(516, clean_session));
+                later_records.insert(
+                    4,
+                    commit(
+                        517,
+                        clean_session,
+                        HistoryScope::Normal,
+                        "りぴーと",
+                        "反復候補",
+                    ),
+                );
+            }
+            records.extend(later_records);
+            let report = mine_snapshot(&InputHistorySnapshot {
+                format_version: INPUT_HISTORY_FORMAT_VERSION,
+                records,
+                ignored_tail_bytes: 0,
+            });
+            assert_eq!(
+                report.candidates, baseline.candidates,
+                "repeat sessions must not add candidates or change clean commits"
+            );
+            assert_eq!(report.family_counts, baseline.family_counts);
+            assert_eq!(report.stats.accepted_commits, 2);
+            assert_eq!(report.stats.excluded_unreconstructable, expected_excluded);
+            assert_eq!(report.stats.commit_records_seen, 2 + expected_excluded);
+            assert_eq!(
+                report.stats.records_seen,
+                BURST_SESSIONS as usize + 6 + expected_excluded + usize::from(mixed_interval)
+            );
+            assert_eq!(report.stats.excluded_non_normal, 0);
+            assert_eq!(report.stats.excluded_private, 0);
+            assert_eq!(report.stats.capped_occurrences, 0);
+        }
+    }
+
+    #[test]
     fn miner_is_deterministic_and_applies_session_day_cap() {
         let mut records = Vec::new();
         for index in 0..10 {
