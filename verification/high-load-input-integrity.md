@@ -567,6 +567,122 @@ engine 側から消える点は同じである。
 修正はしていない。§29 の禁止事項どおり、`KEY_BUDGET` の延長も
 timeout の握り潰しも retry ループも本コミットには含まない。
 
+## 5.6 engine / renderer のプロセス優先度（#322。修正あり）
+
+§5.5 までは観測だけだった。本節は遅延の一因を実測し、修正した。
+
+### 5.6.1 観測（2.0.14 をインストールした開発機）
+
+- logon タスク `\Sakura Input\Logon` の `Settings.Priority` は 7 だった。
+  `crates/sakura-install-maintenance/src/launcher.rs` の `register()` は
+  `ITaskSettings::SetPriority` を呼ばないので、これは Task Scheduler の
+  既定値である。7 は `BELOW_NORMAL_PRIORITY_CLASS` に当たる。
+- `crates/sakura-logon/src/main.rs` の `launch()` は engine と renderer を
+  優先度フラグなしで起動する。`CreateProcess` は below normal の親の子にも
+  below normal を与える。実機の `sakura_engine` / `sakura_renderer` /
+  `sakura_neural_worker` はすべて `BelowNormal`（base priority 6）で動いて
+  いた。crates 内に `SetPriorityClass` / `SetThreadPriority` の呼び出しは
+  無かった。
+- 同じ機械の `ipc-timeouts.bin` には、インストール（10/13 15:41）以降の
+  key timeout が 31 件あり、10/13 18:24、10/14 20:31〜20:33、
+  10/15 22:00〜22:01 に固まっていた。`sakura_settings.exe diagnostics timing`
+  の request-total 最大は 2,261 ms、learning-lock-wait 最大は 2,176 ms。
+  これらの時刻に CPU が飽和していたかは**確認していない**。
+
+### 5.6.2 計測
+
+`crates/sakura-engine/tests/high_load_key_integrity.rs` の
+`key_round_trips_under_a_saturated_cpu_by_engine_priority_class`
+（`#[ignore]`。合否ではなく計測）。
+
+```text
+cargo test -p sakura-engine --release --features dev-fixtures --test high_load_key_integrity -- --ignored --exact key_round_trips_under_a_saturated_cpu_by_engine_priority_class --nocapture
+```
+
+- 負荷: 論理プロセッサ数 × 2 の busy thread（normal）。parallel build 相当。
+- クライアント: `THREAD_PRIORITY_HIGHEST`。キー入力の +2 boost を受けた
+  前景 UI スレッドの位置であり、クライアント自身の待ちを数字から除く。
+- 1 run = romaji 200 キー（8 キーごとに Escape）。壁時計 8 s で打ち切る。
+  class は run ごとに `SetPriorityClass` で明示し、3 class を 3 round
+  交互に回す（機械の状態の変化をどの class にも均等に載せるため）。
+- 機械: Ryzen 7 9700X（16 論理プロセッサ、busy thread 32）、2026-10-16。
+
+CPU 飽和時の結果。1〜3 回目は engine を below normal で起動し、4 回目は
+最終コード（normal で起動）で取った。どの回も、計測する class は run ごとに
+明示設定している。
+
+| 回 | class | keys | p99 | max | 50 ms 超 |
+|---|---|---|---|---|---|
+| 1 | below_normal | 258 | 4.85 s | 9.40 s | 59 |
+| 1 | normal | 600 | 242 µs | 1,233 µs | 0 |
+| 1 | above_normal | 600 | 96 µs | 338 µs | 0 |
+| 2 | below_normal | 277 | 4.92 s | 5.66 s | 5 |
+| 2 | normal | 600 | 153 µs | 524 µs | 0 |
+| 2 | above_normal | 600 | 136 µs | 333 µs | 0 |
+| 3 | below_normal | 275 | 5.28 s | 5.77 s | 5 |
+| 3 | normal | 600 | 353 µs | 18.3 ms | 0 |
+| 3 | above_normal | 600 | 92 µs | 194 µs | 0 |
+| 4 | below_normal | 402 | 129.5 ms | 10.06 s | 15 |
+| 4 | normal | 600 | 98 µs | 298 µs | 0 |
+| 4 | above_normal | 600 | 69 µs | 124 µs | 0 |
+
+below_normal の keys が 600 に届かないのは、8 s の打ち切りに当たった run が
+あるためで、その間に打てたキー自体が少ない。無負荷時はどの回も全 class で
+max ≤ 約 280 µs、50 ms 超 0 だった。
+
+### 5.6.3 判断
+
+- below normal は 4 回すべてで TSF の `KEY_BUDGET`（50 ms）を超え、最悪
+  10 s 止まった。TSF は 50 ms で諦めるので、超えた 1 打はそのまま §5.5 の
+  「諦めたキー」になる。
+- engine は `ABOVE_NORMAL_PRIORITY_CLASS`（`process_priority::ENGINE_CLASS`）。
+  normal も 50 ms 超は 0 だったが、3 回目に max 18.3 ms と予算の 1/3 を
+  使った。above normal は 4 回とも max ≤ 338 µs。TSF が同期で待つ相手は
+  engine だけなので、normal の前景スレッドよりも先に走らせる。`HIGH` は
+  採らない。暴走したときに OS 自身の操作まで止め得る class であり、
+  IME に要る範囲を超える。
+- renderer は `NORMAL_PRIORITY_CLASS`。TSF は renderer を同期で待たないので、
+  普通のアプリと同列で足りる。
+- engine が起動する helper（long conversion / AI text）は
+  `CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS` を明示する
+  （`process_priority::HELPER_CREATION_FLAGS`）。指定しなければ engine の
+  above normal を継承し、重い推論がユーザーの他の作業より先に走る。
+  修正前と同じ below normal を保つ。
+- class はプロセス自身が設定する（engine は `main` の最初、renderer は
+  `run()` の最初）。タスクの `Priority` は変えない。旧ビルドが登録した
+  タスクのままでも効き、class の持ち主が 1 か所に保たれる。
+
+### 5.6.4 検証
+
+- `an_engine_started_below_normal_serves_keys_above_normal`
+  （`high_load_key_integrity.rs`）: below normal で起動した engine は、
+  接続できた時点で above normal にあり、`engine.log` に
+  `event=priority	inherited=below_normal	applied=above_normal`（`	` はタブ） を残す。
+  `main.rs` の呼び出しを外すと `0x4000`（below normal）のまま FAIL する
+  ことを確認した。
+- `a_renderer_started_below_normal_runs_at_normal`
+  （`crates/sakura-renderer/tests/process_priority.rs`）: below normal で
+  起動した renderer は、テスト専用 pipe に接続した時点で normal にある。
+  `run()` の呼び出しを外すと `0x4000` で FAIL することを確認した。
+- `process_priority` の unit test: class の対応表と helper のフラグ。
+
+### 5.6.5 残るリスク
+
+- `main` / `run()` に入る前の起動（loader、static 初期化）は、まだ launcher
+  の class で走る。計測の試行のうち 1 回で、below normal で起動した isolated
+  engine が 5 s 以内に pipe を作らなかった（子は生存、背景 CPU 30〜40%）。
+  再現しておらず（release で deterministic test 10/10 成功）、原因は
+  **未確定**である（起動前に below normal のまま待たされた、という仮説のみ）。
+  logon launcher からも class を渡せば消せるが、class の定数が 2 か所に
+  なるので本修正では行わない。
+- 修正が効くのは、このコードを含むリリースをインストールした後である。
+  インストール済みの 2.0.14 は below normal のまま動く。
+- learning-lock-wait 2,176 ms は lock の構造の問題で、#250 の範囲である。
+  lock を持つ maintenance thread も engine の class で動くので速くはなるが、
+  構造は変えていない。
+- Pending / ACK（#148 / #248）、およびディスク I/O やメモリ圧迫による遅延は
+  対象外。
+
 ## 6. 実施済み / 未実施
 
 | 項目 | 状態 |
@@ -583,6 +699,7 @@ timeout の握り潰しも retry ループも本コミットには含まない�
 | deterministic delay injection | 実施済み（§5.4.1〜5.4.2。release ビルドに残る 4 点、`--fault-injection` + `--test-pipe` gate、`FaultStatus` で検証可） |
 | stress harness | 実施済み（§5.4.3。`spawn_isolated_with_faults` + `high_load_key_integrity.rs` 6 tests。負荷下の長時間実行は未実施） |
 | 諦めたキーの行方の特定 | 実施済み（§5.5。実 engine で `Revert` が未受領のキーを捨てることを確認。修正は未実施） |
+| engine / renderer のプロセス優先度（#322） | 実施済み（§5.6。CPU 飽和下の実測、修正、fail-before 確認。インストール済み環境への反映はリリース後） |
 | ETW 因果確定 | **未実施** |
 | PBT / mutation / TLC | **未実施** |
 | 実ホスト E2E | **未実施**（§5.5.3 の disconnect 経路の実測を含む） |
@@ -598,3 +715,7 @@ stale reply は新しい request の答えとして配送されない」こと�
 特に H-E（`Shared::dynamic_runtimes` の process-wide mutex）と
 H-F（developer mode のファイル syscall）は ETW 実測前であって、
 どちらも原因と断定してはならない。
+
+§5.6 は、engine / renderer が logon タスクから below normal を継承していた
+ことを、CPU 飽和時に `KEY_BUDGET` を超える一因として実測し、修正した。
+それ以外の遅延要因（H-A〜H-F、#250 の lock）は引き続き仮説のままである。

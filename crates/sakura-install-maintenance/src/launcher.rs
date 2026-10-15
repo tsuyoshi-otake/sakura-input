@@ -31,6 +31,13 @@
 //! Each of those is a default that suits a nightly maintenance job and is
 //! wrong for a resident user-facing service.
 //!
+//! `Priority` is the one such default deliberately left alone. Its 7 starts
+//! the launcher below normal, and `CreateProcess` hands that class on to the
+//! engine and the renderer, which then lose every contended CPU to ordinary
+//! programs. Each of them sets its own class as its first act instead
+//! (#322): the class belongs to the process that needs it, and it takes
+//! effect even under a task registered by an older build.
+//!
 //! # Integrity level
 //!
 //! The task runs at the user's own level ([`TASK_RUNLEVEL_LUA`]), never
