@@ -26,7 +26,6 @@ use crate::dictionary::ConversionService;
 const MINIMUM_LONG_READING_CHARS: usize = 10;
 const MINIMUM_SEGMENTED_READING_CHARS: usize = 3;
 const WORKER_RESPONSE_TIMEOUT: Duration = Duration::from_millis(500);
-const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RerankState {
@@ -466,7 +465,7 @@ impl ProcessClient {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
-            .creation_flags(CREATE_NO_WINDOW)
+            .creation_flags(crate::process_priority::HELPER_CREATION_FLAGS)
             .spawn()?;
         let Some(input) = child.stdin.take() else {
             terminate_child(&mut child);

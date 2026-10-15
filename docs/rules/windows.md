@@ -91,3 +91,15 @@
   on the 2.0.10 reinstall; the installer itself finished normally). Open a
   `FileStream` with `FileShare.ReadWrite -bor FileShare.Delete` and wait for
   both `Installation process succeeded.` and `Log closed.`.
+
+- **A process the logon task starts runs below normal, and so does every child
+  it starts without a class flag.** Task Scheduler's default task `Priority` is
+  7 (`BELOW_NORMAL_PRIORITY_CLASS`), and `CreateProcess` gives the children of
+  a below-normal parent the same class. Observed 2026-10-16 (#322): the
+  installed 2.0.14 engine, renderer and neural worker all ran `BelowNormal`,
+  and with 32 busy threads a below-normal engine missed the 50 ms key budget in
+  every measured run (worst 10.06 s) while above normal stayed at or under
+  338 µs. Check `Get-ScheduledTask` `Settings.Priority` and the live process
+  class before blaming conversion code for load-only failures. A process that
+  raises its own class must pass an explicit class to the helpers it spawns,
+  or they inherit the raised one.

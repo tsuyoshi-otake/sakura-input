@@ -6,6 +6,8 @@
 //! passes them to a child it owns, and connects only to that exact private
 //! pipe.
 
+use std::os::windows::io::AsRawHandle;
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -15,6 +17,10 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use sakura_ipc::{Client, Endpoint, ServerTrustPolicy};
 use sakura_proto::{KeyCode, KeyInput, Modifiers, Request, Response, SessionId};
+use windows::Win32::Foundation::HANDLE;
+use windows::Win32::System::Threading::{
+    GetPriorityClass, SetPriorityClass, BELOW_NORMAL_PRIORITY_CLASS, PROCESS_CREATION_FLAGS,
+};
 
 /// Long enough to cover a cold process start on a loaded machine. Nothing
 /// here is measuring latency — that is `ipc_latency.rs`'s job, and it uses
@@ -69,7 +75,31 @@ impl Engine {
     pub fn spawn_isolated_with_setup(setup: impl FnOnce(&Path)) -> Engine {
         let test_lock = acquire_engine_test_lock();
         let identity = TestIdentity::new("ordinary");
-        Self::spawn(identity, PipeBinding::PrivateTest, test_lock, setup, None)
+        Self::spawn(
+            identity,
+            PipeBinding::PrivateTest,
+            test_lock,
+            setup,
+            None,
+            0,
+        )
+    }
+
+    /// Starts an isolated engine the way the logon task starts the real one:
+    /// as a below-normal process. The task's default priority is 7, and
+    /// `CreateProcess` gives a below-normal parent's class to a child that
+    /// does not ask for one, so this is the class the engine is born with.
+    pub fn spawn_isolated_below_normal() -> Engine {
+        let test_lock = acquire_engine_test_lock();
+        let identity = TestIdentity::new("below-normal");
+        Self::spawn(
+            identity,
+            PipeBinding::PrivateTest,
+            test_lock,
+            |_| {},
+            None,
+            BELOW_NORMAL_PRIORITY_CLASS.0,
+        )
     }
 
     /// Starts an isolated engine that will stall itself at named points.
@@ -90,6 +120,7 @@ impl Engine {
             test_lock,
             |_| {},
             Some(spec),
+            0,
         )
     }
 
@@ -110,6 +141,7 @@ impl Engine {
             test_lock,
             |_| {},
             None,
+            0,
         )
     }
 
@@ -119,6 +151,7 @@ impl Engine {
         test_lock: MutexGuard<'static, ()>,
         setup: impl FnOnce(&Path),
         faults: Option<&str>,
+        creation_flags: u32,
     ) -> Engine {
         let dictionary = test_dictionary(&identity.local_app_data);
         setup(&identity.local_app_data);
@@ -145,6 +178,7 @@ impl Engine {
             );
             command.arg("--fault-injection").arg(spec);
         }
+        command.creation_flags(creation_flags);
         let child = command
             .spawn()
             .expect("the engine binary is built as a dependency of this test");
@@ -209,6 +243,31 @@ impl Engine {
             .as_ref()
             .expect("the owned engine has not been cleaned up")
             .id()
+    }
+
+    /// The owned child's raw `GetPriorityClass` value; zero if the query
+    /// failed.
+    pub fn priority_class(&self) -> u32 {
+        let child = self
+            .child
+            .as_ref()
+            .expect("the owned engine has not been cleaned up");
+        // SAFETY: `child` owns this process handle, opened with full access
+        // by `CreateProcess`, and keeps it open for the duration of the call.
+        unsafe { GetPriorityClass(HANDLE(child.as_raw_handle())) }
+    }
+
+    /// Moves the owned child to another priority class, overriding whatever
+    /// the engine chose for itself at startup.
+    pub fn set_priority_class(&self, class: PROCESS_CREATION_FLAGS) {
+        let child = self
+            .child
+            .as_ref()
+            .expect("the owned engine has not been cleaned up");
+        // SAFETY: as in `priority_class`; the handle carries
+        // PROCESS_SET_INFORMATION.
+        unsafe { SetPriorityClass(HANDLE(child.as_raw_handle()), class) }
+            .expect("set the owned engine's priority class");
     }
 
     /// Requests a clean shutdown on this owned pipe, waits for the exact child

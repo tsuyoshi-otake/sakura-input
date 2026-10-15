@@ -18,7 +18,6 @@ use sakura_proto::{AiTextOperation, AiTextStatus, SessionId};
 use sakura_user_prefs::{
     self as user_preferences, AiAuth, AiEffort, AiProvider, AiServiceTier, AiStyle,
 };
-use windows::Win32::System::Threading::CREATE_NO_WINDOW;
 
 const MAX_JOBS: usize = 1;
 const WORKER_DEADLINE: Duration = Duration::from_secs(30);
@@ -335,7 +334,7 @@ fn run_worker(worker: &Path, request: &Request, cancel: &AtomicBool) -> AiTextRe
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())
-        .creation_flags(CREATE_NO_WINDOW.0)
+        .creation_flags(crate::process_priority::HELPER_CREATION_FLAGS)
         .spawn()
     {
         Ok(child) => child,
