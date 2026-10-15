@@ -2972,3 +2972,28 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Pre-publish checks (parallel): the only personal-data-like hit in lines added since v2.0.14 is the public repository URL; the identities since v2.0.14 are the owner identity and GitHub's merge committer; repo PUBLIC with no `v2.0.15` tag or release (Latest is v2.0.14); LICENSE (MIT) present.
 - Verification, one gate script (20 steps, all PASS, 326 s): release-workflow policy (+SelfTest), update signing v2 with an ephemeral key, the canonical-version rule for v2.0.15 plus notes and sequence 23, fmt, clippy `-D warnings` with the release feature set, run-test-quiet SelfTest, wrapped workspace tests, process clean, the installed 2.0.14 `system.dic` SHA-256 equal to the checked-in report (`68f93939…dec0ef`), the five release.yml dictionary gates against it, process clean, `cargo build --workspace --release --locked` (51 s), TSF DLL size (440,832 bytes), no tracked change, process clean.
 - The quiet runner hides test counts, so I listed what each dictionary-gate filter selects with `--ignored --list`: 1 (non-initial allomorphs), 1 (general surface), 2 (#84), 4 (#282), 2 (#291). No gate passed on an empty filter.
+
+## 2026-10-16 Sakura Input 2.0.15 tagged, built and published (#324)
+
+- PR #325 (`claude/324-release-2.0.15`, carrying PR #323's commits): CI passed 8 checks (2 skipped by design); Build and test took 12m34s. Merged with a merge commit as `d7bcd27`. PR #323 then showed as merged and #322 closed through `Closes #322`. GitHub deleted the #324 head branch on merge; I deleted `claude/322-engine-priority` explicitly and pruned both tracking refs and local branches.
+- `gh pr checks --watch --interval 60`, run in a background shell with its output redirected, exited after about 1 minute with code 8 (checks still pending). I did not investigate why; I polled `gh pr checks` every 60 s in a bounded loop instead.
+- Tag: `git merge-base --is-ancestor d7bcd27 origin/main` exited 0 before the annotated `v2.0.15` was pushed on `d7bcd27`. release.yml run 38821388592 succeeded in about 26.5 minutes (23:05:08Z to 23:31:38Z), longer than the 13 minutes of v2.0.14.
+- Release candidate: `sakura_setup.exe` is 24,765,770 bytes, SHA-256 `172eb710…e4ed10`. The manifest has `release_sequence=23`, `source_commit` `d7bcd27` and `authenticode=unsigned`; `signing-status.txt` is `unsigned-owner-approved`. `gh attestation verify` with the release.yml signer workflow and source digest `d7bcd27` exited 0 for the installer and for the manifest. The bundle installer is byte-identical to the candidate.
+- Publish: `scripts/publish-release.ps1 -Publish`, with the protected signing key passed by path only, exited 0 in 44 s. https://github.com/tsuyoshi-otake/sakura-input/releases/tag/v2.0.15 was published at 23:33:39Z as Latest, not a draft. Assets: the 348-byte signature, the 519-byte manifest and the installer. The read-back found 1 valid pinned signature and the script removed its read-back folder.
+
+## 2026-10-16 Sakura Input 2.0.15 reinstalled on this PC and checked (#324)
+
+- Installer: the attested release-candidate `sakura_setup.exe` above. The install script checks its SHA-256 before running it.
+- Reinstall: elevated `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=` without `-Wait`, log polled with shared read access until `Log closed.`. It finished in 4.1 s including UAC. The log has `Installation process succeeded.`; `--configure-diagnostics` and `--enable-profile` exit 0; `Need to restart Windows? No`.
+- Priority, the #322 fix on the installed system:
+  - Before (2.0.14): engine, renderer and neural worker all `BelowNormal` (base priority 6).
+  - After (2.0.15): engine `AboveNormal` (base 10), renderer `Normal` (base 8), both started 08:34 local from `versions\2.0.15-a6610c2636191a30`.
+  - `engine.log`: `event=priority inherited=below_normal applied=above_normal`. The logon task keeps Priority 7, as designed.
+  - The neural worker was not running after the reinstall. It is spawned only by `long_conversion.rs` with `HELPER_CREATION_FLAGS` (below normal); its class on the installed system was not observed.
+- Installed state:
+  - TSF InprocServer32 points at `versions\2.0.15-a6610c2636191a30\sakura_tsf.dll`.
+  - All 16 payload files match the release bundle (13 in the versioned directory, 3 in `{app}`), 0 differ. The installed `dict\system.dic` SHA-256 `68f93939…dec0ef` is unchanged from 2.0.14. `versions\2.0.14-…` keeps only `sakura_tsf.dll`.
+  - The `config.toml`, `memo.bin` and `memo.bin.bak` hashes are unchanged. `logon.status` is all ok before and after.
+- Not verified: an on-screen typing check in a real TSF host under CPU load.
+- Cleanup: `ci/check-process-clean.ps1` is clean; only the installed 2.0.15 engine and renderer remain.
+- Learning (observed once, cause not verified): a background `gh pr checks --watch` can return code 8 while checks are still pending, so check the exit code and fall back to a bounded `gh pr checks` poll.
