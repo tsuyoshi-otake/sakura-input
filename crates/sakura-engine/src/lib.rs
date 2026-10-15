@@ -40,6 +40,7 @@ pub mod input_history;
 pub mod learning;
 pub mod long_conversion;
 pub mod prediction;
+pub mod process_priority;
 pub mod server;
 pub mod session;
 mod shift_ascii_space;

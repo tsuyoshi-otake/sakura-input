@@ -12,6 +12,8 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::process_priority::Applied;
+
 /// Each retained engine log is at most five MiB.
 pub const MAX_ENGINE_LOG_BYTES: u64 = 5 * 1024 * 1024;
 
@@ -68,6 +70,7 @@ pub enum EngineEvent {
     StartupFailed { hresult: i32 },
     DumpsPruned { removed: u64, failures: u64 },
     DumpPruneFailed { os_error: i32 },
+    Priority { outcome: Applied },
 }
 
 /// A bounded two-generation event log.
@@ -181,6 +184,20 @@ fn render_record(timestamp_ms: u64, event: EngineEvent) -> String {
         EngineEvent::DumpPruneFailed { os_error } => {
             format!("unix_ms={timestamp_ms}\tevent=dump_prune_failed\tos_error={os_error}\n")
         }
+        EngineEvent::Priority {
+            outcome: Applied::Set { inherited, applied },
+        } => format!(
+            "unix_ms={timestamp_ms}\tevent=priority\tinherited={}\tapplied={}\n",
+            inherited.name(),
+            applied.name()
+        ),
+        EngineEvent::Priority {
+            outcome: Applied::Failed { inherited, hresult },
+        } => format!(
+            "unix_ms={timestamp_ms}\tevent=priority_failed\tinherited={}\thresult=0x{:08X}\n",
+            inherited.name(),
+            hresult as u32
+        ),
     }
 }
 
@@ -313,6 +330,7 @@ fn unix_timestamp_ms() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::process_priority::PriorityClass;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_DIRECTORY: AtomicU64 = AtomicU64::new(1);
@@ -372,12 +390,34 @@ mod tests {
             },
         )
         .expect("failure");
+        log.record_at(
+            126,
+            EngineEvent::Priority {
+                outcome: Applied::Set {
+                    inherited: PriorityClass::BelowNormal,
+                    applied: PriorityClass::AboveNormal,
+                },
+            },
+        )
+        .expect("priority");
+        log.record_at(
+            127,
+            EngineEvent::Priority {
+                outcome: Applied::Failed {
+                    inherited: PriorityClass::Unknown,
+                    hresult: 0x8007_0005u32 as i32,
+                },
+            },
+        )
+        .expect("priority failure");
 
         assert_eq!(
             fs::read_to_string(&path).expect("log"),
             "unix_ms=123\tevent=startup\twidth_scan=avx2-hybrid\n\
              unix_ms=124\tevent=ready\telapsed_ms=17\n\
-             unix_ms=125\tevent=startup_failed\thresult=0x80004005\n"
+             unix_ms=125\tevent=startup_failed\thresult=0x80004005\n\
+             unix_ms=126\tevent=priority\tinherited=below_normal\tapplied=above_normal\n\
+             unix_ms=127\tevent=priority_failed\tinherited=unknown\thresult=0x80070005\n"
         );
         let _ = fs::remove_dir_all(path.parent().expect("parent"));
     }

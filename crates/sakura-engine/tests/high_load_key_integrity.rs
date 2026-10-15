@@ -11,6 +11,11 @@
 //! engine's own fault counters as well, because a run in which nothing was
 //! ever injected would otherwise pass every one of these assertions while
 //! testing nothing at all.
+//!
+//! The last two tests hold the engine still the way a busy machine does,
+//! without a delay point: the engine is started below normal, as the logon
+//! task starts it, and either checks the class it moves itself to or competes
+//! with a saturated CPU (#322).
 
 #[allow(dead_code)]
 mod common;
@@ -20,6 +25,11 @@ use std::time::{Duration, Instant};
 use sakura_ipc::{Client, Fault};
 use sakura_proto::{
     FaultInjectionEntry, FaultPoint, KeyCode, Request, Response, SessionId, PROTOCOL_VERSION,
+};
+
+use windows::Win32::System::Threading::{
+    GetCurrentThread, GetThreadPriority, SetThreadPriority, ABOVE_NORMAL_PRIORITY_CLASS,
+    BELOW_NORMAL_PRIORITY_CLASS, NORMAL_PRIORITY_CLASS, THREAD_PRIORITY, THREAD_PRIORITY_HIGHEST,
 };
 
 use common::{char_key, named_key, session_for, visible, Engine, PATIENT};
@@ -384,6 +394,215 @@ fn the_revert_after_an_abandoned_key_discards_a_reading_the_client_never_saw() {
     let status = entry(&fault_status(&mut client), FaultPoint::DuringReply);
     assert_eq!(status.fired, 8, "{status:?}");
     assert!(status.slept_us >= 8 * 195_000, "{status:?}");
+
+    drop(client);
+    engine.cleanup().expect("clean shutdown");
+}
+
+/// The logon task starts the engine below normal (#322). The engine must have
+/// left that class before it can be sent a key, or every normal-priority
+/// thread on the machine runs ahead of the user's keystroke.
+///
+/// The engine changes its class before it creates its pipe, so a client that
+/// has connected is already talking to an engine at its final class. No sleep
+/// or poll is needed to observe it.
+#[test]
+fn an_engine_started_below_normal_serves_keys_above_normal() {
+    let mut engine = Engine::spawn_isolated_below_normal();
+    let mut client = engine.client();
+    handshake(&mut client);
+
+    assert_eq!(
+        engine.priority_class(),
+        ABOVE_NORMAL_PRIORITY_CLASS.0,
+        "the engine still runs at the class its launcher gave it (0x{:X}); \
+         below normal is 0x{:X}",
+        engine.priority_class(),
+        BELOW_NORMAL_PRIORITY_CLASS.0
+    );
+    let session = session_for(&mut client, "priority.exe");
+    assert_eq!(preedit_of(&send_char(&mut client, session, 'a')), "あ");
+
+    // The change is diagnosable after the fact, from the owned profile's
+    // engine log, including what the launcher had handed over.
+    let log = std::fs::read_to_string(
+        engine
+            .local_app_data()
+            .join("SakuraInput")
+            .join("logs")
+            .join("engine.log"),
+    )
+    .expect("the engine writes its log under the owned profile");
+    assert!(
+        log.contains("\tevent=priority\tinherited=below_normal\tapplied=above_normal\n"),
+        "engine.log does not record the priority change:\n{log}"
+    );
+
+    drop(client);
+    engine.cleanup().expect("clean shutdown");
+}
+
+/// What a saturated CPU does to a key round trip at each engine class.
+///
+/// This is the measurement behind `process_priority::ENGINE_CLASS`
+/// (`verification/high-load-input-integrity.md` §5.6), not a pass/fail gate:
+/// the numbers depend on the machine, and a timing threshold on a shared
+/// runner fails for reasons unrelated to the code. It saturates every logical
+/// processor of the machine it runs on for about a minute, so it runs only on
+/// purpose:
+///
+/// ```text
+/// cargo test -p sakura-engine --release --test high_load_key_integrity -- --ignored --nocapture
+/// ```
+///
+/// The load is `2 × logical processors` busy threads at normal priority,
+/// which is what a parallel build looks like to the scheduler. The client
+/// thread runs at `THREAD_PRIORITY_HIGHEST` (base 10 in a normal process):
+/// that is where a foreground UI thread stands after the +2 boost Windows
+/// gives it for keyboard input, and it keeps the client's own starvation out
+/// of a number meant to describe the engine's.
+#[test]
+#[ignore = "saturates every logical processor; run on purpose with --release --nocapture"]
+fn key_round_trips_under_a_saturated_cpu_by_engine_priority_class() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::Arc;
+
+    const KEYS_PER_RUN: usize = 200;
+    const RUN_WALL_LIMIT: Duration = Duration::from_secs(8);
+    const ROUNDS: usize = 3;
+    // Longer than `PATIENT`: below normal under saturation can wait for the
+    // balance-set manager's anti-starvation boost, which takes seconds.
+    const STARVED: Duration = Duration::from_secs(30);
+    let classes = [
+        ("below_normal", BELOW_NORMAL_PRIORITY_CLASS),
+        ("normal", NORMAL_PRIORITY_CLASS),
+        ("above_normal", ABOVE_NORMAL_PRIORITY_CLASS),
+    ];
+
+    // Started at normal: every run below sets the class it measures, and a
+    // start below normal only adds a slower startup that nothing here reads.
+    let mut engine = Engine::spawn_isolated();
+    let mut client = engine.client();
+    handshake(&mut client);
+    let session = session_for(&mut client, "saturated.exe");
+
+    // SAFETY: the pseudo-handle names the calling thread and needs no close.
+    let thread = unsafe { GetCurrentThread() };
+    // SAFETY: as above.
+    let previous = unsafe { GetThreadPriority(thread) };
+    // SAFETY: as above.
+    unsafe { SetThreadPriority(thread, THREAD_PRIORITY_HIGHEST) }.expect("raise the client thread");
+
+    // One run: type romaji, cancel every eight keys so the reading stays
+    // short, and time each round trip from the client.
+    let run = |client: &mut Client| -> Vec<Duration> {
+        let started = Instant::now();
+        let mut samples = Vec::with_capacity(KEYS_PER_RUN);
+        for (index, character) in "kannjihennkannsakura"
+            .chars()
+            .cycle()
+            .take(KEYS_PER_RUN)
+            .enumerate()
+        {
+            if started.elapsed() >= RUN_WALL_LIMIT {
+                break;
+            }
+            let sent = Instant::now();
+            let answer = client.call(
+                &Request::SendKey {
+                    session,
+                    key: char_key(character),
+                },
+                STARVED,
+            );
+            samples.push(sent.elapsed());
+            assert!(
+                matches!(answer, Ok(Response::Output(_))),
+                "a starved engine still answers within {STARVED:?}: {answer:?}"
+            );
+            if index % 8 == 7 {
+                let answer = client.call(
+                    &Request::SendKey {
+                        session,
+                        key: named_key(KeyCode::Escape),
+                    },
+                    STARVED,
+                );
+                assert!(matches!(answer, Ok(Response::Output(_))), "{answer:?}");
+            }
+        }
+        samples
+    };
+    let report = |label: &str, samples: &mut Vec<Duration>| {
+        samples.sort();
+        let at = |q: f64| {
+            samples[((samples.len() as f64 * q) as usize).min(samples.len() - 1)].as_micros()
+        };
+        let over = samples.iter().filter(|s| **s > TSF_KEY_BUDGET).count();
+        println!(
+            "{label:<24} keys {:>4}  p50 {:>7} us  p95 {:>7} us  p99 {:>7} us  max {:>8} us  over-50ms {:>4}",
+            samples.len(),
+            at(0.50),
+            at(0.95),
+            at(0.99),
+            samples.last().map_or(0, Duration::as_micros),
+            over
+        );
+    };
+
+    // Unloaded baseline at each class, after one warm-up run.
+    run(&mut client);
+    for (name, class) in classes {
+        engine.set_priority_class(class);
+        report(&format!("idle {name}"), &mut run(&mut client));
+    }
+
+    /// Stops and joins the load on every exit, including a panic, so a
+    /// failed run never leaves the machine saturated.
+    struct Load(Arc<AtomicBool>, Vec<std::thread::JoinHandle<()>>);
+    impl Drop for Load {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::Relaxed);
+            for worker in self.1.drain(..) {
+                let _ = worker.join();
+            }
+        }
+    }
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let workers = 2 * std::thread::available_parallelism().map_or(8, usize::from);
+    let load: Vec<_> = (0..workers)
+        .map(|_| {
+            let stop = Arc::clone(&stop);
+            std::thread::spawn(move || {
+                let mut spin = 0u64;
+                while !stop.load(Ordering::Relaxed) {
+                    spin = std::hint::black_box(spin.wrapping_add(1));
+                }
+            })
+        })
+        .collect();
+    let load = Load(stop, load);
+    println!("load: {workers} busy threads at normal priority");
+
+    // Interleaved rounds, so drift in the machine's state lands on every
+    // class rather than on whichever ran last.
+    let mut loaded: Vec<Vec<Duration>> = vec![Vec::new(); classes.len()];
+    for _ in 0..ROUNDS {
+        for (slot, (_, class)) in classes.iter().enumerate() {
+            engine.set_priority_class(*class);
+            loaded[slot].extend(run(&mut client));
+        }
+    }
+
+    drop(load);
+    // SAFETY: as above.
+    unsafe { SetThreadPriority(thread, THREAD_PRIORITY(previous)) }
+        .expect("restore the client thread");
+
+    for ((name, _), samples) in classes.iter().zip(loaded.iter_mut()) {
+        report(&format!("saturated {name}"), samples);
+    }
 
     drop(client);
     engine.cleanup().expect("clean shutdown");

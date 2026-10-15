@@ -59,7 +59,9 @@ use std::sync::{mpsc::Receiver, Arc, Mutex};
 use sakura_proto::{AppearanceTheme, Mode, PadIdleLockTimeout, PadShortcut};
 use windows::core::{Result, PCWSTR};
 use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, HWND, LPARAM, LRESULT, WPARAM};
-use windows::Win32::System::Threading::CreateMutexW;
+use windows::Win32::System::Threading::{
+    CreateMutexW, GetCurrentProcess, SetPriorityClass, NORMAL_PRIORITY_CLASS,
+};
 use windows::Win32::UI::HiDpi::{
     SetProcessDpiAwarenessContext, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2,
 };
@@ -201,6 +203,11 @@ struct App {
 }
 
 pub fn run() -> Result<()> {
+    // Before anything else, so that the rest of startup already runs at it.
+    // A failure keeps the inherited class: a renderer that repaints late
+    // under load is still better than no candidate list at all, and Task
+    // Manager shows the class it was left at.
+    let _ = run_at_normal_priority();
     let options = match startup_options(std::env::args().skip(1)) {
         Ok(options) => options,
         Err(error) => {
@@ -280,6 +287,20 @@ pub fn run() -> Result<()> {
     }
     drop(app);
     Ok(())
+}
+
+/// Moves the renderer to the class of an ordinary interactive program.
+///
+/// The logon task starts Sakura Input below normal, and `CreateProcess`
+/// hands a below-normal parent's class to a child that does not ask for one
+/// (#322). Below normal, the candidate list the user is waiting to choose
+/// from repaints only once every normal-priority thread on the machine has
+/// had its turn. Normal rather than above normal: nothing waits for the
+/// renderer synchronously, unlike the engine, which sets its own class.
+fn run_at_normal_priority() -> Result<()> {
+    // SAFETY: the pseudo-handle from `GetCurrentProcess` is always valid in
+    // the calling process and carries PROCESS_SET_INFORMATION.
+    unsafe { SetPriorityClass(GetCurrentProcess(), NORMAL_PRIORITY_CLASS) }
 }
 
 #[derive(Debug, Default, PartialEq, Eq)]
