@@ -38,6 +38,14 @@ fn main() {
     };
     let started = Instant::now();
     let event_log = EventLog::open_default().ok();
+    // First, so that startup itself, and every keystroke after it, runs at
+    // the engine's own class rather than the logon task's below-normal one.
+    record(
+        event_log.as_ref(),
+        EngineEvent::Priority {
+            outcome: sakura_engine::process_priority::apply_engine_class(),
+        },
+    );
     match prune_default_dumps() {
         Ok(report) => record(
             event_log.as_ref(),
