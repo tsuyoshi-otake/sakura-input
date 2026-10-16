@@ -11,6 +11,14 @@ pub const RECORD_COMMIT: u8 = 1;
 /// Keeps the learning format version unchanged while still using the CRC envelope.
 pub const REPAIR_SUPPRESS_CONTEXT: u16 = u16::MAX;
 pub const REPAIR_SUPPRESS_SURFACE: &str = "\u{E000}sakura-repair-suppress";
+/// A correction tombstone (#305) is a COMMIT frame with an empty reading,
+/// which no commit has. Its surface is `REJECTION_PREFIX`, the reading,
+/// `REJECTION_SEPARATOR` and the rejected surface; its contexts are the left
+/// context of the rejection and the rejected surface's right ID. An engine
+/// that predates tombstones replays it as a commit of the empty reading,
+/// which no conversion or prediction looks up.
+pub const REJECTION_PREFIX: char = '\u{E001}';
+pub const REJECTION_SEPARATOR: char = '\u{E002}';
 
 /// One durable learning event exposed to the settings viewer/exporter.
 ///
@@ -33,6 +41,10 @@ pub struct LearningRecord {
 pub struct LearningSnapshot {
     pub format_version: u16,
     pub records: Vec<LearningRecord>,
+    /// Correction tombstones (#305) in log order, holding the decoded
+    /// reading and rejected surface. They are not commits, so they never
+    /// appear in `records`.
+    pub rejections: Vec<LearningRecord>,
     /// Bytes after the last checksummed record. The engine repairs this tail
     /// on open; a concurrent settings read reports it instead of presenting
     /// an incomplete event as valid data.

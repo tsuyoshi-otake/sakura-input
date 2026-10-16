@@ -29,6 +29,8 @@
 use std::mem;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::correction::{Correction, CorrectionTrail};
+
 use sakura_core::conversion::{
     ConversionInputClass, CrossCommitBridge, LiteralPolicy, RightContextId,
     MAX_CROSS_COMMIT_TAIL_BYTES, MAX_CROSS_COMMIT_TAIL_SURFACE_BYTES, MIN_CROSS_COMMIT_TAIL_CHARS,
@@ -412,6 +414,9 @@ pub struct Session {
     /// set, key dispatch must not advance the session until the frontend
     /// acknowledges whether the host document deletion was applied.
     undo_pending: bool,
+    /// Recent commits and erasures, to notice a commit the user erased and
+    /// retyped with another spelling (#305).
+    correction_trail: CorrectionTrail,
 }
 
 impl Session {
@@ -485,6 +490,7 @@ impl Session {
             undo_record: UndoRecord::default(),
             undo_armed: false,
             undo_pending: false,
+            correction_trail: CorrectionTrail::default(),
         }
     }
 
@@ -553,6 +559,17 @@ impl Session {
     /// Probe invokes this on a cloned session and therefore never gets a path
     /// to the live cache; Apply invokes it before clearing the live cache.
     pub(crate) fn apply_input_scope(&mut self, scope: InputScope) -> bool {
+        let classified = scope != InputScope::Unclassified;
+        let effective = if classified {
+            scope
+        } else {
+            InputScope::Normal
+        };
+        if (effective, classified) != (self.scope, self.scope_classified) {
+            // Another field took focus: the trail's commits are not left of
+            // this caret (#305).
+            self.correction_trail.clear();
+        }
         if scope == InputScope::Unclassified {
             let was_sensitive = scope_is_sensitive(self.scope);
             self.scope = InputScope::Normal;
@@ -1398,6 +1415,10 @@ impl Session {
         }
         self.undo_pending = false;
         self.undo_armed = false;
+        // The host deleted the undone surface whole, as a run of erasures
+        // would have (#305).
+        self.correction_trail
+            .undo_applied(self.undo_record.surface.as_str());
         if self.commit_cache_len > 0 {
             let previous = (usize::from(self.commit_cache_next) + COMMIT_CACHE_CAPACITY - 1)
                 % COMMIT_CACHE_CAPACITY;
@@ -1419,6 +1440,7 @@ impl Session {
         let right_id = self.undo_record.post_commit_right_id;
         let had_carry = self.undo_record.post_commit_had_carry;
         self.undo_pending = false;
+        self.correction_trail.clear();
         self.reset();
         self.carry_right_id = right_id;
         self.has_carry = had_carry;
@@ -1459,7 +1481,24 @@ impl Session {
         self.undo_record.post_commit_had_carry = false;
     }
 
+    /// Reports a persisted commit of the current reading to the correction
+    /// trail and returns the correction it completes, if any (#305).
+    pub(crate) fn track_commit_correction(
+        &mut self,
+        surface: &str,
+        right_id: u16,
+    ) -> Option<Correction> {
+        let left_context = self.carry_right_id();
+        self.correction_trail
+            .commit(self.preedit.as_str(), surface, left_context, right_id)
+    }
+
+    pub(crate) fn correction_trail_mut(&mut self) -> &mut CorrectionTrail {
+        &mut self.correction_trail
+    }
+
     pub(crate) fn clear_personal_context(&mut self) {
+        self.correction_trail.clear();
         self.reset_carryover();
         self.commit_cache.fill(CommitCacheEntry::default());
         self.commit_cache_len = 0;

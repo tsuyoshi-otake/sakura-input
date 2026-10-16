@@ -42,6 +42,7 @@ Read only the decision files relevant to the task:
 | Sakura reranker / Issue #32 | `docs/decisions/issue-32-reranker.md` |
 | IME key behavior | `docs/decisions/input-behavior.md` |
 | Developer input history | `docs/decisions/developer-history.md` |
+| Correction learning / Issue #305 | `docs/decisions/issue-305-correction-learning.md` |
 
 Consult `.claude/memory/rules.md` for verified rules relevant to the code or
 command being changed. These rules include machine-specific Cargo constraints,

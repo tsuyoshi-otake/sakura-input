@@ -2,7 +2,8 @@ use std::io;
 
 use super::format::{
     FORMAT_VERSION_1, FORMAT_VERSION_2, HEADER_LEN, LEARNING_FORMAT_VERSION, MAX_RECORD_BYTES,
-    RECORD_COMMIT, RECORD_ENVELOPE_LEN,
+    RECORD_COMMIT, RECORD_ENVELOPE_LEN, REJECTION_PREFIX, REJECTION_SEPARATOR,
+    REPAIR_SUPPRESS_CONTEXT, REPAIR_SUPPRESS_SURFACE,
 };
 
 const MAGIC: &[u8; 4] = b"SKLR";
@@ -140,6 +141,60 @@ pub(crate) fn decode_record(payload: &[u8], version: u16) -> io::Result<DecodedR
     })
 }
 
+/// What one verified COMMIT frame means to replay and to the viewer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RecordMeaning<'a> {
+    Commit,
+    RepairSuppress,
+    Rejection {
+        reading: &'a str,
+        surface: &'a str,
+    },
+    /// An empty-reading frame that is not a well-formed tombstone. No writer
+    /// produces one; replay and the viewer skip it.
+    Ignored,
+}
+
+pub(crate) fn record_meaning<'a>(record: &DecodedRecord<'a>) -> RecordMeaning<'a> {
+    if record.left_context == REPAIR_SUPPRESS_CONTEXT
+        && record.right_context == REPAIR_SUPPRESS_CONTEXT
+        && record.surface == REPAIR_SUPPRESS_SURFACE
+    {
+        return RecordMeaning::RepairSuppress;
+    }
+    if !record.reading.is_empty() {
+        return RecordMeaning::Commit;
+    }
+    record
+        .surface
+        .strip_prefix(REJECTION_PREFIX)
+        .and_then(|rest| rest.split_once(REJECTION_SEPARATOR))
+        .filter(|(reading, surface)| rejection_parts_are_valid(reading, surface))
+        .map_or(RecordMeaning::Ignored, |(reading, surface)| {
+            RecordMeaning::Rejection { reading, surface }
+        })
+}
+
+fn rejection_parts_are_valid(reading: &str, surface: &str) -> bool {
+    let reserved = [REJECTION_PREFIX, REJECTION_SEPARATOR];
+    !reading.is_empty()
+        && !surface.is_empty()
+        && !reading.contains(reserved)
+        && !surface.contains(reserved)
+}
+
+/// The tombstone frame's surface, or `None` when the pair could not round-trip
+/// or the frame would exceed the record bound.
+pub(crate) fn rejection_surface(reading: &str, surface: &str) -> Option<String> {
+    if !rejection_parts_are_valid(reading, surface) {
+        return None;
+    }
+    let encoded = format!("{REJECTION_PREFIX}{reading}{REJECTION_SEPARATOR}{surface}");
+    let fits = u16::try_from(encoded.len()).is_ok()
+        && 13usize.saturating_add(encoded.len()) <= MAX_RECORD_BYTES;
+    fits.then_some(encoded)
+}
+
 pub(crate) fn record_at(
     bytes: &[u8],
     version: u16,
@@ -219,6 +274,74 @@ pub(crate) fn crc32(bytes: &[u8]) -> u32 {
         }
     }
     !crc
+}
+
+#[cfg(test)]
+mod rejection_tests {
+    use super::{decode_record, encode_record, record_meaning, rejection_surface, RecordMeaning};
+    use crate::learning::format::{
+        LEARNING_FORMAT_VERSION, MAX_RECORD_BYTES, REJECTION_PREFIX, REJECTION_SEPARATOR,
+        REPAIR_SUPPRESS_CONTEXT, REPAIR_SUPPRESS_SURFACE,
+    };
+
+    /// The meaning of the frame encoded from these fields, as text.
+    fn meaning_of(reading: &str, surface: &str, left: u16, right: u16) -> String {
+        let payload = encode_record(reading, surface, left, right, 20_000).unwrap();
+        let record = decode_record(&payload, LEARNING_FORMAT_VERSION).unwrap();
+        match record_meaning(&record) {
+            RecordMeaning::Commit => "commit".to_owned(),
+            RecordMeaning::RepairSuppress => "repair-suppress".to_owned(),
+            RecordMeaning::Rejection { reading, surface } => format!("reject {reading} {surface}"),
+            RecordMeaning::Ignored => "ignored".to_owned(),
+        }
+    }
+
+    #[test]
+    fn a_tombstone_round_trips_through_the_commit_frame() {
+        let encoded = rejection_surface("かな", "仮名").expect("recordable");
+        assert_eq!(meaning_of("", &encoded, 1841, 7), "reject かな 仮名");
+        assert_eq!(meaning_of("かな", "仮名", 1841, 7), "commit");
+        assert_eq!(
+            meaning_of(
+                "かな",
+                REPAIR_SUPPRESS_SURFACE,
+                REPAIR_SUPPRESS_CONTEXT,
+                REPAIR_SUPPRESS_CONTEXT
+            ),
+            "repair-suppress"
+        );
+    }
+
+    #[test]
+    fn a_malformed_tombstone_is_ignored_and_never_a_commit() {
+        let malformed = [
+            String::new(),
+            "仮名".to_owned(),
+            format!("{REJECTION_PREFIX}かな仮名"),
+            format!("{REJECTION_PREFIX}{REJECTION_SEPARATOR}仮名"),
+            format!("{REJECTION_PREFIX}かな{REJECTION_SEPARATOR}"),
+            format!("{REJECTION_PREFIX}か{REJECTION_SEPARATOR}な{REJECTION_SEPARATOR}仮名"),
+        ];
+        for surface in &malformed {
+            assert_eq!(meaning_of("", surface, 0, 0), "ignored", "{surface:?}");
+        }
+    }
+
+    #[test]
+    fn an_unrecordable_pair_is_refused() {
+        assert_eq!(rejection_surface("", "仮名"), None);
+        assert_eq!(rejection_surface("かな", ""), None);
+        assert_eq!(
+            rejection_surface(&format!("か{REJECTION_SEPARATOR}な"), "仮名"),
+            None
+        );
+        assert_eq!(
+            rejection_surface("かな", &format!("{REJECTION_PREFIX}仮名")),
+            None
+        );
+        let oversized = "x".repeat(MAX_RECORD_BYTES);
+        assert_eq!(rejection_surface("かな", &oversized), None);
+    }
 }
 
 #[cfg(test)]
