@@ -28,6 +28,7 @@ pub mod ai_text;
 pub(crate) mod candidate_projection;
 pub mod composition_fence;
 pub mod configuration;
+pub(crate) mod correction;
 #[cfg(test)]
 #[path = "../tests/unit/developer_history_order_tests.rs"]
 mod developer_history_order;
@@ -41,6 +42,8 @@ pub mod learning;
 pub mod long_conversion;
 pub mod prediction;
 pub mod process_priority;
+#[cfg(feature = "replay-eval")]
+pub mod replay_eval;
 pub mod server;
 pub mod session;
 mod shift_ascii_space;

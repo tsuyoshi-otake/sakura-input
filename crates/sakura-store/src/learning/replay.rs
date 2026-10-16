@@ -1,5 +1,5 @@
-use super::codec::record_at;
-use super::format::{HEADER_LEN, REPAIR_SUPPRESS_CONTEXT, REPAIR_SUPPRESS_SURFACE};
+use super::codec::{record_at, record_meaning, RecordMeaning};
+use super::format::HEADER_LEN;
 
 /// One verified durable event borrowed from a learning-log replay.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -14,6 +14,15 @@ pub enum ReplayEvent<'a> {
     RepairSuppress {
         day: u32,
         reading: &'a str,
+    },
+    /// A correction tombstone (#305): `surface` of `reading` was rejected in
+    /// `left_context`; `right_context` is the rejected surface's right ID.
+    Reject {
+        day: u32,
+        left_context: u16,
+        right_context: u16,
+        reading: &'a str,
+        surface: &'a str,
     },
 }
 
@@ -41,24 +50,30 @@ impl<'a> Iterator for ReplayView<'a> {
     type Item = ReplayEvent<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (next, record) = record_at(self.bytes, self.version, self.offset)?;
-        self.offset = next;
-        if record.left_context == REPAIR_SUPPRESS_CONTEXT
-            && record.right_context == REPAIR_SUPPRESS_CONTEXT
-            && record.surface == REPAIR_SUPPRESS_SURFACE
-        {
-            Some(ReplayEvent::RepairSuppress {
-                day: record.day,
-                reading: record.reading,
-            })
-        } else {
-            Some(ReplayEvent::Commit {
-                day: record.day,
-                left_context: record.left_context,
-                right_context: record.right_context,
-                reading: record.reading,
-                surface: record.surface,
-            })
+        loop {
+            let (next, record) = record_at(self.bytes, self.version, self.offset)?;
+            self.offset = next;
+            return Some(match record_meaning(&record) {
+                RecordMeaning::Commit => ReplayEvent::Commit {
+                    day: record.day,
+                    left_context: record.left_context,
+                    right_context: record.right_context,
+                    reading: record.reading,
+                    surface: record.surface,
+                },
+                RecordMeaning::RepairSuppress => ReplayEvent::RepairSuppress {
+                    day: record.day,
+                    reading: record.reading,
+                },
+                RecordMeaning::Rejection { reading, surface } => ReplayEvent::Reject {
+                    day: record.day,
+                    left_context: record.left_context,
+                    right_context: record.right_context,
+                    reading,
+                    surface,
+                },
+                RecordMeaning::Ignored => continue,
+            });
         }
     }
 }

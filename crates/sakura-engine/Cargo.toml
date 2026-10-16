@@ -12,6 +12,9 @@ authors.workspace = true
 default = []
 context-research = ["dep:sakura-context-research"]
 dev-fixtures = ["dep:dictc-core"]
+# Offline replay API for tools/conversion-eval `learning-replay` (#305).
+# Never enabled by a shipping build.
+replay-eval = []
 
 [[bin]]
 name = "sakura_engine"

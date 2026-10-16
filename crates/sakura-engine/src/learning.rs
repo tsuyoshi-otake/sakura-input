@@ -27,6 +27,10 @@ pub use sakura_store::learning::{
     read_snapshot, LearningRecord, LearningSnapshot, LEARNING_FORMAT_VERSION,
     MAX_LEARNING_LOG_BYTES,
 };
+use sakura_store::learning::{
+    rejection_is_recordable, LearningLog, LogForget, LogMaintenance, OperationReceipt, ReplayEvent,
+    ReplayView,
+};
 #[cfg(test)]
 use sakura_store::learning::{
     test_crc32 as crc32, test_encode_record as encode_record, test_header as header,
@@ -34,10 +38,8 @@ use sakura_store::learning::{
     LearningFaultPoint as ForgetFaultPoint, LearningFaultScope as ForgetFaultScope,
     FORMAT_VERSION_1, FORMAT_VERSION_2, HEADER_LEN, RECORD_COMMIT, REPAIR_SUPPRESS_SURFACE,
 };
-use sakura_store::learning::{
-    LearningLog, LogForget, LogMaintenance, OperationReceipt, ReplayEvent, ReplayView,
-};
 
+use self::rejection::{RejectionGate, RejectionKey, RejectionTable};
 use crate::session::{text_hash, MAX_SESSIONS};
 use crate::timing;
 
@@ -312,6 +314,39 @@ impl Index {
         };
     }
 
+    /// Forgets the exact-context evidence of one surface, which a correction
+    /// in this context rejected (#305). General evidence is kept.
+    fn remove_exact(
+        &mut self,
+        left_context: u16,
+        right_context: u16,
+        reading: &str,
+        surface: &str,
+    ) {
+        let (Ok(reading_len), Ok(surface_len)) =
+            (u16::try_from(reading.len()), u16::try_from(surface.len()))
+        else {
+            return;
+        };
+        let key = LearningKey {
+            general: false,
+            left_context,
+            right_context,
+            reading_hash: text_hash(reading),
+            reading_len,
+            surface_hash: text_hash(surface),
+            surface_len,
+        };
+        let start = Self::bucket(key) * WAYS;
+        if let Some(slot) = self.slots[start..start + WAYS]
+            .iter_mut()
+            .find(|slot| slot.matches(key))
+        {
+            *slot = Slot::default();
+            self.len -= 1;
+        }
+    }
+
     /// Rank offered candidates using decayed evidence and strength bounds.
     ///
     /// When at least two distinct non-identity surfaces have positive exact
@@ -320,6 +355,11 @@ impl Index {
     /// This is not proof that the older spelling was wrong. The newest exact
     /// choice may exceed the usual index bound; competing general evidence
     /// must postdate it. Without that conflict, frequency and bounds are unchanged.
+    ///
+    /// When the user corrected a surface of this reading in this left context
+    /// (#305), `rejections` holds its tombstone: that surface is skipped in
+    /// both passes, and exact evidence newer than the context's latest
+    /// tombstone wins like a conflict.
     /// Both passes probe only the candidates' fixed buckets, with constant local
     /// state and no additional allocation.
     fn preference<'a>(
@@ -328,6 +368,7 @@ impl Index {
         left_context: u16,
         candidates: impl IntoIterator<Item = (&'a str, u16)> + Clone,
         day: u32,
+        rejections: Option<&RejectionTable>,
     ) -> LearningPreference {
         let Ok(reading_len) = u16::try_from(reading.len()) else {
             return LearningPreference {
@@ -336,6 +377,7 @@ impl Index {
             };
         };
         let reading_hash = text_hash(reading);
+        let gate = rejections.and_then(|table| table.gate(reading_hash, reading_len, left_context));
         let exact = self.best_candidate(
             PreferenceQuery {
                 general: false,
@@ -348,6 +390,7 @@ impl Index {
             reading,
             candidates.clone(),
             None,
+            gate,
         );
         let general = self.best_candidate(
             PreferenceQuery {
@@ -361,6 +404,7 @@ impl Index {
             reading,
             candidates,
             exact.exact_conflict,
+            gate,
         );
         LearningPreference {
             exact: exact.candidate_index,
@@ -374,6 +418,7 @@ impl Index {
         reading: &str,
         candidates: impl IntoIterator<Item = (&'a str, u16)>,
         superseding_exact: Option<(&str, u64)>,
+        gate: Option<RejectionGate<'_>>,
     ) -> PreferenceSelection<'a> {
         let mut best = None::<(usize, u64, u64)>;
         let mut latest_exact = None::<(usize, &'a str, u64)>;
@@ -388,6 +433,11 @@ impl Index {
                 continue;
             };
             let surface_hash = text_hash(surface);
+            // A surface the user corrected away in this context is neither
+            // ranked nor counted as a competing exact spelling (#305).
+            if gate.is_some_and(|gate| gate.rejects(surface_hash, surface_len)) {
+                continue;
+            }
             let key = LearningKey {
                 general: query.general,
                 left_context: query.left_context,
@@ -446,7 +496,13 @@ impl Index {
                 best = Some(ranked);
             }
         }
-        let selection = match latest_exact.filter(|_| exact_conflict) {
+        // Exact evidence newer than the context's latest tombstone is the
+        // choice the user made after a correction, so like a conflict it is
+        // not held back by the strength bound (#305).
+        let chosen_after_rejection = gate.is_some_and(|gate| {
+            latest_exact.is_some_and(|(_, _, sequence)| sequence > gate.marker())
+        });
+        let selection = match latest_exact.filter(|_| exact_conflict || chosen_after_rejection) {
             Some((candidate_index, surface, sequence)) => PreferenceSelection {
                 candidate_index: Some(candidate_index),
                 exact_conflict: Some((surface, sequence)),
@@ -597,18 +653,78 @@ impl PredictionHistory {
     }
 }
 
+/// What applying a staged record does with its own commit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StagedKind {
+    /// The commit is learned.
+    Learn,
+    /// The commit is not learning evidence (a mechanical kana transform, a
+    /// raw repair); only its correction's rejections are recorded (#305).
+    RejectOnly,
+}
+
+/// Surfaces of the same reading that a staged commit replaced after the user
+/// erased them (#305), each with the right ID it was committed with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct StagedCorrection {
+    /// Left context of the first erased commit.
+    origin_left: u16,
+    rejected: Vec<(Box<str>, u16)>,
+}
+
+impl StagedCorrection {
+    pub(crate) fn new<'a>(
+        origin_left: u16,
+        rejected: impl IntoIterator<Item = (&'a str, u16)>,
+    ) -> Self {
+        Self {
+            origin_left,
+            rejected: rejected
+                .into_iter()
+                .map(|(surface, right_context)| (surface.into(), right_context))
+                .collect(),
+        }
+    }
+}
+
 /// One commit whose learning waits until the user's next action shows whether
 /// the commit survived (#275). It is invisible to ranking and the log.
 #[derive(Debug)]
 struct StagedCommit {
     owner: u64,
+    kind: StagedKind,
     reading: Box<str>,
     surface: Box<str>,
     left_context: u16,
     right_context: u16,
+    /// Applied together with the commit, so a correction counts only when
+    /// the corrected commit survives (#305).
+    correction: Option<StagedCorrection>,
     /// The owner asked the host to undo this commit and is waiting for the
     /// outcome (#277); only the owner can settle the record then.
     awaiting_undo: bool,
+}
+
+impl StagedCommit {
+    /// Strips the forgotten pair from the record: it must be neither learned
+    /// nor rejected later. `false` when nothing is left to apply.
+    fn forget(&mut self, reading: &str, surface: &str) -> bool {
+        if *self.reading != *reading {
+            return true;
+        }
+        if let Some(correction) = &mut self.correction {
+            correction
+                .rejected
+                .retain(|(rejected, _)| **rejected != *surface);
+            if correction.rejected.is_empty() {
+                self.correction = None;
+            }
+        }
+        if *self.surface == *surface {
+            self.kind = StagedKind::RejectOnly;
+        }
+        self.kind == StagedKind::Learn || self.correction.is_some()
+    }
 }
 
 #[derive(Debug)]
@@ -618,6 +734,8 @@ struct State {
     /// Readings for which the user rejected automatic repair by resizing
     /// segments. Durable via CRC-framed suppress markers in the learning log.
     repair_suppress: HashSet<u64>,
+    /// Surfaces the user corrected away, per reading and left context (#305).
+    rejections: RejectionTable,
     log: LearningLog,
     path: Option<PathBuf>,
     sequence: u64,
@@ -634,16 +752,47 @@ impl State {
         surface: &str,
         left_context: u16,
         right_context: u16,
+        day: u32,
     ) -> bool {
-        let day = unix_day();
         self.sequence = self.sequence.saturating_add(1);
         let sequence = self.sequence;
         self.index
             .learn(left_context, right_context, reading, surface, day, sequence);
+        reinstate(&mut self.rejections, reading, surface, left_context);
         self.prediction_history
             .learn(reading, surface, right_context, day, sequence);
         self.log
             .append(reading, surface, left_context, right_context, day)
+            .is_ok()
+    }
+
+    /// Records that the user corrected `surface` of `reading` away in
+    /// `left_context` (#305); `false` when the log append failed and the
+    /// rejection lives only in memory. A pair the log could not replay
+    /// exactly is not applied at all.
+    fn reject(
+        &mut self,
+        reading: &str,
+        surface: &str,
+        left_context: u16,
+        right_context: u16,
+        day: u32,
+    ) -> bool {
+        if !rejection_is_recordable(reading, surface) {
+            return true;
+        }
+        self.sequence = self.sequence.saturating_add(1);
+        apply_rejection(
+            &mut self.index,
+            &mut self.rejections,
+            reading,
+            surface,
+            left_context,
+            right_context,
+            self.sequence,
+        );
+        self.log
+            .append_rejection(reading, surface, left_context, right_context, day)
             .is_ok()
     }
 
@@ -656,10 +805,36 @@ impl State {
     }
 }
 
+/// A choice of `surface` in `left_context` ends its tombstone there; the
+/// context's marker stays, so the choice still outranks the strength bound.
+fn reinstate(rejections: &mut RejectionTable, reading: &str, surface: &str, left_context: u16) {
+    if let Some(key) = RejectionKey::of(reading, left_context, surface) {
+        rejections.reinstate(key);
+    }
+}
+
+/// The one rejection step shared by live learning and log replay, so both
+/// reach the same ranking state (#305).
+fn apply_rejection(
+    index: &mut Index,
+    rejections: &mut RejectionTable,
+    reading: &str,
+    surface: &str,
+    left_context: u16,
+    right_context: u16,
+    sequence: u64,
+) {
+    index.remove_exact(left_context, right_context, reading, surface);
+    if let Some(key) = RejectionKey::of(reading, left_context, surface) {
+        rejections.reject(key, sequence);
+    }
+}
+
 struct PreparedLearning {
     index: Index,
     prediction_history: PredictionHistory,
     repair_suppress: HashSet<u64>,
+    rejections: RejectionTable,
     sequence: u64,
 }
 
@@ -668,6 +843,7 @@ fn prepare_learning(events: ReplayView<'_>) -> PreparedLearning {
         index: Index::new(),
         prediction_history: PredictionHistory::new(),
         repair_suppress: HashSet::new(),
+        rejections: RejectionTable::new(),
         sequence: 0,
     };
     for event in events {
@@ -688,6 +864,7 @@ fn prepare_learning(events: ReplayView<'_>) -> PreparedLearning {
                     day,
                     prepared.sequence,
                 );
+                reinstate(&mut prepared.rejections, reading, surface, left_context);
                 prepared.prediction_history.learn(
                     reading,
                     surface,
@@ -699,6 +876,21 @@ fn prepare_learning(events: ReplayView<'_>) -> PreparedLearning {
             ReplayEvent::RepairSuppress { reading, .. } => {
                 prepared.repair_suppress.insert(text_hash(reading));
             }
+            ReplayEvent::Reject {
+                left_context,
+                right_context,
+                reading,
+                surface,
+                ..
+            } => apply_rejection(
+                &mut prepared.index,
+                &mut prepared.rejections,
+                reading,
+                surface,
+                left_context,
+                right_context,
+                prepared.sequence,
+            ),
         }
     }
     prepared
@@ -718,6 +910,9 @@ pub struct LearningService {
     skipped_writes: AtomicU64,
     recovered_tail_bytes: AtomicU64,
     maintenance_failures: AtomicU64,
+    /// The day an offline replay has reached (#305); 0 reads the clock.
+    #[cfg(feature = "replay-eval")]
+    replay_day: std::sync::atomic::AtomicU32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -772,6 +967,7 @@ impl LearningService {
                 index: Index::new(),
                 prediction_history: PredictionHistory::new(),
                 repair_suppress: HashSet::new(),
+                rejections: RejectionTable::new(),
                 log: LearningLog::memory(),
                 path: None,
                 sequence: 0,
@@ -782,6 +978,8 @@ impl LearningService {
             skipped_writes: AtomicU64::new(0),
             recovered_tail_bytes: AtomicU64::new(0),
             maintenance_failures: AtomicU64::new(0),
+            #[cfg(feature = "replay-eval")]
+            replay_day: std::sync::atomic::AtomicU32::new(0),
         }
     }
 
@@ -793,6 +991,7 @@ impl LearningService {
                 index: prepared.index,
                 prediction_history: prepared.prediction_history,
                 repair_suppress: prepared.repair_suppress,
+                rejections: prepared.rejections,
                 log,
                 path: Some(path.to_owned()),
                 sequence: prepared.sequence,
@@ -803,7 +1002,45 @@ impl LearningService {
             skipped_writes: AtomicU64::new(0),
             recovered_tail_bytes: AtomicU64::new(receipt.recovered_tail_bytes),
             maintenance_failures: AtomicU64::new(receipt.maintenance_failure_delta),
+            #[cfg(feature = "replay-eval")]
+            replay_day: std::sync::atomic::AtomicU32::new(0),
         })
+    }
+
+    /// The day learning is recorded and decayed at: the clock, or the day an
+    /// offline replay has reached.
+    fn today(&self) -> u32 {
+        #[cfg(feature = "replay-eval")]
+        {
+            let day = self.replay_day.load(Ordering::Acquire);
+            if day != 0 {
+                return day;
+            }
+        }
+        unix_day()
+    }
+
+    /// Moves an offline replay to `day` (#305); 0 returns to the clock.
+    #[cfg(feature = "replay-eval")]
+    pub(crate) fn set_replay_day(&self, day: u32) {
+        self.replay_day.store(day, Ordering::Release);
+    }
+
+    /// Applies one exported tombstone directly, as replaying the log would.
+    #[cfg(feature = "replay-eval")]
+    pub(crate) fn replay_rejection(
+        &self,
+        reading: &str,
+        surface: &str,
+        left_context: u16,
+        right_context: u16,
+    ) {
+        let mut state = self.lock_state();
+        if !state.reject(reading, surface, left_context, right_context, self.today()) {
+            self.skipped_writes.fetch_add(1, Ordering::Relaxed);
+        }
+        drop(state);
+        self.generation.fetch_add(1, Ordering::Release);
     }
 
     pub fn learn(&self, reading: &str, surface: &str, left_context: u16, right_context: u16) {
@@ -824,12 +1061,30 @@ impl LearningService {
         left_context: u16,
         right_context: u16,
     ) {
-        if !state.learn(reading, surface, left_context, right_context) {
+        if !state.learn(reading, surface, left_context, right_context, self.today()) {
             self.skipped_writes.fetch_add(1, Ordering::Relaxed);
         }
     }
 
+    /// Applies one staged record whole. Rejections come first, so the
+    /// commit learned after them is newer than their tombstones (#305).
     fn learn_staged(&self, state: &mut State, staged: &StagedCommit) {
+        if let Some(correction) = &staged.correction {
+            for (surface, right_context) in &correction.rejected {
+                if !state.reject(
+                    &staged.reading,
+                    surface,
+                    correction.origin_left,
+                    *right_context,
+                    self.today(),
+                ) {
+                    self.skipped_writes.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        }
+        if staged.kind == StagedKind::RejectOnly {
+            return;
+        }
         self.learn_locked(
             state,
             &staged.reading,
@@ -837,6 +1092,22 @@ impl LearningService {
             staged.left_context,
             staged.right_context,
         );
+        // Retyping moved the caret's left context; the choice also belongs
+        // where the rejected commit was made.
+        if let Some(origin_left) = staged
+            .correction
+            .as_ref()
+            .map(|correction| correction.origin_left)
+            .filter(|origin_left| *origin_left != staged.left_context)
+        {
+            self.learn_locked(
+                state,
+                &staged.reading,
+                &staged.surface,
+                origin_left,
+                staged.right_context,
+            );
+        }
     }
 
     /// Holds one commit's learning until the owner's next action shows
@@ -847,6 +1118,7 @@ impl LearningService {
     /// A newer commit from the same owner proves the previous one survived,
     /// so that record is learned first. `owner` is a process-unique session
     /// identity; the record stays invisible to ranking until it is confirmed.
+    /// A `correction` (#305) is applied with the commit, never without it.
     pub(crate) fn stage(
         &self,
         owner: u64,
@@ -854,6 +1126,52 @@ impl LearningService {
         surface: &str,
         left_context: u16,
         right_context: u16,
+        correction: Option<StagedCorrection>,
+    ) {
+        self.stage_record(
+            owner,
+            StagedKind::Learn,
+            reading,
+            surface,
+            left_context,
+            right_context,
+            correction,
+        );
+    }
+
+    /// Stages a commit that is not learning evidence but corrected earlier
+    /// commits (#305): only the rejections are recorded once it survives.
+    /// The owner's previous record is learned, as `confirm_staged` would.
+    pub(crate) fn stage_reject_only(
+        &self,
+        owner: u64,
+        reading: &str,
+        surface: &str,
+        left_context: u16,
+        right_context: u16,
+        correction: StagedCorrection,
+    ) {
+        self.stage_record(
+            owner,
+            StagedKind::RejectOnly,
+            reading,
+            surface,
+            left_context,
+            right_context,
+            Some(correction),
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn stage_record(
+        &self,
+        owner: u64,
+        kind: StagedKind,
+        reading: &str,
+        surface: &str,
+        left_context: u16,
+        right_context: u16,
+        correction: Option<StagedCorrection>,
     ) {
         let mut state = self.lock_state();
         let mut learned = false;
@@ -880,10 +1198,12 @@ impl LearningService {
             }
             state.staged.push(StagedCommit {
                 owner,
+                kind,
                 reading: reading.into(),
                 surface: surface.into(),
                 left_context,
                 right_context,
+                correction,
                 awaiting_undo: false,
             });
         }
@@ -987,9 +1307,31 @@ impl LearningService {
         candidates: impl IntoIterator<Item = (&'a str, u16)> + Clone,
     ) -> LearningPreference {
         let state = self.lock_state();
-        state
-            .index
-            .preference(reading, left_context, candidates, unix_day())
+        state.index.preference(
+            reading,
+            left_context,
+            candidates,
+            self.today(),
+            Some(&state.rejections),
+        )
+    }
+
+    /// Whether a tombstone of `surface` holds for `reading` in `left_context`
+    /// (#305), or `None` when no tombstone of that context survives at all.
+    #[cfg(test)]
+    pub(crate) fn test_rejection(
+        &self,
+        reading: &str,
+        left_context: u16,
+        surface: &str,
+    ) -> Option<bool> {
+        let state = self.lock_state();
+        let gate = state.rejections.gate(
+            text_hash(reading),
+            u16::try_from(reading.len()).ok()?,
+            left_context,
+        )?;
+        Some(gate.rejects(text_hash(surface), u16::try_from(surface.len()).ok()?))
     }
 
     /// Remembers that the user rejected automatic repair for this exact reading
@@ -998,7 +1340,7 @@ impl LearningService {
         if reading.is_empty() {
             return;
         }
-        let day = unix_day();
+        let day = self.today();
         let mut state = self.lock_state();
         let hash = text_hash(reading);
         if !state.repair_suppress.insert(hash) {
@@ -1075,7 +1417,7 @@ impl LearningService {
         let state = self.lock_state();
         state
             .prediction_history
-            .visit(prefix, unix_day(), state.sequence, visit);
+            .visit(prefix, self.today(), state.sequence, visit);
     }
 
     /// Durably forgets every learned event for the exact `(reading, surface)`
@@ -1092,10 +1434,11 @@ impl LearningService {
             return Ok(ForgetPredictionOutcome::NotFound);
         }
         let mut state = self.lock_state();
-        // A staged copy of the pair would bring it back once confirmed.
+        // A staged copy of the pair would bring it back once confirmed, and a
+        // staged correction would reject it again (#305).
         state
             .staged
-            .retain(|staged| *staged.reading != *reading || *staged.surface != *surface);
+            .retain_mut(|staged| staged.forget(reading, surface));
         self.staged_commits
             .store(state.staged.len(), Ordering::Release);
         let transaction = {
@@ -1103,6 +1446,7 @@ impl LearningService {
                 index,
                 prediction_history,
                 repair_suppress,
+                rejections,
                 log,
                 sequence,
                 ..
@@ -1111,6 +1455,7 @@ impl LearningService {
                 *index = prepared.index;
                 *prediction_history = prepared.prediction_history;
                 *repair_suppress = prepared.repair_suppress;
+                *rejections = prepared.rejections;
                 *sequence = prepared.sequence;
             })
         };
@@ -1174,6 +1519,7 @@ impl LearningService {
                         state.index = prepared.index;
                         state.prediction_history = prepared.prediction_history;
                         state.repair_suppress = prepared.repair_suppress;
+                        state.rejections = prepared.rejections;
                         state.sequence = prepared.sequence;
                         Ok(MaintenanceOutcome::Compacted)
                     }
@@ -1204,6 +1550,7 @@ impl LearningService {
                 state.index = prepared.index;
                 state.prediction_history = prepared.prediction_history;
                 state.repair_suppress = prepared.repair_suppress;
+                state.rejections = prepared.rejections;
                 state.sequence = prepared.sequence;
                 self.generation.fetch_add(1, Ordering::Release);
                 Ok(cleared_records)
@@ -1356,6 +1703,7 @@ fn compact_state(state: &mut State, target_bytes: usize, target_records: u64) ->
     state.index = prepared.index;
     state.prediction_history = prepared.prediction_history;
     state.repair_suppress = prepared.repair_suppress;
+    state.rejections = prepared.rejections;
     state.sequence = prepared.sequence;
     Ok(())
 }
@@ -1391,3 +1739,6 @@ fn open_append(path: &Path) -> io::Result<File> {
 #[cfg(test)]
 #[path = "learning_tests.rs"]
 mod tests;
+
+#[path = "learning_rejection.rs"]
+mod rejection;
