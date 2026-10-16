@@ -974,6 +974,172 @@ fn issue_84_recent_cached_naika_selection_cannot_override_kouryo_more_context() 
     );
 }
 
+/// Issue #335: several verbs share one reading (閉める / 占める, 降る / 振る,
+/// 呼ぶ / 読む, 起きる / 置く, 切れる / 着れる, 空く / 開く, 着く / 付く), and no
+/// word price can choose between them, because the right spelling depends on the
+/// noun before the particle. `data/verb-collocation-edges.tsv` prices the whole
+/// noun + particle + verb form as one edge, so the spelling follows its noun.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_335_verb_homophones_follow_the_preceding_noun() {
+    for (reading, expected) in [
+        ("さむかったらまどをしめてね", "寒かったら窓を閉めてね"),
+        ("あめがふったらいえにいる", "雨が降ったら家にいる"),
+        ("もんだいがおきました", "問題が起きました"),
+        ("かれをよんできてくれる", "彼を呼んできてくれる"),
+        ("ざいこがきれておりますので", "在庫が切れておりますので"),
+        ("あめがふるかもしれない", "雨が降るかもしれない"),
+        ("せきがあく", "席が空く"),
+        ("えきにつく", "駅に着く"),
+        // Contracted te forms connect through their auxiliary's right id
+        // (#334); their compound edges must carry that id, or the single
+        // generated form wins over the て edge plus the auxiliary.
+        ("まどをしめてる", "窓を閉めてる"),
+        ("かれをよんでいる", "彼を呼んでいる"),
+    ] {
+        assert_eq!(
+            top_text(reading),
+            expected,
+            "{reading}: the verb must follow its noun"
+        );
+    }
+    // Controls: these already converted correctly and must keep doing so.
+    for (reading, expected) in [
+        (
+            "もくようびのごごはあいてますか",
+            "木曜日の午後は空いてますか",
+        ),
+        ("あめがふった", "雨が降った"),
+    ] {
+        assert_eq!(top_text(reading), expected, "{reading}: control row moved");
+    }
+}
+
+fn issue_335_right_key() -> KeyInput {
+    KeyInput {
+        code: KeyCode::Right,
+        ch: None,
+        modifiers: Modifiers::NONE,
+        repeat: false,
+        test_only: false,
+    }
+}
+
+/// The preedit segments of a conversion output, each with whether it is the
+/// focused segment.
+fn issue_335_segments(out: &OutputBuf) -> Vec<(String, bool)> {
+    out.to_output()
+        .preedit
+        .map(|preedit| {
+            preedit
+                .segments
+                .iter()
+                .map(|segment| {
+                    (
+                        segment.text.clone(),
+                        segment.underline == sakura_proto::UnderlineKind::Focused,
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn issue_335_whole(segments: &[(String, bool)]) -> String {
+    segments.iter().map(|(text, _)| text.as_str()).collect()
+}
+
+/// Types `romaji`, converts, and returns the whole converted text.
+fn issue_335_top_text(dispatcher: &mut Dispatcher, session: SessionId, romaji: &str) -> String {
+    type_romaji(dispatcher, session, romaji);
+    issue_335_whole(&issue_335_segments(&send_key(
+        dispatcher,
+        session,
+        space_key(),
+    )))
+}
+
+/// Types `romaji`, converts, then for each segment in turn presses Space until
+/// the focused segment matches `wanted` at its offset and Right to move on, and
+/// finally commits the whole composition with Enter. Returns the commit.
+///
+/// Keys are used because `CommitCandidate` commits the whole composition with
+/// only the focused segment replaced, so it cannot build a spelling that the
+/// first conversion splits across segments.
+fn issue_335_commit_whole_text(
+    dispatcher: &mut Dispatcher,
+    session: SessionId,
+    romaji: &str,
+    wanted: &str,
+) -> String {
+    type_romaji(dispatcher, session, romaji);
+    let mut segments = issue_335_segments(&send_key(dispatcher, session, space_key()));
+    for _ in 0..64 {
+        let focused = segments
+            .iter()
+            .position(|(_, focused)| *focused)
+            .or_else(|| (segments.len() == 1).then_some(0))
+            .unwrap_or_else(|| panic!("{romaji}: no focused segment in {segments:?}"));
+        let before = issue_335_whole(&segments[..focused]);
+        assert!(
+            wanted.starts_with(&before),
+            "{romaji}: fixed segments {segments:?} already differ from {wanted:?}"
+        );
+        if wanted[before.len()..].starts_with(segments[focused].0.as_str()) {
+            if focused + 1 == segments.len() {
+                break;
+            }
+            segments = issue_335_segments(&send_key(dispatcher, session, issue_335_right_key()));
+        } else {
+            segments = issue_335_segments(&send_key(dispatcher, session, space_key()));
+        }
+    }
+    assert_eq!(
+        issue_335_whole(&segments),
+        wanted,
+        "{romaji}: the keys could not compose the wanted text: {segments:?}"
+    );
+    send_key(dispatcher, session, enter_key())
+        .to_output()
+        .commit
+        .unwrap_or_default()
+}
+
+/// Issue #335: a compound verb-collocation edge is priced a fixed margin below
+/// its competitor, and that margin must not outweigh what the user chose. After
+/// one commit of the spelling the edge demotes, the next conversion of the same
+/// reading leads with the learned spelling, compared on the whole converted text.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_335_learned_homophone_leads_over_verb_collocation_edges() {
+    // (romaji, the spelling the compound edge leads with, the spelling it demotes)
+    for (romaji, led, learned) in [
+        ("madowoshimete", "窓を閉めて", "窓を占めて"),
+        ("amegafuttara", "雨が降ったら", "雨が振ったら"),
+    ] {
+        let mut probe = open_dispatcher();
+        let probe_session = create_normal_session(&mut probe, "issue-335-probe.exe");
+        assert_eq!(
+            issue_335_top_text(&mut probe, probe_session, romaji),
+            led,
+            "{romaji}: the compound edge must lead before any learning"
+        );
+
+        let mut dispatcher = open_dispatcher();
+        let session = create_normal_session(&mut dispatcher, "issue-335-learning.exe");
+        assert_eq!(
+            issue_335_commit_whole_text(&mut dispatcher, session, romaji, learned),
+            learned,
+            "{romaji}: setup must commit the demoted spelling"
+        );
+        assert_eq!(
+            issue_335_top_text(&mut dispatcher, session, romaji),
+            learned,
+            "{romaji}: the learned spelling must lead after one commit"
+        );
+    }
+}
+
 #[test]
 #[ignore = "needs the built system dictionary in artifacts/release"]
 fn issue_83_shipped_japanese_bridge_controls() {
