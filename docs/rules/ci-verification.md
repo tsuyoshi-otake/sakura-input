@@ -152,3 +152,12 @@
   `Fault::UntrustedServer { process_id: 0 }` を返していた。peer を判定して
   いないのに untrusted を名乗るので、ログがそのまま虚偽になる。判定していない
   ことを言う variant（ここでは `ServerRejection::PolicyUnavailable`）を用意する。
+
+- **ワークスペースのツールがエンジンの test-only feature に依存するときは、
+  ツール側も opt-in の feature にする。** Cargo は `--workspace` のビルドで
+  feature を統合する。ツールが `sakura-engine/replay-eval` を常に有効にすると、
+  出荷する DLL とエンジンにもその API が入る。#305 の `learning-replay` は
+  `required-features = ["learning-replay"]` と optional 依存にした。
+  `cargo tree -e features --workspace` で、`--features` なしのビルドに
+  `replay-eval` が出ないことを確認した（2026-10-16）。CI と release の
+  clippy・test の feature リストにも、その feature を足す。

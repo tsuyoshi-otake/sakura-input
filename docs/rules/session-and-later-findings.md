@@ -384,3 +384,16 @@
   observe what a person sees, pause at least 100 ms before Space and read
   `CandidateList.selected` as well as the order; a zero-pause run is not
   evidence that a reading keeps its owner's choice.
+
+- **Dispatch lib tests need `--features dev-fixtures`; check the run count.**
+  The `dispatch` unit tests and the 16 KiB layout test
+  (`phase1_session_and_dispatcher_layout_stay_small_for_worker_stack`) are
+  compiled only with `sakura-engine/dev-fixtures`. Without it,
+  `cargo test -p sakura-engine --lib <filter>` passes with 0 tests run.
+  Verified 2026-10-16 (#305) while measuring `Session` at 11,976 bytes.
+
+- **Give each probe session in a dispatch test its own process name.** A
+  second session with the same process name gets its keys eaten while a peer
+  of that process is still composing (idle peer). The #305 dispatch tests
+  failed this way until each probe used `probe{n}.exe` and closed its
+  composition with Escape twice. Verified 2026-10-16 (#305).
