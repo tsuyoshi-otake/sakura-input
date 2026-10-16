@@ -37,11 +37,16 @@ const RANKED_SCRATCH: usize = MAX_SUGGESTIONS * 4;
 const USER_DICTIONARY_BONUS: i64 = 3_000;
 const BASE_IT_BIAS_PER_MILLE: u16 = 100;
 const MAX_IT_BOOST: i64 = 800;
-/// Once the user has typed a word-sized prefix, extending it is weaker
-/// evidence than an entry whose reading ends exactly at the caret.  Keep the
-/// adjustment bounded so a very long completion cannot overflow or erase the
-/// dictionary's base ordering among similarly sized candidates.
-const MIN_PREFIX_CHARS_FOR_COMPLETION_DISTANCE: usize = 3;
+/// Extending the typed prefix is weaker evidence than an entry whose reading
+/// ends exactly at the caret, from the second typed character on: without the
+/// adjustment a two-character prefix ranks completions by base cost alone, and
+/// a rare long word outranks the common short ones (Issue #338).  A single
+/// character stays unadjusted: there a common long word is as likely as a
+/// short one, and the accuracy gate measured fewer keystrokes saved when the
+/// adjustment started at one character.  Keep the adjustment bounded so a
+/// very long completion cannot overflow or erase the dictionary's base
+/// ordering among similarly sized candidates.
+const MIN_PREFIX_CHARS_FOR_COMPLETION_DISTANCE: usize = 2;
 const COMPLETION_COST_PER_CHAR: i64 = 600;
 const MAX_COMPLETION_COST: i64 = 2_400;
 /// A reading repair may correct the portion already typed, but it must not
@@ -840,6 +845,49 @@ impl PredictionIndex {
             }
             self.materialize_ranked(&ranked, user_dictionary, result);
         }
+        self.fill_with_exact_readings(query.prefix.as_str(), result);
+    }
+
+    /// Fills the room that completions and repairs leave with the dictionary
+    /// rows that spell exactly the typed reading but are not prediction rows
+    /// (conversion-only words such as `すべき`), cheapest conversion cost
+    /// first, so a finished word is still offered when nothing longer
+    /// completes it (Issue #338). Rows excluded from prediction by rule,
+    /// spelling corrections and non-initial fragments are never offered.
+    fn fill_with_exact_readings(&self, reading: &str, result: &mut PredictionResult) {
+        if result.candidates().len() == MAX_SUGGESTIONS {
+            return;
+        }
+        let mut ranked = Ranked::new();
+        let _ = self.dictionary.common_prefix_search(reading, |matched| {
+            let flags = matched.entry.flags;
+            if matched.matched_bytes == reading.len()
+                && !flags.contains(EntryFlags::PREDICTION)
+                && !flags.contains(EntryFlags::PREDICTION_EXCLUDED)
+                && !flags.contains(EntryFlags::SPELLING_CORRECTION)
+                && !flags.contains(EntryFlags::NON_INITIAL)
+            {
+                if let Some(surface) = self.system_surface(matched.entry) {
+                    if !result.contains_surface(surface.as_str()) {
+                        ranked.insert(RankedItem::new(
+                            i64::from(matched.entry.word_cost),
+                            DictionarySource::System,
+                            u32::try_from(matched.entry_index).unwrap_or(u32::MAX),
+                            surface,
+                        ));
+                    }
+                }
+            }
+            true
+        });
+        for item in ranked.as_slice() {
+            if result.candidates().len() == MAX_SUGGESTIONS {
+                break;
+            }
+            if let Some(candidate) = self.dictionary_candidate(reading, item.index) {
+                let _ = result.push(candidate);
+            }
+        }
     }
 
     /// A full-reading entry intentionally excluded from prediction is still
@@ -847,7 +895,10 @@ impl PredictionIndex {
     /// changing the reading (for example `べ` -> `ぺ`) must not manufacture
     /// unrelated prefix completions. Predictive exact entries retain the
     /// existing direct-then-repair behavior, which is useful for typo support
-    /// and already protects the direct candidate tier.
+    /// and already protects the direct candidate tier. A row removed from
+    /// prediction by rule (`PREDICTION_EXCLUDED`: a conjugation fragment or a
+    /// translation alias) does not count: the reading was typed as the start
+    /// of something else, so repair stays available (Issue #338).
     fn query_has_exact_non_predictive_reading(&self, reading: &str) -> bool {
         let mut system_exact = false;
         let _ = self.dictionary.common_prefix_search(reading, |matched| {
@@ -858,6 +909,10 @@ impl PredictionIndex {
                     .contains(EntryFlags::SPELLING_CORRECTION)
                 && !matched.entry.flags.contains(EntryFlags::NON_INITIAL)
                 && !matched.entry.flags.contains(EntryFlags::PREDICTION)
+                && !matched
+                    .entry
+                    .flags
+                    .contains(EntryFlags::PREDICTION_EXCLUDED)
             {
                 system_exact = true;
                 return false;
@@ -869,11 +924,12 @@ impl PredictionIndex {
 
     fn system_candidate(&self, index: usize) -> Option<PredictionCandidate> {
         let indexed = *self.entries.get(index)?;
-        let entry = self
-            .dictionary
-            .entry_at(indexed.entry_index as usize)
-            .ok()?;
         let reading = self.reading(indexed)?;
+        self.dictionary_candidate(reading, indexed.entry_index)
+    }
+
+    fn dictionary_candidate(&self, reading: &str, entry_index: u32) -> Option<PredictionCandidate> {
+        let entry = self.dictionary.entry_at(entry_index as usize).ok()?;
         let mut candidate = PredictionCandidate::default();
         candidate.reading.push_str(reading).ok()?;
         self.dictionary
@@ -885,7 +941,7 @@ impl PredictionIndex {
         candidate.right_id = entry.right_id;
         candidate.flags = entry.flags;
         candidate.source = PredictionSource::System;
-        candidate.system_entry_index = Some(indexed.entry_index);
+        candidate.system_entry_index = Some(entry_index);
         Some(candidate)
     }
 

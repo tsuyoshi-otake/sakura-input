@@ -1809,6 +1809,26 @@ fn generated_day_suffix_remains_available_without_a_lexical_whole_path() {
 }
 
 #[test]
+fn an_ascii_digit_passthrough_edge_counts_as_exactly_one_fallback_edge() {
+    let bytes = synthetic_dictionary(&[fixture_entry("じかん", "時間", 1_000, EntryFlags::NONE)]);
+    let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+    let mut converter = Converter::new();
+    let candidates = converter
+        .convert(&dictionary, "12じかん", ConversionOptions::default())
+        .expect("digit run before a lexical word");
+    let candidate = candidates
+        .iter()
+        .find(|candidate| candidate.text() == "12時間")
+        .unwrap_or_else(|| panic!("12時間 missing: {candidates:?}"));
+    let evidence = candidate.path_evidence();
+    assert_eq!(evidence.fallback_edges, 1, "{candidates:?}");
+    assert!(
+        !evidence.is_system_only(),
+        "a path with a passthrough edge must not read as system-only evidence"
+    );
+}
+
+#[test]
 fn bos_filters_non_initial_fragments_but_compound_paths_can_use_them() {
     let bytes = synthetic_dictionary(&[
         fixture_entry("ずかい", "図解", 1_000, EntryFlags::NONE),

@@ -473,14 +473,41 @@ fn a_known_non_predictive_word_does_not_trigger_reading_repairs() {
 
     let result = predict_fixture(&conversion, "すべき", None);
 
-    assert!(
-        result.candidates().is_empty(),
-        "known exact word exposed repaired predictions: {:?}",
+    // The known word itself fills the list; the repair trap stays out.
+    assert_eq!(
         result
             .candidates()
             .iter()
             .map(|candidate| (candidate.reading(), candidate.surface()))
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>(),
+        [("すべき", "すべき")],
+        "known exact word exposed repaired predictions"
+    );
+}
+
+#[test]
+fn exact_conversion_only_readings_fill_the_room_left_by_completions() {
+    let conversion = prediction_fixture_conversion(
+        "かな\t仮名\t0\t0\t100\t100\tpredict\tcommon\n\
+かなた\t彼方\t0\t0\t100\t100\tpredict\tcompletion\n\
+かな\t奏\t0\t0\t300\t-\t\tconversion only\n\
+かな\t哉\t0\t0\t900\t-\t\tconversion only, dearer\n\
+かな\t金\t0\t0\t10\t-\tno-predict\texcluded by rule\n\
+かな\t叶\t0\t0\t20\t-\tcorrection\tspelling correction\n\
+かな\t嘉奈\t0\t0\t30\t-\tnon-initial\tfragment\n",
+    );
+
+    let result = predict_fixture(&conversion, "かな", None);
+
+    // Completions first, then the conversion-only exact rows cheapest first;
+    // the rule-excluded, correction and non-initial rows are never offered.
+    assert_eq!(
+        result
+            .candidates()
+            .iter()
+            .map(PredictionCandidate::surface)
+            .collect::<Vec<_>>(),
+        ["仮名", "彼方", "奏", "哉"]
     );
 }
 
@@ -535,6 +562,17 @@ fn an_exact_history_word_does_not_trigger_reading_repairs() {
 fn completion_distance_is_inactive_for_one_character_prefixes() {
     assert_eq!(completion_cost("か", "か"), 0);
     assert_eq!(completion_cost("か", "かなた"), 0);
+}
+
+#[test]
+fn completion_distance_applies_from_two_character_prefixes() {
+    assert_eq!(completion_cost("かな", "かな"), 0);
+    assert_eq!(completion_cost("かな", "かなた"), 600);
+    assert_eq!(completion_cost("かな", "かなたのそ"), 1_800);
+    assert_eq!(
+        completion_cost("かな", "かなたのそらに"),
+        MAX_COMPLETION_COST
+    );
 }
 
 #[test]

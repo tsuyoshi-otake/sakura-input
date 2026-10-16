@@ -1,0 +1,10 @@
+slice	conv_lenient	conv_strict	pred_full1	pred_full9	pred_half9	pred_save9
+chat	226	214	187	234	130	296
+email	232	220	220	253	122	345
+general	128	112	149	197	69	179
+grammar	217	207	112	141	72	128
+homophone	99	96	94	149	61	152
+it	234	230	342	405	216	646
+loanword	92	90	79	91	64	211
+numbers	102	96	56	82	29	62
+ALL	1330	1265	1239	1552	763	2019

@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use dictc_core::category::{
-    classify_existing_entry, is_address_layer_entry, parse_mozc_pos_catalog, DictionaryCategory,
+    apply_retained_non_initial_penalty, classify_existing_entry, is_address_layer_entry,
+    parse_mozc_pos_catalog, DictionaryCategory,
 };
 use dictc_core::{entries_to_category_tsv, merge_entries, parse_entries, SourceEntry};
 
@@ -139,7 +140,7 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     }
 
     let mut categorized = DictionaryCategory::ALL.map(|_| Vec::new());
-    for entry in merged {
+    for mut entry in merged {
         let key = EntryKey::from(&entry);
         let category = category_by_entry.get(&key).copied().ok_or_else(|| {
             format!(
@@ -147,6 +148,8 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
                 entry.reading, entry.surface
             )
         })?;
+        // The lookup above needs the merged price; re-price only afterwards.
+        apply_retained_non_initial_penalty(&mut entry);
         categorized[usize::from(category.id() - 1)].push(entry);
     }
 

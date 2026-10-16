@@ -218,6 +218,48 @@ fn importer_matches_mozc_then_uses_visible_shape_defaults() {
 }
 
 #[test]
+fn translation_alias_of_a_japanese_word_is_conversion_only() {
+    let terms = parse_part(
+        "ja_part1.json",
+        r#"[
+  {"term":"契約","reading":"けいやく","aliases":["Contract"],"senses":[{"definition":"取り決め。"}]},
+  {"term":"Git","reading":"ぎっと","senses":[{"definition":"版管理。"}]},
+  {"term":"移行","reading":"いこう","aliases":["Migration"],"senses":[{"definition":"移す。"}]},
+  {"term":"マジック4","reading":"まじっく","aliases":["Magic"],"senses":[{"definition":"数。"}]}
+]"#,
+    )
+    .expect("glossary part");
+    // Upstream rows: kanji siblings for けいやく and いこう; a katakana-only sibling for まじっく.
+    let mozc = parse_mozc_entries(
+        "dictionary00.txt",
+        "けいやく\t7\t8\t1000\t契約\nいこう\t7\t8\t1000\t移行\nまじっく\t7\t8\t1000\tマジック\n",
+    )
+    .expect("Mozc fixture");
+    let (connection, pos_features) = grammar();
+    let mut importer = Importer::new(&terms, defaults()).expect("importer");
+    importer.match_mozc(&mozc);
+    importer.observe_upstream(&mozc);
+    let imported = importer.finish(&connection, &pos_features);
+
+    let row = |reading: &str, surface: &str| {
+        imported
+            .entries
+            .iter()
+            .find(|entry| entry.reading == reading && entry.surface == surface)
+            .unwrap_or_else(|| panic!("{reading}/{surface} missing"))
+            .flags
+    };
+    assert!(!row("けいやく", "Contract").contains(EntryFlags::PREDICTION));
+    assert!(!row("いこう", "Migration").contains(EntryFlags::PREDICTION));
+    // The alias row itself stays (conversion), only the flag changes.
+    assert!(row("けいやく", "Contract").contains(EntryFlags::IT));
+    // No kanji sibling: abbreviation or name.
+    assert!(row("ぎっと", "Git").contains(EntryFlags::PREDICTION));
+    // Katakana-only sibling: loanword alias.
+    assert!(row("まじっく", "Magic").contains(EntryFlags::PREDICTION));
+}
+
+#[test]
 fn importer_keeps_definition_brackets_in_typed_details_not_inline_annotations() {
     let terms = parse_part(
         "ja_part1.json",
@@ -684,4 +726,132 @@ fn a_loanword_spelled_as_its_reading_keeps_rank_one() {
     );
     assert_eq!(overlay_entry(&imported, "ぬる", "ヌル").word_cost, 1_460);
     assert_eq!(overlay_entry(&imported, "ぬる", "ナル").word_cost, 4_990);
+}
+
+/// Issue #332: a glossary alias that Mozc does not carry is priced behind the
+/// term it spells, with the term's classes, so it cannot lead the term's reading.
+#[test]
+fn issue_332_variant_never_outranks_its_main_term() {
+    let imported = yield_fixture(
+        &[term("設計書", "せっけいしょ", &["設計ドキュメント"])],
+        "せっけいしょ\t7\t8\t6397\t設計書\n",
+        4_800,
+    );
+
+    let main = overlay_entry(&imported, "せっけいしょ", "設計書");
+    assert_eq!((main.left_id, main.right_id, main.word_cost), (7, 8, 5_997));
+    // The shape default would be 4800 + 8 * 35 + 120 = 5200 in classes 10/11.
+    let variant = overlay_entry(&imported, "せっけいしょ", "設計ドキュメント");
+    assert_eq!((variant.left_id, variant.right_id), (7, 8));
+    assert_eq!((variant.word_cost, variant.prediction_cost), (6_067, 6_367));
+    assert_eq!(variant.flags, EntryFlags::IT | EntryFlags::PREDICTION);
+}
+
+#[test]
+fn issue_332_every_unmatched_variant_follows_its_main_term() {
+    let imported = yield_fixture(
+        &[
+            term("非同期処理", "ひどうきしょり", &["非同期", "async"]),
+            term("異常系", "いじょうけい", &["異常ケース", "エラーケース"]),
+        ],
+        "ひどうきしょり\t7\t8\t6752\t非同期処理\nいじょうけい\t2\t2\t6873\t異常系\n",
+        4_800,
+    );
+
+    for (reading, main, variants) in [
+        ("ひどうきしょり", "非同期処理", &["非同期"][..]),
+        (
+            "いじょうけい",
+            "異常系",
+            &["異常ケース", "エラーケース"][..],
+        ),
+    ] {
+        let main = overlay_entry(&imported, reading, main);
+        for variant in variants {
+            let variant = overlay_entry(&imported, reading, variant);
+            assert_eq!(
+                (variant.left_id, variant.right_id),
+                (main.left_id, main.right_id),
+                "{reading}/{}",
+                variant.surface
+            );
+            assert!(
+                variant.word_cost >= main.word_cost + 70,
+                "{reading}/{}: {} is not behind {}",
+                variant.surface,
+                variant.word_cost,
+                main.word_cost
+            );
+        }
+    }
+    // An ASCII alias at the term's own reading is a variant too.
+    let english = overlay_entry(&imported, "ひどうきしょり", "async");
+    assert_eq!((english.left_id, english.right_id), (7, 8));
+}
+
+#[test]
+fn issue_332_attested_and_phonetic_variants_keep_their_price() {
+    let imported = yield_fixture(
+        &[term("設計書", "せっけいしょ", &["設計", "セッケイショ"])],
+        "せっけいしょ\t7\t8\t6397\t設計書\nせっけいしょ\t5\t6\t4500\t設計\n",
+        4_800,
+    );
+
+    // Mozc carries 設計 at this reading, so Mozc's price and classes stand.
+    let attested = overlay_entry(&imported, "せっけいしょ", "設計");
+    assert_eq!(
+        (attested.left_id, attested.right_id, attested.word_cost),
+        (5, 6, 4_100)
+    );
+    // The reading's own sound keeps its bonus: 4800 + 6 * 35 + 120 - 3000.
+    let phonetic = overlay_entry(&imported, "せっけいしょ", "セッケイショ");
+    assert_eq!(
+        (phonetic.left_id, phonetic.right_id, phonetic.word_cost),
+        (10, 11, 2_130)
+    );
+}
+
+#[test]
+fn issue_332_ascii_main_term_variants_are_unchanged() {
+    let imported = yield_fixture(
+        &[term("Migration", "いこう", &["移行処理"])],
+        "あ\t1\t1\t1000\t亜\n",
+        4_800,
+    );
+
+    // An English main term keeps ranking behind its Japanese alias
+    // (UNMATCHED_ASCII_COST): 4800 + 4 * 35 + 120, in the default classes.
+    let variant = overlay_entry(&imported, "いこう", "移行処理");
+    assert_eq!(
+        (variant.left_id, variant.right_id, variant.word_cost),
+        (10, 11, 5_060)
+    );
+    let main = overlay_entry(&imported, "いこう", "Migration");
+    assert_eq!(
+        (main.left_id, main.right_id, main.word_cost),
+        (12, 13, 7_115)
+    );
+}
+
+#[test]
+fn issue_332_variant_stays_behind_its_term_after_the_upstream_yield() {
+    let imported = yield_fixture(&[term("移行", "いこう", &["移行処理"])], IKOU, 4_000);
+
+    // The yield lifts 移行処理 to 4512, one behind 移行 at 4511; the variant
+    // rule then keeps it 70 behind its term, in the term's classes.
+    assert_eq!(
+        imported.report.upstream_yields,
+        [
+            "いこう/移行: 3900 -> 4511, below 以降",
+            "いこう/移行処理: 4260 -> 4512, below 以降",
+        ]
+    );
+    let term = overlay_entry(&imported, "いこう", "移行");
+    assert_eq!((term.left_id, term.right_id, term.word_cost), (1, 1, 4_511));
+    let variant = overlay_entry(&imported, "いこう", "移行処理");
+    assert_eq!(
+        (variant.left_id, variant.right_id, variant.word_cost),
+        (1, 1, 4_581)
+    );
+    assert!(variant.flags.contains(EntryFlags::READING_YIELD));
 }

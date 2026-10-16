@@ -1,0 +1,4 @@
+# Fetched Tatoeba and Mozc evaluation data stay local (see README.md).
+*
+!.gitignore
+!README.md
