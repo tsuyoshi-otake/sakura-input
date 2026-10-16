@@ -68,6 +68,29 @@
 # that lost to a shorter homophone splice. Keep POS identities and alternate
 # spellings; the ね/値 correction affects only that suffix reading, not ち/値.
 reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
+# Issue #337: Mozc prices the plain-kana spelling of these words below the
+# kanji spelling the user means, so conversion led with the unconverted
+# reading. Same rule as the homophone rows below: the kanji edge lands 60
+# under the kana edge it has to lead; the kana spelling stays the next
+# candidate. Rows priced <= 6000 follow the overlay's prediction contract:
+# predict flag and word cost + 1200.
+# - よろしくおねがいします: Mozc carries only the kana phrase (5256, ids 12/240);
+#   the split よろしく + お願いします totals 9134 against 7716. 5196 = 5256 - 60.
+# - たしかに: Mozc carries the adverb only in kana (3359, ids 12/12), so
+#   確か + に lost by 1320. 3299 = 3359 - 60.
+# - おまかせ: the noun おまかせ (4932, ids 1841/1841) joins its neighbours more
+#   cheaply than お任せ (1953, prefix + verb ids 2597/701); a noun-class
+#   お任せ at 4872 = 4932 - 60 removes the connection gap.
+# - あけまして, いか: Mozc has both spellings in one class and the kana one is
+#   cheaper by 195 and 107. These rows replace Mozc's kanji edge:
+#   明けまして 3027 -> 2772 (kana 2832), 行か 406 -> 239 (kana 299).
+# おい/置い is deliberately not re-priced: the kana おい is also the stem of
+# において and ておく, so it needs a context rule (follow-up #353).
+あけまして	明けまして	2591	2591	2772	3972	predict	
+いか	行か	733	733	239	1439	predict	
+おまかせ	お任せ	1841	1841	4872	6072	predict	
+たしかに	確かに	12	12	3299	4499	predict	
+よろしくおねがいします	よろしくお願いします	12	240	5196	6396	predict	
 # Issue #307: whole loanwords beat lexical splits without repricing their parts.
 # アンインストール totals 5740 vs 案+インストール 6161 (default IT bonus).
 # コントリビューション restores the trimmed 7471 edge:

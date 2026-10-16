@@ -3276,6 +3276,87 @@ fn issue_306_zumi_and_standalone_candidates_are_preserved() {
     }
 }
 
+/// Issue #337: readings whose plain-kana spelling Mozc priced below the
+/// ordinary kanji writing, so conversion led with the unconverted reading.
+const ISSUE_337_KANJI_LEADERS: &[(&str, &str)] = &[
+    ("よろしくおねがいします", "よろしくお願いします"),
+    (
+        "いじょうでよろしくおねがいします",
+        "以上でよろしくお願いします",
+    ),
+    ("たしかにそうですね", "確かにそうですね"),
+    ("おまかせします", "お任せします"),
+    ("おまかせでおねがいします", "お任せでお願いします"),
+    (
+        "あけましておめでとうございます",
+        "明けましておめでとうございます",
+    ),
+    ("そろそろいかないと", "そろそろ行かないと"),
+    ("いかなきゃいけない", "行かなきゃいけない"),
+    ("おそれいりますが", "恐れ入りますが"),
+    (
+        "おいそがしいところおそれいりますが",
+        "お忙しいところ恐れ入りますが",
+    ),
+];
+
+/// Readings from `ISSUE_337_KANJI_LEADERS` whose kana spelling is measured to
+/// stay among the candidates behind the kanji leader.
+const ISSUE_337_KANA_STAYS: &[&str] = &[
+    "よろしくおねがいします",
+    "たしかにそうですね",
+    "おまかせします",
+    "あけましておめでとうございます",
+    "そろそろいかないと",
+    "おそれいりますが",
+];
+
+/// Issue #337: the kana spellings that are the ordinary writing keep leading.
+const ISSUE_337_KANA_CONTROLS: &[&str] = &[
+    "わかりました",
+    "なるほどわかりました",
+    "あっちのほうがいいんじゃないですか",
+    "まだわからないけどやってみる",
+];
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_337_kana_priced_phrases_and_conjugations_lead_in_kanji() {
+    let mut wrong = Vec::new();
+    for &(reading, expected) in ISSUE_337_KANJI_LEADERS {
+        let top = top_text(reading);
+        if top != expected {
+            wrong.push(format!("{reading}: expected {expected}, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_337_kana_spelling_stays_a_candidate_behind_the_kanji_leader() {
+    let mut missing = Vec::new();
+    for &reading in ISSUE_337_KANA_STAYS {
+        if !candidates_for(reading).iter().any(|text| text == reading) {
+            missing.push(reading);
+        }
+    }
+    assert!(missing.is_empty(), "kana spelling dropped: {missing:?}");
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_337_ordinary_kana_writings_keep_leading() {
+    let mut wrong = Vec::new();
+    for &reading in ISSUE_337_KANA_CONTROLS {
+        let top = top_text(reading);
+        if top != reading {
+            wrong.push(format!("{reading}: expected the kana writing, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
 #[test]
 #[ignore = "needs the built system dictionary in artifacts/release"]
 fn issue_334_function_words_stay_separate_from_the_next_word() {

@@ -424,3 +424,49 @@ fn overlay_rows_say_nothing_to_the_user() {
         );
     }
 }
+
+/// Issue #337: `(reading, kanji, left_id, right_id, kana edge cost)`. Mozc
+/// prices the kana spelling of each reading below the kanji one the user
+/// means (the kana edges are Mozc's, at the pinned revision, not rows of this
+/// overlay). Each kanji row has to sit one homophone margin under that edge.
+#[test]
+fn kanji_spellings_land_below_the_kana_edge_they_must_lead() {
+    const MARGIN: i32 = 60;
+    let wanted = [
+        (
+            "よろしくおねがいします",
+            "よろしくお願いします",
+            12,
+            240,
+            5256,
+        ),
+        ("たしかに", "確かに", 12, 12, 3359),
+        ("おまかせ", "お任せ", 1841, 1841, 4932),
+        ("あけまして", "明けまして", 2591, 2591, 2832),
+        ("いか", "行か", 733, 733, 299),
+    ];
+    let overlay = overlay();
+    for (reading, surface, left_id, right_id, kana_cost) in wanted {
+        let entry = overlay
+            .iter()
+            .find(|entry| {
+                entry.reading == reading
+                    && entry.surface == surface
+                    && entry.left_id == left_id
+                    && entry.right_id == right_id
+            })
+            .unwrap_or_else(|| panic!("missing {reading} -> {surface}"));
+        assert_eq!(
+            entry.word_cost,
+            kana_cost - MARGIN,
+            "{surface} must sit {MARGIN} below the kana edge of {reading}"
+        );
+        // The kana spelling stays a candidate: the overlay never re-prices it.
+        assert!(
+            !overlay
+                .iter()
+                .any(|other| other.reading == reading && other.surface == reading),
+            "the kana edge of {reading} must keep Mozc's price"
+        );
+    }
+}
