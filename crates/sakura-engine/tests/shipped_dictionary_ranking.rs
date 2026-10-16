@@ -1636,6 +1636,58 @@ fn compound_number_words_keep_both_spellings() {
     }
 }
 
+/// A digit run is a neutral passthrough edge carrying the numeral class, so it
+/// connects to the counter word that follows. Before #331 the rows other than
+/// the last three had one candidate, the reading itself; `1じかん` and
+/// `3じかん` already led with the dictionary word (kept).
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_331_digit_runs_lead_with_the_counter_word() {
+    for (reading, expected) in [
+        ("12じかん", "12時間"),
+        ("24じかん", "24時間"),
+        ("12じ", "12時"),
+        ("10ぷん", "10分"),
+        ("15ふん", "15分"),
+        ("12にん", "12人"),
+        ("11めい", "11名"),
+        ("20けん", "20件"),
+        ("30てん", "30点"),
+        ("1じかん", "1時間"),
+        ("3じかん", "3時間"),
+        ("100えん", "100円"),
+    ] {
+        let candidates = candidates_for(reading);
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some(expected),
+            "{reading}: {expected} must lead ({:?})",
+            &candidates[..candidates.len().min(6)]
+        );
+    }
+}
+
+/// `%` is carried like a digit. Before #331 the first candidate was the reading.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_331_percent_sign_connects_to_the_following_word() {
+    for (reading, expected) in [
+        ("10ぱーせんと", "10%"),
+        ("50%はさける", "50%は避ける"),
+        ("8%のしょうひぜい", "8%の消費税"),
+        ("10%ふえました", "10%増えました"),
+        ("100%かんせい", "100%完成"),
+    ] {
+        let candidates = candidates_for(reading);
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some(expected),
+            "{reading}: {expected} must lead ({:?})",
+            &candidates[..candidates.len().min(6)]
+        );
+    }
+}
+
 #[test]
 #[ignore = "needs the built system dictionary in artifacts/release"]
 fn ranks_function_introduction_above_yesterday_introduction() {
