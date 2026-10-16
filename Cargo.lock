@@ -467,7 +467,9 @@ dependencies = [
 name = "sakura-conversion-eval"
 version = "2.0.15"
 dependencies = [
+ "dictc-core",
  "sakura-core",
+ "sakura-engine",
  "sakura-proto",
  "sakura-rerank-proto",
  "serde",

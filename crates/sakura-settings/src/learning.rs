@@ -6,10 +6,8 @@ use std::path::Path;
 use sakura_ipc::diagnostics::{record_timeout, TimeoutOperation};
 use sakura_ipc::{Client, Endpoint, Fault};
 use sakura_proto::{Request, Response};
-#[cfg(test)]
-use sakura_store::learning::LearningRecord;
 use sakura_store::learning::{
-    read_snapshot, LearningLog, LearningSnapshot, LEARNING_FORMAT_VERSION,
+    read_snapshot, LearningLog, LearningRecord, LearningSnapshot, LEARNING_FORMAT_VERSION,
 };
 
 use crate::engine_admin::{
@@ -29,6 +27,7 @@ pub fn view(path: &Path) -> io::Result<LearningSnapshot> {
         Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(LearningSnapshot {
             format_version: LEARNING_FORMAT_VERSION,
             records: Vec::new(),
+            rejections: Vec::new(),
             ignored_tail_bytes: 0,
         }),
         Err(error) => Err(error),
@@ -43,26 +42,36 @@ pub fn export(source: &Path, destination: &Path) -> io::Result<usize> {
 
 /// Stable, UTF-8 TSV presentation owned by the settings surface. Text fields
 /// use backslash escaping because a committed surface may contain controls.
+/// Correction tombstones (#305) follow the table as `#reject` lines with the
+/// same columns, so a reader that skips `#` lines sees the table unchanged.
 pub fn snapshot_to_tsv(snapshot: &LearningSnapshot) -> String {
     let mut output = format!(
         "# sakura-learning-format: {}\nsequence\tday\tleft-context\tright-context\treading\tsurface\n",
         snapshot.format_version
     );
     for record in &snapshot.records {
-        output.push_str(&record.sequence.to_string());
-        output.push('\t');
-        output.push_str(&record.day.to_string());
-        output.push('\t');
-        output.push_str(&record.left_context.to_string());
-        output.push('\t');
-        output.push_str(&record.right_context.to_string());
-        output.push('\t');
-        push_tsv_escaped(&mut output, &record.reading);
-        output.push('\t');
-        push_tsv_escaped(&mut output, &record.surface);
-        output.push('\n');
+        push_tsv_record(&mut output, record);
+    }
+    for rejection in &snapshot.rejections {
+        output.push_str("#reject\t");
+        push_tsv_record(&mut output, rejection);
     }
     output
+}
+
+fn push_tsv_record(output: &mut String, record: &LearningRecord) {
+    output.push_str(&record.sequence.to_string());
+    output.push('\t');
+    output.push_str(&record.day.to_string());
+    output.push('\t');
+    output.push_str(&record.left_context.to_string());
+    output.push('\t');
+    output.push_str(&record.right_context.to_string());
+    output.push('\t');
+    push_tsv_escaped(output, &record.reading);
+    output.push('\t');
+    push_tsv_escaped(output, &record.surface);
+    output.push('\n');
 }
 
 fn push_tsv_escaped(output: &mut String, value: &str) {
@@ -173,11 +182,34 @@ mod tests {
                 reading: "さく\\ら".to_owned(),
                 surface: "Sakura\tInput\r\n".to_owned(),
             }],
+            rejections: Vec::new(),
             ignored_tail_bytes: 0,
         };
         assert_eq!(
             snapshot_to_tsv(&snapshot),
             "# sakura-learning-format: 3\nsequence\tday\tleft-context\tright-context\treading\tsurface\n1\t2\t7\t9\tさく\\\\ら\tSakura\\tInput\\r\\n\n"
+        );
+    }
+
+    #[test]
+    fn rejections_follow_the_table_as_reject_lines() {
+        let record = |sequence, reading: &str, surface: &str| LearningRecord {
+            sequence,
+            day: 2,
+            left_context: 7,
+            right_context: 9,
+            reading: reading.to_owned(),
+            surface: surface.to_owned(),
+        };
+        let snapshot = LearningSnapshot {
+            format_version: LEARNING_FORMAT_VERSION,
+            records: vec![record(1, "かな", "仮名")],
+            rejections: vec![record(2, "かな", "加\t奈")],
+            ignored_tail_bytes: 0,
+        };
+        assert_eq!(
+            snapshot_to_tsv(&snapshot),
+            "# sakura-learning-format: 3\nsequence\tday\tleft-context\tright-context\treading\tsurface\n1\t2\t7\t9\tかな\t仮名\n#reject\t2\t2\t7\t9\tかな\t加\\t奈\n"
         );
     }
 }

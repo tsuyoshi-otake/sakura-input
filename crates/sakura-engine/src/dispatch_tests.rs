@@ -10614,7 +10614,7 @@ fn password_scope_cannot_reach_persistent_learning() {
     session.preedit.push_str("かな").expect("bounded reading");
 
     record_learning(
-        &session,
+        &mut session,
         Some(&learning),
         true,
         None,
@@ -11376,3 +11376,6 @@ fn another_dispatchers_conversion_does_not_learn_a_commit_awaiting_its_undo_outc
         assert_eq!(learned_kana_choice(&learning), expected, "{outcome:?}");
     }
 }
+
+#[path = "dispatch_correction_tests.rs"]
+mod correction;

@@ -8,8 +8,8 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::codec::{
-    crc32, decode_record, encode_record, header, read_header, record_at, scan_records,
-    upgrade_to_current,
+    crc32, decode_record, encode_record, header, read_header, record_at, record_meaning,
+    rejection_surface, scan_records, upgrade_to_current, RecordMeaning,
 };
 use super::format::{
     LearningRecord, LearningSnapshot, FORMAT_VERSION_1, FORMAT_VERSION_2, HEADER_LEN,
@@ -188,6 +188,28 @@ impl LearningLog {
         self.append_payload(&payload)
     }
 
+    /// Appends a correction tombstone (#305): `surface` of `reading` was
+    /// rejected in `left_context`. Fails without writing when
+    /// [`rejection_is_recordable`] is false.
+    pub fn append_rejection(
+        &mut self,
+        reading: &str,
+        surface: &str,
+        left_context: u16,
+        right_context: u16,
+        day: u32,
+    ) -> Result<(), LearningLogError> {
+        let encoded = rejection_surface(reading, surface).ok_or_else(|| {
+            LearningLogError::without_receipt(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "rejection cannot be recorded",
+            ))
+        })?;
+        let payload = encode_record("", &encoded, left_context, right_context, day)
+            .map_err(LearningLogError::without_receipt)?;
+        self.append_payload(&payload)
+    }
+
     fn append_payload(&mut self, payload: &[u8]) -> Result<(), LearningLogError> {
         if self.path.is_none() {
             return Ok(());
@@ -320,7 +342,15 @@ impl LearningLog {
             let mut offset = HEADER_LEN;
             let mut removed = 0u64;
             while let Some((next, record)) = record_at(&source, LEARNING_FORMAT_VERSION, offset) {
-                if record.reading == reading && record.surface == surface {
+                let forgotten = match record_meaning(&record) {
+                    RecordMeaning::Commit => record.reading == reading && record.surface == surface,
+                    RecordMeaning::Rejection {
+                        reading: rejected_reading,
+                        surface: rejected_surface,
+                    } => rejected_reading == reading && rejected_surface == surface,
+                    RecordMeaning::RepairSuppress | RecordMeaning::Ignored => false,
+                };
+                if forgotten {
                     removed = removed.saturating_add(1);
                 } else {
                     rewritten.extend_from_slice(&source[offset..next]);
@@ -575,26 +605,30 @@ pub fn read_snapshot(path: &Path) -> io::Result<LearningSnapshot> {
     let mut offset = HEADER_LEN;
     let mut sequence = 0u64;
     let mut records = Vec::new();
+    let mut rejections = Vec::new();
     while let Some((next, record)) = record_at(&bytes, version, offset) {
         sequence = sequence.saturating_add(1);
-        if record.left_context != REPAIR_SUPPRESS_CONTEXT
-            || record.right_context != REPAIR_SUPPRESS_CONTEXT
-            || record.surface != REPAIR_SUPPRESS_SURFACE
-        {
-            records.push(LearningRecord {
-                sequence,
-                day: record.day,
-                left_context: record.left_context,
-                right_context: record.right_context,
-                reading: record.reading.to_owned(),
-                surface: record.surface.to_owned(),
-            });
+        let entry = |reading: &str, surface: &str| LearningRecord {
+            sequence,
+            day: record.day,
+            left_context: record.left_context,
+            right_context: record.right_context,
+            reading: reading.to_owned(),
+            surface: surface.to_owned(),
+        };
+        match record_meaning(&record) {
+            RecordMeaning::Commit => records.push(entry(record.reading, record.surface)),
+            RecordMeaning::Rejection { reading, surface } => {
+                rejections.push(entry(reading, surface));
+            }
+            RecordMeaning::RepairSuppress | RecordMeaning::Ignored => {}
         }
         offset = next;
     }
     Ok(LearningSnapshot {
         format_version: version,
         records,
+        rejections,
         ignored_tail_bytes: u64::try_from(bytes.len().saturating_sub(offset)).unwrap_or(u64::MAX),
     })
 }
