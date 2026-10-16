@@ -36,6 +36,7 @@ $CuratedHomophoneSystemDetails = Join-Path $RepositoryRoot 'data\curated-homopho
 $CuratedPhraseTargetEntries = Join-Path $RepositoryRoot 'data\curated-phrase-target-entries.tsv'
 $CuratedGeneralTargetEntries = Join-Path $RepositoryRoot 'data\curated-general-target-entries.tsv'
 $ConversionPriorities = Join-Path $RepositoryRoot 'data\conversion-priorities.tsv'
+$VerbCollocationEdges = Join-Path $RepositoryRoot 'data\verb-collocation-edges.tsv'
 $NonInitialBoundaryPolicy = Join-Path $RepositoryRoot 'data\non-initial-boundary-policy.tsv'
 $LlmDetailTargetDirectory = Join-Path $RepositoryRoot 'data\llm-detail-targets\000010'
 $LlmDetailReleaseDirectory = Join-Path $RepositoryRoot 'data\llm-details\releases\000010'
@@ -78,6 +79,9 @@ if (-not [IO.File]::Exists($CuratedTerms)) {
 }
 if (-not [IO.File]::Exists($ConversionPriorities)) {
     throw "conversion-priority dictionary layer is missing: $ConversionPriorities"
+}
+if (-not [IO.File]::Exists($VerbCollocationEdges)) {
+    throw "verb-collocation dictionary layer is missing: $VerbCollocationEdges"
 }
 if (-not [IO.File]::Exists($NonInitialBoundaryPolicy)) {
     throw "non-initial boundary policy is missing: $NonInitialBoundaryPolicy"
@@ -358,6 +362,7 @@ function Invoke-BuildPass {
         [Parameter(Mandatory)][string]$CuratedPhraseTargetEntriesPath,
         [Parameter(Mandatory)][string]$CuratedGeneralTargetEntriesPath,
         [Parameter(Mandatory)][string]$ConversionPrioritiesPath,
+        [Parameter(Mandatory)][string]$VerbCollocationEdgesPath,
         [Parameter(Mandatory)][string]$NonInitialBoundaryPolicyPath,
         [Parameter(Mandatory)][string]$WordNetLmfPath,
         [string[]]$SystemCategoryPaths = @()
@@ -442,6 +447,7 @@ function Invoke-BuildPass {
         '--overlay', $CuratedGeneralDetailsPath,
         '--overlay', $CuratedGeneralTargetEntriesPath,
         '--overlay', $ConversionPrioritiesPath,
+        '--overlay', $VerbCollocationEdgesPath,
         '--system-category', '4', $CuratedPhrasesPath,
         '--system-category', '4', $CuratedPhraseTargetEntriesPath,
         '--output-dir', $categoryDirectory
@@ -617,6 +623,7 @@ try {
         -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
         -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
         -ConversionPrioritiesPath $ConversionPriorities `
+        -VerbCollocationEdgesPath $VerbCollocationEdges `
         -NonInitialBoundaryPolicyPath $NonInitialBoundaryPolicy `
         -WordNetLmfPath $WordNetLmfPath -SystemCategoryPaths $SystemCategoryPaths
 
@@ -634,6 +641,7 @@ try {
             -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
             -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
             -ConversionPrioritiesPath $ConversionPriorities `
+            -VerbCollocationEdgesPath $VerbCollocationEdges `
             -NonInitialBoundaryPolicyPath $NonInitialBoundaryPolicy `
             -WordNetLmfPath $WordNetLmfPath -SystemCategoryPaths $SystemCategoryPaths
         foreach ($name in $scalarArtifactNames) {
@@ -726,6 +734,7 @@ try {
             curated_phrase_target_entries = Get-ArtifactRecord $CuratedPhraseTargetEntries
             curated_general_target_entries = Get-ArtifactRecord $CuratedGeneralTargetEntries
             conversion_priorities = Get-ArtifactRecord $ConversionPriorities
+            verb_collocation_edges = Get-ArtifactRecord $VerbCollocationEdges
             non_initial_boundary_policy = Get-ArtifactRecord $NonInitialBoundaryPolicy
             system_category_dictionary = if ($null -eq $SystemCategoryDictionary) {
                 $null
