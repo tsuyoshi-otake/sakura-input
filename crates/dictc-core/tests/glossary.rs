@@ -218,6 +218,48 @@ fn importer_matches_mozc_then_uses_visible_shape_defaults() {
 }
 
 #[test]
+fn translation_alias_of_a_japanese_word_is_conversion_only() {
+    let terms = parse_part(
+        "ja_part1.json",
+        r#"[
+  {"term":"契約","reading":"けいやく","aliases":["Contract"],"senses":[{"definition":"取り決め。"}]},
+  {"term":"Git","reading":"ぎっと","senses":[{"definition":"版管理。"}]},
+  {"term":"移行","reading":"いこう","aliases":["Migration"],"senses":[{"definition":"移す。"}]},
+  {"term":"マジック4","reading":"まじっく","aliases":["Magic"],"senses":[{"definition":"数。"}]}
+]"#,
+    )
+    .expect("glossary part");
+    // Upstream rows: kanji siblings for けいやく and いこう; a katakana-only sibling for まじっく.
+    let mozc = parse_mozc_entries(
+        "dictionary00.txt",
+        "けいやく\t7\t8\t1000\t契約\nいこう\t7\t8\t1000\t移行\nまじっく\t7\t8\t1000\tマジック\n",
+    )
+    .expect("Mozc fixture");
+    let (connection, pos_features) = grammar();
+    let mut importer = Importer::new(&terms, defaults()).expect("importer");
+    importer.match_mozc(&mozc);
+    importer.observe_upstream(&mozc);
+    let imported = importer.finish(&connection, &pos_features);
+
+    let row = |reading: &str, surface: &str| {
+        imported
+            .entries
+            .iter()
+            .find(|entry| entry.reading == reading && entry.surface == surface)
+            .unwrap_or_else(|| panic!("{reading}/{surface} missing"))
+            .flags
+    };
+    assert!(!row("けいやく", "Contract").contains(EntryFlags::PREDICTION));
+    assert!(!row("いこう", "Migration").contains(EntryFlags::PREDICTION));
+    // The alias row itself stays (conversion), only the flag changes.
+    assert!(row("けいやく", "Contract").contains(EntryFlags::IT));
+    // No kanji sibling: abbreviation or name.
+    assert!(row("ぎっと", "Git").contains(EntryFlags::PREDICTION));
+    // Katakana-only sibling: loanword alias.
+    assert!(row("まじっく", "Magic").contains(EntryFlags::PREDICTION));
+}
+
+#[test]
 fn importer_keeps_definition_brackets_in_typed_details_not_inline_annotations() {
     let terms = parse_part(
         "ja_part1.json",

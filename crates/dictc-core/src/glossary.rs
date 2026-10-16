@@ -358,6 +358,7 @@ impl Importer {
         }
         let mut entries = Vec::new();
         for (reading, mut priced) in readings {
+            let translation_aliases = translation_alias_surfaces(&reading, &priced, &upstream);
             let owner = upstream.owner(&reading, connection, pos_features, &options);
             report.upstream_yields.extend(yield_to_upstream_leader(
                 &reading,
@@ -368,18 +369,28 @@ impl Importer {
             ));
             price_variants_behind_their_term(&mut priced);
             for edge in priced {
+                let predictive = !translation_aliases.contains(edge.surface.as_str());
+                let mut flags = EntryFlags::IT
+                    | if predictive {
+                        EntryFlags::PREDICTION
+                    } else {
+                        EntryFlags::PREDICTION_EXCLUDED
+                    };
+                if edge.yielded {
+                    flags = flags | EntryFlags::READING_YIELD;
+                }
                 entries.push(SourceEntry {
                     reading: reading.clone(),
                     surface: edge.surface,
                     left_id: edge.left_id,
                     right_id: edge.right_id,
                     word_cost: edge.word_cost,
-                    prediction_cost: edge.word_cost.saturating_add(300),
-                    flags: if edge.yielded {
-                        EntryFlags::IT | EntryFlags::PREDICTION | EntryFlags::READING_YIELD
+                    prediction_cost: if predictive {
+                        edge.word_cost.saturating_add(300)
                     } else {
-                        EntryFlags::IT | EntryFlags::PREDICTION
+                        i32::MAX
                     },
+                    flags,
                     annotation: edge.candidate.annotation,
                     source: edge.candidate.source,
                     line: edge.candidate.line,
@@ -456,6 +467,77 @@ fn price_reading(
         });
     }
     priced
+}
+
+/// Rule T (Issue #338): the ASCII surfaces of `reading` that are only an
+/// English rendering of a Japanese word, so they convert but are not offered
+/// as completions. A kana reading whose other surfaces include a kanji word
+/// and no katakana-only loanword is the Japanese word's reading; an ASCII
+/// glossary surface on it (`Contract` for `けいやく`) would crowd the list with
+/// translations of what the user is typing. A reading without a kanji
+/// sibling is an abbreviation or a name (`Git`), a katakana-only sibling marks
+/// a loanword alias (`Magic` for `マジック`), and a short acronym-shaped
+/// surface (`LR`, `Notice`) stays predictive.
+///
+/// The siblings are the upstream edges retained for the reading plus the
+/// glossary's own surfaces, so the result does not depend on the order in which
+/// readings are processed.
+fn translation_alias_surfaces(
+    reading: &str,
+    priced: &[PricedEdge],
+    upstream: &ReadingOwners,
+) -> BTreeSet<String> {
+    let mut aliases = BTreeSet::new();
+    if !reading.chars().any(is_kana) {
+        return aliases;
+    }
+    let siblings: Vec<&str> = upstream
+        .upstream_surfaces(reading)
+        .chain(priced.iter().map(|edge| edge.surface.as_str()))
+        .collect();
+    let has_loanword_sibling = siblings.iter().any(|surface| {
+        !is_ascii_like(surface) && !surface.chars().any(is_han) && !surface.chars().any(is_hiragana)
+    });
+    let has_kanji_sibling = siblings.iter().any(|surface| surface.chars().any(is_han));
+    if has_loanword_sibling || !has_kanji_sibling {
+        return aliases;
+    }
+    for edge in priced {
+        if is_ascii_like(&edge.surface) && !is_acronym_like(&edge.surface) {
+            aliases.insert(edge.surface.clone());
+        }
+    }
+    aliases
+}
+
+fn is_kana(character: char) -> bool {
+    matches!(character, 'ぁ'..='ゟ' | 'ー')
+}
+
+fn is_hiragana(character: char) -> bool {
+    matches!(character, 'ぁ'..='ゖ')
+}
+
+fn is_han(character: char) -> bool {
+    matches!(character, '\u{4e00}'..='\u{9fff}' | '々' | '〆')
+}
+
+/// Printable ASCII, with `±` counted as ASCII because glossary terms such as
+/// `±1` are typed and read as ASCII.
+fn is_ascii_like(surface: &str) -> bool {
+    !surface.is_empty()
+        && surface
+            .chars()
+            .all(|character| matches!(character, ' '..='~' | '±'))
+}
+
+/// An upper-case initial followed by one to five ASCII letters or digits and no
+/// space: the shape of an acronym or a product name rather than a translation.
+fn is_acronym_like(surface: &str) -> bool {
+    let mut characters = surface.chars();
+    matches!(characters.next(), Some('A'..='Z'))
+        && (1..=5).contains(&characters.as_str().chars().count())
+        && characters.all(|character| character.is_ascii_alphanumeric())
 }
 
 /// Canonicalizes glossary pronunciations to the hiragana reading keyed by the
