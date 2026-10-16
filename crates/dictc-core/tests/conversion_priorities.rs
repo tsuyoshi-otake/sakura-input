@@ -312,6 +312,108 @@ fn business_compounds_outrank_homophone_splits() {
     }
 }
 
+/// Issue #336: the noun-homophone rows as they ship, in file order. A cost is a
+/// measured lattice decision: moving one reopens the sentence it was priced for
+/// (see the ranking tests named `issue_336_*`).
+const NOUN_HOMOPHONE_ROWS: &str = concat!(
+    "# license: LicenseRef-Sakura-InHouse\n",
+    "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+    "あん\t案\t1851\t1851\t4780\t5980\tpredict\t\n",
+    "いちじていし\t一時停止\t1841\t1841\t6500\t-\tit\t\n",
+    "いんしぜい\t印紙税\t1851\t1851\t8000\t-\t\t\n",
+    "かた\t型\t1851\t1851\t3000\t4200\tpredict\t\n",
+    "きのうふらぐ\t機能フラグ\t1851\t1851\t3600\t4800\tit,predict\t\n",
+    "けんさくきのう\t検索機能\t1841\t1841\t4300\t5500\tit,predict\t\n",
+    "さいしゅうばん\t最終版\t1851\t1851\t6200\t-\t\t\n",
+    "しょうたい\t招待\t1841\t1841\t4110\t5310\tpredict\t\n",
+    "ふどうしょうすうてん\t浮動小数点\t1851\t1851\t11600\t-\tit\t\n",
+);
+
+#[test]
+fn noun_homophone_rows_keep_their_measured_prices() {
+    let expected =
+        parse_entries("noun-homophone-rows.tsv", NOUN_HOMOPHONE_ROWS).expect("valid expected rows");
+    assert_eq!(expected.len(), 9);
+    let overlay = overlay();
+    for want in &expected {
+        let rows: Vec<_> = overlay
+            .iter()
+            .filter(|entry| {
+                entry.reading == want.reading
+                    && entry.surface == want.surface
+                    && entry.left_id == want.left_id
+                    && entry.right_id == want.right_id
+            })
+            .collect();
+        assert_eq!(
+            rows.len(),
+            1,
+            "{}\t{} must be one row",
+            want.reading,
+            want.surface
+        );
+        let row = rows[0];
+        assert_eq!(
+            (row.word_cost, row.prediction_cost, row.flags),
+            (want.word_cost, want.prediction_cost, want.flags),
+            "{}\t{} drifted from its measured price",
+            want.reading,
+            want.surface
+        );
+    }
+}
+
+/// Every reviewed detail source that can describe an edge this layer replaces.
+fn reviewed_detail_rows() -> Vec<SourceEntry> {
+    let mut rows = Vec::new();
+    for name in [
+        "curated-phrases.tsv",
+        "curated-general-details.tsv",
+        "curated-homophone-details.tsv",
+    ] {
+        let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../data")
+            .join(name);
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|error| panic!("read {}: {error}", path.display()));
+        rows.extend(
+            parse_entries(name, &text)
+                .unwrap_or_else(|error| panic!("parse {}: {error}", path.display())),
+        );
+    }
+    rows
+}
+
+#[test]
+fn reviewed_details_describe_the_edge_a_row_here_replaces() {
+    // dictc fails the build when a reviewed detail source and the final entry
+    // disagree on cost or flags; this reports the disagreement without a build.
+    let overlay = overlay();
+    let mut agreed = BTreeSet::new();
+    for reviewed in reviewed_detail_rows() {
+        let replacing = overlay.iter().find(|entry| {
+            entry.reading == reviewed.reading
+                && entry.surface == reviewed.surface
+                && entry.left_id == reviewed.left_id
+                && entry.right_id == reviewed.right_id
+        });
+        if let Some(row) = replacing {
+            assert_eq!(
+                (row.word_cost, row.prediction_cost, row.flags),
+                (reviewed.word_cost, reviewed.prediction_cost, reviewed.flags),
+                "reviewed detail and overlay row disagree: {}\t{}",
+                row.reading,
+                row.surface
+            );
+            agreed.insert((row.reading.clone(), row.surface.clone()));
+        }
+    }
+    assert!(
+        agreed.contains(&("しょうたい".to_owned(), "招待".to_owned())),
+        "招待 must be priced in both its overlay row and its reviewed detail"
+    );
+}
+
 #[test]
 fn overlay_rows_say_nothing_to_the_user() {
     for entry in overlay() {

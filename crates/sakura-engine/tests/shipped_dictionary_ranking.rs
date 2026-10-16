@@ -2679,6 +2679,99 @@ fn issue_282_repriced_homophones_lead_in_every_context() {
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
+/// Issue #336: noun homophones whose expected word lost on a price, on the
+/// per-reading edge limit or for want of a compound edge. Each sentence led
+/// with the homophone (餡, 正体, 最終盤, 方, ...) before the rows in
+/// `data/conversion-priorities.tsv` re-priced the expected word.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_336_noun_homophones_lead_in_the_sentences_that_lost() {
+    let mut wrong = Vec::new();
+    for (reading, expected) in [
+        ("しょうたいをおくりました", "招待を送りました"),
+        (
+            "のちほどかれんだーのしょうたいをおおくりします",
+            "後ほどカレンダーの招待をお送りします",
+        ),
+        (
+            "さいしゅうばんをかくにんしていただきたくぞんじます",
+            "最終版を確認していただきたく存じます",
+        ),
+        (
+            "けいやくしょのあんをおおくりします",
+            "契約書の案をお送りします",
+        ),
+        (
+            "ぎょうむいたくけいやくのあんをおおくりします",
+            "業務委託契約の案をお送りします",
+        ),
+        ("れつのかたをへんこうするとき", "列の型を変更するとき"),
+        ("ふどうしょうすうてんのひかく", "浮動小数点の比較"),
+        ("もどりちのかたをめいじする", "戻り値の型を明示する"),
+    ] {
+        let top = top_text(reading);
+        if top != expected {
+            wrong.push(format!("{reading}: expected {expected}, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// Issue #336: the compound edges lead as whole words, alone and in a short
+/// phrase. Before the rows 因子性, 不動小数点, 検索昨日, 昨日フラグ, 一次停止 and
+/// 最終盤 led their readings.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_336_compound_rows_lead_as_whole_words() {
+    let mut wrong = Vec::new();
+    for (reading, expected) in [
+        ("さいしゅうばん", "最終版"),
+        ("さいしゅうばんをかくにん", "最終版を確認"),
+        ("ふどうしょうすうてん", "浮動小数点"),
+        ("きのうふらぐ", "機能フラグ"),
+        ("きのうふらぐをおん", "機能フラグをオン"),
+        ("けんさくきのう", "検索機能"),
+        ("いんしぜい", "印紙税"),
+        ("いんしぜいをのうふ", "印紙税を納付"),
+        ("いちじていし", "一時停止"),
+        ("いちじていしする", "一時停止する"),
+    ] {
+        let top = top_text(reading);
+        if top != expected {
+            wrong.push(format!("{reading}: expected {expected}, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// Issue #336: the rows must not move the readings they sit next to. These
+/// leaders were already correct before the rows, so a failure here means a
+/// row price spilled into a bare reading or a general sentence.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_336_rows_leave_the_neighbouring_leaders_alone() {
+    let mut wrong = Vec::new();
+    for (reading, expected) in [
+        ("かた", "方"),
+        ("れつのかた", "列の方"),
+        ("ひだりのかたがいたい", "左の方が痛い"),
+        ("きのう", "昨日"),
+        ("あん", "案"),
+        ("あんをだす", "案を出す"),
+        ("しょうたい", "招待"),
+        ("しょうたいじょう", "招待状"),
+        ("しょうたいする", "招待する"),
+        // 戻り値 needs no row: #332 prices its alias 返り値 behind it.
+        ("もどりち", "戻り値"),
+    ] {
+        let top = top_text(reading);
+        if top != expected {
+            wrong.push(format!("{reading}: expected {expected}, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
 /// Issue #291: `(reading, yielded glossary surface, owner)` for every edge the
 /// glossary importer priced behind the word that owns its reading, read from
 /// the checked-in report so a new yield is covered without editing this file.

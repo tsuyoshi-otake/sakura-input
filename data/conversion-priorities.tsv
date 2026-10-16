@@ -162,3 +162,39 @@ reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
 よう	用	1978	1978	603	1803	predict	
 よう	用	2031	2031	603	1803	predict	
 いと	意図	1841	1841	3610	3910	predict	
+# Issue #336: noun homophones whose expected word lost on a price, on the
+# per-reading edge limit, or because no compound edge existed. Each row
+# replaces or adds exactly one edge and keeps the contract above (rows at or
+# below 6,000 are predictive with word cost + 1,200; dearer rows are not).
+# Costs come from the lattice totals of the sentences that failed and were
+# checked against the standalone leaders pinned in the ranking tests.
+#
+# あん/案 and かた/型: the 案 and 型 edges (1851) sat 14th and 17th among the
+# edges of their reading, behind the per-reading edge limit, so the lattice
+# never saw them. 案 is priced at 4780, 65 below the 4845 edge, which lifts it
+# to 12th; 型 at 3000 admits it and keeps 方 first for a bare かた. 型 carries
+# no `it` flag: with the flag a bare かた would convert to 型 and a general
+# sentence such as 左の方が痛い would break.
+#
+# しょうたい/招待: at 4247, 招待 stood 73 behind 正体 after the connection
+# costs of カレンダーの招待 were added; 4110 turns that around. This edge has
+# a reviewed description, so curated-homophone-details.tsv carries the same
+# price and dictc fails the build if the two disagree.
+#
+# さいしゅうばん/最終版 and ふどうしょうすうてん/浮動小数点 add missing compound
+# edges; without them 最終盤 and 不動小数点 beat the split spellings.
+#
+# 機能フラグ, 検索機能, 印紙税 and 一時停止 are whole-compound edges whose lead
+# must not depend on the IT compound coherence bonus of a multi-word path, so
+# that bonus can be narrowed later (Issue #352) without moving them. 検索機能
+# replaces the generated edge and adds the `it` flag. 戻り値 needs no row: its
+# alias 返り値 is priced behind it by the glossary generator (Issue #332).
+あん	案	1851	1851	4780	5980	predict	
+いちじていし	一時停止	1841	1841	6500	-	it	
+いんしぜい	印紙税	1851	1851	8000	-		
+かた	型	1851	1851	3000	4200	predict	
+きのうふらぐ	機能フラグ	1851	1851	3600	4800	it,predict	
+けんさくきのう	検索機能	1841	1841	4300	5500	it,predict	
+さいしゅうばん	最終版	1851	1851	6200	-		
+しょうたい	招待	1841	1841	4110	5310	predict	
+ふどうしょうすうてん	浮動小数点	1851	1851	11600	-	it	
