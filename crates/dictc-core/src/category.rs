@@ -93,15 +93,43 @@ impl DictionaryCategory {
     }
 }
 
+/// Conjugation forms (the sixth `id.def` field) that exist only as the piece
+/// of a longer word that precedes its continuation: the imperfective,
+/// hypothetical and imperative forms, the classical-Japanese forms, and the
+/// rest of the forms that cannot end a standalone phrase.
+const CONJUGATION_FRAGMENT_FORM_PREFIXES: [&str; 8] = [
+    "未然",
+    "仮定",
+    "命令",
+    "連用ゴザイ",
+    "体言接続特殊",
+    "文語",
+    "ガル接続",
+    "音便基本形",
+];
+
 /// POS labels parsed from Mozc's pinned `id.def` file.
 #[derive(Debug, Default)]
 pub struct MozcPosCatalog {
     labels_by_id: BTreeMap<u16, Vec<String>>,
+    /// The conjugation form of each id that has one. `labels_by_id` drops the
+    /// `*` fields, so a label's position says nothing about which field it
+    /// came from, and a conjugation type such as `文語・キ` must never be
+    /// mistaken for a form.
+    conjugation_forms: BTreeMap<u16, String>,
 }
 
 impl MozcPosCatalog {
     fn labels_for(&self, id: u16) -> Option<&[String]> {
         self.labels_by_id.get(&id).map(Vec::as_slice)
+    }
+
+    fn is_conjugation_fragment(&self, id: u16) -> bool {
+        self.conjugation_forms.get(&id).is_some_and(|form| {
+            CONJUGATION_FRAGMENT_FORM_PREFIXES
+                .iter()
+                .any(|prefix| form.starts_with(*prefix))
+        })
     }
 }
 
@@ -288,6 +316,11 @@ pub fn parse_mozc_pos_catalog(source: &str, text: &str) -> Result<MozcPosCatalog
         let id = id
             .parse::<u16>()
             .map_err(|_| format!("{source}:{line_number}: invalid POS id '{id}'"))?;
+        let conjugation_form = definition
+            .split(',')
+            .nth(5)
+            .map(str::trim)
+            .unwrap_or_default();
         let labels = definition
             .split(',')
             .map(str::trim)
@@ -302,11 +335,47 @@ pub fn parse_mozc_pos_catalog(source: &str, text: &str) -> Result<MozcPosCatalog
         if catalog.labels_by_id.insert(id, labels).is_some() {
             return Err(format!("{source}:{line_number}: duplicate POS id {id}"));
         }
+        if !conjugation_form.is_empty() && conjugation_form != "*" {
+            catalog
+                .conjugation_forms
+                .insert(id, conjugation_form.to_owned());
+        }
     }
     if catalog.labels_by_id.is_empty() {
         return Err(format!("{source}: no POS definitions found"));
     }
     Ok(catalog)
+}
+
+/// Removes conjugation-form fragments from prediction (Issue #338).
+///
+/// A Mozc row whose connection class is a fragment conjugation form (see
+/// [`CONJUGATION_FRAGMENT_FORM_PREFIXES`]) is the stem of a longer word, such
+/// as `休みゃ` or `浅から`. Conversion needs it to build the longer word, but
+/// offering it as a completion of what the user typed fills the suggestion
+/// list with pieces no one stops at. The row keeps every conversion field;
+/// only `PREDICTION` is replaced by `PREDICTION_EXCLUDED` and the prediction
+/// cost becomes unavailable. The judgement reads the conjugation form alone,
+/// never the conjugation type. Returns the number of rows excluded.
+pub fn exclude_conjugation_fragment_predictions(
+    entries: &mut [SourceEntry],
+    catalog: &MozcPosCatalog,
+) -> usize {
+    let mut excluded = 0;
+    for entry in entries {
+        if !entry.flags.contains(EntryFlags::PREDICTION)
+            || !catalog.is_conjugation_fragment(entry.left_id)
+        {
+            continue;
+        }
+        entry.flags = EntryFlags::from_bits(
+            (entry.flags.bits() & !EntryFlags::PREDICTION.bits())
+                | EntryFlags::PREDICTION_EXCLUDED.bits(),
+        );
+        entry.prediction_cost = i32::MAX;
+        excluded += 1;
+    }
+    excluded
 }
 
 /// Marks lexical fragments that are meaningful only after preceding text.
@@ -985,8 +1054,8 @@ mod tests {
     use sakura_core::dictionary::EntryFlags;
 
     use super::{
-        classify_existing_entry, is_address_layer_entry, mark_non_initial_allomorphs,
-        mark_non_initial_allomorphs_with_boundary_policy,
+        classify_existing_entry, exclude_conjugation_fragment_predictions, is_address_layer_entry,
+        mark_non_initial_allomorphs, mark_non_initial_allomorphs_with_boundary_policy,
         mark_non_initial_allomorphs_with_legacy_evidence, parse_mozc_pos_catalog,
         parse_non_initial_boundary_policy, DictionaryCategory,
     };
@@ -1060,6 +1129,68 @@ mod tests {
         assert!(entries
             .iter()
             .all(|entry| entry.flags.contains(EntryFlags::PREDICTION)));
+    }
+
+    #[test]
+    fn conjugation_fragment_rows_lose_prediction_and_keep_conversion() {
+        // Lines in Mozc id.def format. 96/97 are auxiliary verbs whose conjugation TYPE
+        // starts with 文語 but whose conjugation FORM (体言接続 / 基本形) is not a fragment form.
+        let catalog = parse_mozc_pos_catalog(
+            "id.def",
+            "617 動詞,自立,*,*,サ変,仮定形,*\n\
+             673 動詞,自立,*,*,一段,命令ｙｏ,*\n\
+             2439 形容詞,自立,*,*,形容詞・アウオ段,未然ヌ接続,*\n\
+             829 動詞,自立,*,*,五段・ワ行促音便,連用形,*\n\
+             1851 名詞,一般,*,*,*,*,*\n\
+             96 助動詞,*,*,*,文語・キ,体言接続,き\n\
+             97 助動詞,*,*,*,文語・キ,基本形,き\n",
+        )
+        .expect("fixture POS catalog parses");
+        let mut entries = vec![
+            lexical_entry("やすみゃ", "休みゃ", 617),
+            lexical_entry("たしかめよ", "確かめよ", 673),
+            lexical_entry("あさから", "浅から", 2439),
+            lexical_entry("やすみ", "休み", 829),
+            lexical_entry("やすみ", "休", 1851),
+            lexical_entry("き", "き", 96),
+            lexical_entry("き", "き", 97),
+            // A fragment row that never had PREDICTION is left untouched.
+            entry(617, "先んずれ", ""),
+        ];
+
+        assert_eq!(
+            exclude_conjugation_fragment_predictions(&mut entries, &catalog),
+            3
+        );
+
+        for row in &entries[..3] {
+            assert!(
+                !row.flags.contains(EntryFlags::PREDICTION),
+                "{}",
+                row.surface
+            );
+            assert!(
+                row.flags.contains(EntryFlags::PREDICTION_EXCLUDED),
+                "{}",
+                row.surface
+            );
+            assert_eq!(row.prediction_cost, i32::MAX, "{}", row.surface);
+        }
+        for row in &entries[3..7] {
+            assert!(
+                row.flags.contains(EntryFlags::PREDICTION),
+                "{}",
+                row.surface
+            );
+            assert!(
+                !row.flags.contains(EntryFlags::PREDICTION_EXCLUDED),
+                "{}",
+                row.surface
+            );
+        }
+        assert!(!entries[7].flags.contains(EntryFlags::PREDICTION_EXCLUDED));
+        // Conversion fields are unchanged.
+        assert!(entries.iter().all(|row| row.word_cost == 100));
     }
 
     #[test]

@@ -1529,11 +1529,12 @@ fn reported_prediction_prefixes_keep_direct_candidates_before_repairs() {
     let runtime = PredictionRuntime::start(Arc::clone(&conversion)).expect("prediction runtime");
     let service = runtime.service();
 
+    let mut first_mismatches = Vec::new();
     for (generation, (prefix, expected_first)) in [
-        ("かが", "輝け"),
-        ("みみ", "みみりん"),
+        ("かが", "香川"),
+        ("みみ", "みみ"),
         ("まだ", "まだ"),
-        ("ただ", "正しかろ"),
+        ("ただ", "ただ"),
     ]
     .into_iter()
     .enumerate()
@@ -1574,11 +1575,11 @@ fn reported_prediction_prefixes_keep_direct_candidates_before_repairs() {
             "{prefix}: no direct candidate in {:?}",
             surfaces
         );
-        assert_eq!(
-            candidates.first().map(|candidate| candidate.surface()),
-            Some(expected_first),
-            "{prefix}: unexpected first candidate in {surfaces:?}"
-        );
+        if candidates.first().map(|candidate| candidate.surface()) != Some(expected_first) {
+            first_mismatches.push(format!(
+                "{prefix}: expected {expected_first}, got {surfaces:?}"
+            ));
+        }
         assert!(
             !direct_after_repair,
             "{prefix}: direct candidate followed a repair in {surfaces:?}"
@@ -1595,7 +1596,99 @@ fn reported_prediction_prefixes_keep_direct_candidates_before_repairs() {
         }
     }
 
+    assert!(first_mismatches.is_empty(), "{first_mismatches:#?}");
+
     runtime.stop().expect("joined prediction runtime");
+}
+
+fn prediction_surfaces(prefix: &str, domain_it_per_mille: u16) -> Vec<String> {
+    let conversion = open_conversion();
+    let runtime = PredictionRuntime::start(Arc::clone(&conversion)).expect("prediction runtime");
+    let result = runtime
+        .service()
+        .request(
+            1,
+            1,
+            prefix,
+            domain_it_per_mille,
+            InputSupport::default(),
+            false,
+            Duration::from_secs(1),
+        )
+        .unwrap_or_else(|| panic!("{prefix}: prediction request failed"));
+    let surfaces = result
+        .candidates()
+        .iter()
+        .map(|candidate| candidate.surface().to_owned())
+        .collect();
+    runtime.stop().expect("joined prediction runtime");
+    surfaces
+}
+
+/// Issue #338. Conjugation-fragment rows (Mozc rows whose left id is an
+/// imperfective, hypothetical or imperative form, ...) and glossary
+/// translation aliases are conversion-only.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn fragment_rows_and_translation_aliases_are_not_predicted() {
+    // (prefix, IT per mille, surface that must NOT be offered)
+    let absent = [
+        ("やすみゃ", 0, "休みゃ"),
+        ("あさから", 0, "浅から"),
+        ("えきすれ", 0, "役すれ"),
+        ("ほうぜよ", 0, "報ぜよ"),
+        ("おそいかかろ", 0, "襲いかかろ"),
+        ("たしかめろ", 0, "確かめろ"),
+        ("たしかめよ", 0, "確かめよ"),
+        ("わびりゃ", 0, "詫びりゃ"),
+        ("さきんずれ", 0, "先んずれ"),
+        ("ますたーで", 1_000, "Master Data List"),
+        ("けいやく", 1_000, "Contract"),
+    ];
+    for (prefix, domain, surface) in absent {
+        let surfaces = prediction_surfaces(prefix, domain);
+        assert!(
+            !surfaces.iter().any(|offered| offered == surface),
+            "{prefix}: {surface} must be conversion-only, got {surfaces:?}"
+        );
+    }
+    // (prefix, IT per mille, surface that must still be offered)
+    let present = [
+        ("あさから", 0, "朝から晩"),
+        ("ぎっと", 1_000, "Git"),
+        ("えらー", 1_000, "error"),
+        ("ぱすわーど", 1_000, "password"),
+    ];
+    for (prefix, domain, surface) in present {
+        let surfaces = prediction_surfaces(prefix, domain);
+        assert!(
+            surfaces.iter().any(|offered| offered == surface),
+            "{prefix}: {surface} must stay predictable, got {surfaces:?}"
+        );
+    }
+}
+
+/// Issue #338. Spelling repair must still fire for a mistyped reading whose
+/// exact-reading rows were all excluded from prediction: such rows are not
+/// evidence that the typed reading is a finished word.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn repair_still_offers_the_intended_word_when_only_excluded_rows_match() {
+    // (typed reading with a dakuten slip, intended surface)
+    let typos = [
+        ("いせん", "以前"),
+        ("ごうしん", "更新"),
+        ("ほしゅう", "募集"),
+        ("ぞうしん", "送信"),
+        ("しゅうしょ", "住所"),
+    ];
+    for (typed, intended) in typos {
+        let surfaces = prediction_surfaces(typed, 0);
+        assert!(
+            surfaces.iter().take(9).any(|offered| offered == intended),
+            "{typed}: {intended} missing from the first nine of {surfaces:?}"
+        );
+    }
 }
 
 #[test]
