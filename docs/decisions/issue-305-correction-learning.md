@@ -18,6 +18,7 @@
    - 候補を個別に削除する操作（別 Issue）。
 2. **ほかの文脈での X。** 打ち消しは消した語の左文脈 L だけに効く。ほかの文脈では、X の general（文脈なし）の学習が今までどおり効く。general を消す方式は、予備計測で悪化が増えたため採らない（改善 22、悪化 6、辞書順に戻った変換のうち元が正解だったもの 4）。
 3. **打ち直した直後の再変換の表示順。** 消した X を打ち直しで下げることはしない。消して同じ表記を打ち直す操作（147 回）が訂正（128 回）より多いためである。消した X は確定キャッシュに残るため、同じセッションの打ち直しでは今までどおり X が先に出ることがある。
+   - 実装後の再計測（5.1）では、同じ表記の打ち直しは 32 回、訂正は 117 回だった。この根拠は今のデータでは成り立たない。この版では扱いを変えず、別 Issue で見直す。
 4. **打ち直さずに消しただけの確定。** #275 の猶予で、確定直後に消した確定は学習されない。その猶予をすり抜ける次の 2 経路は、打ち直せばこの設計の訂正として直る。2.0.10 以後、全部消された確定 243 件のうち学習に残ったのは 3 件で、頻度が低い。猶予の延長（Issue 本文の項目 3）は保留のままとする。
    - 確定を 2 回続けてから両方を消す。
    - 消す前に別の変換を始める（`confirm_all_staged`）。
@@ -86,7 +87,7 @@
     - 連鎖で引き継ぐ却下表記（表記 `FixedStr<96>` と右ID を最大 2 件）。
   - 読みか表記が 96 バイトを超える確定は、文字数だけ持つ「追跡しない項目」として入れる。Backspace の数え合わせを崩さないためである。この項目は照合しない。
   - `erase_overflow`: 残っている確定を丸ごと覆わない、余った Backspace の数。
-  - 大きさは 1,840 バイト（`size_of::<CorrectionTrail>()` の実測）。`Session` は今 11,976 バイトで、上限テスト（16 KiB、`phase1_session_and_dispatcher_layout_stay_small_for_worker_stack`）に収まる。
+  - 大きさは 1,840 バイト（`size_of::<CorrectionTrail>()` の実測）。trail を持つ `Session` は 13,816 バイト（実装後の実測、以前は 11,976 バイト）で、上限テスト（16 KiB、`phase1_session_and_dispatcher_layout_stay_small_for_worker_stack`）に収まる。
 - **イベントと状態遷移:**
 
 | イベント | 条件 | 遷移 |
@@ -95,7 +96,7 @@
 | E2 消去 | idle → idle の未処理の Backspace。修飾キーなし、または Shift だけ（どちらもホストでは 1 文字の削除） | `erase_overflow += 1`。最新の残っている確定の `chars` を覆う間、その確定をスタックの一番上に移し、`erase_overflow` から引く |
 | E3 取り消し成功 | `acknowledge_undo_commit` が true | 最新の残っている確定の表記が取り消した表記と一致すれば、スタックの一番上に移す。一致しなければ trail を空にする |
 | E4 連続の終了 | idle → idle のキーのうち E2 以外のすべて（矢印、Enter、Delete、Tab、idle Space、Ctrl / Alt 付きの Backspace（単語削除など、消える文字数が分からない）、Ctrl+Z、モード切替のキーなど） | trail を空にする |
-| E5 文脈の破棄 | `clear_personal_context`（`ResetDocumentContext`、scope 変更、機微な確定など）、セッションの reset と終了 | trail を空にする |
+| E5 文脈の破棄 | `clear_personal_context`（`ResetDocumentContext`、機微な確定など）、実効 scope の変更（別の欄にフォーカスが移った）、再変換（`Reconvert`）、ホストによる合成の破棄（`Revert`）、AI 文の適用、セッションの reset と終了 | trail を空にする |
 | E6 取り消し失敗 | 取り消しの結果が Rejected / Unknown | trail を空にする |
 
 - **取り消しの窓の Ctrl+Backspace:** 確定直後の Ctrl+Backspace は、エンジンが取り消しとして処理する（処理済みのキー）。`settle_staged_learning_after_idle_key` は取り消し待ちを最初に調べて `hold_staged` を呼び、そのキーでは trail を変えない。trail は結果の通知で E3 か E6 になる。窓の外の Ctrl+Backspace は処理されずにホストへ渡るので、E4 になる。
@@ -118,14 +119,14 @@
 - `StagedCommit` に次の 2 つを足す。
   - `kind: Learn | RejectOnly`
   - `correction: Option<StagedCorrection { origin_left, rejected: 最大 2 件の (表記, 右ID) }>`
-- **`record_learning`:**
+- **`record_learning`:** 確定ごとに `Session::track_commit_correction(Y, 右ID)` で trail に報告し、返った訂正を記録に載せる。
   - 学習対象: `stage(owner, r, Y, left, right, correction)`。
-  - 学習対象外（カナ変換、raw repair、synthetic exact）で訂正あり: `RejectOnly` の記録を `stage` する。今の `confirm_staged` と同じく、前の記録は学習される。
+  - 学習対象外（カナ変換、raw repair、synthetic exact）で訂正あり: `stage_reject_only(owner, r, Y, left, right, correction)` で `RejectOnly` の記録を置く。今の `confirm_staged` と同じく、前の記録は学習される。
   - 学習対象外で訂正なし: 今どおり `confirm_staged`。
 - **記録を適用するとき（`learn_staged`）:**
   1. `correction` があれば、却下表記ごとに tombstone (r, origin_left, 表記, 右ID) を記録する（メモリとログ）。
   2. `kind == Learn` なら、今どおり (r, Y) を左文脈 left で学習する。
-  3. `kind == Learn` で、`correction` があり `origin_left != left` なら、(r, Y) を左文脈 origin_left でも通常の確定レコードとして学習する。general と予測の頻度も 1 増える。予備計測では、exact だけに記録する方式（改善 22 / 悪化 2）より正味の改善が大きかった（改善 32 / 悪化 5）。
+  3. 消去の Backspace は左文脈を 0 に戻す（#273）ので、打ち直しの確定の left は 0 になる。`kind == Learn` で、`correction` があり `origin_left != left` なら、(r, Y) を左文脈 origin_left でも通常の確定レコードとして学習する。general と予測の頻度も 1 増える。予備計測では、exact だけに記録する方式（改善 22 / 悪化 2）より正味の改善が大きかった（改善 32 / 悪化 5）。
   - この順序なので、Y の学習の `sequence` は必ず tombstone より新しい。
 - **猶予の結果ごとの扱い:** どの経路でも、適用は記録全体に対して一度だけ行う。
 
@@ -194,6 +195,7 @@
 - **状態の作り直し:** ログを再生して状態を置き換える箇所は 4 つある（起動の `open`、compaction の `maintain`、個別削除の `forget_prediction_exact`、`clear`。テスト用の `compact_state` も同じ）。`PreparedLearning` に `RejectionTable` を加え、この 4 か所で `Index` などと一緒に置き換える。
 - **個別削除:** `forget_exact(r, X)`（log.rs 280 行、323 行の条件）を拡張し、復号した (r, 表記) が (r, X) と一致する tombstone も消す。予測候補の削除（Ctrl+Delete）で X を忘れると、X の tombstone も残らない。
   - `forget_prediction_exact` は今、(r, X) と同じ猶予中の記録を捨てている（1095-1100 行）。これに加えて、猶予中の訂正の却下表記からも (r, X) を外す。外さないと、削除の後に記録が適用されて X の tombstone ができてしまう。
+  - 猶予中の記録が (r, X) 自体の確定で、ほかの表記を却下する訂正を持つ場合は、記録を捨てずに `RejectOnly` に変える。X は学習せず、ほかの表記の tombstone だけを記録する。却下表記が空になった記録は、訂正のない通常の確定として、打った左文脈でだけ学習する。
   - 削除を指示したセッションの trail からも (r, X) を外す。ほかのセッションの trail は外さない。残った却下は、そのセッションで同じ読みを消して打ち直したときだけ効き、そのときは X をもう一度却下したのと同じ意味になる。
 - **スナップショット:** `read_snapshot`（log.rs 563-600 行）は tombstone を `records` から除き、新しい `rejections` に入れる。形の崩れた番兵はどちらにも入れない。
   - 設定の `learning export` と `learning show` は、`rejections` を `#reject` で始まる行として、既存の表の後に出力する。既存の列と行は変えない。
@@ -227,6 +229,29 @@
 - **限界:**
   - データは開発者 1 人の 21 日分（訂正 128 回）で、最終選択も同じ人の判断である。
   - リリース後 14 日の新しい履歴で同じ再生を行い、判定を再確認する。満たさなければ前の版に戻す（4.5）。
+- **実行:** ツールは feature `learning-replay` を付けたときだけビルドされる。workspace のビルドでは、出荷するエンジンに `replay-eval` が入らない。
+
+  ```powershell
+  cargo run --release -p sakura-conversion-eval --features learning-replay --bin learning-replay -- --history <history.tsv> --learning <learning.tsv> --dictionary <system.dic>
+  ```
+
+#### 5.1 結果（2026-10-16、実装後の再生）
+
+- **データ:**
+  - 入力履歴は 20 日分（208,821 行）。確定は 20,283 回で、そのうち変換を経た確定は 9,224 回。
+  - 学習の初期状態は、履歴の初日より前の学習記録 29,035 件。tombstone は 0 件。
+  - 辞書は 2.0.15 の同梱辞書。
+- **件数:**
+  - 訂正は 117 回。同じ表記の打ち直しは 32 回。
+  - 現行と先頭が変わる変換は 31 回。改善 23、悪化 6、どちらも最終選択と違うもの 2。
+  - 辞書順に戻った変換のうち元が正解だったものは 0。
+  - 忠実度は 1,066/1,072（99%）。
+- **判定:** 改善 23 ≥ 2 ×（悪化 6 + 0）= 12、忠実度 99% ≥ 80%。リリース条件を満たす。
+- **予備計測との差:**
+  - 訂正は 128 回から 117 回で、近い値になった。
+  - 同じ表記の打ち直しは 147 回から 32 回に減った。予備計測のスクリプトは残っていないため、差の原因は確かめられない。
+  - 別の一時スクリプトで単純に数えた値は 35 回だった。数え方は「直前の確定をちょうどの文字数だけ消して、同じ読みを同じ表記で確定した回数」で、途中の別キーと消しすぎも含めた。ツールの 32 回とほぼ一致する。
+  - そのため、1 章の「直さないもの」3 の根拠は今のデータでは成り立たない。扱いは別 Issue で見直す。
 
 ### 6. テスト
 
@@ -234,17 +259,21 @@ fail-before の対象は、現行コードで失敗し、実装後に通るテ�
 
 #### 6.1 dispatch（engine）
 
+テストは `crates/sakura-engine/src/dispatch_correction_tests.rs` にある。X の前に 電気（右ID 3）を確定して L = 3 にする。L = 0 だと、打ち直しの確定も L で学習される（#273 で left が 0 になるため）。すると、段階 1 の競合規則だけで T2 が通ってしまい、fail-before にならない。T1-T3 と T8 の「次の L の変換」は、別のセッションで 電気 の後に かな を変換して確かめる。
+
 - **T1:** 面ション を左文脈 0 で 8 回学習する → 確定 → 全部消す → 同じ読みをカナ変換で確定 → 次の左文脈 0 の変換で 面ション が先頭にならない。カタカナの学習記録も増えていない（fail-before）。
 - **T2:** ズミ を左文脈 L で学習する → L で確定 → 全部消す → 打ち直して、辞書の index 2 以降にある候補を選ぶ → 次の L の変換でその候補が先頭になる（fail-before）。
 - **T3:** ズミ と で を続けて確定 → 両方消す → 打ち直す → T2 と同じ結果になる（fail-before）。
 - **T4:** 消して同じ表記を打ち直す → tombstone も追加の学習もない。
-- **T5:** 消去の連続が、矢印、Enter、Delete、取り消しの窓の外の Ctrl+Backspace、Alt+Backspace、`ResetDocumentContext` のそれぞれで途切れる → 照合しない。Shift+Backspace は 1 文字の消去として数え、照合する。
+- **T5:** 消去の連続が、矢印、Enter、Delete、取り消しの窓の外の Ctrl+Backspace、Alt+Backspace、`ResetDocumentContext`、別の欄への scope 変更のそれぞれで途切れる → 照合しない。Shift+Backspace は 1 文字の消去として数え、照合する。
 - **T6:** Backspace が 1 文字足りない、または 1 文字多い → 照合しない。
 - **T7:** 訂正の確定 Y を猶予中に消す → tombstone も追加の学習もない。続けて Y2 を確定する → X と Y の tombstone ができる。Y2 の代わりに同じ Y を確定する → X の tombstone ができる。
-- **T8:** Ctrl+Backspace の取り消しが成功した後にカナ変換で確定する → X の tombstone が L にできる（fail-before）。
+- **T8:** Ctrl+Backspace の取り消しが成功した後に、復元された読みをカナ変換で確定する → X の tombstone が L にできる（fail-before）。
 - **T9:** 機微な scope の確定は trail に入らない。
 
 #### 6.2 learning（engine）
+
+L5 は `learning_rejection.rs` の中のテスト、そのほかは `crates/sakura-engine/src/learning_correction_tests.rs` にある。trail 単体のテストは `correction_tests.rs` にある。
 
 - **L1:** tombstone の後の Y（exact 1 件、index 3）が勝つ。tombstone なしでは位置ゲートで負ける（fail-before）。
 - **L2:** カナ変換による tombstone と、古い Z（exact 1 件、index 4）がある → Z は選ばれない。

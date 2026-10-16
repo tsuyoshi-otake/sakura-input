@@ -79,22 +79,27 @@ fn exact_context_wins_and_general_frequency_decays() {
     index.learn(8, 12, "かえる", "変える", 100, 3);
     let surfaces = [("蛙", 10), ("帰る", 11), ("変える", 12)];
 
-    let context_seven = index.preference("かえる", 7, surfaces, 100);
+    let context_seven = index.preference("かえる", 7, surfaces, 100, None);
     assert_eq!(context_seven.exact, Some(1));
     assert_eq!(context_seven.general, Some(2));
 
-    let context_eight = index.preference("かえる", 8, surfaces, 100);
+    let context_eight = index.preference("かえる", 8, surfaces, 100, None);
     assert_eq!(context_eight.exact, Some(2));
 
-    let wrong_right_context =
-        index.preference("かえる", 7, [("蛙", 10), ("帰る", 12), ("変える", 12)], 100);
+    let wrong_right_context = index.preference(
+        "かえる",
+        7,
+        [("蛙", 10), ("帰る", 12), ("変える", 12)],
+        100,
+        None,
+    );
     assert_eq!(wrong_right_context.exact, None);
     assert_eq!(wrong_right_context.general, Some(2));
 
     index.learn(u16::MAX, u16::MAX, "しるし", "印", 100, 4);
     assert_eq!(
         index
-            .preference("しるし", u16::MAX, [("標", 0), ("印", u16::MAX)], 100)
+            .preference("しるし", u16::MAX, [("標", 0), ("印", u16::MAX)], 100, None)
             .exact,
         Some(1),
         "the maximum class id must not collide with general learning"
@@ -108,7 +113,7 @@ fn identity_history_does_not_prefer_the_unconverted_reading() {
     index.learn(0, 0, "にほんご", "にほんご", 100, 2);
     index.learn(0, 0, "にほんご", "にほんご", 100, 3);
     let candidates = [("日本語", 0), ("にほんご", 0)];
-    let preference = index.preference("にほんご", 0, candidates, 100);
+    let preference = index.preference("にほんご", 0, candidates, 100, None);
     assert_eq!(preference.exact, None);
     assert_eq!(preference.general, None);
 }
@@ -182,7 +187,7 @@ fn learning_strength_rejects_one_off_far_choices_and_decays_stale_context() {
     // A single far-down selection remains recorded, but weak evidence must
     // not displace the converter's base ranking in the next conversion.
     index.learn(7, 9, "reading", "far", 100, 1);
-    let one_confirmation = index.preference("reading", 7, candidates, 100);
+    let one_confirmation = index.preference("reading", 7, candidates, 100, None);
     assert_eq!(one_confirmation.exact, None);
     assert_eq!(one_confirmation.general, None);
 
@@ -190,21 +195,27 @@ fn learning_strength_rejects_one_off_far_choices_and_decays_stale_context() {
     // four exact-context candidates.  Three recent confirmations are a
     // deliberate user preference and may select the exact-context choice.
     index.learn(7, 9, "reading", "far", 100, 2);
-    assert_eq!(index.preference("reading", 7, candidates, 100).exact, None);
+    assert_eq!(
+        index.preference("reading", 7, candidates, 100, None).exact,
+        None
+    );
     index.learn(7, 9, "reading", "far", 100, 3);
     assert_eq!(
-        index.preference("reading", 7, candidates, 100).exact,
+        index.preference("reading", 7, candidates, 100, None).exact,
         Some(6)
     );
 
     // Context-free history is never allowed to carry this far-down choice
     // into a different grammatical context, even after repetition.
-    let different_context = index.preference("reading", 8, candidates, 100);
+    let different_context = index.preference("reading", 8, candidates, 100, None);
     assert_eq!(different_context.exact, None);
     assert_eq!(different_context.general, None);
 
     // Three 30-day half-lives reduce three confirmations to zero evidence.
-    assert_eq!(index.preference("reading", 7, candidates, 190).exact, None);
+    assert_eq!(
+        index.preference("reading", 7, candidates, 190, None).exact,
+        None
+    );
 }
 
 // #305: a later conflicting exact choice overrides frequency and the weak index gate;
@@ -218,7 +229,7 @@ fn issue_305_latest_conflicting_exact_choice_overrides_frequency() {
     }
     index.learn(0, 14, "へんしん", "返信", 100, 16);
 
-    let preference = index.preference("へんしん", 0, candidates, 100);
+    let preference = index.preference("へんしん", 0, candidates, 100, None);
     assert_eq!(preference.exact, Some(3));
     assert_eq!(
         preference.general, None,
@@ -229,7 +240,7 @@ fn issue_305_latest_conflicting_exact_choice_overrides_frequency() {
         [("返信", 14), ("変心", 12), ("変身", 11), ("変針", 13)],
     ] {
         let selected = index
-            .preference("へんしん", 0, reordered, 100)
+            .preference("へんしん", 0, reordered, 100, None)
             .exact
             .map(|position| reordered[position].0);
         assert_eq!(selected, Some("返信"), "candidate order is not recency");
@@ -247,6 +258,7 @@ fn issue_305_latest_conflicting_exact_choice_overrides_frequency() {
                 0,
                 [("変身", 11), ("変心", 12), ("変針", 13), ("変身", 14)],
                 100,
+                None,
             )
             .exact,
         Some(0),
@@ -270,21 +282,25 @@ fn issue_305_other_context_choices_do_not_replace_exact_preference() {
         index.learn(1841, 14, "へんしん", "返信", 100, sequence);
     }
     assert_eq!(
-        index.preference("へんしん", 0, candidates, 100).exact,
+        index.preference("へんしん", 0, candidates, 100, None).exact,
         Some(0)
     );
     assert_eq!(
-        index.preference("へんしん", 1841, candidates, 100).exact,
+        index
+            .preference("へんしん", 1841, candidates, 100, None)
+            .exact,
         Some(3)
     );
 
     index.learn(0, 14, "へんしん", "返信", 100, 28);
     assert_eq!(
-        index.preference("へんしん", 0, candidates, 100).exact,
+        index.preference("へんしん", 0, candidates, 100, None).exact,
         Some(3)
     );
     assert_eq!(
-        index.preference("へんしん", 1841, candidates, 100).exact,
+        index
+            .preference("へんしん", 1841, candidates, 100, None)
+            .exact,
         Some(3),
         "correcting context 0 must not rewrite context 1841"
     );
@@ -309,7 +325,7 @@ fn issue_305_correction_exception_keeps_unrelated_learning_bounds() {
             for sequence in 1..=frequency {
                 index.learn(7, right_id, "reading", surface, 100, sequence);
             }
-            let same_context = index.preference("reading", 7, candidates, 100);
+            let same_context = index.preference("reading", 7, candidates, 100, None);
             assert_eq!(
                 same_context.exact,
                 (position <= exact_limit).then_some(position)
@@ -318,7 +334,7 @@ fn issue_305_correction_exception_keeps_unrelated_learning_bounds() {
                 same_context.general,
                 (position <= general_limit).then_some(position)
             );
-            let other_context = index.preference("reading", 8, candidates, 100);
+            let other_context = index.preference("reading", 8, candidates, 100, None);
             assert_eq!(other_context.exact, None);
             assert_eq!(other_context.general, same_context.general);
         }
@@ -330,7 +346,9 @@ fn issue_305_correction_exception_keeps_unrelated_learning_bounds() {
     }
     expired.learn(7, 9, "reading", "far", 200, 16);
     assert_eq!(
-        expired.preference("reading", 7, candidates, 200).exact,
+        expired
+            .preference("reading", 7, candidates, 200, None)
+            .exact,
         None
     );
 
@@ -341,7 +359,7 @@ fn issue_305_correction_exception_keeps_unrelated_learning_bounds() {
     expired_correction.learn(7, 9, "reading", "far", 100, 16);
     assert_eq!(
         expired_correction
-            .preference("reading", 7, candidates, 190)
+            .preference("reading", 7, candidates, 190, None)
             .exact,
         Some(0)
     );
@@ -360,7 +378,7 @@ fn issue_305_correction_exception_keeps_unrelated_learning_bounds() {
     ];
     assert_eq!(
         identity
-            .preference("reading", 7, identity_candidates, 100)
+            .preference("reading", 7, identity_candidates, 100, None)
             .exact,
         None
     );
@@ -372,7 +390,7 @@ fn issue_305_correction_exception_keeps_unrelated_learning_bounds() {
     absent.learn(7, 9, "reading", "far", 100, 16);
     assert_eq!(
         absent
-            .preference("reading", 7, [("top", 9), ("near", 9)], 100)
+            .preference("reading", 7, [("top", 9), ("near", 9)], 100, None)
             .exact,
         Some(0),
         "an absent correction cannot fabricate a candidate index"
@@ -389,9 +407,9 @@ fn issue_305_newest_conflicting_spelling_can_change_again() {
         index.learn(3, 4, "かな", "仮名", 100, sequence);
     }
     index.learn(3, 5, "かな", "加奈", 100, 16);
-    let corrected = index.preference("かな", 3, candidates, 100).exact;
+    let corrected = index.preference("かな", 3, candidates, 100, None).exact;
     index.learn(3, 4, "かな", "仮名", 100, 17);
-    let changed_back = index.preference("かな", 3, candidates, 100).exact;
+    let changed_back = index.preference("かな", 3, candidates, 100, None).exact;
     assert_eq!((corrected, changed_back), (Some(1), Some(0)));
 }
 
@@ -1580,7 +1598,7 @@ fn a_staged_commit_is_invisible_until_confirmed_and_dropped_when_discarded() {
     let service = LearningService::memory();
     let generation = service.generation();
 
-    service.stage(1, "かな", "加奈", 0, 0);
+    service.stage(1, "かな", "加奈", 0, 0, None);
     assert_eq!(staged_preference(&service), None, "staged is not learned");
     assert!(!history_contains(&service, "かな", "加奈"));
     assert_eq!(service.generation(), generation);
@@ -1596,7 +1614,7 @@ fn a_staged_commit_is_invisible_until_confirmed_and_dropped_when_discarded() {
         "a record confirms once"
     );
 
-    service.stage(1, "かな", "仮名", 0, 0);
+    service.stage(1, "かな", "仮名", 0, 0, None);
     service.discard_staged(1);
     service.confirm_all_staged();
     assert_eq!(
@@ -1610,11 +1628,11 @@ fn a_staged_commit_is_invisible_until_confirmed_and_dropped_when_discarded() {
 #[test]
 fn a_newer_commit_confirms_only_its_own_owners_previous_record() {
     let service = LearningService::memory();
-    service.stage(1, "かな", "加奈", 0, 0);
-    service.stage(2, "かな", "仮名", 0, 0);
+    service.stage(1, "かな", "加奈", 0, 0, None);
+    service.stage(2, "かな", "仮名", 0, 0, None);
     let generation = service.generation();
 
-    service.stage(1, "かえる", "帰る", 0, 0);
+    service.stage(1, "かえる", "帰る", 0, 0, None);
     assert_eq!(service.generation(), generation + 1);
     assert_eq!(staged_preference(&service), Some(1), "owner 1's commit");
 
@@ -1639,14 +1657,14 @@ fn staging_beyond_the_bound_learns_the_oldest_record() {
     let service = LearningService::memory();
     let generation = service.generation();
     for owner in 0..MAX_STAGED_COMMITS as u64 {
-        service.stage(owner + 1, "かえる", "帰る", 0, 0);
+        service.stage(owner + 1, "かえる", "帰る", 0, 0, None);
     }
     assert_eq!(
         service.generation(),
         generation,
         "a full bound of live sessions learns nothing early (#277)"
     );
-    service.stage(u64::MAX, "かな", "加奈", 0, 0);
+    service.stage(u64::MAX, "かな", "加奈", 0, 0, None);
 
     assert_eq!(service.generation(), generation + 1);
     assert_eq!(
@@ -1670,8 +1688,8 @@ fn the_staging_bound_covers_every_session_the_process_can_hold() {
 #[test]
 fn a_held_record_waits_for_its_owner_through_bulk_confirmation() {
     let service = LearningService::memory();
-    service.stage(1, "かな", "加奈", 0, 0);
-    service.stage(2, "かえる", "帰る", 0, 0);
+    service.stage(1, "かな", "加奈", 0, 0, None);
+    service.stage(2, "かえる", "帰る", 0, 0, None);
     service.hold_staged(1);
 
     service.confirm_all_staged();
@@ -1692,7 +1710,7 @@ fn a_held_record_waits_for_its_owner_through_bulk_confirmation() {
     assert_eq!(service.staged_commits.load(Ordering::Acquire), 0);
 
     // A rejected undo returns it to an ordinary staged record.
-    service.stage(1, "かな", "加奈", 0, 0);
+    service.stage(1, "かな", "加奈", 0, 0, None);
     service.hold_staged(1);
     service.confirm_all_staged();
     assert_eq!(staged_preference(&service), None);
@@ -1704,12 +1722,12 @@ fn a_held_record_waits_for_its_owner_through_bulk_confirmation() {
 #[test]
 fn eviction_beyond_the_bound_skips_a_record_awaiting_its_undo_outcome() {
     let service = LearningService::memory();
-    service.stage(1, "かな", "加奈", 0, 0);
+    service.stage(1, "かな", "加奈", 0, 0, None);
     service.hold_staged(1);
     for owner in 2..=MAX_STAGED_COMMITS as u64 {
-        service.stage(owner, "かえる", "帰る", 0, 0);
+        service.stage(owner, "かえる", "帰る", 0, 0, None);
     }
-    service.stage(u64::MAX, "かえる", "帰る", 0, 0);
+    service.stage(u64::MAX, "かえる", "帰る", 0, 0, None);
 
     {
         let state = service.lock_state();
@@ -1729,13 +1747,13 @@ fn eviction_beyond_the_bound_skips_a_record_awaiting_its_undo_outcome() {
 #[test]
 fn clearing_or_forgetting_drops_matching_staged_commits() {
     let service = LearningService::memory();
-    service.stage(1, "かな", "加奈", 0, 0);
+    service.stage(1, "かな", "加奈", 0, 0, None);
     service.clear().expect("clear");
     service.confirm_all_staged();
     assert_eq!(staged_preference(&service), None, "clear drops staged");
 
-    service.stage(1, "かな", "加奈", 0, 0);
-    service.stage(2, "かな", "仮名", 0, 0);
+    service.stage(1, "かな", "加奈", 0, 0, None);
+    service.stage(2, "かな", "仮名", 0, 0, None);
     // A memory service has no log to forget from, but still drops the staged copy.
     assert_eq!(
         service
@@ -1750,3 +1768,6 @@ fn clearing_or_forgetting_drops_matching_staged_commits() {
         "only the forgotten pair's staged copy is dropped"
     );
 }
+
+#[path = "learning_correction_tests.rs"]
+mod correction;

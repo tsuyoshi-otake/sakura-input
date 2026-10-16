@@ -34,10 +34,18 @@ pub fn test_encode_record(
 ) -> std::io::Result<Vec<u8>> {
     codec::encode_record(reading, surface, left_context, right_context, day)
 }
+/// Whether a correction tombstone of `surface` for `reading` can be written
+/// and replayed exactly. Callers check it before applying the rejection in
+/// memory, so the running state never holds a tombstone the log lacks.
+pub fn rejection_is_recordable(reading: &str, surface: &str) -> bool {
+    codec::rejection_surface(reading, surface).is_some()
+}
+
 pub use format::{
     LearningRecord, LearningSnapshot, FORMAT_VERSION_1, FORMAT_VERSION_2, HEADER_LEN,
     LEARNING_FORMAT_VERSION, MAX_LEARNING_LOG_BYTES, MAX_RECORD_BYTES, RECORD_COMMIT,
-    RECORD_ENVELOPE_LEN, REPAIR_SUPPRESS_CONTEXT, REPAIR_SUPPRESS_SURFACE,
+    RECORD_ENVELOPE_LEN, REJECTION_PREFIX, REJECTION_SEPARATOR, REPAIR_SUPPRESS_CONTEXT,
+    REPAIR_SUPPRESS_SURFACE,
 };
 pub use log::{
     read_snapshot, LearningLog, LearningLogError, LogForget, LogMaintenance, OperationReceipt,

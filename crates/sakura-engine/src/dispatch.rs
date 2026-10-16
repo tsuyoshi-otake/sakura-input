@@ -62,9 +62,12 @@ use sakura_proto::{
 use crate::ai_text::{AiTextService, Poll as AiPoll, StartError as AiStartError};
 use crate::candidate_projection::{CandidateProjection, ProjectionError};
 use crate::composition_fence::CompositionFence;
+use crate::correction::Correction;
 use crate::dictionary::{ConversionService, ConvertFailure};
 use crate::input_history::{clear_path, default_path, InputHistoryService, ScopeClass};
-use crate::learning::{ForgetPredictionOutcome, LearningPreference, LearningService};
+use crate::learning::{
+    ForgetPredictionOutcome, LearningPreference, LearningService, StagedCorrection,
+};
 use crate::long_conversion::LongConversionService;
 use crate::prediction::{PredictionResult, PredictionService, PredictionSource};
 use crate::session::{
@@ -1016,6 +1019,8 @@ impl Dispatcher {
         if let Some(learning) = self.learning.as_deref() {
             learning.confirm_staged(session.process_unique_id());
         }
+        // The AI text has no reading the trail could match (#305).
+        session.correction_trail_mut().clear();
         session.disarm_commit_undo();
         session.reset();
         if let Some(mode) = session.take_mode_restored() {
@@ -1604,6 +1609,7 @@ impl Dispatcher {
             if !preview {
                 if let Some(session) = self.sessions.get_mut(id) {
                     session.reset();
+                    session.correction_trail_mut().clear();
                 }
                 self.prediction_cache.clear_if_session(id);
             }
@@ -1639,6 +1645,8 @@ impl Dispatcher {
             // Ranking is about to read learning, as for any conversion (#275).
             learning.confirm_all_staged();
         }
+        // The reconverted text is a selection the trail never saw (#305).
+        session.correction_trail_mut().clear();
         self.prediction_cache.clear_if_session(id);
         match build_reconversion(
             session,
@@ -1674,6 +1682,7 @@ impl Dispatcher {
             }
             session.disarm_commit_undo();
             session.reset();
+            session.correction_trail_mut().clear();
             session.take_mode_restored()
         };
         self.prediction_cache.clear_if_session(id);
@@ -2248,7 +2257,7 @@ fn schedule_long_conversion(session_id: SessionId, session: &Session, services: 
     );
 }
 
-fn preferred_candidate_index(
+pub(crate) fn preferred_candidate_index(
     candidates: &[ConversionCandidate],
     reading: &str,
     requested: i16,
@@ -2576,7 +2585,7 @@ fn session_cross_commit_bridge(
 /// caret and the previous commit, so it learns that one instead of leaving it
 /// for the next key to misread as erased (#277).
 fn record_learning(
-    session: &Session,
+    session: &mut Session,
     learning: Option<&LearningService>,
     learnable: bool,
     input_history: Option<&InputHistoryService>,
@@ -2592,8 +2601,19 @@ fn record_learning(
         // normally classified as Normal so Japanese conversion remains
         // usable, but neither its commit history nor learning record may be
         // admitted to a durable sink.
+        session.correction_trail_mut().clear();
         return;
     }
+    // A correction rides on the commit's staged record, so it is learned
+    // only if the corrected commit survives (#305). A sensitive commit is
+    // never tracked, and nothing typed before it is next to the caret.
+    let sensitive = scope_is_sensitive(session.scope);
+    let correction = if sensitive {
+        session.correction_trail_mut().clear();
+        None
+    } else {
+        session.track_commit_correction(surface, chosen_right_id)
+    };
     let scope = ScopeClass::from_scope(session.scope, session.scope_classified());
     if scope != ScopeClass::Sensitive {
         if let Some(history) = input_history {
@@ -2610,17 +2630,37 @@ fn record_learning(
     let Some(service) = learning else {
         return;
     };
-    if learnable && !scope_is_sensitive(session.scope) {
+    if learnable && !sensitive {
         service.stage(
             session.process_unique_id(),
             session.preedit.as_str(),
             surface,
             session.carry_right_id(),
             chosen_right_id,
+            correction.as_ref().map(staged_correction),
+        );
+    } else if let Some(correction) = correction {
+        service.stage_reject_only(
+            session.process_unique_id(),
+            session.preedit.as_str(),
+            surface,
+            session.carry_right_id(),
+            chosen_right_id,
+            staged_correction(&correction),
         );
     } else {
         service.confirm_staged(session.process_unique_id());
     }
+}
+
+fn staged_correction(correction: &Correction) -> StagedCorrection {
+    StagedCorrection::new(
+        correction.origin_left(),
+        correction
+            .rejected()
+            .iter()
+            .map(|rejected| (rejected.surface(), rejected.right_context())),
+    )
 }
 
 /// Decides the session's staged commit (#275) from an applied key that found
@@ -2633,32 +2673,44 @@ fn record_learning(
 /// so it is dropped, and any other key leaves it standing, so it is learned. A
 /// key that opens the next composition decides nothing; that composition's
 /// commit or conversion does.
+///
+/// The same keys drive the session's correction trail (#305): a plain or
+/// Shift Backspace erases one character left of the caret, and every other
+/// key ends the erase run, because what it changed is unknown.
 fn settle_staged_learning_after_idle_key(
-    session: &Session,
+    session: &mut Session,
     learning: Option<&LearningService>,
     key: &KeyInput,
     out: &OutputBuf,
 ) {
-    let Some(learning) = learning else {
-        return;
-    };
     if session.undo_pending() {
         // The host was asked to delete the commit; its outcome settles the
         // record, and no other session's conversion may learn it first (#277).
-        learning.hold_staged(session.process_unique_id());
+        if let Some(learning) = learning {
+            learning.hold_staged(session.process_unique_id());
+        }
         return;
     }
     if session.is_composing() {
         return;
     }
-    if key.code == KeyCode::Backspace && !out.consumed {
+    let erased = key.code == KeyCode::Backspace && !out.consumed;
+    if erased && !key.modifiers.ctrl() && !key.modifiers.alt() {
+        session.correction_trail_mut().erase();
+    } else {
+        session.correction_trail_mut().clear();
+    }
+    let Some(learning) = learning else {
+        return;
+    };
+    if erased {
         learning.discard_staged(session.process_unique_id());
     } else {
         learning.confirm_staged(session.process_unique_id());
     }
 }
 
-fn candidate_learning_key(candidate: &ConversionCandidate) -> (&str, u16) {
+pub(crate) fn candidate_learning_key(candidate: &ConversionCandidate) -> (&str, u16) {
     (
         candidate.text(),
         candidate
@@ -4408,6 +4460,11 @@ fn delete_focused_prediction_history(
         return true;
     }
 
+    // A rejection this session still carries would bring the pair back as
+    // a tombstone (#305).
+    session
+        .correction_trail_mut()
+        .forget(candidate.reading(), candidate.surface());
     match learning.forget_prediction_exact(candidate.reading(), candidate.surface()) {
         Ok(ForgetPredictionOutcome::Removed) => {
             // The session generation makes in-flight worker replies stale;
