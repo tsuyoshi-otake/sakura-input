@@ -33,6 +33,12 @@ const PHONETIC_SURFACE_BONUS: i32 = 3_000;
 /// less than the extra IT reduction a session with IT context adds, so IT
 /// context can still put the glossary word first.
 const UPSTREAM_LEADER_MARGIN: i64 = 60;
+/// A glossary alias that Mozc does not carry stays at least this far above the
+/// word cost of the term it spells (see `price_variants_behind_their_term`).
+/// Measured on the shipped glossary: a margin of 0 repairs most conversions
+/// that put an alias first, and 70 through 300 repair the same larger set, so
+/// the smallest value that keeps the alias strictly behind its term is used.
+const VARIANT_MARGIN: i32 = 70;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GlossarySense {
@@ -360,6 +366,7 @@ impl Importer {
                 connection,
                 &options,
             ));
+            price_variants_behind_their_term(&mut priced);
             for edge in priced {
                 entries.push(SourceEntry {
                     reading: reading.clone(),
@@ -730,6 +737,47 @@ fn yield_to_upstream_leader(
         slot = edge.total(lifted, connection, options).saturating_add(1);
     }
     yields
+}
+
+/// Keeps a glossary alias behind the term it spells. The shape defaults price
+/// an unmatched alias from its length alone, so a short alias such as
+/// `設計ドキュメント` undercuts a Mozc-matched compound such as `設計書`, and
+/// its default noun classes also connect more cheaply than the compound's own
+/// classes; the alias then leads a reading the term was written for. An alias
+/// that Mozc does not carry and that is not the reading's own sound in
+/// katakana therefore takes the term's left and right classes and a word cost
+/// of at least [`VARIANT_MARGIN`] above the term's. A Mozc-attested alias
+/// keeps the price Mozc gives it, a phonetic spelling keeps its bonus, and a
+/// term spelled in ASCII keeps the Japanese aliases that
+/// `UNMATCHED_ASCII_COST` ranks before its English form. It runs after
+/// [`yield_to_upstream_leader`], so the term's cost is final; the report
+/// lines of that rule keep the prices it set.
+fn price_variants_behind_their_term(priced: &mut [PricedEdge]) {
+    let mut repriced = Vec::new();
+    for (index, edge) in priced.iter().enumerate() {
+        let candidate = &edge.candidate;
+        if !candidate.alias || candidate.phonetic || candidate.matched.is_some() {
+            continue;
+        }
+        let Some(term) = priced.iter().find(|term| {
+            !term.candidate.alias
+                && !term.surface.is_ascii()
+                && term.candidate.source == candidate.source
+                && term.candidate.line == candidate.line
+        }) else {
+            continue;
+        };
+        let word_cost = edge
+            .word_cost
+            .max(term.word_cost.saturating_add(VARIANT_MARGIN));
+        repriced.push((index, term.left_id, term.right_id, word_cost));
+    }
+    for (index, left_id, right_id, word_cost) in repriced {
+        let edge = &mut priced[index];
+        edge.left_id = left_id;
+        edge.right_id = right_id;
+        edge.word_cost = word_cost;
+    }
 }
 
 /// The cheapest word cost at or above `from` that satisfies `ranks_below`,

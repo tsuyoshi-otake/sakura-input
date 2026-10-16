@@ -1,1 +1,2 @@
 kind	id	issue	reason	date
+prediction	p1020	#332	ひどう reached 非同期 through the glossary alias 非同期 of 非同期処理, which #332 now prices behind its term; full@1 kept, one more keystroke (k9 3 -> 4); #332 measured 10 conversion rows fixed, 0 broken, 7 prediction words better, 1 worse	2026-10-16
