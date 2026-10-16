@@ -98,6 +98,19 @@ impl ReadingOwners {
         }
     }
 
+    /// The surfaces of the retained upstream edges that spell exactly
+    /// `reading`. Spelling corrections were never retained.
+    pub(super) fn upstream_surfaces<'a>(
+        &'a self,
+        reading: &str,
+    ) -> impl Iterator<Item = &'a str> + 'a {
+        self.edges
+            .get(reading)
+            .into_iter()
+            .flatten()
+            .map(|edge| edge.surface.as_str())
+    }
+
     /// Retains one priced glossary edge. Every glossary reading is a piece
     /// of itself, so all of them are kept; like every glossary edge it is
     /// tagged `IT` and may start a conversion.

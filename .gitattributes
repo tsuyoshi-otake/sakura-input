@@ -3,6 +3,7 @@
 data/it-terms.tsv whitespace=-blank-at-eol
 data/curated-terms.tsv whitespace=-blank-at-eol
 data/conversion-priorities.tsv whitespace=-blank-at-eol
+data/verb-collocation-edges.tsv whitespace=-blank-at-eol
 
 # These directories contain manifest-bound JSON/JSONL artifacts. Keep their
 # bytes stable across Windows checkouts because manifests store SHA-256 values.

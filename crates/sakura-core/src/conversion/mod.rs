@@ -116,6 +116,10 @@ const GENERATED_DAY_SUFFIX_PENALTY: i64 = COUNTER_WORD_COST - NUMBER_FORM_COST;
 const BARE_KANA_NUMBER_FORM_COST: i64 = 5_000;
 const MAX_GENERATED_SURFACES: usize = 64;
 const DEFAULT_NOUN_ID: u16 = 1_851;
+/// Mozc `名詞,数,アラビア数字`: the class of the dictionary's `0`..`9` rows
+/// (`conversion_priorities.rs` pins it). A typed digit run takes it so it
+/// connects to counter words like a dictionary numeral.
+const DIGIT_NOUN_ID: u16 = 2_044;
 /// Annotation for an appended character the pinned variant rules do not
 /// relate to another. It exists so the tail reads as a character list
 /// rather than as more ranked conversions.
@@ -157,6 +161,10 @@ pub(super) enum Surface {
     },
     User(usize),
     Reading,
+    /// The typed reading kept as is, for an ASCII digit run or `%`. Unlike
+    /// [`Surface::Reading`] it is neutral to the coherence check, so a
+    /// numeral can precede a dictionary word.
+    Passthrough,
     Katakana,
     Literal(&'static str),
     Generated(u16),
@@ -1452,7 +1460,7 @@ fn make_candidate(
                         .map_err(|_| ConversionError::OutputTooLong)?;
                 }
             }
-            Surface::Reading => text
+            Surface::Reading | Surface::Passthrough => text
                 .push_str(&reading[node.start..node.end])
                 .map_err(|_| ConversionError::OutputTooLong)?,
             Surface::Katakana => write_katakana(&reading[node.start..node.end], &mut text)?,

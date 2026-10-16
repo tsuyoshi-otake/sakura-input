@@ -8,7 +8,7 @@ on:
       tag:
         description: Existing release tag (must match Cargo version)
         required: true
-        default: v2.0.16
+        default: v2.0.17
 
 permissions:
   contents: read
@@ -113,7 +113,7 @@ jobs:
       - name: Format
         run: cargo fmt --all -- --check
       - name: Clippy
-        run: cargo clippy --workspace --all-targets --features 'sakura-engine/dev-fixtures,sakura-ime-eval/engine-fixture,sakura-conversion-eval/learning-replay' -- -D warnings
+        run: cargo clippy --workspace --all-targets --features 'sakura-engine/dev-fixtures,sakura-ime-eval/engine-fixture,sakura-conversion-eval/learning-replay,sakura-conversion-eval/accuracy-gate' -- -D warnings
       - name: Self-test dependency auditor gate
         shell: pwsh
         run: ./ci/ensure-cargo-audit.ps1 -SelfTest
@@ -127,7 +127,7 @@ jobs:
         run: ./ci/test-run-test-quiet.ps1
       - name: Test
         shell: pwsh
-        run: ./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace --features 'sakura-engine/dev-fixtures,sakura-ime-eval/engine-fixture,sakura-conversion-eval/learning-replay' }
+        run: ./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace --features 'sakura-engine/dev-fixtures,sakura-ime-eval/engine-fixture,sakura-conversion-eval/learning-replay,sakura-conversion-eval/accuracy-gate' }
       - name: Prove test runners exited
         if: always()
         shell: pwsh

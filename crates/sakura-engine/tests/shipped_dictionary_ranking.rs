@@ -974,6 +974,172 @@ fn issue_84_recent_cached_naika_selection_cannot_override_kouryo_more_context() 
     );
 }
 
+/// Issue #335: several verbs share one reading (閉める / 占める, 降る / 振る,
+/// 呼ぶ / 読む, 起きる / 置く, 切れる / 着れる, 空く / 開く, 着く / 付く), and no
+/// word price can choose between them, because the right spelling depends on the
+/// noun before the particle. `data/verb-collocation-edges.tsv` prices the whole
+/// noun + particle + verb form as one edge, so the spelling follows its noun.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_335_verb_homophones_follow_the_preceding_noun() {
+    for (reading, expected) in [
+        ("さむかったらまどをしめてね", "寒かったら窓を閉めてね"),
+        ("あめがふったらいえにいる", "雨が降ったら家にいる"),
+        ("もんだいがおきました", "問題が起きました"),
+        ("かれをよんできてくれる", "彼を呼んできてくれる"),
+        ("ざいこがきれておりますので", "在庫が切れておりますので"),
+        ("あめがふるかもしれない", "雨が降るかもしれない"),
+        ("せきがあく", "席が空く"),
+        ("えきにつく", "駅に着く"),
+        // Contracted te forms connect through their auxiliary's right id
+        // (#334); their compound edges must carry that id, or the single
+        // generated form wins over the て edge plus the auxiliary.
+        ("まどをしめてる", "窓を閉めてる"),
+        ("かれをよんでいる", "彼を呼んでいる"),
+    ] {
+        assert_eq!(
+            top_text(reading),
+            expected,
+            "{reading}: the verb must follow its noun"
+        );
+    }
+    // Controls: these already converted correctly and must keep doing so.
+    for (reading, expected) in [
+        (
+            "もくようびのごごはあいてますか",
+            "木曜日の午後は空いてますか",
+        ),
+        ("あめがふった", "雨が降った"),
+    ] {
+        assert_eq!(top_text(reading), expected, "{reading}: control row moved");
+    }
+}
+
+fn issue_335_right_key() -> KeyInput {
+    KeyInput {
+        code: KeyCode::Right,
+        ch: None,
+        modifiers: Modifiers::NONE,
+        repeat: false,
+        test_only: false,
+    }
+}
+
+/// The preedit segments of a conversion output, each with whether it is the
+/// focused segment.
+fn issue_335_segments(out: &OutputBuf) -> Vec<(String, bool)> {
+    out.to_output()
+        .preedit
+        .map(|preedit| {
+            preedit
+                .segments
+                .iter()
+                .map(|segment| {
+                    (
+                        segment.text.clone(),
+                        segment.underline == sakura_proto::UnderlineKind::Focused,
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn issue_335_whole(segments: &[(String, bool)]) -> String {
+    segments.iter().map(|(text, _)| text.as_str()).collect()
+}
+
+/// Types `romaji`, converts, and returns the whole converted text.
+fn issue_335_top_text(dispatcher: &mut Dispatcher, session: SessionId, romaji: &str) -> String {
+    type_romaji(dispatcher, session, romaji);
+    issue_335_whole(&issue_335_segments(&send_key(
+        dispatcher,
+        session,
+        space_key(),
+    )))
+}
+
+/// Types `romaji`, converts, then for each segment in turn presses Space until
+/// the focused segment matches `wanted` at its offset and Right to move on, and
+/// finally commits the whole composition with Enter. Returns the commit.
+///
+/// Keys are used because `CommitCandidate` commits the whole composition with
+/// only the focused segment replaced, so it cannot build a spelling that the
+/// first conversion splits across segments.
+fn issue_335_commit_whole_text(
+    dispatcher: &mut Dispatcher,
+    session: SessionId,
+    romaji: &str,
+    wanted: &str,
+) -> String {
+    type_romaji(dispatcher, session, romaji);
+    let mut segments = issue_335_segments(&send_key(dispatcher, session, space_key()));
+    for _ in 0..64 {
+        let focused = segments
+            .iter()
+            .position(|(_, focused)| *focused)
+            .or_else(|| (segments.len() == 1).then_some(0))
+            .unwrap_or_else(|| panic!("{romaji}: no focused segment in {segments:?}"));
+        let before = issue_335_whole(&segments[..focused]);
+        assert!(
+            wanted.starts_with(&before),
+            "{romaji}: fixed segments {segments:?} already differ from {wanted:?}"
+        );
+        if wanted[before.len()..].starts_with(segments[focused].0.as_str()) {
+            if focused + 1 == segments.len() {
+                break;
+            }
+            segments = issue_335_segments(&send_key(dispatcher, session, issue_335_right_key()));
+        } else {
+            segments = issue_335_segments(&send_key(dispatcher, session, space_key()));
+        }
+    }
+    assert_eq!(
+        issue_335_whole(&segments),
+        wanted,
+        "{romaji}: the keys could not compose the wanted text: {segments:?}"
+    );
+    send_key(dispatcher, session, enter_key())
+        .to_output()
+        .commit
+        .unwrap_or_default()
+}
+
+/// Issue #335: a compound verb-collocation edge is priced a fixed margin below
+/// its competitor, and that margin must not outweigh what the user chose. After
+/// one commit of the spelling the edge demotes, the next conversion of the same
+/// reading leads with the learned spelling, compared on the whole converted text.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_335_learned_homophone_leads_over_verb_collocation_edges() {
+    // (romaji, the spelling the compound edge leads with, the spelling it demotes)
+    for (romaji, led, learned) in [
+        ("madowoshimete", "窓を閉めて", "窓を占めて"),
+        ("amegafuttara", "雨が降ったら", "雨が振ったら"),
+    ] {
+        let mut probe = open_dispatcher();
+        let probe_session = create_normal_session(&mut probe, "issue-335-probe.exe");
+        assert_eq!(
+            issue_335_top_text(&mut probe, probe_session, romaji),
+            led,
+            "{romaji}: the compound edge must lead before any learning"
+        );
+
+        let mut dispatcher = open_dispatcher();
+        let session = create_normal_session(&mut dispatcher, "issue-335-learning.exe");
+        assert_eq!(
+            issue_335_commit_whole_text(&mut dispatcher, session, romaji, learned),
+            learned,
+            "{romaji}: setup must commit the demoted spelling"
+        );
+        assert_eq!(
+            issue_335_top_text(&mut dispatcher, session, romaji),
+            learned,
+            "{romaji}: the learned spelling must lead after one commit"
+        );
+    }
+}
+
 #[test]
 #[ignore = "needs the built system dictionary in artifacts/release"]
 fn issue_83_shipped_japanese_bridge_controls() {
@@ -1363,11 +1529,12 @@ fn reported_prediction_prefixes_keep_direct_candidates_before_repairs() {
     let runtime = PredictionRuntime::start(Arc::clone(&conversion)).expect("prediction runtime");
     let service = runtime.service();
 
+    let mut first_mismatches = Vec::new();
     for (generation, (prefix, expected_first)) in [
-        ("かが", "輝け"),
-        ("みみ", "みみりん"),
+        ("かが", "香川"),
+        ("みみ", "みみ"),
         ("まだ", "まだ"),
-        ("ただ", "正しかろ"),
+        ("ただ", "ただ"),
     ]
     .into_iter()
     .enumerate()
@@ -1408,11 +1575,11 @@ fn reported_prediction_prefixes_keep_direct_candidates_before_repairs() {
             "{prefix}: no direct candidate in {:?}",
             surfaces
         );
-        assert_eq!(
-            candidates.first().map(|candidate| candidate.surface()),
-            Some(expected_first),
-            "{prefix}: unexpected first candidate in {surfaces:?}"
-        );
+        if candidates.first().map(|candidate| candidate.surface()) != Some(expected_first) {
+            first_mismatches.push(format!(
+                "{prefix}: expected {expected_first}, got {surfaces:?}"
+            ));
+        }
         assert!(
             !direct_after_repair,
             "{prefix}: direct candidate followed a repair in {surfaces:?}"
@@ -1429,7 +1596,99 @@ fn reported_prediction_prefixes_keep_direct_candidates_before_repairs() {
         }
     }
 
+    assert!(first_mismatches.is_empty(), "{first_mismatches:#?}");
+
     runtime.stop().expect("joined prediction runtime");
+}
+
+fn prediction_surfaces(prefix: &str, domain_it_per_mille: u16) -> Vec<String> {
+    let conversion = open_conversion();
+    let runtime = PredictionRuntime::start(Arc::clone(&conversion)).expect("prediction runtime");
+    let result = runtime
+        .service()
+        .request(
+            1,
+            1,
+            prefix,
+            domain_it_per_mille,
+            InputSupport::default(),
+            false,
+            Duration::from_secs(1),
+        )
+        .unwrap_or_else(|| panic!("{prefix}: prediction request failed"));
+    let surfaces = result
+        .candidates()
+        .iter()
+        .map(|candidate| candidate.surface().to_owned())
+        .collect();
+    runtime.stop().expect("joined prediction runtime");
+    surfaces
+}
+
+/// Issue #338. Conjugation-fragment rows (Mozc rows whose left id is an
+/// imperfective, hypothetical or imperative form, ...) and glossary
+/// translation aliases are conversion-only.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn fragment_rows_and_translation_aliases_are_not_predicted() {
+    // (prefix, IT per mille, surface that must NOT be offered)
+    let absent = [
+        ("やすみゃ", 0, "休みゃ"),
+        ("あさから", 0, "浅から"),
+        ("えきすれ", 0, "役すれ"),
+        ("ほうぜよ", 0, "報ぜよ"),
+        ("おそいかかろ", 0, "襲いかかろ"),
+        ("たしかめろ", 0, "確かめろ"),
+        ("たしかめよ", 0, "確かめよ"),
+        ("わびりゃ", 0, "詫びりゃ"),
+        ("さきんずれ", 0, "先んずれ"),
+        ("ますたーで", 1_000, "Master Data List"),
+        ("けいやく", 1_000, "Contract"),
+    ];
+    for (prefix, domain, surface) in absent {
+        let surfaces = prediction_surfaces(prefix, domain);
+        assert!(
+            !surfaces.iter().any(|offered| offered == surface),
+            "{prefix}: {surface} must be conversion-only, got {surfaces:?}"
+        );
+    }
+    // (prefix, IT per mille, surface that must still be offered)
+    let present = [
+        ("あさから", 0, "朝から晩"),
+        ("ぎっと", 1_000, "Git"),
+        ("えらー", 1_000, "error"),
+        ("ぱすわーど", 1_000, "password"),
+    ];
+    for (prefix, domain, surface) in present {
+        let surfaces = prediction_surfaces(prefix, domain);
+        assert!(
+            surfaces.iter().any(|offered| offered == surface),
+            "{prefix}: {surface} must stay predictable, got {surfaces:?}"
+        );
+    }
+}
+
+/// Issue #338. Spelling repair must still fire for a mistyped reading whose
+/// exact-reading rows were all excluded from prediction: such rows are not
+/// evidence that the typed reading is a finished word.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn repair_still_offers_the_intended_word_when_only_excluded_rows_match() {
+    // (typed reading with a dakuten slip, intended surface)
+    let typos = [
+        ("いせん", "以前"),
+        ("ごうしん", "更新"),
+        ("ほしゅう", "募集"),
+        ("ぞうしん", "送信"),
+        ("しゅうしょ", "住所"),
+    ];
+    for (typed, intended) in typos {
+        let surfaces = prediction_surfaces(typed, 0);
+        assert!(
+            surfaces.iter().take(9).any(|offered| offered == intended),
+            "{typed}: {intended} missing from the first nine of {surfaces:?}"
+        );
+    }
 }
 
 #[test]
@@ -1633,6 +1892,58 @@ fn compound_number_words_keep_both_spellings() {
                 &candidates[..candidates.len().min(8)]
             );
         }
+    }
+}
+
+/// A digit run is a neutral passthrough edge carrying the numeral class, so it
+/// connects to the counter word that follows. Before #331 the rows other than
+/// the last three had one candidate, the reading itself; `1じかん` and
+/// `3じかん` already led with the dictionary word (kept).
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_331_digit_runs_lead_with_the_counter_word() {
+    for (reading, expected) in [
+        ("12じかん", "12時間"),
+        ("24じかん", "24時間"),
+        ("12じ", "12時"),
+        ("10ぷん", "10分"),
+        ("15ふん", "15分"),
+        ("12にん", "12人"),
+        ("11めい", "11名"),
+        ("20けん", "20件"),
+        ("30てん", "30点"),
+        ("1じかん", "1時間"),
+        ("3じかん", "3時間"),
+        ("100えん", "100円"),
+    ] {
+        let candidates = candidates_for(reading);
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some(expected),
+            "{reading}: {expected} must lead ({:?})",
+            &candidates[..candidates.len().min(6)]
+        );
+    }
+}
+
+/// `%` is carried like a digit. Before #331 the first candidate was the reading.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_331_percent_sign_connects_to_the_following_word() {
+    for (reading, expected) in [
+        ("10ぱーせんと", "10%"),
+        ("50%はさける", "50%は避ける"),
+        ("8%のしょうひぜい", "8%の消費税"),
+        ("10%ふえました", "10%増えました"),
+        ("100%かんせい", "100%完成"),
+    ] {
+        let candidates = candidates_for(reading);
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some(expected),
+            "{reading}: {expected} must lead ({:?})",
+            &candidates[..candidates.len().min(6)]
+        );
     }
 }
 
@@ -2461,6 +2772,99 @@ fn issue_282_repriced_homophones_lead_in_every_context() {
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
+/// Issue #336: noun homophones whose expected word lost on a price, on the
+/// per-reading edge limit or for want of a compound edge. Each sentence led
+/// with the homophone (餡, 正体, 最終盤, 方, ...) before the rows in
+/// `data/conversion-priorities.tsv` re-priced the expected word.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_336_noun_homophones_lead_in_the_sentences_that_lost() {
+    let mut wrong = Vec::new();
+    for (reading, expected) in [
+        ("しょうたいをおくりました", "招待を送りました"),
+        (
+            "のちほどかれんだーのしょうたいをおおくりします",
+            "後ほどカレンダーの招待をお送りします",
+        ),
+        (
+            "さいしゅうばんをかくにんしていただきたくぞんじます",
+            "最終版を確認していただきたく存じます",
+        ),
+        (
+            "けいやくしょのあんをおおくりします",
+            "契約書の案をお送りします",
+        ),
+        (
+            "ぎょうむいたくけいやくのあんをおおくりします",
+            "業務委託契約の案をお送りします",
+        ),
+        ("れつのかたをへんこうするとき", "列の型を変更するとき"),
+        ("ふどうしょうすうてんのひかく", "浮動小数点の比較"),
+        ("もどりちのかたをめいじする", "戻り値の型を明示する"),
+    ] {
+        let top = top_text(reading);
+        if top != expected {
+            wrong.push(format!("{reading}: expected {expected}, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// Issue #336: the compound edges lead as whole words, alone and in a short
+/// phrase. Before the rows 因子性, 不動小数点, 検索昨日, 昨日フラグ, 一次停止 and
+/// 最終盤 led their readings.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_336_compound_rows_lead_as_whole_words() {
+    let mut wrong = Vec::new();
+    for (reading, expected) in [
+        ("さいしゅうばん", "最終版"),
+        ("さいしゅうばんをかくにん", "最終版を確認"),
+        ("ふどうしょうすうてん", "浮動小数点"),
+        ("きのうふらぐ", "機能フラグ"),
+        ("きのうふらぐをおん", "機能フラグをオン"),
+        ("けんさくきのう", "検索機能"),
+        ("いんしぜい", "印紙税"),
+        ("いんしぜいをのうふ", "印紙税を納付"),
+        ("いちじていし", "一時停止"),
+        ("いちじていしする", "一時停止する"),
+    ] {
+        let top = top_text(reading);
+        if top != expected {
+            wrong.push(format!("{reading}: expected {expected}, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+/// Issue #336: the rows must not move the readings they sit next to. These
+/// leaders were already correct before the rows, so a failure here means a
+/// row price spilled into a bare reading or a general sentence.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_336_rows_leave_the_neighbouring_leaders_alone() {
+    let mut wrong = Vec::new();
+    for (reading, expected) in [
+        ("かた", "方"),
+        ("れつのかた", "列の方"),
+        ("ひだりのかたがいたい", "左の方が痛い"),
+        ("きのう", "昨日"),
+        ("あん", "案"),
+        ("あんをだす", "案を出す"),
+        ("しょうたい", "招待"),
+        ("しょうたいじょう", "招待状"),
+        ("しょうたいする", "招待する"),
+        // 戻り値 needs no row: #332 prices its alias 返り値 behind it.
+        ("もどりち", "戻り値"),
+    ] {
+        let top = top_text(reading);
+        if top != expected {
+            wrong.push(format!("{reading}: expected {expected}, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
 /// Issue #291: `(reading, yielded glossary surface, owner)` for every edge the
 /// glossary importer priced behind the word that owns its reading, read from
 /// the checked-in report so a new yield is covered without editing this file.
@@ -2963,4 +3367,207 @@ fn issue_306_zumi_and_standalone_candidates_are_preserved() {
             })
             .expect("standalone candidates");
     }
+}
+
+/// Issue #337: readings whose plain-kana spelling Mozc priced below the
+/// ordinary kanji writing, so conversion led with the unconverted reading.
+const ISSUE_337_KANJI_LEADERS: &[(&str, &str)] = &[
+    ("よろしくおねがいします", "よろしくお願いします"),
+    (
+        "いじょうでよろしくおねがいします",
+        "以上でよろしくお願いします",
+    ),
+    ("たしかにそうですね", "確かにそうですね"),
+    ("おまかせします", "お任せします"),
+    ("おまかせでおねがいします", "お任せでお願いします"),
+    (
+        "あけましておめでとうございます",
+        "明けましておめでとうございます",
+    ),
+    ("そろそろいかないと", "そろそろ行かないと"),
+    ("いかなきゃいけない", "行かなきゃいけない"),
+    ("おそれいりますが", "恐れ入りますが"),
+    (
+        "おいそがしいところおそれいりますが",
+        "お忙しいところ恐れ入りますが",
+    ),
+];
+
+/// Readings from `ISSUE_337_KANJI_LEADERS` whose kana spelling is measured to
+/// stay among the candidates behind the kanji leader.
+const ISSUE_337_KANA_STAYS: &[&str] = &[
+    "よろしくおねがいします",
+    "たしかにそうですね",
+    "おまかせします",
+    "あけましておめでとうございます",
+    "そろそろいかないと",
+    "おそれいりますが",
+];
+
+/// Issue #337: the kana spellings that are the ordinary writing keep leading.
+const ISSUE_337_KANA_CONTROLS: &[&str] = &[
+    "わかりました",
+    "なるほどわかりました",
+    "あっちのほうがいいんじゃないですか",
+    "まだわからないけどやってみる",
+];
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_337_kana_priced_phrases_and_conjugations_lead_in_kanji() {
+    let mut wrong = Vec::new();
+    for &(reading, expected) in ISSUE_337_KANJI_LEADERS {
+        let top = top_text(reading);
+        if top != expected {
+            wrong.push(format!("{reading}: expected {expected}, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_337_kana_spelling_stays_a_candidate_behind_the_kanji_leader() {
+    let mut missing = Vec::new();
+    for &reading in ISSUE_337_KANA_STAYS {
+        if !candidates_for(reading).iter().any(|text| text == reading) {
+            missing.push(reading);
+        }
+    }
+    assert!(missing.is_empty(), "kana spelling dropped: {missing:?}");
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_337_ordinary_kana_writings_keep_leading() {
+    let mut wrong = Vec::new();
+    for &reading in ISSUE_337_KANA_CONTROLS {
+        let top = top_text(reading);
+        if top != reading {
+            wrong.push(format!("{reading}: expected the kana writing, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_334_function_words_stay_separate_from_the_next_word() {
+    // Authored corpus rows a1-123, a1-096, a2-044, a2-104, a4-025, a4-026. In
+    // 2.0.16 the tops were これ出会ってる, 説明語りませんでした,
+    // いただけます用お願い..., 今の話をしてる and ここでずっと舞ってる.
+    for (reading, expected) in [
+        ("これであってる", "これで合ってる"),
+        ("せつめいがたりませんでした", "説明が足りませんでした"),
+        (
+            "ごしじをいただけますようおねがいします",
+            "ご指示をいただけますようお願いします",
+        ),
+        (
+            "ごしゅっせきいただけますようおねがいもうしあげます",
+            "ご出席いただけますようお願い申し上げます",
+        ),
+        ("いまのはなしをしってる", "今の話を知ってる"),
+        ("ここでずっとまってる", "ここでずっと待ってる"),
+    ] {
+        assert_eq!(top_text(reading), expected, "{reading}");
+    }
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_334_ainai_to_is_not_read_as_na_ito() {
+    // 意図 (いと) used to carry the IT flag; its bonus (1,200) beat ない + と by
+    // 801 although the dictionary-only path of the latter is 399 cheaper. The
+    // English term `intent` keeps its own IT row.
+    for (reading, expected) in [
+        ("これぐらいないと", "これぐらいないと"),
+        ("それぐらいないと", "それぐらいないと"),
+    ] {
+        assert_eq!(top_text(reading), expected, "{reading}");
+    }
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_334_contracted_te_forms_stay_predictable_from_a_short_prefix() {
+    // Their word cost rises above the 6,000 prediction limit, but prediction
+    // keeps the former cost and flag: しっ -> 知ってる and 知っている,
+    // おもっ -> 思ってる are in the first nine, as in 2.0.16.
+    for (prefix, reading, surface) in [
+        ("しっ", "しってる", "知ってる"),
+        ("おもっ", "おもってる", "思ってる"),
+        ("しっ", "しっている", "知っている"),
+    ] {
+        let predictions = predictions_for(prefix);
+        assert!(
+            predictions
+                .iter()
+                .any(|(r, s)| r == reading && s == surface),
+            "{prefix}: {reading} -> {surface} missing from {predictions:?}"
+        );
+    }
+}
+
+fn issue_334_dictionary_at(
+    variable: &str,
+) -> std::sync::Arc<sakura_engine::dictionary::ConversionService> {
+    let value = std::env::var(variable).unwrap_or_else(|_| panic!("set {variable}"));
+    let path = Path::new(&value)
+        .canonicalize()
+        .unwrap_or_else(|error| panic!("{value}: {error}"));
+    sakura_engine::dictionary::open(&path).expect("open dictionary")
+}
+
+fn issue_334_matteru_top_with(learning: Arc<LearningService>) -> String {
+    let mut dispatcher =
+        Dispatcher::new_with_services(open_conversion(), learning).expect("dispatcher");
+    let session = create_normal_session(&mut dispatcher, "issue-334-learning.exe");
+    type_romaji(&mut dispatcher, session, "matteru");
+    send_key(&mut dispatcher, session, space_key())
+        .preedit_text()
+        .to_owned()
+}
+
+#[test]
+#[ignore = "needs two built dictionaries: SAKURA_BASE_SYSTEM_DIC (before) and SAKURA_SYSTEM_DIC (after)"]
+fn issue_334_learning_made_on_the_old_te_form_right_id_still_applies() {
+    // The right id of the generated te forms changes (825 -> 1097) while the
+    // learning index keys an exact record by (left context, right id, reading,
+    // surface) and also writes a general record (learning.rs, LearningKey).
+    // This test learns 舞ってる on the OLD right id, read from the dictionary
+    // built before the change, and converts with the NEW dictionary.
+    //
+    // Precondition: without learning, 舞ってる must not lead on the dictionary
+    // under test, otherwise the test shows nothing about learning. That holds on
+    // the changed dictionary (top 待ってる) and fails on the one built before
+    // the change, where 舞ってる already leads; so run it with
+    // SAKURA_BASE_SYSTEM_DIC set to the old dictionary and SAKURA_SYSTEM_DIC to
+    // the new one. A learned record on right id 1, 825 or 1097 all make 舞ってる
+    // lead on the changed dictionary: a right-id-independent record carries it.
+    let old = issue_334_dictionary_at("SAKURA_BASE_SYSTEM_DIC");
+    let old_right = old
+        .with_candidates("まってる", ConversionOptions::default(), |candidates| {
+            candidates
+                .iter()
+                .find(|candidate| candidate.text() == "舞ってる")
+                .and_then(|candidate| candidate.segments().last())
+                .map(|segment| segment.right_id)
+        })
+        .expect("base conversion")
+        .expect("base dictionary has 舞ってる");
+    let unlearned = issue_334_matteru_top_with(Arc::new(LearningService::memory()));
+    assert_ne!(
+        unlearned, "舞ってる",
+        "precondition: 舞ってる must not lead without learning on this dictionary"
+    );
+    let learning = Arc::new(LearningService::memory());
+    for _ in 0..10 {
+        learning.learn("まってる", "舞ってる", 0, old_right);
+    }
+    let selected = issue_334_matteru_top_with(learning);
+    assert_eq!(
+        selected, "舞ってる",
+        "old right id {old_right}: the learned spelling must still lead"
+    );
 }

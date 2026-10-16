@@ -1,0 +1,95 @@
+name: Accuracy gate
+
+# Conversion and prediction accuracy against the committed snapshot in
+# corpus/accuracy (#333). The job name `accuracy-gate` is the required status
+# check in ci/rulesets/main.json, so the workflow has no path filter: a skipped
+# required check would block every pull request that did not touch these paths.
+# It builds the system dictionary from the pinned sources exactly as the release
+# does (the determinism check stays in installer.yml, which builds twice) and
+# runs `accuracy-gate --check`. See corpus/accuracy/README.md.
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Superseded pull-request runs are cancelled; manual runs never replace each other.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_NET_LOCKED: "true"
+
+jobs:
+  accuracy-gate:
+    name: accuracy-gate
+    runs-on: windows-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 (reviewed 2026-08-24; upstream 2024-10-23; quarantine satisfied)
+
+      # These sparse paths must stay in sync with the $SparsePaths list in
+      # scripts/build-dictionary.ps1. When -MozcSource is supplied,
+      # Resolve-PinnedSource only checks the revision and returns; it never
+      # re-asserts the sparse profile, so anything missing here reaches the
+      # build as a hard failure. #95 added src/data/single_kanji to the script
+      # and not to this list, which broke both workflows.
+      - name: Check out pinned Mozc dictionary data
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2 (reviewed 2026-08-24; upstream 2024-10-23; quarantine satisfied)
+        with:
+          repository: google/mozc
+          ref: 3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732
+          path: .sources/mozc
+          sparse-checkout: |
+            LICENSE
+            src/data/dictionary_oss
+            src/data/rules
+            src/data/single_kanji
+
+      # IT glossary input is the MIT snapshot under
+      # third_party/smile-chat-public (no private-repo token).
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2 (reviewed 2026-08-24; upstream 2026-08-06; quarantine satisfied)
+
+      # build-dictionary resolves the official, fixed Japanese WordNet LMF
+      # artifact itself and verifies its pinned size and SHA-256. The second,
+      # determinism-checking build is installer.yml's job.
+      - name: Build the release dictionary
+        shell: pwsh
+        run: >-
+          ./scripts/build-dictionary.ps1
+          -MozcSource .sources/mozc
+          -GlossarySource third_party/smile-chat-public
+          -OutputDirectory artifacts/accuracy
+          -SkipDeterminismCheck
+
+      - name: Check conversion and prediction accuracy against the snapshot
+        shell: pwsh
+        run: >-
+          cargo run --release --locked -p sakura-conversion-eval
+          --features accuracy-gate --bin accuracy-gate --
+          --dictionary artifacts/accuracy/system.dic
+          --check --report accuracy-report.txt
+
+      - name: Show the accuracy report
+        if: always()
+        shell: pwsh
+        run: |
+          if (Test-Path -LiteralPath accuracy-report.txt) {
+            '```text' | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+            Get-Content -LiteralPath accuracy-report.txt | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+            '```' | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY
+          }
+
+      - name: Upload the accuracy report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2 (reviewed 2026-08-24; upstream 2025-03-19; quarantine satisfied)
+        with:
+          name: accuracy-report
+          path: accuracy-report.txt
+          if-no-files-found: ignore

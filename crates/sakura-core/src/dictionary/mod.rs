@@ -64,6 +64,12 @@ impl EntryFlags {
     /// A boundary-preferred alias: available initially, but inside a query
     /// only with exact whole-reading system evidence (#306).
     pub const BOUNDARY_ALIAS: Self = Self(1 << 5);
+    /// A row the build removed from prediction by rule rather than by cost: a
+    /// conjugation fragment, or a translation alias of a Japanese word (Issue
+    /// #338). It carries no `PREDICTION` and its prediction cost is
+    /// unavailable. Unlike a plain non-predictive row it is not evidence that
+    /// the typed reading is a finished word, so input repair stays available.
+    pub const PREDICTION_EXCLUDED: Self = Self(1 << 6);
 
     pub const fn from_bits(bits: u16) -> Self {
         Self(bits)
