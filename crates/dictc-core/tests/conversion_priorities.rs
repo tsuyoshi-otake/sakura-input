@@ -77,6 +77,18 @@ fn every_row_keeps_the_prediction_status_its_own_cost_earns() {
             // suggestion. Other 値 readings and noun identities are untouched.
             assert_eq!(entry.flags, EntryFlags::NONE);
             assert_eq!(entry.prediction_cost, i32::MAX);
+        } else if (
+            entry.reading.as_str(),
+            entry.surface.as_str(),
+            entry.left_id,
+            entry.right_id,
+        ) == ("いと", "意図", 1841, 1841)
+        {
+            // Issue #334 drops the IT flag of the glossary edge but keeps its
+            // price, prediction cost included (word cost + 300), so the term
+            // stays on the same prediction page.
+            assert!(entry.flags.contains(EntryFlags::PREDICTION), "{context}");
+            assert_eq!(entry.prediction_cost, entry.word_cost + 300, "{context}");
         } else if entry.word_cost <= PREDICTION_COST_LIMIT {
             assert!(
                 entry.flags.contains(EntryFlags::PREDICTION),
@@ -180,6 +192,39 @@ fn yesterday_keeps_its_standalone_price() {
         assert_eq!(entry.word_cost, 1100, "Issue #62 must not retune 昨日");
         assert!(!entry.flags.contains(EntryFlags::IT));
     }
+}
+
+#[test]
+fn issue_334_rows_reprice_the_edges_that_absorb_function_words() {
+    // (reading, surface, left_id, right_id, word_cost)
+    let wanted = [
+        ("あってる", "合ってる", 825, 1097, 2900),
+        ("よう", "用", 1978, 1978, 603),
+        ("よう", "用", 2031, 2031, 603),
+        ("いと", "意図", 1841, 1841, 3610),
+    ];
+    let overlay = overlay();
+    for (reading, surface, left_id, right_id, word_cost) in wanted {
+        let entry = overlay
+            .iter()
+            .find(|entry| {
+                entry.reading == reading
+                    && entry.surface == surface
+                    && entry.left_id == left_id
+                    && entry.right_id == right_id
+            })
+            .unwrap_or_else(|| panic!("missing {reading} -> {surface} {left_id}/{right_id}"));
+        assert_eq!(entry.word_cost, word_cost, "{reading} -> {surface}");
+    }
+    // 意図 owes its glossary price but not the IT bonus that beat これぐらいないと.
+    let intent = overlay
+        .iter()
+        .find(|entry| entry.reading == "いと" && entry.surface == "意図")
+        .expect("意図 row");
+    assert!(
+        !intent.flags.contains(EntryFlags::IT),
+        "意図 must not be IT"
+    );
 }
 
 #[test]

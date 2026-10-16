@@ -147,3 +147,18 @@ reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
 よん	4	2044	2044	4462	5662	predict	
 れい	0	2044	2044	3905	5105	predict	
 ろく	6	2044	2044	5157	6357	predict	
+# Issue #334: a word must not absorb the function word before it.
+# 合ってる (825 -> 1097) is 3118 upstream. Once the generated contracted forms
+# are priced like the split they replace, 2900 keeps これであってる on
+# で + 合ってる instead of これ + 出会ってる. 用 (よう, suffix classes 1978 and
+# 2031) costs 3 upstream, so ます + 用 was nearly free in ...ますよう; +600
+# keeps the whole word. 意図 (いと) is the glossary's IT edge: its IT bonus let
+# これぐらいな + 意図 beat これぐらい + ない + と although the dictionary-only
+# path of the latter is 399 cheaper. The row keeps the glossary price and
+# drops the IT flag, prediction cost included (word cost + 300), so the term
+# stays on its prediction page; the English term `intent` keeps its own IT
+# row. The other rows follow this file's prediction contract (word cost + 1200).
+あってる	合ってる	825	1097	2900	4100	predict	
+よう	用	1978	1978	603	1803	predict	
+よう	用	2031	2031	603	1803	predict	
+いと	意図	1841	1841	3610	3910	predict	

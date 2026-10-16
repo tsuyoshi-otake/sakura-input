@@ -535,6 +535,35 @@ pub fn mark_non_initial_allomorphs_with_boundary_policy(
     })
 }
 
+/// Extra word and prediction cost of an entry that still carries `NON_INITIAL`
+/// when the category dictionaries are written (Issue #334).
+///
+/// A retained entry is a voiced allomorph such as `がたり → 語り` that the
+/// lattice admits only after text. Priced like an independent word it can win
+/// a path by absorbing the function word before it (`説明が足りません` read
+/// as `説明語りません`). The penalty keeps it available as a bound form while a
+/// split into independent words wins when the two are close. The reported
+/// sentence needs more than 372; 500 leaves a margin, and the checked-in
+/// conversion corpus gives the same result up to 1,000.
+pub const RETAINED_NON_INITIAL_PENALTY: i32 = 500;
+
+/// Adds [`RETAINED_NON_INITIAL_PENALTY`] to a retained non-initial entry.
+///
+/// Released entries and generated initial aliases lost the flag in
+/// [`mark_non_initial_allomorphs_with_boundary_policy`] and keep their price.
+/// A row without a prediction cost stays without one, and the prediction flag
+/// is not recomputed from the new cost.
+pub fn apply_retained_non_initial_penalty(entry: &mut SourceEntry) {
+    if !entry.flags.contains(EntryFlags::NON_INITIAL) {
+        return;
+    }
+    let penalty = RETAINED_NON_INITIAL_PENALTY;
+    entry.word_cost = entry.word_cost.saturating_add(penalty);
+    if entry.prediction_cost != i32::MAX {
+        entry.prediction_cost = entry.prediction_cost.saturating_add(penalty);
+    }
+}
+
 fn preferred_initial_identity(
     entries: &[SourceEntry],
     pair: &(String, String),
@@ -1348,6 +1377,24 @@ mod tests {
     fn issue_306_prefer_boundary_is_not_a_general_policy_escape() {
         let result = parse_non_initial_boundary_policy("bad.tsv", "# schema_version: 1\n# mozc_revision: test\nreading\tsurface\tdecision\tevidence\nずみ\t済み\tprefer-boundary\ttest\n", "test");
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn retained_non_initial_entries_cost_more_and_other_entries_keep_their_price() {
+        let mut ordinary = lexical_entry("かい", "買い", 829);
+        let mut retained = lexical_entry("がい", "買い", 829);
+        retained.flags = retained.flags | EntryFlags::NON_INITIAL;
+        let mut conversion_only = entry(829, "語り", "non-initial");
+
+        super::apply_retained_non_initial_penalty(&mut ordinary);
+        super::apply_retained_non_initial_penalty(&mut retained);
+        super::apply_retained_non_initial_penalty(&mut conversion_only);
+
+        assert_eq!((ordinary.word_cost, ordinary.prediction_cost), (100, 1300));
+        assert_eq!((retained.word_cost, retained.prediction_cost), (600, 1800));
+        assert!(retained.flags.contains(EntryFlags::PREDICTION));
+        assert_eq!(conversion_only.word_cost, 600);
+        assert_eq!(conversion_only.prediction_cost, i32::MAX);
     }
 
     #[test]
