@@ -46,6 +46,11 @@ a user-visible composition boundary, while `ずかい → 使い／遣い` remai
 suppressed. The schema-4 trim report records the raw classifier totals, all 287
 audited blocked pairs, the 60 approved pairs, the retained pairs, the released
 and generated initial-entry counts, and the policy SHA-256.
+Entries that stay `non-initial` are priced 500 higher (word and prediction
+cost, `RETAINED_NON_INITIAL_PENALTY` in `dictc-core`'s `category.rs`) when
+`category-split` writes the category dictionaries, so a split into
+independent words wins over a bound form that would absorb the function
+word before it (Issue #334).
 
 For #306, `prefer-boundary` is restricted to `がわ → 川`: only its generated
 1851/1851 alias carries `boundary-alias` (bit 5). It remains eligible at the

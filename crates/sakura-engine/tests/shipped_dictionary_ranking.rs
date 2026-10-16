@@ -3016,3 +3016,125 @@ fn issue_306_zumi_and_standalone_candidates_are_preserved() {
             .expect("standalone candidates");
     }
 }
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_334_function_words_stay_separate_from_the_next_word() {
+    // Authored corpus rows a1-123, a1-096, a2-044, a2-104, a4-025, a4-026. In
+    // 2.0.16 the tops were これ出会ってる, 説明語りませんでした,
+    // いただけます用お願い..., 今の話をしてる and ここでずっと舞ってる.
+    for (reading, expected) in [
+        ("これであってる", "これで合ってる"),
+        ("せつめいがたりませんでした", "説明が足りませんでした"),
+        (
+            "ごしじをいただけますようおねがいします",
+            "ご指示をいただけますようお願いします",
+        ),
+        (
+            "ごしゅっせきいただけますようおねがいもうしあげます",
+            "ご出席いただけますようお願い申し上げます",
+        ),
+        ("いまのはなしをしってる", "今の話を知ってる"),
+        ("ここでずっとまってる", "ここでずっと待ってる"),
+    ] {
+        assert_eq!(top_text(reading), expected, "{reading}");
+    }
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_334_ainai_to_is_not_read_as_na_ito() {
+    // 意図 (いと) used to carry the IT flag; its bonus (1,200) beat ない + と by
+    // 801 although the dictionary-only path of the latter is 399 cheaper. The
+    // English term `intent` keeps its own IT row.
+    for (reading, expected) in [
+        ("これぐらいないと", "これぐらいないと"),
+        ("それぐらいないと", "それぐらいないと"),
+    ] {
+        assert_eq!(top_text(reading), expected, "{reading}");
+    }
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_334_contracted_te_forms_stay_predictable_from_a_short_prefix() {
+    // Their word cost rises above the 6,000 prediction limit, but prediction
+    // keeps the former cost and flag: しっ -> 知ってる and 知っている,
+    // おもっ -> 思ってる are in the first nine, as in 2.0.16.
+    for (prefix, reading, surface) in [
+        ("しっ", "しってる", "知ってる"),
+        ("おもっ", "おもってる", "思ってる"),
+        ("しっ", "しっている", "知っている"),
+    ] {
+        let predictions = predictions_for(prefix);
+        assert!(
+            predictions
+                .iter()
+                .any(|(r, s)| r == reading && s == surface),
+            "{prefix}: {reading} -> {surface} missing from {predictions:?}"
+        );
+    }
+}
+
+fn issue_334_dictionary_at(
+    variable: &str,
+) -> std::sync::Arc<sakura_engine::dictionary::ConversionService> {
+    let value = std::env::var(variable).unwrap_or_else(|_| panic!("set {variable}"));
+    let path = Path::new(&value)
+        .canonicalize()
+        .unwrap_or_else(|error| panic!("{value}: {error}"));
+    sakura_engine::dictionary::open(&path).expect("open dictionary")
+}
+
+fn issue_334_matteru_top_with(learning: Arc<LearningService>) -> String {
+    let mut dispatcher =
+        Dispatcher::new_with_services(open_conversion(), learning).expect("dispatcher");
+    let session = create_normal_session(&mut dispatcher, "issue-334-learning.exe");
+    type_romaji(&mut dispatcher, session, "matteru");
+    send_key(&mut dispatcher, session, space_key())
+        .preedit_text()
+        .to_owned()
+}
+
+#[test]
+#[ignore = "needs two built dictionaries: SAKURA_BASE_SYSTEM_DIC (before) and SAKURA_SYSTEM_DIC (after)"]
+fn issue_334_learning_made_on_the_old_te_form_right_id_still_applies() {
+    // The right id of the generated te forms changes (825 -> 1097) while the
+    // learning index keys an exact record by (left context, right id, reading,
+    // surface) and also writes a general record (learning.rs, LearningKey).
+    // This test learns 舞ってる on the OLD right id, read from the dictionary
+    // built before the change, and converts with the NEW dictionary.
+    //
+    // Precondition: without learning, 舞ってる must not lead on the dictionary
+    // under test, otherwise the test shows nothing about learning. That holds on
+    // the changed dictionary (top 待ってる) and fails on the one built before
+    // the change, where 舞ってる already leads; so run it with
+    // SAKURA_BASE_SYSTEM_DIC set to the old dictionary and SAKURA_SYSTEM_DIC to
+    // the new one. A learned record on right id 1, 825 or 1097 all make 舞ってる
+    // lead on the changed dictionary: a right-id-independent record carries it.
+    let old = issue_334_dictionary_at("SAKURA_BASE_SYSTEM_DIC");
+    let old_right = old
+        .with_candidates("まってる", ConversionOptions::default(), |candidates| {
+            candidates
+                .iter()
+                .find(|candidate| candidate.text() == "舞ってる")
+                .and_then(|candidate| candidate.segments().last())
+                .map(|segment| segment.right_id)
+        })
+        .expect("base conversion")
+        .expect("base dictionary has 舞ってる");
+    let unlearned = issue_334_matteru_top_with(Arc::new(LearningService::memory()));
+    assert_ne!(
+        unlearned, "舞ってる",
+        "precondition: 舞ってる must not lead without learning on this dictionary"
+    );
+    let learning = Arc::new(LearningService::memory());
+    for _ in 0..10 {
+        learning.learn("まってる", "舞ってる", 0, old_right);
+    }
+    let selected = issue_334_matteru_top_with(learning);
+    assert_eq!(
+        selected, "舞ってる",
+        "old right id {old_right}: the learned spelling must still lead"
+    );
+}

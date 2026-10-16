@@ -1,7 +1,7 @@
 use dictc_core::inflection::{expand_inflections, parse_inflection_pos_catalog};
 use dictc_core::{compile, merge_entries, parse_connection, parse_entries, SourceEntry};
 use sakura_core::conversion::{ConversionOptions, Converter};
-use sakura_core::dictionary::Dictionary;
+use sakura_core::dictionary::{Dictionary, EntryFlags};
 use sakura_core::ConversionMethod;
 
 const POS: &str = "\
@@ -86,6 +86,87 @@ fn kuru_gains_the_everyday_te_ta_and_nai_forms() {
     pair(&entries, "こよう", "来よう");
     pair(&entries, "きてない", "来てない");
     pair(&entries, "きている", "来ている");
+}
+
+/// Auxiliary rows copied from Mozc id.def (ids 1097, 1099, 1084, 204).
+const AUX_POS: &str = "\
+1097 動詞,非自立,*,*,一段,基本形,てる
+1099 動詞,非自立,*,*,一段,基本形,でる
+1084 動詞,非自立,*,*,一段,基本形,いる
+204 助動詞,*,*,*,特殊・ナイ,基本形,ない
+";
+
+fn catalog_with_auxiliaries() -> dictc_core::inflection::InflectionPosCatalog {
+    parse_inflection_pos_catalog("id.def", &format!("{POS}{AUX_POS}"))
+        .expect("POS with auxiliaries")
+}
+
+#[test]
+fn contracted_te_forms_connect_as_their_auxiliary_and_cost_more_than_the_split() {
+    // Issue #334: a fused form that is as cheap as its lemma and connects as the
+    // stem absorbs the particle before it (これであってる -> これ出会ってる).
+    let lemmas = vec![lemma("くる", "来る", 610, 7)];
+    let (entries, _) = expand_inflections(&lemmas, &catalog_with_auxiliaries()).expect("expand");
+    for (reading, surface, aux_id, cost_delta) in [
+        ("きてる", "来てる", 1097_u16, 2_035),
+        ("きている", "来ている", 1084, 2_040),
+        ("きてない", "来てない", 204, 2_845),
+    ] {
+        let form = pair(&entries, reading, surface);
+        assert_eq!(form.left_id, 616, "{reading}: left id stays the stem's");
+        assert_eq!(
+            form.right_id, aux_id,
+            "{reading}: right id is the auxiliary's"
+        );
+        assert_eq!(
+            form.word_cost,
+            7 + cost_delta,
+            "{reading}: conversion delta is 2,035 / 2,040 / 2,845"
+        );
+    }
+}
+
+#[test]
+fn contracted_te_forms_keep_the_stem_id_when_the_catalog_has_no_auxiliary() {
+    // The fixture catalog in this file has no 非自立 / ない rows: fall back to the
+    // stem id instead of dropping the form.
+    let lemmas = vec![lemma("くる", "来る", 610, 7)];
+    let (entries, _) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    for (reading, surface) in [
+        ("きてる", "来てる"),
+        ("きている", "来ている"),
+        ("きてない", "来てない"),
+    ] {
+        let form = pair(&entries, reading, surface);
+        assert_eq!(form.left_id, 616);
+        assert_eq!(form.right_id, 616, "{reading}: fallback keeps the stem id");
+    }
+}
+
+#[test]
+fn raising_the_conversion_cost_leaves_prediction_of_te_forms_unchanged() {
+    // When the prediction flag follows the raised word cost, generated rows whose
+    // cost passes 6,000 lose `predict` and prefix prediction of forms such as
+    // しってる -> 知ってる disappears. Prediction cost and flag keep following
+    // the lemma cost plus the former delta (35 / 40 / 45).
+    let lemmas = vec![lemma("くる", "来る", 610, 5_000)];
+    let (entries, _) = expand_inflections(&lemmas, &catalog_with_auxiliaries()).expect("expand");
+    for (reading, surface, former_delta) in [
+        ("きてる", "来てる", 35),
+        ("きている", "来ている", 40),
+        ("きてない", "来てない", 45),
+    ] {
+        let form = pair(&entries, reading, surface);
+        assert!(
+            form.flags.contains(EntryFlags::PREDICTION),
+            "{reading}: still a prediction entry although the word cost is above 6,000"
+        );
+        assert_eq!(
+            form.prediction_cost,
+            5_000 + former_delta + 1_200,
+            "{reading}"
+        );
+    }
 }
 
 #[test]

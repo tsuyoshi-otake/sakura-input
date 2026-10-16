@@ -132,94 +132,182 @@ pub struct InflectionReport {
     pub skipped_unsupported: usize,
 }
 
+/// Mozc `id.def` row of the auxiliary a contracted form connects as on its
+/// right edge (Issue #334). `voiced_lemma` replaces `lemma` when the form's
+/// reading ends in `でる`.
+#[derive(Clone, Copy)]
+struct AuxLookup {
+    pos: &'static str,
+    subpos: &'static str,
+    ctype: &'static str,
+    cform: &'static str,
+    lemma: &'static str,
+    voiced_lemma: &'static str,
+}
+
 #[derive(Clone, Copy)]
 struct FormSpec {
     cost_delta: i32,
+    /// Auxiliary the form connects as on its right edge; `None` keeps the
+    /// stem id.
+    aux: Option<AuxLookup>,
+    /// Delta behind the prediction cost and the prediction flag. It stays at
+    /// the value from before Issue #334 so raising `cost_delta` does not drop
+    /// prefix prediction of the contracted forms (their word cost can pass
+    /// `PREDICTION_COST_LIMIT`).
+    prediction_delta: i32,
     cforms: &'static [&'static str],
 }
 
 const VERB_TE: FormSpec = FormSpec {
     cost_delta: 20,
+    aux: None,
+    prediction_delta: 20,
     cforms: &["連用タ接続", "連用形"],
 };
 const VERB_TA: FormSpec = FormSpec {
     cost_delta: 25,
+    aux: None,
+    prediction_delta: 25,
     cforms: &["連用タ接続", "連用形"],
 };
 const VERB_TARA: FormSpec = FormSpec {
     cost_delta: 30,
+    aux: None,
+    prediction_delta: 30,
     cforms: &["連用タ接続", "連用形"],
 };
 const VERB_NAI: FormSpec = FormSpec {
     cost_delta: 30,
+    aux: None,
+    prediction_delta: 30,
     cforms: &["未然形"],
 };
 const VERB_NAKATTA: FormSpec = FormSpec {
     cost_delta: 40,
+    aux: None,
+    prediction_delta: 40,
     cforms: &["未然形"],
 };
 const VERB_MASU: FormSpec = FormSpec {
     cost_delta: 40,
+    aux: None,
+    prediction_delta: 40,
     cforms: &["連用形"],
 };
 const VERB_MASHITA: FormSpec = FormSpec {
     cost_delta: 50,
+    aux: None,
+    prediction_delta: 50,
     cforms: &["連用形"],
 };
 const VERB_TAI: FormSpec = FormSpec {
     cost_delta: 45,
+    aux: None,
+    prediction_delta: 45,
     cforms: &["連用形"],
 };
 const VERB_BA: FormSpec = FormSpec {
     cost_delta: 35,
+    aux: None,
+    prediction_delta: 35,
     cforms: &["仮定形"],
 };
 const VERB_VOLITIONAL: FormSpec = FormSpec {
     cost_delta: 40,
+    aux: None,
+    prediction_delta: 40,
     cforms: &["未然ウ接続"],
 };
 const VERB_IMPERATIVE: FormSpec = FormSpec {
     cost_delta: 60,
+    aux: None,
+    prediction_delta: 60,
     cforms: &["命令ｉ", "命令ｒｏ", "命令ｅ", "命令ｙｏ"],
 };
 const VERB_RENYOU: FormSpec = FormSpec {
     cost_delta: 15,
+    aux: None,
+    prediction_delta: 15,
     cforms: &["連用形"],
 };
 const VERB_MIZEN: FormSpec = FormSpec {
     cost_delta: 20,
+    aux: None,
+    prediction_delta: 20,
     cforms: &["未然形"],
 };
+// Contracted `て` + auxiliary forms (Issue #334). Fused into one edge they
+// cost about what the split `て` + auxiliary costs and connect as the
+// auxiliary; as cheap stem-connected edges they let a wrong fused word
+// (出会ってる) absorb the particle before a right one (で + 合ってる).
 const VERB_TERU: FormSpec = FormSpec {
-    cost_delta: 35,
+    cost_delta: 2035,
+    aux: Some(AuxLookup {
+        pos: "動詞",
+        subpos: "非自立",
+        ctype: "一段",
+        cform: "基本形",
+        lemma: "てる",
+        voiced_lemma: "でる",
+    }),
+    prediction_delta: 35,
     cforms: &["連用タ接続", "連用形"],
 };
 const VERB_TEIRU: FormSpec = FormSpec {
-    cost_delta: 40,
+    cost_delta: 2040,
+    aux: Some(AuxLookup {
+        pos: "動詞",
+        subpos: "非自立",
+        ctype: "一段",
+        cform: "基本形",
+        lemma: "いる",
+        voiced_lemma: "いる",
+    }),
+    prediction_delta: 40,
     cforms: &["連用タ接続", "連用形"],
 };
 const VERB_TENAI: FormSpec = FormSpec {
-    cost_delta: 45,
+    cost_delta: 2845,
+    aux: Some(AuxLookup {
+        pos: "助動詞",
+        subpos: "*",
+        ctype: "特殊・ナイ",
+        cform: "基本形",
+        lemma: "ない",
+        voiced_lemma: "ない",
+    }),
+    prediction_delta: 45,
     cforms: &["連用タ接続", "連用形"],
 };
 const ADJ_TE: FormSpec = FormSpec {
     cost_delta: 20,
+    aux: None,
+    prediction_delta: 20,
     cforms: &["連用テ接続"],
 };
 const ADJ_TA: FormSpec = FormSpec {
     cost_delta: 25,
+    aux: None,
+    prediction_delta: 25,
     cforms: &["連用タ接続"],
 };
 const ADJ_NAI: FormSpec = FormSpec {
     cost_delta: 30,
+    aux: None,
+    prediction_delta: 30,
     cforms: &["連用テ接続", "未然ヌ接続"],
 };
 const ADJ_NAKATTA: FormSpec = FormSpec {
     cost_delta: 40,
+    aux: None,
+    prediction_delta: 40,
     cforms: &["連用タ接続"],
 };
 const ADJ_BA: FormSpec = FormSpec {
     cost_delta: 35,
+    aux: None,
+    prediction_delta: 35,
     cforms: &["仮定形"],
 };
 
@@ -269,19 +357,32 @@ pub fn expand_inflections(
                 report.skipped_unsupported = report.skipped_unsupported.saturating_add(1);
                 continue;
             };
+            let right_id = form
+                .spec
+                .aux
+                .and_then(|aux| {
+                    let aux_lemma = if form.reading.ends_with("でる") {
+                        aux.voiced_lemma
+                    } else {
+                        aux.lemma
+                    };
+                    catalog.lookup(aux.pos, aux.subpos, aux.ctype, aux.cform, aux_lemma)
+                })
+                .unwrap_or(class_id);
             let word_cost = lemma.word_cost.saturating_add(form.spec.cost_delta);
+            let prediction_base = lemma.word_cost.saturating_add(form.spec.prediction_delta);
             let prediction_worthy =
-                form.reading.chars().count() >= 2 && word_cost <= PREDICTION_COST_LIMIT;
+                form.reading.chars().count() >= 2 && prediction_base <= PREDICTION_COST_LIMIT;
             emitted.push(SourceEntry::derived(
                 Arc::clone(&source),
                 emitted.len().saturating_add(1),
                 form.reading,
                 form.surface,
                 class_id,
-                class_id,
+                right_id,
                 word_cost,
                 if prediction_worthy {
-                    word_cost.saturating_add(PREDICTION_OFFSET)
+                    prediction_base.saturating_add(PREDICTION_OFFSET)
                 } else {
                     i32::MAX
                 },
