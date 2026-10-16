@@ -103,3 +103,10 @@
   class before blaming conversion code for load-only failures. A process that
   raises its own class must pass an explicit class to the helpers it spawns,
   or they inherit the raised one.
+
+- **PowerShell 7.3+ reserves `clean` as a script-block keyword.** A helper
+  function named `Clean` and a call such as `{ Clean }` fail to parse
+  ("'clean' の後にステートメント ブロックがありません"), so the whole script stops
+  before its first step. Observed 2026-10-16 (#357) in a throwaway release-gate
+  script; renaming the helper to `Invoke-CleanCheck` fixed it. Give helpers a
+  verb-noun name.
