@@ -64,7 +64,7 @@ impl PathClass {
             Surface::Dictionary { .. } | Surface::User(_) => Self::Lexical,
             Surface::Reading => Self::Reading,
             Surface::Katakana => Self::Katakana,
-            Surface::Literal(_) | Surface::Generated(_) => Self::Neutral,
+            Surface::Literal(_) | Surface::Generated(_) | Surface::Passthrough => Self::Neutral,
         };
         match (self, next) {
             (current, Self::Neutral) => Some(current),
@@ -88,7 +88,8 @@ enum SurfaceKind {
 /// one spelling consistently; partial hiragana/katakana mosaics are equally
 /// unhelpful. Keep wholly lexical multiword paths (normal Japanese
 /// segmentation) and wholly synthetic reading/katakana fallbacks, so
-/// conversion always has a safe, lossless result.
+/// conversion always has a safe, lossless result. An ASCII digit run or `%`
+/// is a neutral passthrough, not a fallback spelling, so `12` + `時間` stays.
 fn candidate_path_is_coherent(nodes: &[Node], path: &[usize]) -> bool {
     let mut has_lexical_edge = false;
     let mut fallback = None;
@@ -107,7 +108,7 @@ fn candidate_path_is_coherent(nodes: &[Node], path: &[usize]) -> bool {
                 }
                 fallback = Some(SurfaceKind::Katakana);
             }
-            Surface::Literal(_) | Surface::Generated(_) => {}
+            Surface::Literal(_) | Surface::Generated(_) | Surface::Passthrough => {}
         }
     }
     !(has_lexical_edge && fallback.is_some())

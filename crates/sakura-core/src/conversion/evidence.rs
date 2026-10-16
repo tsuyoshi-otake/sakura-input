@@ -216,7 +216,7 @@ impl PathEvidence {
             } => self.repair_kinds |= repair_kind_bit(kind),
             Surface::Dictionary { repair: None, .. } => self.add_system(spelling),
             Surface::User(_) => self.user_edges = self.user_edges.saturating_add(1),
-            Surface::Reading | Surface::Katakana => {
+            Surface::Reading | Surface::Katakana | Surface::Passthrough => {
                 self.fallback_edges = self.fallback_edges.saturating_add(1)
             }
             Surface::Literal(_) | Surface::Generated(_) => {

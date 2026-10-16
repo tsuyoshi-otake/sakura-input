@@ -11,7 +11,7 @@ use crate::user_dictionary::UserDictionary;
 use super::super::{
     connection_cost, synthetic_run_cost, ConversionError, ConversionOptions, Converter,
     LeftContextId, RightContextId, Surface, BASE_DICTIONARY_EDGES_PER_READING, COUNTER_FORMS,
-    COUNTER_WORD_COST, DEFAULT_NOUN_ID, FALLBACK_WORD_COST, KATAKANA_BASE_COST,
+    COUNTER_WORD_COST, DEFAULT_NOUN_ID, DIGIT_NOUN_ID, FALLBACK_WORD_COST, KATAKANA_BASE_COST,
     KATAKANA_COST_PER_CHAR, MAX_DICTIONARY_SURFACES_PER_READING, NONE, RUN_BASE_COST,
     RUN_COST_PER_CHAR,
 };
@@ -190,6 +190,11 @@ impl Converter {
         } else {
             0
         };
+        let digit_id = if dictionary.class_count() > usize::from(DIGIT_NOUN_ID) {
+            DIGIT_NOUN_ID
+        } else {
+            synthetic_id
+        };
         let mut previous_class = None;
         let mut has_exact_system_reading = false;
         dictionary
@@ -344,6 +349,15 @@ impl Converter {
             }
 
             let character_end = start + character.len_utf8();
+            // A typed digit run or `%` is a passthrough, not a kana fallback,
+            // so it can precede a dictionary word (`12じかん` -> `12時間`).
+            let (fallback_surface, fallback_id) = if class == CharClass::AsciiDigit {
+                (Surface::Passthrough, digit_id)
+            } else if character == '%' {
+                (Surface::Passthrough, synthetic_id)
+            } else {
+                (Surface::Reading, synthetic_id)
+            };
             // Keep ASCII letter/digit runs atomic: a per-character fallback
             // for `2` inside `24` is how a superscript numeral can splice in.
             if !(atomic_token && run.end > character_end) {
@@ -352,10 +366,10 @@ impl Converter {
                     NodeSpec {
                         start,
                         end: character_end,
-                        left_id: synthetic_id,
-                        right_id: synthetic_id,
+                        left_id: fallback_id,
+                        right_id: fallback_id,
                         local_cost: FALLBACK_WORD_COST,
-                        surface: Surface::Reading,
+                        surface: fallback_surface,
                     },
                 )?;
             }
@@ -366,10 +380,10 @@ impl Converter {
                     NodeSpec {
                         start,
                         end: run.end,
-                        left_id: synthetic_id,
-                        right_id: synthetic_id,
+                        left_id: fallback_id,
+                        right_id: fallback_id,
                         local_cost: synthetic_run_cost(RUN_BASE_COST, RUN_COST_PER_CHAR, run.chars),
-                        surface: Surface::Reading,
+                        surface: fallback_surface,
                     },
                 )?;
             }

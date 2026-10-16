@@ -1174,6 +1174,87 @@ fn bare_spoken_numbers_defer_to_lexical_homophones() {
 }
 
 #[test]
+fn issue_331_ascii_digit_run_connects_to_a_lexical_counter_word() {
+    // Fail-before: the digit run is a `Surface::Reading` node, so the path
+    // `12` + `時間` mixes a reading fallback with a lexical edge and the
+    // coherence check drops it; the only candidate is the reading itself.
+    let bytes = compile_fixture(
+        "# license: MIT\n\
+reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+じかん\t時間\t1\t1\t100\t-\t\t\n\
+じかん\t次官\t1\t1\t400\t-\t\t\n",
+    );
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+    let candidates = converter
+        .convert(&dictionary, "12じかん", ConversionOptions::default())
+        .expect("conversion");
+    let texts: Vec<&str> = candidates
+        .iter()
+        .map(|candidate| candidate.text())
+        .collect();
+    assert_eq!(texts.first().copied(), Some("12時間"), "{texts:?}");
+    assert!(
+        texts.contains(&"12次官"),
+        "second homophone lost: {texts:?}"
+    );
+}
+
+#[test]
+fn issue_331_percent_sign_connects_to_the_following_word() {
+    // Fail-before: `%` is a per-character `Surface::Reading` node.
+    let bytes = compile_fixture(
+        "# license: MIT\n\
+reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+は\tは\t1\t1\t100\t-\t\t\n\
+さける\t避ける\t1\t1\t100\t-\t\t\n",
+    );
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+    let candidates = converter
+        .convert(&dictionary, "50%はさける", ConversionOptions::default())
+        .expect("conversion");
+    assert_eq!(
+        candidates.first().map(|candidate| candidate.text()),
+        Some("50%は避ける"),
+        "{:?}",
+        candidates.iter().map(|c| c.text()).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn issue_331_digit_run_does_not_license_a_kana_splice() {
+    // Pass-before and pass-after: the kana `ん` stays a `Surface::Reading`
+    // node, so `12` + プロ + `ん` + ... is still rejected as a splice.
+    // (The shipped dictionary has ぷろ/ふと rows, so only a fixture can
+    // show this; same entries as `n_best_rejects_spliced_kana_fallbacks...`.)
+    let bytes = compile_fixture(
+        "# license: MIT\n\
+reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+ぷろ\tプロ\t1\t1\t10\t-\t\t\n\
+ふ\t布\t1\t1\t10\t-\t\t\n\
+ふ\t富\t1\t1\t11\t-\t\t\n\
+と\t戸\t1\t1\t10\t-\t\t\n",
+    );
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+    let candidates = converter
+        .convert(&dictionary, "12ぷろんふと", ConversionOptions::default())
+        .expect("conversion");
+    let texts: Vec<&str> = candidates
+        .iter()
+        .map(|candidate| candidate.text())
+        .collect();
+    assert_eq!(texts.first().copied(), Some("12ぷろんふと"), "{texts:?}");
+    assert!(
+        texts
+            .iter()
+            .all(|text| !text.contains('ん') || *text == "12ぷろんふと"),
+        "a kana splice survived: {texts:?}"
+    );
+}
+
+#[test]
 #[ignore = "real built dictionary; set SAKURA_PHASE2_DICTIONARY"]
 fn real_dictionary_balances_non_initial_fragments_and_productive_bound_forms() {
     let path = std::env::var_os("SAKURA_PHASE2_DICTIONARY")
