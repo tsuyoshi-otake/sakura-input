@@ -161,3 +161,15 @@
   `cargo tree -e features --workspace` で、`--features` なしのビルドに
   `replay-eval` が出ないことを確認した（2026-10-16）。CI と release の
   clippy・test の feature リストにも、その feature を足す。
+
+- **`gh pr checks --watch` と `gh run watch` の終了コードは、CI の結果ではない。**
+  2026-10-16（#357）に、どちらも一時的な `wsarecv` のタイムアウトで exit 1
+  になったが、run は続いていた。`gh run view <id> --json status,conclusion`
+  を、失敗した呼び出しを許すループで確認する。
+
+- **`scripts/publish-release.ps1` は、署名の前の `gh attestation verify` が
+  ネットワークエラーで失敗すると、何も作らずに止まる。** 2026-10-16（#357）に
+  TLS handshake timeout で止まったとき、`gh release view v2.0.17` は
+  "release not found" で、候補フォルダーは installer と manifest の2ファイル
+  のままだった。この2点を確認してから同じコマンドを再実行し、27 秒で公開と
+  読み戻しまで終わった。
