@@ -13,6 +13,10 @@ publish = false
 # `learning-replay` drives the engine's replay API (#305). It is opt-in, so a
 # workspace build never compiles the shipping engine with `replay-eval`.
 learning-replay = ["dep:sakura-engine", "sakura-engine/replay-eval"]
+# `accuracy-gate` (#333) measures the shipping conversion service and
+# prediction runtime. It is opt-in for the same reason: a workspace build does
+# not link the engine into an offline tool.
+accuracy-gate = ["dep:sakura-engine", "dep:sha2"]
 
 [[bin]]
 name = "corpus-eval"
@@ -31,6 +35,11 @@ name = "learning-replay"
 path = "src/bin/learning_replay.rs"
 required-features = ["learning-replay"]
 
+[[bin]]
+name = "accuracy-gate"
+path = "src/bin/accuracy_gate.rs"
+required-features = ["accuracy-gate"]
+
 [dependencies]
 sakura-core = { path = "../../crates/sakura-core" }
 sakura-engine = { path = "../../crates/sakura-engine", optional = true }
@@ -39,9 +48,11 @@ sakura-rerank-proto = { path = "../../crates/sakura-rerank-proto" }
 # neural-eval report serialization; offline only (ci/dep-policy.ps1).
 serde = { version = "=1.0.219", features = ["derive"] }
 serde_json = "=1.0.140"
+# accuracy-gate report header: dictionary and corpus SHA-256 (ci/dep-policy.ps1).
+sha2 = { version = "=0.10.9", optional = true }
 
 [dev-dependencies]
-# learning-replay tests compile a fixture dictionary.
+# learning-replay and accuracy-gate tests compile a fixture dictionary.
 dictc-core = { path = "../../crates/dictc-core" }
 
 [lints]

@@ -33,7 +33,8 @@
           { "context": "workspace-tests" },
           { "context": "irv-regression" },
           { "context": "dll-size" },
-          { "context": "Dependency policy" }
+          { "context": "Dependency policy" },
+          { "context": "accuracy-gate" }
         ]
       }
     }
