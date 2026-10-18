@@ -27,7 +27,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DestroyWindow, HWND_MESSAGE, WINDOW_EX_STYLE, WS_CHILD,
 };
 
-use super::{copy_to_clipboard, place_text, ClipboardPrivacy};
+use super::{copy_to_clipboard, place_text, ClipboardMarker, ClipboardPrivacy};
 
 const CHILD_ENV: &str = "SAKURA_PAD_CLIPBOARD_STATION_CHILD";
 const CHILD_DEADLINE: Duration = Duration::from_secs(120);
@@ -237,10 +237,26 @@ fn t2_normal_copy_is_text_only(hwnd: HWND) {
 }
 
 /// T3 (K3): a marker that cannot be registered fails the whole copy closed —
-/// false, an empty clipboard, and a closable clipboard afterwards.
+/// false, an empty clipboard, and a closable clipboard afterwards. The list is
+/// written out as literals so the test does not inherit a shortened or
+/// reordered production list.
 fn t3_marker_failure_empties_the_clipboard(hwnd: HWND) {
+    let protected = [
+        ClipboardMarker {
+            name: "ExcludeClipboardContentFromMonitorProcessing",
+            value: 1,
+        },
+        ClipboardMarker {
+            name: "CanIncludeInClipboardHistory",
+            value: 0,
+        },
+        ClipboardMarker {
+            name: "CanUploadToCloudClipboard",
+            value: 0,
+        },
+    ];
     for index in 0..3 {
-        let mut markers = ClipboardPrivacy::Protected.markers().to_vec();
+        let mut markers = protected;
         markers[index].name = "";
         assert!(
             !place_text(hwnd, "x", &markers),
