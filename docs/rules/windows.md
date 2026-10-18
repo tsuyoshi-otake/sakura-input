@@ -123,8 +123,10 @@
   very `FILE_ATTRIBUTE_REPARSE_POINT` the check exists to reject; canonicalize
   only the two endpoints used for the containment compare. To create a
   junction in a test, `New-Item -ItemType Junction` requires an absolute
-  `-Target`; invoking `mklink` through `cmd /c` from Rust `Command` mangles
-  the argv pieces (#360 A1, 2026-10-18).
+  `-Target`. Through `cmd /c` from Rust `Command`, the `mklink` form #360 A1
+  tried mangled its argv; `args(["/c", "mklink", "/J"]).arg(link).arg(target)`
+  with space-free paths worked in #360 #2 (`codex_cli_workdir_tests.rs`), and
+  paths that need quoting are unverified (2026-10-18).
 - **Never use `user32.dll` as the "other module" when testing per-module
   window classes.** Its instance handle is reserved for system classes.
   Observed 2026-10-18 (#360 A2): in a pwsh P/Invoke probe, `RegisterClassW`
@@ -147,3 +149,9 @@
   --lib --locked` itself. Otherwise it tests a stale DLL. Observed 2026-10-18
   (#360 A2): after the sources were restored, the test still loaded a
   leftover DLL that contained the injected fault.
+
+- **Rust's Windows `FileType::is_dir()` is false for a junction or symlink.**
+  std defines it as `!is_symlink && is_directory`, and a junction is a name
+  surrogate (checked 2026-10-18 in the toolchain's `library/std/src/sys/fs/
+  windows.rs`; #360 #2 T2). `symlink_metadata(p)?.is_dir()` alone excludes
+  reparse links, so dropping only an extra `is_symlink()` is an equivalent mutant.
