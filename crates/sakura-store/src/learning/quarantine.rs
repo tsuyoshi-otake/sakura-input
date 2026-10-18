@@ -16,8 +16,12 @@ use std::time::SystemTime;
 
 use super::log::{unique_sibling, write_new_file};
 
-/// How many `corrupt-*` siblings are kept after each quarantine. Older
-/// copies are removed best-effort: a removal failure never fails `open`.
+/// How many `corrupt-*` siblings are kept after each quarantine. The copy
+/// the call just wrote is always among them — its stamp comes from the
+/// current clock, which may sort before older copies written while the
+/// clock was ahead, so retention removes only the oldest of the *other*
+/// matching names. Older-copy removal is best effort: a failure there
+/// never fails `open`.
 const RETAINED_COPIES: usize = 3;
 
 /// The UTC stamp in a copy name: 8 digits, `T`, 6 digits, `Z`.
@@ -103,19 +107,21 @@ fn artifact_tail_is(tail: &str) -> bool {
     }
 }
 
-fn corrupt_copy_paths(path: &Path) -> Vec<PathBuf> {
+/// Lists every sibling whose name matches `corrupt_copy_name_is`. Listing
+/// errors are propagated: `remove_copies` (and therefore `clear`) fails
+/// closed when the directory cannot be read, while `quarantine` drops the
+/// result because retention is best effort and must never fail `open`.
+fn corrupt_copy_paths(path: &Path) -> io::Result<Vec<PathBuf>> {
     let mut copies = Vec::new();
     let Some(parent) = path.parent() else {
-        return copies;
+        return Ok(copies);
     };
     let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
-        return copies;
+        return Ok(copies);
     };
     let prefix = format!("{stem}.");
-    let Ok(entries) = fs::read_dir(parent) else {
-        return copies;
-    };
-    for entry in entries.flatten() {
+    for entry in fs::read_dir(parent)? {
+        let entry = entry?;
         let name = entry.file_name();
         let Some(rest) = name
             .to_str()
@@ -127,22 +133,27 @@ fn corrupt_copy_paths(path: &Path) -> Vec<PathBuf> {
             copies.push(entry.path());
         }
     }
-    copies
+    Ok(copies)
 }
 
 /// Writes `bytes` — exactly what `open` read of the current-format log,
 /// before any change — to a fresh `{stem}.corrupt-{stamp}` sibling, synced,
-/// then keeps the newest `RETAINED_COPIES` matching siblings. A copy
-/// failure is returned so `open` fails with `log.bin` byte-for-byte
-/// unchanged; retention failures are ignored because they are best effort
+/// then keeps at most `RETAINED_COPIES` matching siblings. The copy just
+/// written is always kept: its name comes from the current clock and can
+/// sort before older copies stamped while the clock was ahead, so only the
+/// oldest of the *other* matching names are removed. A copy failure is
+/// returned so `open` fails with `log.bin` byte-for-byte unchanged;
+/// retention and listing failures are ignored because they are best effort
 /// and never worth losing a session of learning over.
 pub(crate) fn quarantine(path: &Path, bytes: &[u8], stamp: &str) -> io::Result<()> {
     let copy = unique_sibling(path, &format!("corrupt-{stamp}"));
     write_new_file(&copy, bytes)?;
-    let mut copies = corrupt_copy_paths(path);
-    copies.sort();
-    while copies.len() > RETAINED_COPIES {
-        let _ = fs::remove_file(copies.remove(0));
+    if let Ok(mut others) = corrupt_copy_paths(path) {
+        others.retain(|candidate| candidate != &copy);
+        others.sort();
+        while others.len() + 1 > RETAINED_COPIES {
+            let _ = fs::remove_file(others.remove(0));
+        }
     }
     Ok(())
 }
@@ -152,7 +163,7 @@ pub(crate) fn quarantine(path: &Path, bytes: &[u8], stamp: &str) -> io::Result<(
 /// other removal error is returned so the clear fails without publishing
 /// and `log.bin` stays unchanged.
 pub(crate) fn remove_copies(path: &Path) -> io::Result<()> {
-    for copy in corrupt_copy_paths(path) {
+    for copy in corrupt_copy_paths(path)? {
         match fs::remove_file(&copy) {
             Ok(()) => {}
             Err(error) if error.kind() == io::ErrorKind::NotFound => {}

@@ -301,6 +301,124 @@ fn a_failed_copy_changes_nothing_and_open_retries() {
     let _ = fs::remove_dir_all(&directory);
 }
 
+/// K1, K4: retention removes the oldest of the *other* matching names and
+/// never the copy this open just wrote — its stamp comes from the current
+/// clock and sorts before copies written while the clock was ahead.
+#[test]
+fn retention_never_removes_the_new_copy() {
+    let path = temporary_log("quarantine-retention-new-copy");
+    {
+        let service = LearningService::open(&path).expect("open");
+        service.learn("かな", "加奈", 3, 4);
+        service.learn("きく", "菊", 5, 6);
+    }
+    let directory = path.parent().unwrap();
+    for (name, contents) in [
+        ("log.corrupt-29900101T000000Z", b"future-0".as_slice()),
+        ("log.corrupt-29910101T000000Z", b"future-1".as_slice()),
+        ("log.corrupt-29920101T000000Z", b"future-2".as_slice()),
+    ] {
+        fs::write(directory.join(name), contents).expect("staged future copy");
+    }
+    let damaged = damage_frame_payload(&path, 1);
+
+    let reopened = LearningService::open(&path).expect("reopen damaged log");
+    drop(reopened);
+
+    let copies = corrupt_copy_names(&path);
+    assert_eq!(copies.len(), 3, "exactly three copies remain: {copies:?}");
+    let new_copy = copies
+        .iter()
+        .find(|name| !name.starts_with("log.corrupt-299"))
+        .expect("the new copy was removed");
+    assert_eq!(
+        fs::read(directory.join(new_copy)).expect("new copy bytes"),
+        damaged,
+        "the surviving new copy holds exactly what open read"
+    );
+    assert!(!directory.join("log.corrupt-29900101T000000Z").exists());
+    for (name, contents) in [
+        ("log.corrupt-29910101T000000Z", b"future-1".as_slice()),
+        ("log.corrupt-29920101T000000Z", b"future-2".as_slice()),
+    ] {
+        assert_eq!(
+            fs::read(directory.join(name)).expect(name),
+            contents,
+            "the two newest other copies were kept"
+        );
+    }
+    let _ = fs::remove_dir_all(directory);
+}
+
+/// Removes the directory list deny this guard installs, before the test's
+/// temporary directory is deleted.
+#[cfg(windows)]
+struct DenyListGuard(PathBuf);
+
+#[cfg(windows)]
+impl DenyListGuard {
+    /// Denies Everyone read-data on `directory` with no inheritance flags,
+    /// so existing files stay readable but the directory cannot be listed.
+    fn new(directory: &Path) -> Self {
+        let status = std::process::Command::new("icacls")
+            .arg(directory)
+            .args(["/deny", "*S-1-1-0:(RD)"])
+            .status()
+            .expect("icacls deny");
+        assert!(status.success(), "icacls deny failed");
+        Self(directory.to_owned())
+    }
+}
+
+#[cfg(windows)]
+impl Drop for DenyListGuard {
+    fn drop(&mut self) {
+        let status = std::process::Command::new("icacls")
+            .arg(&self.0)
+            .args(["/remove:d", "*S-1-1-0"])
+            .status()
+            .expect("icacls remove");
+        assert!(status.success(), "icacls remove failed");
+    }
+}
+
+/// K6: when the directory cannot be listed, `clear` fails before
+/// publishing — a surviving copy must not be left behind silently.
+#[cfg(windows)]
+#[test]
+fn clear_fails_closed_when_the_directory_cannot_be_listed() {
+    let path = temporary_log("quarantine-clear-unlistable");
+    {
+        let service = LearningService::open(&path).expect("open");
+        service.learn("かな", "加奈", 3, 4);
+    }
+    let directory = path.parent().unwrap().to_owned();
+    let copy = directory.join("log.corrupt-20010101T000000Z");
+    fs::write(&copy, b"staged copy").expect("staged copy");
+    let service = LearningService::open(&path).expect("reopen");
+    let _deny = DenyListGuard::new(&directory);
+    assert!(
+        fs::read_dir(&directory).is_err(),
+        "the deny did not block listing"
+    );
+
+    assert!(
+        service.clear().is_err(),
+        "clear published while the directory could not be listed"
+    );
+    drop(_deny);
+    drop(service);
+
+    let reopened = LearningService::open(&path).expect("reopen after failed clear");
+    assert!(
+        history_contains(&reopened, "かな", "加奈"),
+        "a failed clear still emptied the log"
+    );
+    assert!(copy.exists(), "the copy vanished despite the failed clear");
+    drop(reopened);
+    let _ = fs::remove_dir_all(&directory);
+}
+
 /// K6: `clear` removes every matching copy before it publishes the empty
 /// log; a name that does not match is left alone.
 #[test]
