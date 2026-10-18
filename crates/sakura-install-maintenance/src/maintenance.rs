@@ -18,6 +18,8 @@ use windows::Win32::System::TaskScheduler::{
 use windows::Win32::System::Variant::VARIANT;
 use windows_core::{Error, Interface, Result, BSTR, HRESULT};
 
+use crate::install_location;
+
 const FOLDER: &str = "Sakura Input Maintenance";
 const TASK_LEAF: &str = "Payload Cleanup";
 const TASK_PATH: &str = "\\Sakura Input Maintenance\\Payload Cleanup";
@@ -46,6 +48,21 @@ pub fn register_cleanup_task(executable: &Path) -> Result<()> {
             "the cleanup executable must be an existing absolute file",
         ));
     }
+
+    // Issue #360 (A1): the task runs this executable as SYSTEM at every
+    // logon, so the binary must not be replaceable by a standard user. The
+    // install root is the executable's own directory; the check refuses an
+    // install below a user-writable ancestor (e.g. `C:\SakuraInput`
+    // inheriting `Authenticated Users: Modify`) before Task Scheduler is
+    // asked for anything.
+    install_location::verify_admin_only_payload(working_directory, executable).map_err(
+        |rejection| {
+            Error::new(
+                windows::Win32::Foundation::E_INVALIDARG,
+                rejection.to_string(),
+            )
+        },
+    )?;
 
     let service = connect()?;
     // SAFETY: `service` is a live Task Scheduler connection and the root

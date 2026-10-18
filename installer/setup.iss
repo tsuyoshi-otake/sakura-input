@@ -26,7 +26,7 @@ ja.WelcomeLabel1=Sakura Input のセットアップ
 ja.WelcomeLabel2=Windows の日本語入力を、軽く、確実に。%n%nセットアップを始める前に、作業中のファイルを保存し、入力中のアプリケーションを終了してください。
 ja.WizardSelectDir=インストール先
 ja.SelectDirDesc=Sakura Input のインストール先を確認してください。
-ja.SelectDirLabel3=標準の保存先を使用するか、任意のフォルダーを指定できます。
+ja.SelectDirLabel3=インストール先は Program Files 内のフォルダーでなければなりません。
 ja.SelectDirBrowseLabel=変更する場合は「参照」を選択してください。
 ja.WizardReady=インストール内容の確認
 ja.ReadyLabel1=次の内容で Sakura Input をインストールします。
@@ -41,7 +41,7 @@ en.WelcomeLabel1=Set up Sakura Input
 en.WelcomeLabel2=Lightweight, reliable Japanese input for Windows.%n%nSave your work and close applications that are currently accepting input before continuing.
 en.WizardSelectDir=Install location
 en.SelectDirDesc=Confirm where Sakura Input will be installed.
-en.SelectDirLabel3=Use the recommended location or choose a custom folder.
+en.SelectDirLabel3=The installation folder must be inside Program Files.
 en.SelectDirBrowseLabel=Select Browse to change the location.
 en.WizardReady=Review installation
 en.ReadyLabel1=Sakura Input is ready to install with these settings.
@@ -59,6 +59,8 @@ ja.StatusInstallCleanup=古いペイロードのクリーンアップを設定�
 ja.StatusConfigureDiagnostics=ローカルのクラッシュ診断を設定しています...
 ja.StatusEnableProfile=入力方法に Sakura Input を追加しています...
 ja.PostInstallAi=Sakura Input の AI 文章変換を設定する
+ja.DirMustBeUnderProgramFiles=セキュリティ上の理由から、インストール先は Program Files 内のフォルダーでなければなりません。
+ja.UnsafeInstallLocation=このインストール先は標準ユーザーが変更できるため、登録されたプログラムファイルを置き換えられてしまい、安全ではありません。Sakura Input は Program Files 内にインストールする必要があります。以前のバージョンが Program Files 以外にインストールされている場合は、先にアンインストールしてから Program Files 内に再インストールしてください。
 
 en.AppPublisher=Sakura Input contributors
 en.StatusRegisterTextService=Registering the Sakura Input text service...
@@ -66,6 +68,8 @@ en.StatusInstallCleanup=Installing payload cleanup maintenance...
 en.StatusConfigureDiagnostics=Configuring bounded local crash diagnostics...
 en.StatusEnableProfile=Adding Sakura Input to your input methods...
 en.PostInstallAi=Configure Sakura Input AI text transformation
+en.DirMustBeUnderProgramFiles=For security, Sakura Input must be installed in a folder inside Program Files.
+en.UnsafeInstallLocation=This install location can be modified by standard users, which would let them replace registered program files. Sakura Input must be installed inside Program Files. If an earlier version was installed outside Program Files, uninstall it first, then install again inside Program Files.
 
 #ifndef AppBuildId
 #define AppBuildId "dev"
@@ -360,6 +364,37 @@ begin
   end;
 end;
 
+// Issue #360 (A1): the registered payload -- the SYSTEM cleanup task's
+// sakura_regtool.exe action and the HKLM-registered sakura_tsf.dll -- is
+// only safe while a standard user cannot replace it. A folder created
+// directly under a drive root (for example C:\SakuraInput) inherits
+// "Authenticated Users: Modify" and would give a standard user SYSTEM code
+// execution at the next logon, so the install directory is restricted to a
+// subfolder of Program Files. The comparison is case-insensitive, both
+// sides are normalized to end with a backslash, and the boundary keeps
+// "C:\Program FilesX\..." from matching the prefix.
+function InstallDirIsSafe(const Dir: String): Boolean;
+var
+  ProgramFiles, Normalized: String;
+begin
+  ProgramFiles := AddBackslash(ExpandConstant('{autopf}'));
+  Normalized := AddBackslash(Dir);
+  Result := (Length(Normalized) > Length(ProgramFiles)) and
+    (CompareText(Copy(Normalized, 1, Length(ProgramFiles)), ProgramFiles) = 0);
+end;
+
+function NextButtonClick(CurPageID: Integer): Boolean;
+begin
+  Result := True;
+  if (CurPageID = wpSelectDir) and
+    not InstallDirIsSafe(WizardDirValue()) then
+  begin
+    SuppressibleMsgBox(ExpandConstant('{cm:DirMustBeUnderProgramFiles}'),
+      mbCriticalError, MB_OK, IDOK);
+    Result := False;
+  end;
+end;
+
 procedure InitializeWizard;
 begin
   PolishWizardPages;
@@ -641,6 +676,21 @@ var
   ResultCode: Integer;
   ExistingRegTool: String;
 begin
+  { Issue #360 (A1): the same location restriction enforced on the directory
+    page must run here as well. Inno skips the directory page when a previous
+    install exists (DisableDirPage=auto) and on silent installs driven by
+    /DIR=, so a custom-folder upgrade -- or a silent install -- would
+    otherwise never see the guard. This must precede the Exec below: the
+    existing sakura_regtool.exe in an unsafe location is itself replaceable
+    by a standard user, and running it elevated would hand them escalation.
+    Returning a non-empty string stops Setup before anything is changed;
+    the message tells the user to uninstall and reinstall into Program
+    Files, which is the only supported way off a custom location. }
+  if not InstallDirIsSafe(ExpandConstant('{app}')) then
+  begin
+    Result := ExpandConstant('{cm:UnsafeInstallLocation}');
+    exit;
+  end;
   Result := '';
   ExistingRegTool := RegToolPath();
   if FileExists(ExistingRegTool) then

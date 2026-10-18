@@ -24,6 +24,11 @@ features = [
     "Win32_System_Variant",
     "Win32_System_Ole",
     "Win32_Security_Authentication_Identity",
+    # The install-location verifier reads file security descriptors and opens
+    # directories with FILE_FLAG_BACKUP_SEMANTICS.
+    "Win32_Security",
+    "Win32_Security_Authorization",
+    "Win32_Storage_FileSystem",
 ]
 
 [lints]

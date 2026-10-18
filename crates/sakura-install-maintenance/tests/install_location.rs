@@ -1,0 +1,206 @@
+//! Non-elevated integration checks for `verify_admin_only_payload`
+//! (issue #360, finding A1; contracts C1, C2, C8, C9, C11).
+//!
+//! Every test here must pass as a standard user: none of them writes outside
+//! a temp directory it creates under `%USERPROFILE%\tmp\` and deletes before
+//! returning.
+
+#![cfg(windows)]
+
+use std::path::{Path, PathBuf};
+
+use sakura_install_maintenance::install_location::{verify_admin_only_payload, Rejection};
+
+fn temp_root(name: &str) -> PathBuf {
+    let base = std::env::var_os("USERPROFILE")
+        .map(PathBuf::from)
+        .expect("USERPROFILE is always set on Windows")
+        .join("tmp")
+        .join(format!("sakura-a1-{name}-{}", std::process::id()));
+    std::fs::create_dir_all(&base).expect("create temp root");
+    base
+}
+
+/// C8 (liveness): the real system layout — `cmd.exe` under `System32`,
+/// admin-owned all the way up — passes, so a supported install is not broken
+/// by the check.
+#[test]
+fn a_system32_binary_passes_verification() {
+    let root = Path::new(r"C:\Windows\System32");
+    verify_admin_only_payload(root, &root.join("cmd.exe"))
+        .expect("C:\\Windows\\System32\\cmd.exe must be admin-only replaceable");
+}
+
+/// C8 (liveness): the installed Sakura Input layout, when present on this
+/// machine, passes — `sakura_regtool.exe` at the root and the active
+/// `versions\<ver>\sakura_tsf.dll` inside it. Skips with a printed reason
+/// when the product is not installed; never fails or passes silently.
+#[test]
+fn the_installed_program_files_layout_passes_when_present() {
+    let root = Path::new(r"C:\Program Files\Sakura Input");
+    let regtool = root.join("sakura_regtool.exe");
+    if !regtool.is_file() {
+        eprintln!(
+            "skipping: {} is not installed on this machine",
+            regtool.display()
+        );
+        return;
+    }
+    verify_admin_only_payload(root, &regtool).expect("the installed regtool must verify");
+
+    let dll = std::fs::read_dir(root.join("versions"))
+        .ok()
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path().join("sakura_tsf.dll"))
+        .find(|path| path.is_file());
+    let Some(dll) = dll else {
+        eprintln!(
+            "skipping: no versions\\<ver>\\sakura_tsf.dll under {}",
+            root.display()
+        );
+        return;
+    };
+    verify_admin_only_payload(root, &dll).expect("the installed TSF DLL must verify");
+}
+
+/// C3/C5: a payload inside a user-owned directory is rejected — this is the
+/// `C:\SakuraInput` shape (a standard user, or a writable user grant, can
+/// replace the file).
+#[test]
+fn a_payload_in_a_user_owned_directory_is_rejected() {
+    let root = temp_root("userowned");
+    let payload = root.join("sakura_regtool.exe");
+    std::fs::write(&payload, b"payload").expect("write payload");
+
+    let error = verify_admin_only_payload(&root, &payload)
+        .expect_err("a user-owned install root must fail");
+    let text = error.to_string();
+    assert!(
+        matches!(
+            error.rejection,
+            Rejection::UntrustedOwner(_) | Rejection::UnsafeAce { .. }
+        ),
+        "the rejection must be ownership or a dangerous grant, got {error:?}"
+    );
+    assert!(text.contains("sakura"), "the error names the path: {text}");
+    std::fs::remove_dir_all(&root).expect("remove temp root");
+}
+
+/// C2: a junction anywhere in the walked chain is rejected even though a
+/// `mklink /J` needs no elevation to create.
+#[test]
+fn a_junction_in_the_chain_is_rejected() {
+    let base = temp_root("junction");
+    let real = base.join("real");
+    std::fs::create_dir_all(&real).expect("create real dir");
+    let payload = real.join("sakura_regtool.exe");
+    std::fs::write(&payload, b"payload").expect("write payload");
+
+    let link = base.join("link");
+    // New-Item's Junction target must be absolute; junction creation needs
+    // no elevation.
+    let status = std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-Command",
+            &format!(
+                "New-Item -ItemType Junction -Path '{}' -Target '{}' | Out-Null",
+                link.display(),
+                real.display()
+            ),
+        ])
+        .status()
+        .expect("run New-Item Junction");
+    assert!(status.success(), "junction creation failed: {status}");
+
+    let error = verify_admin_only_payload(&link, &link.join("sakura_regtool.exe"))
+        .expect_err("a junction install root must fail");
+    assert_eq!(error.rejection, Rejection::ReparsePoint, "{error:?}");
+
+    std::fs::remove_dir(&link).expect("remove junction");
+    std::fs::remove_dir_all(&base).expect("remove temp root");
+}
+
+/// C1.
+#[test]
+fn a_payload_outside_the_root_is_rejected() {
+    let root = temp_root("root");
+    let elsewhere = temp_root("elsewhere");
+    let payload = elsewhere.join("sakura_regtool.exe");
+    std::fs::write(&payload, b"payload").expect("write payload");
+
+    let error = verify_admin_only_payload(&root, &payload)
+        .expect_err("a payload outside the install root must fail");
+    assert_eq!(error.rejection, Rejection::OutsideInstallRoot, "{error:?}");
+
+    std::fs::remove_dir_all(&root).expect("remove temp root");
+    std::fs::remove_dir_all(&elsewhere).expect("remove temp root");
+}
+
+/// C9 (ordering): `register_cleanup_task` must run the location check before
+/// any Task Scheduler call. Verified textually — the alternative, observing
+/// the Task Scheduler service, requires the very machine state the check
+/// exists to prevent.
+#[test]
+fn the_cleanup_task_checks_the_location_before_contacting_task_scheduler() {
+    let source =
+        std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/maintenance.rs"))
+            .expect("read maintenance.rs");
+    let check = source
+        .find("verify_admin_only_payload")
+        .expect("register_cleanup_task must call the location check");
+    let scheduler = source
+        .find("let service = connect()?;")
+        .expect("register_cleanup_task connects to Task Scheduler");
+    assert!(
+        check < scheduler,
+        "the location check must precede the Task Scheduler connection"
+    );
+}
+
+/// C9 (ordering): `--register` verifies the DLL(s) before any registry write
+/// (`sakura_reg::register_all`).
+#[test]
+fn register_verifies_the_dll_before_any_hklm_write() {
+    let source = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../sakura-regtool/src/main.rs"),
+    )
+    .expect("read regtool main.rs");
+    let check = source
+        .find("verify_admin_only_payload")
+        .expect("register must call the location check");
+    let write = source
+        .find("sakura_reg::register_all")
+        .expect("register writes the registration");
+    assert!(
+        check < write,
+        "the DLL location check must precede the HKLM write"
+    );
+}
+
+/// C10: the installer guards the location in `PrepareToInstall` before the
+/// existing `{app}\sakura_regtool.exe` is executed, so a silent upgrade of a
+/// custom-folder install cannot run user-replaceable code.
+#[test]
+fn prepare_to_install_checks_the_location_before_running_regtool() {
+    let source = std::fs::read_to_string(
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../installer/setup.iss"),
+    )
+    .expect("read setup.iss");
+    let prepare = source
+        .find("function PrepareToInstall")
+        .expect("setup.iss must define PrepareToInstall");
+    let section = &source[prepare..];
+    let guard = section
+        .find("InstallDirIsSafe")
+        .expect("PrepareToInstall must check the install location");
+    let exec = section
+        .find("Exec(ExistingRegTool")
+        .expect("PrepareToInstall runs the existing regtool");
+    assert!(
+        guard < exec,
+        "the location check must precede the existing regtool exec"
+    );
+}

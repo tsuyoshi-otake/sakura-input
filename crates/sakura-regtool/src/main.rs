@@ -33,7 +33,7 @@ use std::process::Command as ProcessCommand;
 use std::time::Duration;
 
 use cli::{Command, VscodeDumps, Wow64};
-use sakura_install_maintenance::{launcher, maintenance, payloads};
+use sakura_install_maintenance::{install_location, launcher, maintenance, payloads};
 use sakura_reg::RegistryView;
 use sakura_reg::{com_server, user_profile, ComApartment};
 use windows::core::{Error, HRESULT};
@@ -167,6 +167,23 @@ fn register(dll: Option<PathBuf>, wow64: Wow64, enabled_by_default: bool) -> Res
             "note: registering without an x86 build; 32-bit applications on this \
              machine will have no IME"
         );
+    }
+
+    // Issue #360 (A1): the registered DLL is loaded into elevated processes,
+    // so it must not be replaceable by a standard user. The install root is
+    // this executable's own directory — `{app}` — which contains `versions\`;
+    // a DLL outside it, or any user-writable component in the chain, is
+    // refused before any HKLM write.
+    let install_root = std::env::current_exe()
+        .map_err(|error| format!("cannot locate sakura_regtool.exe: {error}"))?
+        .parent()
+        .map(Path::to_path_buf)
+        .ok_or_else(|| "sakura_regtool.exe has no parent directory".to_owned())?;
+    install_location::verify_admin_only_payload(&install_root, &native)
+        .map_err(|rejection| rejection.to_string())?;
+    if let Some(wow64) = &wow64 {
+        install_location::verify_admin_only_payload(&install_root, wow64)
+            .map_err(|rejection| rejection.to_string())?;
     }
 
     let _com = ComApartment::new().map_err(|error| explain("COM initialization", &error))?;
