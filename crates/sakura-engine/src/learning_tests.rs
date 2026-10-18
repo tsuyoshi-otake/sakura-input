@@ -2065,9 +2065,11 @@ fn upgrade_publish_failure_keeps_canonical_and_removes_temporary() {
     let _ = fs::remove_dir_all(path.parent().expect("parent"));
 }
 
-// E7: after the publish rename commits, a writer-reopen failure returns the
-// error without rolling the published file back; the log mirrors the disk,
-// append reports BrokenPipe, and `maintain` restores the writer.
+// E7: after the publish rename commits, a writer-reopen failure cannot roll
+// the published empty file back, so `clear` moves forward: it returns Ok with
+// the cleared indexes applied, the log mirrors the disk (`file: None`), the
+// failure is counted in `maintenance_failures()`, `append` reports
+// BrokenPipe, and `maintain` restores the writer.
 #[test]
 fn clear_post_publish_reopen_failure_leaves_published_state() {
     let path = temporary_log("clear-post-publish");
@@ -2077,20 +2079,25 @@ fn clear_post_publish_reopen_failure_leaves_published_state() {
 
     {
         let _fault = ForgetFaultScope::new(&[ForgetFaultPoint::PostPublishAppendOpen]);
-        service.clear().expect_err("writer reopen after publish");
+        assert_eq!(service.clear().expect("clear publishes durably"), 1);
     }
 
-    // The published empty file stands; the log mirrors it (E7 terminal state).
+    // Memory and disk agree immediately: the cleared data is gone from both.
+    assert!(!history_contains(&service, "reading", "surface"));
     assert!(read_snapshot(&path).expect("snapshot").records.is_empty());
     assert!(service.maintenance_failures() >= 1);
 
-    // A new append cannot write while the writer is unavailable, and the next
-    // maintenance pass republishes the same content and reopens the writer.
+    // Learning while the writer is down cannot keep the record, so it is not
+    // learned in memory either — memory and disk agree at every point (E7).
     service.learn("reading", "blocked", 5, 6);
+    assert!(!history_contains(&service, "reading", "blocked"));
+    assert!(service.skipped_writes() >= 1);
     assert_eq!(
         service.maintain().expect("maintain restores the writer"),
         MaintenanceOutcome::Compacted
     );
+    assert!(!history_contains(&service, "reading", "blocked"));
+
     service.learn("reading", "after", 5, 6);
     assert_eq!(
         service.maintain().expect("flush relearned record"),
@@ -2101,7 +2108,38 @@ fn clear_post_publish_reopen_failure_leaves_published_state() {
     let reopened = LearningService::open(&path).expect("reopen");
     assert!(history_contains(&reopened, "reading", "after"));
     assert!(!history_contains(&reopened, "reading", "surface"));
+    assert!(!history_contains(&reopened, "reading", "blocked"));
     drop(reopened);
+    let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
+// E2/E3: a backup-copy failure in `publish_upgrade` removes the partial
+// backup and the temporary file and leaves the canonical v1 log untouched;
+// the next open without the fault upgrades normally.
+#[test]
+fn upgrade_backup_copy_failure_keeps_canonical_and_removes_artifacts() {
+    let path = temporary_log("upgrade-backup-failure");
+    let old = write_version_one_log(&path, "かな", "加奈");
+
+    {
+        let _fault = ForgetFaultScope::new(&[ForgetFaultPoint::UpgradeBackupCopy]);
+        LearningService::open(&path).expect_err("backup copy failure");
+    }
+
+    assert_eq!(fs::read(&path).expect("canonical"), old);
+    assert_eq!(
+        sibling_names(&path),
+        vec!["log.bin".to_owned()],
+        "partial backup and temporary were removed"
+    );
+
+    let upgraded = LearningService::open(&path).expect("upgrade retries");
+    assert!(history_contains(&upgraded, "かな", "加奈"));
+    assert_eq!(
+        fs::read(path.with_extension("v1.bak")).expect("retained backup"),
+        old
+    );
+    drop(upgraded);
     let _ = fs::remove_dir_all(path.parent().expect("parent"));
 }
 

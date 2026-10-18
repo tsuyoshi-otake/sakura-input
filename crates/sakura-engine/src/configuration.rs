@@ -399,8 +399,33 @@ fn upgrade(
 }
 
 fn copy_synced(source: &Path, destination: &Path) -> io::Result<()> {
+    take_backup_copy_fault(destination)?;
     fs::copy(source, destination)?;
     OpenOptions::new().write(true).open(destination)?.sync_all()
+}
+
+// Test-only fault: the backup copy fails after a partial backup file
+// exists, exercising the caller's cleanup of both partial artifacts.
+#[cfg(test)]
+thread_local! {
+    static UPGRADE_BACKUP_COPY_FAULT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+fn take_backup_copy_fault(destination: &Path) -> io::Result<()> {
+    if UPGRADE_BACKUP_COPY_FAULT.with(|flag| flag.replace(false)) {
+        fs::write(destination, b"partial backup")?;
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "injected config upgrade backup copy fault",
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(not(test))]
+fn take_backup_copy_fault(_destination: &Path) -> io::Result<()> {
+    Ok(())
 }
 
 fn unique_sibling(path: &Path, suffix: &str) -> PathBuf {
@@ -679,6 +704,33 @@ mod tests {
             previous
         );
         drop(_held);
+        let _ = fs::remove_dir_all(path.parent().expect("parent"));
+    }
+
+    // E2/E3: a backup-copy failure removes the partial backup and the
+    // temporary file and leaves the canonical config untouched; the next load
+    // without the fault upgrades normally.
+    #[test]
+    fn upgrade_backup_copy_failure_keeps_canonical_and_removes_artifacts() {
+        let path = temporary_config("upgrade-backup-failure");
+        let previous = "[settings]\nformat-version = \"1\"\nkeymap = \"atok\"\n";
+        fs::write(&path, previous).expect("previous config");
+
+        UPGRADE_BACKUP_COPY_FAULT.with(|flag| flag.set(true));
+        load(&path).expect_err("backup copy failure");
+
+        assert_eq!(fs::read_to_string(&path).expect("canonical"), previous);
+        assert_eq!(
+            sibling_names(&path),
+            vec!["config.toml".to_owned()],
+            "partial backup and temporary were removed"
+        );
+
+        load(&path).expect("upgrade retries");
+        assert_eq!(
+            sibling_names(&path),
+            vec!["config.toml".to_owned(), "config.toml.v1.bak".to_owned()]
+        );
         let _ = fs::remove_dir_all(path.parent().expect("parent"));
     }
 }
