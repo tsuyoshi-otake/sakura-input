@@ -3,7 +3,9 @@
 //! client (module docs of `security` explain the three mechanisms).
 
 use windows::core::{Error, Result, HRESULT, PCWSTR, PWSTR};
-use windows::Win32::Foundation::{LocalFree, ERROR_SUCCESS, HANDLE, HLOCAL, WIN32_ERROR};
+use windows::Win32::Foundation::{
+    LocalFree, ERROR_INVALID_DATA, ERROR_SUCCESS, HANDLE, HLOCAL, WIN32_ERROR,
+};
 use windows::Win32::Security::Authorization::{
     ConvertStringSecurityDescriptorToSecurityDescriptorW, ConvertStringSidToSidW, GetSecurityInfo,
     SetEntriesInAclW, SetSecurityInfo, EXPLICIT_ACCESS_W, GRANT_ACCESS, SDDL_REVISION_1,
@@ -15,7 +17,7 @@ use windows::Win32::Security::{
 };
 use windows::Win32::System::SystemServices::SECURITY_MANDATORY_MEDIUM_RID;
 use windows::Win32::System::Threading::{
-    GetCurrentProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
+    GetCurrentProcess, OpenProcessToken, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
 };
 
 use super::process::{to_wide_nul, ProcessHandle, ProcessToken};
@@ -94,6 +96,23 @@ pub fn classify_client_process(process_id: u32) -> Result<ClientTrust> {
     let process = ProcessHandle::open(process_id)?;
     let token = ProcessToken::open_process(&process)?;
     classify_token(&token)
+}
+
+/// The file name of a connected client's executable image.
+///
+/// Like [`classify_client_process`], this identifies the client from the
+/// kernel-reported pipe PID, not from anything the client sent on the wire:
+/// the engine uses it as the composition-fence host key so a client cannot
+/// fence another application by borrowing its name in `CreateSession`.
+/// A failure — a dead or inaccessible process, or an image path with no
+/// file name — is returned rather than guessed; the caller degrades to a
+/// per-PID key so the connection can still be served.
+pub fn client_image_file_name(process_id: u32) -> Result<String> {
+    let process = ProcessHandle::open(process_id)?;
+    let path = process.image_path(PROCESS_NAME_WIN32)?;
+    path.file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .ok_or_else(|| Error::from_hresult(HRESULT::from_win32(ERROR_INVALID_DATA.0)))
 }
 
 /// Grants sandboxed clients the two read-only kernel queries required to

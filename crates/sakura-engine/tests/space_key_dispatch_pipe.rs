@@ -7,7 +7,10 @@
 mod common;
 
 use std::fs;
-use std::time::Duration;
+use std::io::Read;
+use std::path::PathBuf;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
 use sakura_ipc::Client;
 use sakura_proto::{KeyCode, Request, Response, SessionId, PROTOCOL_VERSION};
@@ -75,6 +78,146 @@ fn write_failure_log(name: &str, body: &str) {
         .join("verification/space-key-dispatch/failure-injection");
     fs::create_dir_all(&dir).expect("dir");
     fs::write(dir.join(name), body).expect("log");
+}
+
+/// #360 A9: the fence key is the kernel-reported image file name, so a
+/// second client of *this* test binary always shares one host key. Tests
+/// that need a genuinely different image run a copy of this binary under a
+/// chosen file name; the pipe name reaches it through this variable.
+const FENCE_CHILD_PIPE_ENV: &str = "SAKURA_FENCE_CHILD_PIPE";
+
+fn fence_child_pipe() -> Option<String> {
+    std::env::var(FENCE_CHILD_PIPE_ENV).ok()
+}
+
+/// Child mode of the fence tests: one real data-pipe client whose image is
+/// the copied binary's file name. Connects, handshakes, creates a session
+/// named after its own image, sends one idle Space, and reports the commit
+/// on stdout so the parent can assert against it.
+fn fence_child_idle_space_once(pipe_name: &str) {
+    let mut client =
+        Client::connect_to(pipe_name, PATIENT).expect("child connects to the owned test pipe");
+    handshake(&mut client);
+    let image = std::env::current_exe()
+        .expect("child exe path")
+        .file_name()
+        .expect("exe file name")
+        .to_string_lossy()
+        .into_owned();
+    let session = session_for(&mut client, &image);
+    let response = send_named(&mut client, session, KeyCode::Space);
+    println!("CHILD-COMMIT: {:?}", commit_text(&response));
+}
+
+struct ScratchDirGuard(PathBuf);
+
+impl Drop for ScratchDirGuard {
+    fn drop(&mut self) {
+        if let Err(error) = fs::remove_dir_all(&self.0) {
+            eprintln!(
+                "test cleanup: remove child image dir {}: {error}",
+                self.0.display()
+            );
+        }
+    }
+}
+
+/// Runs this test binary, copied under `image_name`, in fence-child mode
+/// against `engine`'s private pipe. Returns the commit text the child
+/// printed (`Some("…")` contents or `None`).
+fn fence_child_idle_space_commit(
+    engine: &Engine,
+    image_name: &str,
+    test_name: &str,
+) -> Option<String> {
+    let root = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("sakura-engine-fence-child");
+    fs::create_dir_all(&root).expect("create fence child root");
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let dir = root.join(format!("{}-{nonce}", std::process::id()));
+    fs::create_dir(&dir).expect("create unique child image dir");
+    let guard = ScratchDirGuard(dir.clone());
+    let exe = dir.join(image_name);
+    fs::copy(
+        std::env::current_exe().expect("this test binary has a path"),
+        &exe,
+    )
+    .expect("copy this test binary under the child image name");
+
+    let mut child = Command::new(&exe)
+        .args([test_name, "--exact", "--test-threads=1", "--nocapture"])
+        .env(FENCE_CHILD_PIPE_ENV, engine.pipe_name())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("spawn the child image");
+
+    let deadline = Instant::now() + Duration::from_secs(60);
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(50));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                panic!("fence child {image_name} did not exit within 60s");
+            }
+            Err(error) => panic!("could not query fence child {image_name}: {error}"),
+        }
+    };
+
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+    child
+        .stdout
+        .take()
+        .expect("child stdout was piped")
+        .read_to_string(&mut stdout)
+        .expect("read child stdout");
+    child
+        .stderr
+        .take()
+        .expect("child stderr was piped")
+        .read_to_string(&mut stderr)
+        .expect("read child stderr");
+    assert!(
+        status.success(),
+        "fence child {image_name} exited with {status}\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    assert!(
+        stdout.contains("test result: ok. 1 passed"),
+        "fence child {image_name} did not run exactly one passing test\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    let commits: Vec<&str> = stdout
+        .split("CHILD-COMMIT: ")
+        .skip(1)
+        .filter_map(|rest| rest.lines().next())
+        .collect();
+    assert_eq!(
+        commits.len(),
+        1,
+        "fence child {image_name} must print exactly one CHILD-COMMIT line\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    drop(guard);
+    parse_child_commit(commits[0], &stdout, &stderr)
+}
+
+fn parse_child_commit(payload: &str, stdout: &str, stderr: &str) -> Option<String> {
+    if payload == "None" {
+        return None;
+    }
+    // `{:?}` escaping is produced and expected by the same Rust version, so
+    // the comparison is exact rather than a second unescape implementation.
+    let expected = format!("{:?}", Some("\u{3000}".to_owned()));
+    assert_eq!(
+        payload, expected,
+        "unexpected CHILD-COMMIT payload\nstdout:\n{stdout}\nstderr:\n{stderr}"
+    );
+    Some("\u{3000}".to_owned())
 }
 
 #[test]
@@ -280,21 +423,91 @@ fn fail_retry_after_short_timeout_reaches_a_terminal_idle_space() {
 
 #[test]
 fn fail_partial_drop_of_composing_client_leaves_idle_peer() {
+    if let Some(pipe) = fence_child_pipe() {
+        fence_child_idle_space_once(&pipe);
+        return;
+    }
+    let mut engine = Engine::spawn_isolated();
+    let mut composing = engine.client();
+    handshake(&mut composing);
+    let session_a = session_for(&mut composing, "space-partial-a.exe");
+    let _ = send_char(&mut composing, session_a, 'a');
+    drop(composing);
+    // #360 A9: the fence key is now the kernel-reported image file name, so
+    // a second client of this same test binary would share the dropped
+    // composer's host key and its idle Space would be absorbed. The idle
+    // peer must be a child running under a different image file name.
+    let inserted = fence_child_idle_space_commit(
+        &engine,
+        "space-partial-b.exe",
+        "fail_partial_drop_of_composing_client_leaves_idle_peer",
+    );
+    write_failure_log(
+        "fail-partial-drop.txt",
+        &format!("idle_commit_after_peer_drop={inserted:?}\n"),
+    );
+    assert_eq!(inserted.as_deref(), Some("\u{3000}"));
+    let _ = engine.cleanup();
+}
+
+/// #360 A9, K1: a client whose session names another host can neither
+/// suppress that host's idle Space with its live claim nor arm the named
+/// host's teardown latch — the fence key is the attacker's own image.
+#[test]
+fn fence_spoofed_session_name_cannot_fence_the_named_image() {
+    if let Some(pipe) = fence_child_pipe() {
+        fence_child_idle_space_once(&pipe);
+        return;
+    }
+    let mut engine = Engine::spawn_isolated();
+    let mut attacker = engine.client();
+    handshake(&mut attacker);
+    let session = session_for(&mut attacker, "space-victim.exe");
+    let _ = send_char(&mut attacker, session, 'a');
+    // Both halves are collected before asserting so a fail-before run
+    // exercises the teardown half even when the live-claim half is wrong.
+    let first = fence_child_idle_space_commit(
+        &engine,
+        "space-victim.exe",
+        "fence_spoofed_session_name_cannot_fence_the_named_image",
+    );
+    drop(attacker);
+    let second = fence_child_idle_space_commit(
+        &engine,
+        "space-victim.exe",
+        "fence_spoofed_session_name_cannot_fence_the_named_image",
+    );
+    // One assertion reports both halves so a failing run shows whether the
+    // live claim and the teardown latch each stayed on the attacker's image.
+    assert_eq!(
+        (first.as_deref(), second.as_deref()),
+        (Some("\u{3000}"), Some("\u{3000}")),
+        "a spoofed session name must neither suppress space-victim.exe's idle \
+         Space nor arm its teardown latch"
+    );
+    let _ = engine.cleanup();
+}
+
+/// #360 A9, K2: two connections of the same image share live fence claims
+/// even when their `CreateSession` names differ, so the composing client
+/// suppresses the idle client's Space.
+#[test]
+fn fence_same_image_clients_share_the_live_claim() {
     let mut engine = Engine::spawn_isolated();
     let mut composing = engine.client();
     let mut idle = engine.client();
     handshake(&mut composing);
     handshake(&mut idle);
-    let session_a = session_for(&mut composing, "space-partial-a.exe");
-    let session_b = session_for(&mut idle, "space-partial-b.exe");
+    let session_a = session_for(&mut composing, "space-same-a.exe");
+    let session_b = session_for(&mut idle, "space-same-b.exe");
     let _ = send_char(&mut composing, session_a, 'a');
-    drop(composing);
     let inserted = send_named(&mut idle, session_b, KeyCode::Space);
-    write_failure_log(
-        "fail-partial-drop.txt",
-        &format!("idle_commit_after_peer_drop={:?}\n", commit_text(&inserted)),
+    assert_ne!(
+        commit_text(&inserted),
+        Some("\u{3000}"),
+        "a same-image peer's idle Space must not commit while a claim is live"
     );
-    assert_eq!(commit_text(&inserted), Some("\u{3000}"));
+    assert_ne!(commit_text(&inserted), Some(" "));
     let _ = engine.cleanup();
 }
 

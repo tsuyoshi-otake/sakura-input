@@ -182,6 +182,9 @@ pub struct Dispatcher {
     /// Local mirror of fence claims for sessions this worker owns.
     fence_claims: HashMap<SessionId, (Box<str>, bool)>,
     connection_probe: Option<sakura_ipc::ConnectionProbe>,
+    /// Kernel-derived host key for the composition fence, set by the pipe
+    /// worker from the accepted client's image file name (#360 A9).
+    fence_host: Option<Box<str>>,
     /// Process-wide candidate-board identity. Independent of AI-text owners:
     /// those restart at 1 on a private `AiTextService`, which Dual TSF workers
     /// would collide on.
@@ -384,6 +387,7 @@ impl Dispatcher {
             composition_fence: None,
             fence_claims: HashMap::new(),
             connection_probe: None,
+            fence_host: None,
             ui_connection: ui::allocate_board_connection(),
             scratch: FixedStr::new(),
         }
@@ -411,6 +415,13 @@ impl Dispatcher {
         }
     }
 
+    /// Records the kernel-derived host identity this connection's fence
+    /// claims and teardown latch are keyed by (#360 A9). Cleared by
+    /// `reset()` like every other piece of per-connection state.
+    pub(crate) fn set_fence_host(&mut self, host: Box<str>) {
+        self.fence_host = Some(host);
+    }
+
     /// Attaches the process-wide composition fence used to absorb idle Space
     /// while a peer connection of the same host process is converting.
     pub(crate) fn set_composition_fence(&mut self, fence: Arc<CompositionFence>) {
@@ -418,10 +429,20 @@ impl Dispatcher {
         self.composition_fence = Some(fence);
     }
 
+    /// The key every cross-connection fence question is asked under (#360
+    /// A9): the image file name of the kernel-reported client PID when the
+    /// pipe worker recorded one, never the wire-claimed `CreateSession`
+    /// name. A dispatcher without a host key exists only in in-process
+    /// tests — `server::worker` always sets one — so the fallback keeps the
+    /// historical per-session-name behaviour there.
+    fn fence_key<'a>(&'a self, session_name: &'a str) -> &'a str {
+        self.fence_host.as_deref().unwrap_or(session_name)
+    }
+
     fn suppress_idle_space_for(&self, id: SessionId, process_name: &str) -> bool {
         self.composition_fence
             .as_ref()
-            .is_some_and(|fence| fence.any_active(process_name))
+            .is_some_and(|fence| fence.any_active(self.fence_key(process_name)))
             || self.sessions.peer_is_composing(id, process_name)
     }
 
@@ -446,7 +467,7 @@ impl Dispatcher {
         }
         self.composition_fence
             .as_ref()
-            .is_some_and(|fence| fence.consume_teardown(session.process_name()))
+            .is_some_and(|fence| fence.consume_teardown(self.fence_key(session.process_name())))
     }
 
     fn sync_composition_fence(&mut self, id: SessionId) {
@@ -457,31 +478,35 @@ impl Dispatcher {
             self.release_composition_fence(id);
             return;
         };
-        let process_name = session.process_name().to_owned();
+        // Claims are acquired and released under the connection's fence
+        // key, so the stored name in `fence_claims` is always the key the
+        // claim was taken with — the release path below never re-derives
+        // it (#360 A9).
+        let process_name: Box<str> = Box::from(self.fence_key(session.process_name()));
         let want = session.is_composing();
         let entry = self
             .fence_claims
             .entry(id)
-            .or_insert_with(|| (Box::from(process_name.as_str()), false));
-        if entry.0.as_ref() != process_name {
+            .or_insert_with(|| (process_name.clone(), false));
+        if entry.0 != process_name {
             if entry.1 {
                 fence.release_owned(entry.0.as_ref(), self.ui_connection, id, false);
                 entry.1 = false;
             }
-            entry.0 = Box::from(process_name.as_str());
+            entry.0 = process_name.clone();
         }
         if entry.1 == want {
             return;
         }
         if want {
             fence.acquire_owned(
-                process_name.as_str(),
+                process_name.as_ref(),
                 self.ui_connection,
                 id,
                 self.connection_probe.clone(),
             );
         } else {
-            fence.release_owned(process_name.as_str(), self.ui_connection, id, false);
+            fence.release_owned(process_name.as_ref(), self.ui_connection, id, false);
         }
         entry.1 = want;
     }
@@ -526,6 +551,7 @@ impl Dispatcher {
     pub fn reset(&mut self) {
         self.release_all_composition_fence_claims();
         self.connection_probe = None;
+        self.fence_host = None;
         self.ai_text.cancel_owner(self.ai_text_owner);
         self.ai_text_owner = self.ai_text.allocate_owner();
         if let Some(learning) = self.learning.as_deref() {
@@ -6913,3 +6939,7 @@ fn render_converted_segments(
 #[cfg(all(test, feature = "dev-fixtures"))]
 #[path = "dispatch_tests.rs"]
 mod tests;
+
+#[cfg(all(test, feature = "dev-fixtures"))]
+#[path = "fence_host_tests.rs"]
+mod fence_host_tests;

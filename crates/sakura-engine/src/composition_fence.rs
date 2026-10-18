@@ -6,10 +6,14 @@
 //! one of those contexts is composing or converting, an idle peer must not
 //! insert a document space for that same Space key.
 //!
-//! Counts are keyed by host `process_name` (what CreateSession reports),
-//! compared ASCII-case-insensitively. Distinct executables do not fence
-//! each other. Same-name processes share a count — a deliberate bound when
-//! two Notepad windows both report `notepad.exe`.
+//! Counts are keyed by the image file name of the connection's
+//! kernel-reported client PID — or `pid:<n>` when that image cannot be
+//! read — compared ASCII-case-insensitively (#360 A9). The `CreateSession`
+//! `process_name` is a wire claim and is not trusted for this; a client
+//! that names another host can neither suppress that host's idle Space
+//! nor arm a teardown latch for it. Distinct executables do not fence
+//! each other. Processes with the same image file name share a count — a
+//! deliberate bound when two Notepad windows both run `notepad.exe`.
 //!
 //! A claim can also disappear *abnormally*. The DLL gives a keystroke a
 //! 50 ms round trip; when that budget expires it drops the pipe, and the
