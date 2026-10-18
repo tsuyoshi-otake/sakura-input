@@ -22,6 +22,11 @@ const MIN_SECRET_LEN: usize = 16;
 const MAX_SECRET_LEN: usize = 128;
 const MAX_FAILURES: u8 = 8;
 const MAX_BACKOFF_MS: u64 = 60_000;
+// A rollback of at most two steps clears by itself within 60 seconds, no
+// longer than the largest backoff (`MAX_BACKOFF_MS`), so it stays a counted
+// `ClockRollback`. A larger rollback would otherwise block every code until
+// real time passes the recorded floor.
+const ROLLBACK_RESET_STEPS: u64 = 2;
 pub(crate) const SECRET_LEN: usize = 20;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -120,11 +125,29 @@ impl PadTotp {
     /// a persisted backoff remains effective after a process restart.
     pub fn verify(&mut self, code: &str, unix_seconds: u64, unix_ms: u64) -> Result<(), TotpError> {
         let current = unix_seconds / STEP_SECONDS;
-        if self
+        if let Some(greatest) = self
             .greatest_observed_step
-            .is_some_and(|greatest| current < greatest)
+            .filter(|greatest| current < *greatest)
         {
-            return self.failed(TotpError::ClockRollback, unix_ms);
+            if greatest - current <= ROLLBACK_RESET_STEPS {
+                return self.failed(TotpError::ClockRollback, unix_ms);
+            }
+            // A larger rollback means the recorded floor came from a clock
+            // that has since been corrected. Do not count a failure for the
+            // rollback; reset the floor to now so a correct code can be
+            // accepted again. A `last_accepted_step` above `current + 1`
+            // came from the same wrong clock and would block every code, so
+            // it is dropped; a value at or below `current + 1` still guards
+            // replay and is kept. `blocked_until_ms` is clamped to at most
+            // one current delay from now, never raised and never cleared.
+            self.last_accepted_step = self
+                .last_accepted_step
+                .filter(|last| *last <= current.saturating_add(1));
+            if self.failures > 0 {
+                self.blocked_until_ms = self
+                    .blocked_until_ms
+                    .min(unix_ms.saturating_add(backoff_delay_ms(self.failures)));
+            }
         }
         self.greatest_observed_step = Some(current);
         if unix_ms < self.blocked_until_ms {
@@ -161,11 +184,15 @@ impl PadTotp {
 
     fn failed<T>(&mut self, error: TotpError, unix_ms: u64) -> Result<T, TotpError> {
         self.failures = self.failures.saturating_add(1).min(MAX_FAILURES);
-        let shift = u32::from(self.failures.saturating_sub(1)).min(6);
-        let delay = (1_000_u64 << shift).min(MAX_BACKOFF_MS);
+        let delay = backoff_delay_ms(self.failures);
         self.blocked_until_ms = self.blocked_until_ms.max(unix_ms.saturating_add(delay));
         Err(error)
     }
+}
+
+fn backoff_delay_ms(failures: u8) -> u64 {
+    let shift = u32::from(failures.saturating_sub(1)).min(6);
+    (1_000_u64 << shift).min(MAX_BACKOFF_MS)
 }
 
 fn constant_time_eq(left: &[u8], right: &[u8]) -> bool {
@@ -307,6 +334,125 @@ mod tests {
             Err(TotpError::InvalidCode)
         );
         assert!(verifier.blocked_until_ms <= 63_000);
+    }
+
+    /// Returns a six-digit code that matches none of `steps`.
+    fn wrong_code(secret: &[u8], steps: [u64; 3]) -> String {
+        let valid: Vec<u32> = steps
+            .iter()
+            .map(|&step| hotp(secret, step).unwrap())
+            .collect();
+        let code = (0..1_000_000_u32).find(|c| !valid.contains(c)).unwrap();
+        format!("{code:06}")
+    }
+
+    fn code_for(secret: &[u8], step: u64) -> String {
+        format!("{:06}", hotp(secret, step).unwrap())
+    }
+
+    /// U1 (K2): a rollback of two steps stays a counted `ClockRollback` and
+    /// keeps `greatest_observed_step` unchanged.
+    #[test]
+    fn two_step_rollback_stays_a_counted_clock_rollback() {
+        let mut verifier = PadTotp::new(RFC_SECRET.to_vec()).unwrap();
+        let wrong = wrong_code(RFC_SECRET, [4, 5, 6]);
+        assert_eq!(
+            verifier.verify(&wrong, 150, 150_000),
+            Err(TotpError::InvalidCode)
+        );
+        assert_eq!(verifier.failures, 1);
+        assert_eq!(
+            verifier.verify(&wrong, 90, 90_000),
+            Err(TotpError::ClockRollback)
+        );
+        assert_eq!(verifier.failures, 2);
+        assert_eq!(verifier.greatest_observed_step, Some(5));
+        // U6 (K4): the produced state round-trips through `from_state`.
+        assert!(PadTotp::from_state(RFC_SECRET.to_vec(), verifier.state()).is_ok());
+    }
+
+    /// U2 (K1): a three-step rollback resets the floor without counting a
+    /// failure; the pending backoff still applies for one current delay.
+    #[test]
+    fn three_step_rollback_resets_the_floor() {
+        let mut verifier = PadTotp::new(RFC_SECRET.to_vec()).unwrap();
+        let wrong = wrong_code(RFC_SECRET, [4, 5, 6]);
+        assert_eq!(
+            verifier.verify(&wrong, 150, 150_000),
+            Err(TotpError::InvalidCode)
+        );
+        assert_eq!(verifier.failures, 1);
+        let code = code_for(RFC_SECRET, 2);
+        assert_eq!(
+            verifier.verify(&code, 60, 60_000),
+            Err(TotpError::RateLimited)
+        );
+        assert_eq!(verifier.failures, 1);
+        assert_eq!(verifier.greatest_observed_step, Some(2));
+        assert_eq!(verifier.blocked_until_ms, 61_000);
+        assert_eq!(verifier.verify(&code, 61, 61_000), Ok(()));
+        // U6 (K4): the produced state round-trips through `from_state`.
+        assert!(PadTotp::from_state(RFC_SECRET.to_vec(), verifier.state()).is_ok());
+    }
+
+    /// U3 (K1): a `last_accepted_step` recorded while the clock was far
+    /// ahead is dropped by the reset, so the real-time code is accepted.
+    #[test]
+    fn reset_drops_a_future_last_accepted_step() {
+        let mut verifier = PadTotp::new(RFC_SECRET.to_vec()).unwrap();
+        let future = code_for(RFC_SECRET, 1_000_000);
+        assert_eq!(verifier.verify(&future, 30_000_000, 30_000_000_000), Ok(()));
+        let now = code_for(RFC_SECRET, 10);
+        assert_eq!(verifier.verify(&now, 300, 300_000), Ok(()));
+        // U6 (K4): the produced state round-trips through `from_state`.
+        assert!(PadTotp::from_state(RFC_SECRET.to_vec(), verifier.state()).is_ok());
+    }
+
+    /// U4 (K3): a `last_accepted_step` at or below `current + 1` survives
+    /// the reset and still rejects a replayed code.
+    #[test]
+    fn reset_keeps_replay_protection() {
+        let mut verifier = PadTotp::new(RFC_SECRET.to_vec()).unwrap();
+        let code10 = code_for(RFC_SECRET, 10);
+        assert_eq!(verifier.verify(&code10, 300, 300_000), Ok(()));
+        let wrong = wrong_code(RFC_SECRET, [19, 20, 21]);
+        assert_eq!(
+            verifier.verify(&wrong, 600, 600_000),
+            Err(TotpError::InvalidCode)
+        );
+        assert_eq!(
+            verifier.verify(&code10, 300, 300_000),
+            Err(TotpError::RateLimited)
+        );
+        assert_eq!(verifier.last_accepted_step, Some(10));
+        assert_eq!(
+            verifier.verify(&code10, 301, 301_000),
+            Err(TotpError::InvalidCode)
+        );
+        // U6 (K4): the produced state round-trips through `from_state`.
+        assert!(PadTotp::from_state(RFC_SECRET.to_vec(), verifier.state()).is_ok());
+    }
+
+    /// U5 (K3): the reset clamps `blocked_until_ms` to one current delay
+    /// from now; it is neither raised nor cleared.
+    #[test]
+    fn reset_clamps_backoff_without_clearing_it() {
+        let mut verifier = PadTotp::new(RFC_SECRET.to_vec()).unwrap();
+        let wrong = wrong_code(RFC_SECRET, [29, 30, 31]);
+        assert_eq!(
+            verifier.verify(&wrong, 900, 900_000),
+            Err(TotpError::InvalidCode)
+        );
+        let code = code_for(RFC_SECRET, 20);
+        assert_eq!(
+            verifier.verify(&code, 600, 600_000),
+            Err(TotpError::RateLimited)
+        );
+        assert!(verifier.blocked_until_ms > 600_000);
+        assert!(verifier.blocked_until_ms <= 601_000);
+        assert_eq!(verifier.verify(&code, 600, 601_000), Ok(()));
+        // U6 (K4): the produced state round-trips through `from_state`.
+        assert!(PadTotp::from_state(RFC_SECRET.to_vec(), verifier.state()).is_ok());
     }
 
     #[test]
