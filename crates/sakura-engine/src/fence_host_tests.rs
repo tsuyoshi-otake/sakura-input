@@ -122,8 +122,32 @@ fn fence_host_key_is_cleared_by_reset() {
     let mut out = OutputBuf::new();
     let session = create_session(&mut dispatcher, &mut out, "x.exe");
     send_key(&mut dispatcher, session, char_key('a'), &mut out);
+    assert!(fence.any_active("host-a.exe"), "setup: the claim is live");
     // Releasing the live claim arms the teardown latch for host-a.exe.
     dispatcher.reset();
+    assert!(
+        !fence.any_active("host-a.exe"),
+        "reset() must release every claim: a leaked host-a.exe claim would \
+         suppress that image's peers"
+    );
+    // A same-image idle peer: the armed latch absorbs the first Space
+    // (the #102 behaviour); the second must commit — a leaked live claim
+    // would suppress both.
+    let mut peer = fence_dispatcher(&fence, "host-a.exe");
+    let p = create_session(&mut peer, &mut out, "peer.exe");
+    send_key(&mut peer, p, named_key(KeyCode::Space), &mut out);
+    assert_ne!(
+        out.commit_text(),
+        Some("\u{3000}"),
+        "the armed teardown latch absorbs exactly one Space"
+    );
+    send_key(&mut peer, p, named_key(KeyCode::Space), &mut out);
+    assert_eq!(
+        out.commit_text(),
+        Some("\u{3000}"),
+        "a leaked live claim would suppress this Space as well"
+    );
+    // The dispatcher itself no longer fences under the stale host key.
     let session = create_session(&mut dispatcher, &mut out, "y.exe");
     send_key(
         &mut dispatcher,
@@ -135,6 +159,40 @@ fn fence_host_key_is_cleared_by_reset() {
         out.commit_text(),
         Some("\u{3000}"),
         "a retained host key would spend the armed teardown latch on this Space"
+    );
+}
+
+/// K5: a claim is always released under the key it was acquired with.
+/// Changing the host key under a live claim must neither strand the old
+/// claim nor touch a claim it never took, and the teardown paths
+/// (`DeleteSession`, `reset()`) release under the stored key.
+#[test]
+fn fence_claim_releases_under_the_key_it_was_acquired_with() {
+    let fence = Arc::new(CompositionFence::new());
+    let mut dispatcher = fence_dispatcher(&fence, "host-a.exe");
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "x.exe");
+    send_key(&mut dispatcher, session, char_key('a'), &mut out);
+    assert!(fence.any_active("host-a.exe"), "setup: the claim is live");
+    dispatcher.set_fence_host(Box::from("host-b.exe"));
+    dispatcher.dispatch(&Request::Revert { session }, &mut out);
+    assert!(
+        !fence.any_active("host-a.exe"),
+        "releasing under the current key would strand the host-a.exe claim"
+    );
+    assert!(
+        !fence.any_active("host-b.exe"),
+        "no claim may be acquired or left under the unacquired host key"
+    );
+    // The teardown path uses the stored key as well: composing under
+    // host-b and deleting the session releases that claim.
+    let session = create_session(&mut dispatcher, &mut out, "y.exe");
+    send_key(&mut dispatcher, session, char_key('a'), &mut out);
+    assert!(fence.any_active("host-b.exe"), "setup: the claim is live");
+    dispatcher.dispatch(&Request::DeleteSession { session }, &mut out);
+    assert!(
+        !fence.any_active("host-b.exe"),
+        "DeleteSession must release the claim under its stored key"
     );
 }
 
