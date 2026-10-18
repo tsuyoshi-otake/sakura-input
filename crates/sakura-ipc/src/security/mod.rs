@@ -63,8 +63,8 @@ mod server_trust;
 mod server_trust_tests;
 
 pub use admission::{
-    allow_sandbox_identity_queries, classify_client_process, pipe_name, pipe_name_for, sddl,
-    sddl_for, ClientTrust, Descriptor, Endpoint, CLIENT_ACCESS,
+    allow_sandbox_identity_queries, classify_client_process, client_image_file_name, pipe_name,
+    pipe_name_for, sddl, sddl_for, ClientTrust, Descriptor, Endpoint, CLIENT_ACCESS,
 };
 pub use server_trust::{verify_server_process, ServerRejection, ServerTrustPolicy};
 

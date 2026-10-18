@@ -182,6 +182,11 @@ pub struct Dispatcher {
     /// Local mirror of fence claims for sessions this worker owns.
     fence_claims: HashMap<SessionId, (Box<str>, bool)>,
     connection_probe: Option<sakura_ipc::ConnectionProbe>,
+    /// Kernel-derived host key for the composition fence, set by the pipe
+    /// worker from the accepted client's image file name (#360 A9).
+    /// Nothing reads it yet; the next commit switches the fence calls over.
+    #[allow(dead_code)]
+    fence_host: Option<Box<str>>,
     /// Process-wide candidate-board identity. Independent of AI-text owners:
     /// those restart at 1 on a private `AiTextService`, which Dual TSF workers
     /// would collide on.
@@ -384,6 +389,7 @@ impl Dispatcher {
             composition_fence: None,
             fence_claims: HashMap::new(),
             connection_probe: None,
+            fence_host: None,
             ui_connection: ui::allocate_board_connection(),
             scratch: FixedStr::new(),
         }
@@ -409,6 +415,13 @@ impl Dispatcher {
                 }
             }
         }
+    }
+
+    /// Records the kernel-derived host identity this connection's fence
+    /// claims and teardown latch are keyed by (#360 A9). Cleared by
+    /// `reset()` like every other piece of per-connection state.
+    pub(crate) fn set_fence_host(&mut self, host: Box<str>) {
+        self.fence_host = Some(host);
     }
 
     /// Attaches the process-wide composition fence used to absorb idle Space
@@ -526,6 +539,7 @@ impl Dispatcher {
     pub fn reset(&mut self) {
         self.release_all_composition_fence_claims();
         self.connection_probe = None;
+        self.fence_host = None;
         self.ai_text.cancel_owner(self.ai_text_owner);
         self.ai_text_owner = self.ai_text.allocate_owner();
         if let Some(learning) = self.learning.as_deref() {
