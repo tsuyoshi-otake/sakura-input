@@ -1769,5 +1769,514 @@ fn clearing_or_forgetting_drops_matching_staged_commits() {
     );
 }
 
+// #360 A4 helpers: sibling listing, a v1-frame fixture writer, and a held
+// handle that shares read/write but not delete so a replace-rename fails.
+
+fn sibling_names(path: &Path) -> Vec<String> {
+    let mut names = fs::read_dir(path.parent().expect("sibling directory"))
+        .expect("list siblings")
+        .map(|entry| {
+            entry
+                .expect("directory entry")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect::<Vec<_>>();
+    names.sort();
+    names
+}
+
+fn write_version_one_log(path: &Path, reading: &str, surface: &str) -> Vec<u8> {
+    let mut payload = Vec::new();
+    payload.extend_from_slice(&unix_day().to_le_bytes());
+    payload.extend_from_slice(&(reading.len() as u16).to_le_bytes());
+    payload.extend_from_slice(&(surface.len() as u16).to_le_bytes());
+    payload.extend_from_slice(reading.as_bytes());
+    payload.extend_from_slice(surface.as_bytes());
+    let mut old = header(FORMAT_VERSION_1).to_vec();
+    old.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    old.extend_from_slice(&crc32(&payload).to_le_bytes());
+    old.extend_from_slice(&payload);
+    fs::write(path, &old).expect("write version-1 log");
+    old
+}
+
+#[cfg(windows)]
+fn hold_without_delete_share(path: &Path) -> File {
+    const FILE_SHARE_READ: u32 = 0x0000_0001;
+    const FILE_SHARE_WRITE: u32 = 0x0000_0002;
+    OpenOptions::new()
+        .read(true)
+        .write(true)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+        .open(path)
+        .expect("held handle without delete share")
+}
+
+// E1/E4: a crash between the old clear renames left `clear.bak` and possibly
+// `clear.tmp` with no canonical file. Open must delete both (cleared data is
+// never restored) and start from an empty log.
+#[test]
+fn startup_recovery_deletes_clear_backup_and_temporary_without_canonical() {
+    let path = temporary_log("recover-clear-crash");
+    {
+        let service = LearningService::open(&path).expect("open");
+        service.learn("reading", "surface", 3, 4);
+        service.maintain().expect("flush");
+    }
+    fs::rename(&path, path.with_extension("clear.bak")).expect("stage clear crash");
+    fs::write(path.with_extension("clear.tmp"), b"partial").expect("stage clear tmp");
+
+    let reopened = LearningService::open(&path).expect("reopen after clear crash");
+
+    assert!(read_snapshot(&path).expect("snapshot").records.is_empty());
+    assert!(!path.with_extension("clear.bak").exists());
+    assert!(!path.with_extension("clear.tmp").exists());
+    assert!(!history_contains(&reopened, "reading", "surface"));
+    drop(reopened);
+    let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
+// E1/E4/E5: a crash between the old compaction renames left only
+// `compact.bak`. Open must restore it and replay its records.
+#[test]
+fn startup_recovery_restores_a_single_compact_backup_without_canonical() {
+    let path = temporary_log("recover-compact-crash");
+    {
+        let service = LearningService::open(&path).expect("open");
+        service.learn("reading", "surface", 3, 4);
+        service.maintain().expect("flush");
+    }
+    fs::rename(&path, path.with_extension("compact.bak")).expect("stage compact crash");
+
+    let reopened = LearningService::open(&path).expect("reopen after compact crash");
+
+    assert!(history_contains(&reopened, "reading", "surface"));
+    assert!(snapshot_contains(&path, "reading", "surface"));
+    assert!(!path.with_extension("compact.bak").exists());
+    drop(reopened);
+    let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
+// E3/E4: a crash before the old upgrade replacement rename left only
+// `v1.bak` plus `upgrade.tmp`. Open must restore the backup and rerun the
+// upgrade so the v1 records survive.
+#[test]
+fn startup_recovery_restores_version_backup_and_reruns_upgrade() {
+    let path = temporary_log("recover-upgrade-crash");
+    let old = write_version_one_log(&path.with_extension("v1.bak"), "かな", "加奈");
+    fs::write(path.with_extension("upgrade.tmp"), b"partial").expect("stage upgrade tmp");
+
+    let reopened = LearningService::open(&path).expect("reopen after upgrade crash");
+
+    assert!(history_contains(&reopened, "かな", "加奈"));
+    assert!(snapshot_contains(&path, "かな", "加奈"));
+    assert_eq!(
+        read_header(&fs::read(&path).expect("canonical")).expect("header"),
+        LEARNING_FORMAT_VERSION
+    );
+    // The restored backup ran through the upgrade again, retaining a fresh
+    // copy of the original v1 bytes.
+    assert_eq!(
+        fs::read(path.with_extension("v1.bak")).expect("retained v1 backup"),
+        old
+    );
+    assert!(!path.with_extension("upgrade.tmp").exists());
+    drop(reopened);
+    let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
+// E4/E5: with the canonical file present, every rollback leftover is deleted
+// while a retained `v{N}.bak` and another base name's files are kept.
+#[test]
+fn startup_recovery_sweeps_leftovers_only_when_canonical_exists() {
+    let path = temporary_log("recover-present-canonical");
+    {
+        let service = LearningService::open(&path).expect("open");
+        service.learn("reading", "surface", 3, 4);
+        service.maintain().expect("flush");
+    }
+    for extension in [
+        "compact.bak",
+        "compact.bak.123.45",
+        "clear.bak",
+        "compact.tmp",
+        "clear.tmp",
+        "upgrade.tmp",
+    ] {
+        fs::write(path.with_extension(extension), b"leftover").expect(extension);
+    }
+    fs::write(path.with_extension("v1.bak"), b"retained backup").expect("v1.bak");
+    let other = path.with_file_name("other.compact.bak");
+    fs::write(&other, b"different base").expect("other base");
+
+    let reopened = LearningService::open(&path).expect("reopen");
+
+    assert!(history_contains(&reopened, "reading", "surface"));
+    assert_eq!(
+        sibling_names(&path),
+        vec![
+            "log.bin".to_owned(),
+            "log.v1.bak".to_owned(),
+            "other.compact.bak".to_owned(),
+        ]
+    );
+    drop(reopened);
+    let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
+// E4/E5: two compaction backups with no canonical file are ambiguous and fail
+// closed — nothing is renamed and only `*.tmp*` siblings are removed.
+#[test]
+fn startup_recovery_rejects_ambiguous_compact_backups() {
+    let path = temporary_log("recover-ambiguous");
+    for extension in ["compact.bak", "compact.bak.42.7", "clear.bak"] {
+        fs::write(path.with_extension(extension), b"candidate").expect(extension);
+    }
+    fs::write(path.with_extension("clear.tmp"), b"temporary").expect("tmp");
+
+    let error = LearningService::open(&path).expect_err("ambiguous backups fail closed");
+
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+    assert!(!path.exists(), "nothing was restored");
+    assert!(path.with_extension("compact.bak").exists());
+    assert!(path.with_extension("compact.bak.42.7").exists());
+    assert!(path.with_extension("clear.bak").exists());
+    assert!(
+        !path.with_extension("clear.tmp").exists(),
+        "temporaries are still swept"
+    );
+    let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
+// E4/E5: two upgrade backups with no canonical file are ambiguous and fail
+// closed like the compaction case — nothing is renamed, `clear.bak` keeps
+// its evidence, and only `*.tmp*` siblings are removed.
+#[test]
+fn startup_recovery_rejects_ambiguous_version_backups() {
+    for (name, second_extension) in [
+        ("recover-ambiguous-versions", "v2.bak"),
+        ("recover-ambiguous-version-copies", "v1.bak.42.7"),
+    ] {
+        let path = temporary_log(name);
+        let first = write_version_one_log(&path.with_extension("v1.bak"), "かな", "加奈");
+        let second = b"other version backup".to_vec();
+        fs::write(path.with_extension(second_extension), &second).expect("second backup");
+        fs::write(path.with_extension("clear.bak"), b"cleared").expect("clear.bak");
+        fs::write(path.with_extension("upgrade.tmp"), b"partial").expect("upgrade.tmp");
+
+        let error =
+            LearningService::open(&path).expect_err("ambiguous version backups fail closed");
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(!path.exists(), "nothing was restored");
+        assert_eq!(
+            fs::read(path.with_extension("v1.bak")).expect("first backup"),
+            first
+        );
+        assert_eq!(
+            fs::read(path.with_extension(second_extension)).expect("second backup"),
+            second
+        );
+        assert!(path.with_extension("clear.bak").exists());
+        assert!(
+            !path.with_extension("upgrade.tmp").exists(),
+            "temporaries are still swept"
+        );
+        let _ = fs::remove_dir_all(path.parent().expect("parent"));
+    }
+}
+
+// E4/E5: recovery matches this log's own stem and the `.{pid}.{id}` tail
+// exactly, so another base name's files and foreign suffixes or tails are
+// left untouched while an empty canonical log is created.
+#[test]
+fn startup_recovery_without_canonical_ignores_other_base_names() {
+    let path = temporary_log("recover-other-base-names");
+    let fixtures: [(&str, &[u8]); 6] = [
+        ("other.compact.bak", b"other compact"),
+        ("other.v1.bak", b"other v1"),
+        ("logx.compact.bak", b"logx compact"),
+        ("log.compact.bakx", b"wrong suffix"),
+        ("log.compact.bak.x.7", b"non-numeric tail"),
+        ("log.compact.bak.1.2.3", b"three-part tail"),
+    ];
+    for (name, bytes) in fixtures {
+        fs::write(path.with_file_name(name), bytes).expect(name);
+    }
+
+    let reopened = LearningService::open(&path).expect("open with unrelated siblings");
+
+    assert!(read_snapshot(&path)
+        .expect("empty snapshot")
+        .records
+        .is_empty());
+    assert_eq!(
+        sibling_names(&path),
+        vec![
+            "log.bin".to_owned(),
+            "log.compact.bak.1.2.3".to_owned(),
+            "log.compact.bak.x.7".to_owned(),
+            "log.compact.bakx".to_owned(),
+            "logx.compact.bak".to_owned(),
+            "other.compact.bak".to_owned(),
+            "other.v1.bak".to_owned(),
+        ]
+    );
+    for (name, bytes) in fixtures {
+        assert_eq!(fs::read(path.with_file_name(name)).expect(name), bytes);
+    }
+    drop(reopened);
+    let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
+// E1/E2: `clear` publishes with one rename; a successful clear leaves no
+// `*.tmp*` or rollback `*.bak*` sibling.
+#[test]
+fn clear_leaves_no_publish_artifacts() {
+    let path = temporary_log("clear-clean");
+    let service = LearningService::open(&path).expect("open");
+    service.learn("かな", "仮名", 3, 4);
+    service.maintain().expect("flush");
+
+    assert_eq!(service.clear().expect("clear"), 1);
+
+    assert_eq!(sibling_names(&path), vec!["log.bin".to_owned()]);
+    assert!(read_snapshot(&path)
+        .expect("empty snapshot")
+        .records
+        .is_empty());
+    drop(service);
+    let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
+// E2: when the publish rename cannot replace the canonical file, `clear`
+// fails with the old bytes intact and no temporary left behind.
+#[test]
+#[cfg(windows)]
+fn clear_publish_failure_keeps_canonical_and_removes_temporary() {
+    let path = temporary_log("clear-publish-failure");
+    let service = LearningService::open(&path).expect("open");
+    service.learn("reading", "surface", 3, 4);
+    service.maintain().expect("flush");
+    let before = fs::read(&path).expect("old canonical");
+    let held = hold_without_delete_share(&path);
+
+    service.clear().expect_err("publish rename blocked");
+
+    assert_eq!(fs::read(&path).expect("canonical"), before);
+    assert!(
+        sibling_names(&path)
+            .iter()
+            .all(|name| !name.contains(".tmp")),
+        "no publish temporary is stranded: {:?}",
+        sibling_names(&path)
+    );
+    drop(held);
+    assert_eq!(service.clear().expect("retry after releasing"), 1);
+    drop(service);
+    let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
+// E2: the same publish failure during compaction keeps the canonical file and
+// removes the temporary.
+#[test]
+#[cfg(windows)]
+fn compaction_publish_failure_keeps_canonical_and_removes_temporary() {
+    let path = temporary_log("compact-publish-failure");
+    let service = LearningService::open(&path).expect("open");
+    for _ in 0..4 {
+        service.learn("かな", "仮名", 3, 4);
+    }
+    service.maintain().expect("flush");
+    let before = fs::read(&path).expect("old canonical");
+    let held = hold_without_delete_share(&path);
+
+    {
+        let mut state = service
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        compact_state(&mut state, 1_024, 2).expect_err("publish rename blocked");
+    }
+
+    assert_eq!(fs::read(&path).expect("canonical"), before);
+    assert!(
+        sibling_names(&path)
+            .iter()
+            .all(|name| !name.contains(".tmp") && !name.contains("compact.bak")),
+        "no publish artifact is stranded: {:?}",
+        sibling_names(&path)
+    );
+    drop(held);
+    {
+        let mut state = service
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        compact_state(&mut state, 1_024, 2).expect("retry compaction");
+        assert!(state.log.test_records() <= 2);
+    }
+    drop(service);
+    let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
+// E2/E3: when the upgrade replacement cannot be renamed over the canonical
+// file, open fails with the original v1 bytes intact, no temporary left, and
+// the retained `v1.bak` copy holding the same old bytes.
+#[test]
+#[cfg(windows)]
+fn upgrade_publish_failure_keeps_canonical_and_removes_temporary() {
+    let path = temporary_log("upgrade-publish-failure");
+    let old = write_version_one_log(&path, "かな", "加奈");
+    let held = hold_without_delete_share(&path);
+
+    LearningService::open(&path).expect_err("publish rename blocked");
+
+    assert_eq!(fs::read(&path).expect("canonical"), old);
+    for name in sibling_names(&path) {
+        assert!(!name.contains(".tmp"), "publish temporary stranded: {name}");
+    }
+    assert_eq!(
+        fs::read(path.with_extension("v1.bak")).expect("retained backup"),
+        old
+    );
+    drop(held);
+    let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
+// E7: after the publish rename commits, a writer-reopen failure cannot roll
+// the published empty file back, so `clear` moves forward: it returns Ok with
+// the cleared indexes applied, the log mirrors the disk (`file: None`), the
+// failure is counted in `maintenance_failures()`, `append` reports
+// BrokenPipe, and `maintain` restores the writer.
+#[test]
+fn clear_post_publish_reopen_failure_leaves_published_state() {
+    let path = temporary_log("clear-post-publish");
+    let service = LearningService::open(&path).expect("open");
+    service.learn("reading", "surface", 3, 4);
+    service.maintain().expect("flush");
+
+    {
+        let _fault = ForgetFaultScope::new(&[ForgetFaultPoint::PostPublishAppendOpen]);
+        assert_eq!(service.clear().expect("clear publishes durably"), 1);
+    }
+
+    // Memory and disk agree immediately: the cleared data is gone from both.
+    assert!(!history_contains(&service, "reading", "surface"));
+    assert!(read_snapshot(&path).expect("snapshot").records.is_empty());
+    assert!(service.maintenance_failures() >= 1);
+
+    // `State::learn` documents the degraded mode: "`false` when the log
+    // append failed and the commit lives only in memory". A record learned
+    // while the writer is down is ranked in memory but never persisted.
+    // The restoring `maintain` goes through `compact_for_open`, whose
+    // `Compacted` path rebuilds the indexes from the on-disk log — so the
+    // unpersisted record is dropped and memory and disk agree again
+    // (pre-existing semantics).
+    service.learn("reading", "blocked", 5, 6);
+    assert!(history_contains(&service, "reading", "blocked"));
+    assert!(service.skipped_writes() >= 1);
+    assert_eq!(
+        service.maintain().expect("maintain restores the writer"),
+        MaintenanceOutcome::Compacted
+    );
+    assert!(!history_contains(&service, "reading", "blocked"));
+
+    service.learn("reading", "after", 5, 6);
+    assert_eq!(
+        service.maintain().expect("flush relearned record"),
+        MaintenanceOutcome::Flushed
+    );
+    drop(service);
+
+    let reopened = LearningService::open(&path).expect("reopen");
+    assert!(history_contains(&reopened, "reading", "after"));
+    assert!(!history_contains(&reopened, "reading", "surface"));
+    assert!(!history_contains(&reopened, "reading", "blocked"));
+    drop(reopened);
+    let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
+// E2/E3: a backup-copy failure in `publish_upgrade` removes the partial
+// backup and the temporary file and leaves the canonical v1 log untouched;
+// the next open without the fault upgrades normally.
+#[test]
+fn upgrade_backup_copy_failure_keeps_canonical_and_removes_artifacts() {
+    let path = temporary_log("upgrade-backup-failure");
+    let old = write_version_one_log(&path, "かな", "加奈");
+
+    {
+        let _fault = ForgetFaultScope::new(&[ForgetFaultPoint::UpgradeBackupCopy]);
+        LearningService::open(&path).expect_err("backup copy failure");
+    }
+
+    assert_eq!(fs::read(&path).expect("canonical"), old);
+    assert_eq!(
+        sibling_names(&path),
+        vec!["log.bin".to_owned()],
+        "partial backup and temporary were removed"
+    );
+
+    let upgraded = LearningService::open(&path).expect("upgrade retries");
+    assert!(history_contains(&upgraded, "かな", "加奈"));
+    assert_eq!(
+        fs::read(path.with_extension("v1.bak")).expect("retained backup"),
+        old
+    );
+    drop(upgraded);
+    let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
+// E7: a writer-reopen failure after a published compaction returns the error
+// while the disk keeps the compacted content — never rolled back to the
+// pre-compaction bytes. This also proves the publish is a single rename: a
+// two-step implementation would restore the old canonical file here.
+#[test]
+fn compaction_post_publish_reopen_failure_keeps_published_compaction() {
+    let path = temporary_log("compact-post-publish");
+    let service = LearningService::open(&path).expect("open");
+    for _ in 0..4 {
+        service.learn("かな", "仮名", 3, 4);
+    }
+    service.learn("かな", "加奈", 3, 4);
+    service.maintain().expect("flush");
+
+    {
+        let mut state = service
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _fault = ForgetFaultScope::new(&[ForgetFaultPoint::PostPublishAppendOpen]);
+        compact_state(&mut state, 1_024, 2).expect_err("writer reopen after publish");
+    }
+
+    // The published compacted file stands: only the two retained records.
+    let snapshot = read_snapshot(&path).expect("snapshot");
+    assert_eq!(snapshot.records.len(), 2);
+    assert!(snapshot
+        .records
+        .iter()
+        .all(|record| record.reading == "かな"));
+    assert_eq!(
+        sibling_names(&path),
+        vec!["log.bin".to_owned()],
+        "no rollback artifact is created"
+    );
+    // The log mirrors the disk and the next maintain() restores the writer.
+    assert_eq!(
+        service.maintain().expect("maintain restores the writer"),
+        MaintenanceOutcome::Compacted
+    );
+    service.learn("かな", "仮字", 3, 4);
+    assert_eq!(
+        service.maintain().expect("flush relearned record"),
+        MaintenanceOutcome::Flushed
+    );
+    drop(service);
+    let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
 #[path = "learning_correction_tests.rs"]
 mod correction;

@@ -94,6 +94,7 @@ impl LearningLog {
                 fs::create_dir_all(parent)?;
             }
             let forget_artifacts = recover_forget_artifacts_at_startup(path)?;
+            recover_publish_artifacts_at_startup(path)?;
             create_if_missing(path)?;
 
             let file_len = fs::metadata(path)?.len();
@@ -505,6 +506,17 @@ impl LearningLog {
             .map_err(|source| LearningLogError { source, receipt })
     }
 
+    /// Publishes an empty log with a single rename so the canonical file is
+    /// never missing (#360 A4). Terminal states: on success the log is empty
+    /// with a live writer. On a publish failure the old canonical file and its
+    /// records are untouched and the old writer is restored. If reopening the
+    /// append writer fails after publication, the clear still took effect
+    /// durably: `prepare` runs on the empty view, `self` mirrors the disk
+    /// (`records == 0`, `bytes == HEADER_LEN`, `file: None`), the failure is
+    /// reported through `maintenance_failure_delta`, and `Ok` is returned.
+    /// In that state `append` returns `BrokenPipe`, and the next `maintain`
+    /// rewrites the published file through `compact_for_open`, which restores
+    /// the writer.
     pub fn clear<T>(
         &mut self,
         prepare: impl FnOnce(ReplayView<'_>) -> T,
@@ -526,47 +538,24 @@ impl LearningLog {
                 file.sync_data()?;
             }
             let temporary = unique_sibling(&path, "clear.tmp");
-            let backup = unique_sibling(&path, "clear.bak");
             write_new_file(&temporary, &empty)?;
             self.file = None;
-            if let Err(error) = fs::rename(&path, &backup) {
+            if let Err(error) = fs::rename(&temporary, &path) {
                 self.file = open_append(&path).ok();
                 let _ = fs::remove_file(&temporary);
                 return Err(error);
             }
-            if let Err(error) = fs::rename(&temporary, &path) {
-                let rollback = fs::rename(&backup, &path);
-                self.file = open_append(&path).ok();
-                let _ = fs::remove_file(&temporary);
-                return match rollback {
-                    Ok(()) => Err(error),
-                    Err(rollback_error) => Err(io::Error::new(
-                        rollback_error.kind(),
-                        format!(
-                            "clear publish failed ({error}); rollback failed ({rollback_error})"
-                        ),
-                    )),
-                };
-            }
-            let file = match open_append(&path) {
-                Ok(file) => file,
-                Err(error) => {
-                    let _ = fs::remove_file(&path);
-                    let rollback = fs::rename(&backup, &path);
-                    self.file = open_append(&path).ok();
-                    return match rollback {
-                        Ok(()) => Err(error),
-                        Err(rollback_error) => Err(io::Error::new(
-                            rollback_error.kind(),
-                            format!("cleared log could not be opened ({error}); rollback failed ({rollback_error})"),
-                        )),
-                    };
+            let file = match reopen_append(&path) {
+                Ok(file) => Some(file),
+                Err(_error) => {
+                    receipt.maintenance_failure_delta =
+                        receipt.maintenance_failure_delta.saturating_add(1);
+                    None
                 }
             };
-            let _ = fs::remove_file(&backup);
             let prepared = prepare(ReplayView::from_verified(&empty, LEARNING_FORMAT_VERSION));
             *self = LearningLog {
-                file: Some(file),
+                file,
                 path: Some(path),
                 bytes: HEADER_LEN as u64,
                 records: 0,
@@ -681,6 +670,8 @@ pub enum LearningFaultPoint {
     RecoveryRestore,
     BackupCleanup,
     TemporaryCleanup,
+    PostPublishAppendOpen,
+    UpgradeBackupCopy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -694,6 +685,8 @@ enum LearningFaultPoint {
     RecoveryRestore,
     BackupCleanup,
     TemporaryCleanup,
+    PostPublishAppendOpen,
+    UpgradeBackupCopy,
 }
 
 #[cfg(any(test, feature = "test-hooks"))]
@@ -881,6 +874,160 @@ fn recover_forget_artifacts_at_startup(path: &Path) -> io::Result<ForgetArtifact
             "multiple exact-prediction recovery logs exist while canonical is absent",
         )),
     }
+}
+
+/// Leftover sibling classes produced by the pre-#360-A4 two-step publish
+/// (`rename(path -> *.bak)` then `rename(tmp -> path)`): a crash between the
+/// renames left the canonical file missing and its data stranded in a backup
+/// that nothing read back.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PublishLeftover {
+    CompactBackup,
+    ClearBackup,
+    /// `v{N}.bak` retained upgrade backup. Only v1/v2 are restore candidates;
+    /// every versioned backup is always kept.
+    VersionBackup(u16),
+    Temporary,
+}
+
+/// Whether `rest` (the part of a sibling name after `{stem}.`) is exactly
+/// `suffix` or `suffix` plus the `.{pid}.{id}` tail `unique_sibling` appends.
+fn leftover_name_is(rest: &str, suffix: &str) -> bool {
+    if rest == suffix {
+        return true;
+    }
+    let Some(tail) = rest
+        .strip_prefix(suffix)
+        .and_then(|tail| tail.strip_prefix('.'))
+    else {
+        return false;
+    };
+    let mut parts = tail.split('.');
+    match (parts.next(), parts.next(), parts.next()) {
+        (Some(pid), Some(id), None) => [pid, id]
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())),
+        _ => false,
+    }
+}
+
+fn classify_publish_leftover(rest: &str) -> Option<PublishLeftover> {
+    if leftover_name_is(rest, "compact.bak") {
+        return Some(PublishLeftover::CompactBackup);
+    }
+    if leftover_name_is(rest, "clear.bak") {
+        return Some(PublishLeftover::ClearBackup);
+    }
+    for suffix in ["compact.tmp", "clear.tmp", "upgrade.tmp"] {
+        if leftover_name_is(rest, suffix) {
+            return Some(PublishLeftover::Temporary);
+        }
+    }
+    if let Some(digits) = rest
+        .strip_prefix('v')
+        .and_then(|tail| tail.split('.').next())
+    {
+        if !digits.is_empty() && digits.bytes().all(|byte| byte.is_ascii_digit()) {
+            if let Ok(version) = digits.parse::<u16>() {
+                if leftover_name_is(rest, &format!("v{version}.bak")) {
+                    return Some(PublishLeftover::VersionBackup(version));
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Removes or restores publish artifacts older builds could leave behind
+/// (#360 A4), run during `open` after the forget recovery and before
+/// `create_if_missing` so a recovered log is never overwritten empty.
+/// Matching is exact on this log's own stem: siblings of any other base name
+/// are never touched, and `v{N}.bak` files are never deleted.
+///
+/// - Canonical present: every `compact.bak*`, `clear.bak*`, and publish
+///   `*.tmp*` sibling is deleted.
+/// - Canonical missing: `clear.bak*` is deleted and never restored (the user
+///   asked for the data to be erased), every `*.tmp*` is deleted, exactly one
+///   `compact.bak*` or — failing that — exactly one `v1.bak*`/`v2.bak*` is
+///   renamed back, and more than one candidate in the chosen class is
+///   `InvalidData` with nothing restored.
+fn recover_publish_artifacts_at_startup(path: &Path) -> io::Result<()> {
+    let Some(parent) = path.parent() else {
+        return Ok(());
+    };
+    let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+        return Ok(());
+    };
+    let stem_prefix = format!("{stem}.");
+    let mut compact_backups = Vec::new();
+    let mut clear_backups = Vec::new();
+    let mut version_backups = Vec::new();
+    let mut temporaries = Vec::new();
+    for entry in fs::read_dir(parent)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_file() {
+            continue;
+        }
+        let name = entry.file_name();
+        let Some(rest) = name
+            .to_str()
+            .and_then(|name| name.strip_prefix(stem_prefix.as_str()))
+        else {
+            continue;
+        };
+        match classify_publish_leftover(rest) {
+            Some(PublishLeftover::CompactBackup) => compact_backups.push(entry.path()),
+            Some(PublishLeftover::ClearBackup) => clear_backups.push(entry.path()),
+            Some(PublishLeftover::VersionBackup(1 | 2)) => version_backups.push(entry.path()),
+            Some(PublishLeftover::VersionBackup(_)) | None => {}
+            Some(PublishLeftover::Temporary) => temporaries.push(entry.path()),
+        }
+    }
+    let remove_all = |paths: &[PathBuf]| -> io::Result<()> {
+        for leftover in paths {
+            match fs::remove_file(leftover) {
+                Ok(()) => {}
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
+            }
+        }
+        Ok(())
+    };
+    if path_exists(path)? {
+        remove_all(&compact_backups)?;
+        remove_all(&clear_backups)?;
+        return remove_all(&temporaries);
+    }
+    remove_all(&temporaries)?;
+    let candidates = if !compact_backups.is_empty() {
+        ("compaction", &compact_backups)
+    } else {
+        ("upgrade backup", &version_backups)
+    };
+    let restore = match candidates.1.as_slice() {
+        [] => None,
+        [candidate] => Some(candidate.clone()),
+        _ => {
+            let names = candidates
+                .1
+                .iter()
+                .map(|candidate| candidate.display().to_string())
+                .collect::<Vec<_>>()
+                .join(", ");
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "multiple {} artifacts exist while the canonical learning log is absent: {names}",
+                    candidates.0
+                ),
+            ));
+        }
+    };
+    remove_all(&clear_backups)?;
+    if let Some(candidate) = restore {
+        fs::rename(candidate, path)?;
+    }
+    Ok(())
 }
 
 fn settle_forget_cleanup(paths: &mut Vec<PathBuf>, kind: ForgetArtifactKind) -> io::Result<()> {
@@ -1165,24 +1312,53 @@ fn write_new_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
     result
 }
 
+/// Reopens the append writer on a freshly published canonical file. Kept
+/// separate from `open_append` so a fault-injected failure is exercised only
+/// at post-publish reopens, never at ordinary open or error-recovery reopens.
+fn reopen_append(path: &Path) -> io::Result<File> {
+    if take_learning_fault(LearningFaultPoint::PostPublishAppendOpen) {
+        return Err(injected_learning_error(
+            LearningFaultPoint::PostPublishAppendOpen,
+        ));
+    }
+    open_append(path)
+}
+
+/// Copies the canonical file to its retained `v{N}.bak` backup and fsyncs the
+/// copy. The backup exists before the canonical rename below, and a failure
+/// here leaves the canonical file untouched.
+fn copy_synced(source: &Path, destination: &Path) -> io::Result<()> {
+    fs::copy(source, destination)?;
+    OpenOptions::new().write(true).open(destination)?.sync_all()
+}
+
+/// Fault-injectable wrapper around `copy_synced` for the upgrade backup: the
+/// injected failure leaves a partial backup file behind so the caller's
+/// cleanup is exercised exactly as after a real mid-copy failure.
+fn copy_upgrade_backup(path: &Path, backup: &Path) -> io::Result<()> {
+    if take_learning_fault(LearningFaultPoint::UpgradeBackupCopy) {
+        fs::write(backup, b"partial upgrade backup")?;
+        return Err(injected_learning_error(
+            LearningFaultPoint::UpgradeBackupCopy,
+        ));
+    }
+    copy_synced(path, backup)
+}
+
 fn publish_upgrade(path: &Path, bytes: &[u8], source_version: u16) -> io::Result<()> {
     let temporary = unique_sibling(path, "upgrade.tmp");
     let backup = unique_sibling(path, &format!("v{source_version}.bak"));
     write_new_file(&temporary, bytes)?;
-    if let Err(error) = fs::rename(path, &backup) {
+    if let Err(error) = copy_upgrade_backup(path, &backup) {
+        let _ = fs::remove_file(&backup);
         let _ = fs::remove_file(&temporary);
         return Err(error);
     }
+    // Single replace: the canonical name is never absent. The retained backup
+    // is a copy, so the pre-upgrade file is not moved out from under readers.
     if let Err(error) = fs::rename(&temporary, path) {
-        let rollback = fs::rename(&backup, path);
         let _ = fs::remove_file(&temporary);
-        return match rollback {
-            Ok(()) => Err(error),
-            Err(rollback_error) => Err(io::Error::new(
-                rollback_error.kind(),
-                format!("upgrade publish failed ({error}); rollback failed ({rollback_error})"),
-            )),
-        };
+        return Err(error);
     }
     Ok(())
 }
@@ -1230,36 +1406,31 @@ fn compact_for_open<T>(
     ));
 
     let temporary = unique_sibling(&path, "compact.tmp");
-    let backup = unique_sibling(&path, "compact.bak");
     write_new_file(&temporary, &compacted)?;
     log.file = None;
-    if let Err(error) = fs::rename(&path, &backup) {
+    if let Err(error) = fs::rename(&temporary, &path) {
         log.file = open_append(&path).ok();
         let _ = fs::remove_file(&temporary);
         return Err(error);
     }
-    if let Err(error) = fs::rename(&temporary, &path) {
-        let rollback = fs::rename(&backup, &path);
-        log.file = open_append(&path).ok();
-        let _ = fs::remove_file(&temporary);
-        return match rollback {
-            Ok(()) => Err(error),
-            Err(rollback_error) => Err(io::Error::new(
-                rollback_error.kind(),
-                format!("compaction publish failed ({error}); rollback failed ({rollback_error})"),
-            )),
-        };
-    }
-    let file = match open_append(&path) {
+    // Published. A reopen failure returns the error without rolling the
+    // compacted file back; `log` is then aligned with the disk (compacted
+    // bytes/records, `file: None`), `append` reports `BrokenPipe`, and the
+    // next `maintain` retries this same path to restore the writer.
+    let file = match reopen_append(&path) {
         Ok(file) => file,
         Err(error) => {
-            let _ = fs::remove_file(&path);
-            let _ = fs::rename(&backup, &path);
-            log.file = open_append(&path).ok();
+            *log = LearningLog {
+                file: None,
+                path: Some(path),
+                bytes: u64::try_from(compacted.len()).unwrap_or(u64::MAX),
+                records: retained_records,
+                dirty_records: 0,
+                forget_artifacts: ForgetArtifacts::default(),
+            };
             return Err(error);
         }
     };
-    let _ = fs::remove_file(&backup);
     *log = LearningLog {
         file: Some(file),
         path: Some(path),
