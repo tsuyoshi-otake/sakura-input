@@ -110,3 +110,18 @@
   before its first step. Observed 2026-10-16 (#357) in a throwaway release-gate
   script; renaming the helper to `Invoke-CleanCheck` fixed it. Give helpers a
   verb-noun name.
+
+- **`ConvertStringSecurityDescriptorToSecurityDescriptorW` rejects a space
+  after a numeric `O:` SID.** `O:S-1-5-18 D:(...)` fails with
+  `ERROR_INVALID_SID (0x80070539)` while `O:BA D:(...)` and the same sections
+  concatenated (`O:S-1-5-18D:(...)`) parse. Keep `O:...D:` adjacent in
+  SDDL-built test descriptors. In the same helper, the SDDL right `DC` is the
+  directory-service right `0x2`, not `FILE_DELETE_CHILD` (`0x40`); write
+  file-right bits as `0x` hex literals (#360 A1, 2026-10-18).
+- **Never canonicalize a path chain a reparse check must inspect.**
+  `Path::canonicalize` resolves junctions, so the walked components lose the
+  very `FILE_ATTRIBUTE_REPARSE_POINT` the check exists to reject; canonicalize
+  only the two endpoints used for the containment compare. To create a
+  junction in a test, `New-Item -ItemType Junction` requires an absolute
+  `-Target`; invoking `mklink` through `cmd /c` from Rust `Command` mangles
+  the argv pieces (#360 A1, 2026-10-18).
