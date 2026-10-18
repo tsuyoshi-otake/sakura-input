@@ -13,7 +13,8 @@ fn fatal(message: impl std::fmt::Display) -> ! {
 
 fn initialize(model: &Path) -> (String, sakura_runtime::ModelRuntime) {
     let validated = manifest::validate(model).unwrap_or_else(|error| fatal(error));
-    let runtime = sakura_runtime::ModelRuntime::load(model).unwrap_or_else(|error| fatal(error));
+    let runtime = sakura_runtime::ModelRuntime::load(&validated.model_bytes)
+        .unwrap_or_else(|error| fatal(error));
     (validated.model_hash, runtime)
 }
 

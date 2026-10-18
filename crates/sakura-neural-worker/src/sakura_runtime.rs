@@ -96,12 +96,12 @@ impl fmt::Debug for ModelRuntime {
 }
 
 impl ModelRuntime {
-    pub fn load(model_directory: &Path) -> Result<Self, Error> {
+    pub fn load(model_bytes: &[u8]) -> Result<Self, Error> {
         let executable = env::current_exe().map_err(|_| Error::CurrentExecutable)?;
-        Self::load_from(model_directory, &executable)
+        Self::load_from(model_bytes, &executable)
     }
 
-    fn load_from(model_directory: &Path, executable: &Path) -> Result<Self, Error> {
+    fn load_from(model_bytes: &[u8], executable: &Path) -> Result<Self, Error> {
         initialize_ort(executable)?;
         let session = Session::builder()
             .map_err(|_| Error::SessionBuild)?
@@ -113,7 +113,7 @@ impl ModelRuntime {
             .map_err(|_| Error::SessionBuild)?
             .with_optimization_level(GraphOptimizationLevel::Level2)
             .map_err(|_| Error::SessionBuild)?
-            .commit_from_file(model_directory.join("model.onnx"))
+            .commit_from_memory(model_bytes)
             .map_err(|_| Error::SessionBuild)?;
         validate_ort_contract(&session)?;
         Ok(Self {

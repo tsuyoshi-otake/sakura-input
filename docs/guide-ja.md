@@ -161,6 +161,6 @@ Issue #32 の実験的 neural reranker は、自作の `Sakura-Rerank-Tiny-v1` �
 
 この worker はネットワークへ送信しません。engine が分類済み `Normal` scope の通常変換の読みからローカルで作った候補 snapshot だけを、同一マシン内の IPC で渡します。Password、URL、Email、Digits、未知または未分類 scope、直接入力、`test_only` 入力、短い読み、候補が 1 件だけの場合は worker を起動せず、入力内容も送信しません。通常の診断ログへ入力文字列を記録せず、自動アップロードもしません。
 
-変換のキー経路は worker の応答を待ちません。worker／モデルの欠落、起動失敗、異常応答、timeout、または一致しない古い結果では、従来のローカル順位のまま表示します。候補表示後に遅い結果で順序を変更することはありません。明示的な学習、完全一致 cache、ユーザー辞書の優先順位はモデルより上です。
+変換のキー経路は worker の応答を待ちません。worker／モデルの欠落、起動失敗、異常応答、timeout、または一致しない古い結果では、従来のローカル順位のまま表示します。ハッシュまたはサイズがworker内の固定値と一致しないモデルは使用せず、従来のローカル順位で変換します。候補表示後に遅い結果で順序を変更することはありません。明示的な学習、完全一致 cache、ユーザー辞書の優先順位はモデルより上です。
 
 `15 MiB` の private working-set 予算は TSF/engine 本体の予算であり、任意 worker のモデル、ONNX Runtime、working setは含みません。Sakuraモデルのworking setとcold/warm latencyは別途計測します。自作モデルはMITライセンスで配布承認済みですが、既存評価ではGate A未通過・final holdout未使用です。これは品質合格を示すものではありません。設定の neural reranker scope を `off` にすると無効化でき、`all-normal-conversions` にすると短い読みを含む通常変換へ広げられます。
