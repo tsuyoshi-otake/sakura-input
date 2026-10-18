@@ -58,17 +58,12 @@ fn killed_worker_collision_uses_the_next_name() {
 /// or other names, and never fails.
 #[test]
 fn sweep_removes_only_stale_matching_real_directories() {
+    // Declared before `base` so it drops after it: even a failed assertion
+    // cannot leak the junction target, which lives outside `base`.
+    let target = TestBase::new("sweep-target");
     let base = TestBase::new("sweep-stale");
-    let target = std::env::temp_dir().join(format!(
-        "sakura-o2-sweep-target-{}-{}",
-        std::process::id(),
-        SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map(|since| since.as_nanos())
-            .unwrap_or(0)
-    ));
-    fs::create_dir(&target).expect("junction target");
-    fs::write(target.join("keep.txt"), b"keep").expect("keep.txt");
+    fs::create_dir(&target.0).expect("junction target");
+    fs::write(target.0.join("keep.txt"), b"keep").expect("keep.txt");
 
     let leaked = EmptyWorkdir::create_in(&base.0, 4242, 7).expect("leaked workdir");
     let leaked_path = leaked.path().to_owned();
@@ -78,7 +73,7 @@ fn sweep_removes_only_stale_matching_real_directories() {
     let status = Command::new("cmd")
         .args(["/c", "mklink", "/J"])
         .arg(base.0.join("9-9"))
-        .arg(&target)
+        .arg(&target.0)
         .status()
         .expect("mklink spawn");
     assert!(status.success(), "mklink /J must succeed without elevation");
@@ -99,13 +94,55 @@ fn sweep_removes_only_stale_matching_real_directories() {
         "a matching-named junction entry survives"
     );
     assert!(
-        target.join("keep.txt").exists(),
+        target.0.join("keep.txt").exists(),
         "the sweep never reaches through the junction"
     );
 
-    // Remove the junction itself before deleting its target.
+    // Remove the junction itself before the guards delete its target.
     fs::remove_dir(base.0.join("9-9")).expect("remove junction");
-    fs::remove_dir_all(&target).expect("remove junction target");
+}
+
+/// K1 (defined failure): when all sixteen attempt names already exist,
+/// `create_in` returns `Err(())` — the request ends as `codex_workdir` —
+/// and it never touches or reuses an existing path.
+#[test]
+fn create_in_gives_up_after_sixteen_existing_names() {
+    let base = TestBase::new("sixteen-names");
+    fs::create_dir_all(&base.0).expect("base");
+    for attempt in 0..16 {
+        fs::create_dir(base.0.join(format!("4242-7-{attempt}"))).expect("pre-create");
+    }
+
+    let result = EmptyWorkdir::create_in(&base.0, 4242, 7);
+    assert!(result.is_err(), "all sixteen names taken must fail");
+
+    let entries: Vec<_> = fs::read_dir(&base.0)
+        .expect("read_dir")
+        .collect::<Result<_, _>>()
+        .expect("entries");
+    assert_eq!(entries.len(), 16, "no seventeenth entry may be created");
+    for entry in entries {
+        assert!(
+            entry.path().is_dir(),
+            "every existing entry is left in place"
+        );
+    }
+    assert!(!base.0.join("4242-7-16").exists());
+}
+
+/// K2 (bounded): one sweep removes at most 32 entries.
+#[test]
+fn sweep_removes_at_most_thirty_two() {
+    let base = TestBase::new("sweep-bound");
+    fs::create_dir_all(&base.0).expect("base");
+    for index in 0..40 {
+        fs::create_dir(base.0.join(format!("1000-{index}"))).expect("pre-create");
+    }
+
+    sweep_stale_workdirs(&base.0, SystemTime::now() + Duration::from_secs(11 * 60));
+
+    let remaining = fs::read_dir(&base.0).expect("read_dir").count();
+    assert_eq!(remaining, 8, "exactly 32 of 40 stale workdirs are removed");
 }
 
 /// K2 (liveness): a directory younger than STALE_WORKDIR_AGE is never
