@@ -110,3 +110,48 @@
   before its first step. Observed 2026-10-16 (#357) in a throwaway release-gate
   script; renaming the helper to `Invoke-CleanCheck` fixed it. Give helpers a
   verb-noun name.
+
+- **`ConvertStringSecurityDescriptorToSecurityDescriptorW` rejects a space
+  after a numeric `O:` SID.** `O:S-1-5-18 D:(...)` fails with
+  `ERROR_INVALID_SID (0x80070539)` while `O:BA D:(...)` and the same sections
+  concatenated (`O:S-1-5-18D:(...)`) parse. Keep `O:...D:` adjacent in
+  SDDL-built test descriptors. In the same helper, the SDDL right `DC` is the
+  directory-service right `0x2`, not `FILE_DELETE_CHILD` (`0x40`); write
+  file-right bits as `0x` hex literals (#360 A1, 2026-10-18).
+- **Never canonicalize a path chain a reparse check must inspect.**
+  `Path::canonicalize` resolves junctions, so the walked components lose the
+  very `FILE_ATTRIBUTE_REPARSE_POINT` the check exists to reject; canonicalize
+  only the two endpoints used for the containment compare. To create a
+  junction in a test, `New-Item -ItemType Junction` requires an absolute
+  `-Target`. Through `cmd /c` from Rust `Command`, the `mklink` form #360 A1
+  tried mangled its argv; `args(["/c", "mklink", "/J"]).arg(link).arg(target)`
+  with space-free paths worked in #360 #2 (`codex_cli_workdir_tests.rs`), and
+  paths that need quoting are unverified (2026-10-18).
+- **Never use `user32.dll` as the "other module" when testing per-module
+  window classes.** Its instance handle is reserved for system classes.
+  Observed 2026-10-18 (#360 A2): in a pwsh P/Invoke probe, `RegisterClassW`
+  failed with error 87 under the `user32.dll` handle, even for a fresh class
+  name. In a Rust test exe, a duplicate name under it failed the same way.
+  Ordinary modules (exe, `kernel32.dll`, `version.dll`, `comdlg32.dll`)
+  register the same class name in either order. Test with such a module, and
+  test both orders.
+
+- **A module pin needs an over-release test.** Observed 2026-10-18 (#360 A2):
+  `GetModuleHandleExW(FROM_ADDRESS)` without `UNCHANGED_REFCOUNT` adds a
+  reference the caller never frees. That leaked reference survives one
+  `FreeLibrary` just like `GET_MODULE_HANDLE_EX_FLAG_PIN` does. Call
+  `FreeLibrary` on the same handle several more times, then assert the module
+  is still mapped. Only a real pin passes. The test caught the dropped-PIN
+  fault only after this change.
+
+- **`cargo test` never builds a `cdylib` target.** Nothing links the library.
+  A test that loads `sakura_tsf.dll` must first run `cargo build -p sakura-tsf
+  --lib --locked` itself. Otherwise it tests a stale DLL. Observed 2026-10-18
+  (#360 A2): after the sources were restored, the test still loaded a
+  leftover DLL that contained the injected fault.
+
+- **Rust's Windows `FileType::is_dir()` is false for a junction or symlink.**
+  std defines it as `!is_symlink && is_directory`, and a junction is a name
+  surrogate (checked 2026-10-18 in the toolchain's `library/std/src/sys/fs/
+  windows.rs`; #360 #2 T2). `symlink_metadata(p)?.is_dir()` alone excludes
+  reparse links, so dropping only an extra `is_symlink()` is an equivalent mutant.

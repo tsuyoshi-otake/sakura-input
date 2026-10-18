@@ -1535,9 +1535,13 @@ impl LearningService {
     }
 
     /// Clears both the live personalization indexes and their durable log
-    /// under the same mutex used by commits and maintenance. Every failure
-    /// path either restores the old writer or leaves it explicitly disabled;
-    /// no caller can observe an empty in-memory index backed by the old log.
+    /// under the same mutex used by commits and maintenance. A publish
+    /// failure restores the old writer with the old log untouched. If the
+    /// writer reopen fails after the empty log was published, the clear still
+    /// took effect durably: the indexes are cleared with it, the log mirrors
+    /// the disk with `file: None`, and the failure is reported through
+    /// `maintenance_failures()` until `maintain` reopens the writer
+    /// (#360 A4).
     pub fn clear(&self) -> io::Result<u64> {
         let mut state = self.lock_state();
         // A commit staged before the request must not repopulate the store

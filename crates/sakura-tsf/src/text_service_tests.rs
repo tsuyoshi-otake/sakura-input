@@ -4,6 +4,11 @@ use crate::testing::fake_engine::{
     fake_engine_with_no_further_requests,
 };
 use sakura_proto::{Modifiers, Segment, UnderlineKind};
+use windows::Win32::System::LibraryLoader::{
+    GetModuleHandleExW, GetModuleHandleW, GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+    GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+};
+use windows::Win32::UI::WindowsAndMessaging::GWLP_HINSTANCE;
 
 #[test]
 fn wait_status_labels_name_the_in_flight_ai_operation() {
@@ -2003,4 +2008,160 @@ fn input_mode_item_exposes_a_split_menu_button_to_tsf() {
     assert_eq!(info.guidItem, GUID_LBI_INPUTMODE);
     assert_ne!(info.dwStyle & TF_LBI_STYLE_BTN_BUTTON, 0);
     assert_ne!(info.dwStyle & TF_LBI_STYLE_BTN_MENU, 0);
+}
+
+// ---------------------------------------------------------------------------
+// Issue #360 A2: deferred-window class registration contracts (D3, D4, D5).
+// Inside the test executable the "module" is the test process itself; each
+// test uses a distinct class name so parallel tests cannot collide on the
+// process-wide (name, hInstance) class namespace.
+// ---------------------------------------------------------------------------
+
+/// The module this test code is loaded as. `module_handle()` cannot answer
+/// here because `DllMain` never ran in the test process.
+fn current_test_module() -> HMODULE {
+    let mut module = HMODULE::default();
+    // SAFETY: FROM_ADDRESS interprets a function address inside this
+    // executable as a module reference; UNCHANGED_REFCOUNT only queries.
+    unsafe {
+        GetModuleHandleExW(
+            GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+            PCWSTR(current_test_module as *const () as *const u16),
+            &mut module,
+        )
+        .expect("test module handle")
+    };
+    module
+}
+
+unsafe extern "system" fn foreign_window_procedure(
+    window: HWND,
+    message: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> LRESULT {
+    // SAFETY: a test-only stand-in for another module's wndproc.
+    unsafe { DefWindowProcW(window, message, wparam, lparam) }
+}
+
+/// D3 + D5: the class registers under our module handle, a repeated
+/// registration takes the already-exists branch and still succeeds, and the
+/// registered procedure is `deferred_window_procedure`.
+#[test]
+fn deferred_window_class_registration_is_idempotent_and_owns_its_procedure() {
+    let module = current_test_module();
+    let name = windows_core::w!("SakuraInputTsfDeferredTestIdempotent");
+
+    ensure_deferred_window_class(module, name).expect("first registration");
+    // Second call must take the ERROR_CLASS_ALREADY_EXISTS branch and accept
+    // it because the procedure is ours (D5 liveness).
+    ensure_deferred_window_class(module, name).expect("second registration");
+
+    let mut info = WNDCLASSW::default();
+    // SAFETY: `info` is writable and `name` is a valid class string.
+    unsafe { GetClassInfoW(Some(HINSTANCE(module.0)), name, &mut info) }.expect("class info");
+    assert_eq!(
+        info.lpfnWndProc.map(|procedure| procedure as usize),
+        Some(deferred_window_procedure as *const () as usize)
+    );
+}
+
+/// A module loaded in this process that is not the test exe, so tests can
+/// prove (name, hInstance) scoping instead of the exe-attributed NULL class.
+/// `user32.dll` is deliberately avoided: observed behavior under it differs
+/// by process. In this test process a fresh-name registration under
+/// `user32.dll` succeeded while a duplicate name was rejected with
+/// `ERROR_INVALID_PARAMETER`; in a separate probe process even a fresh name
+/// was rejected with `ERROR_INVALID_PARAMETER`. Its behavior is therefore
+/// process-dependent and does not stand for an ordinary DLL.
+fn non_exe_module() -> HMODULE {
+    // SAFETY: querying a loaded system module by name cannot fail here.
+    unsafe { GetModuleHandleW(windows_core::w!("kernel32.dll")) }.expect("kernel32 module")
+}
+
+/// D4: a class pre-registered under the same name and module with a different
+/// procedure is rejected, so no window would be created on a foreign wndproc.
+#[test]
+fn deferred_window_class_conflict_with_foreign_procedure_is_rejected() {
+    let module = current_test_module();
+    let name = windows_core::w!("SakuraInputTsfDeferredTestConflict");
+
+    // SAFETY: static class string and a procedure in this executable.
+    let atom = unsafe {
+        RegisterClassW(&WNDCLASSW {
+            lpfnWndProc: Some(foreign_window_procedure),
+            hInstance: HINSTANCE(module.0),
+            lpszClassName: name,
+            ..Default::default()
+        })
+    };
+    assert_ne!(atom, 0, "pre-registration must succeed");
+
+    let error = ensure_deferred_window_class(module, name)
+        .expect_err("a foreign procedure under the same (name, module) must be rejected");
+    assert_eq!(error.code(), E_UNEXPECTED);
+    assert!(
+        error.message().contains("different procedure"),
+        "error must name the procedure conflict: {}",
+        error.message()
+    );
+}
+
+/// D3: registration and window creation both use the given module handle —
+/// proven with a module that is not the exe, where a NULL hInstance could
+/// not impersonate it.
+#[test]
+fn deferred_window_registers_and_creates_under_the_given_module() {
+    let other = non_exe_module();
+    let name = windows_core::w!("SakuraInputTsfDeferredTestModule");
+
+    let window = create_deferred_window_in(other, name).expect("window");
+
+    let mut info = WNDCLASSW::default();
+    // SAFETY: `info` is writable and `name` is a valid class string.
+    unsafe { GetClassInfoW(Some(HINSTANCE(other.0)), name, &mut info) }
+        .expect("class info under the foreign module");
+    assert_eq!(
+        info.lpfnWndProc.map(|procedure| procedure as usize),
+        Some(deferred_window_procedure as *const () as usize)
+    );
+    // SAFETY: `window` is a live HWND created above on this thread.
+    let instance = unsafe { GetWindowLongPtrW(window, GWLP_HINSTANCE) };
+    assert_eq!(instance, other.0 as isize);
+    // SAFETY: `window` belongs to this thread and has no queued work.
+    unsafe {
+        DestroyWindow(window).expect("destroy window");
+    }
+}
+
+/// D3 isolation: the same class name under two different module handles
+/// resolves independently in either registration order, mirroring two DLL
+/// versions in one host.
+#[test]
+fn deferred_window_class_is_scoped_per_module() {
+    let exe = current_test_module();
+    let other = non_exe_module();
+
+    // Order 1: exe first, then the foreign module.
+    let name1 = windows_core::w!("SakuraInputTsfDeferredTestIsolation1");
+    ensure_deferred_window_class(exe, name1).expect("exe module registration");
+    ensure_deferred_window_class(other, name1).expect("foreign module registration");
+
+    // Order 2: foreign module first, then the exe.
+    let name2 = windows_core::w!("SakuraInputTsfDeferredTestIsolation2");
+    ensure_deferred_window_class(other, name2).expect("foreign module registration");
+    ensure_deferred_window_class(exe, name2).expect("exe module registration");
+
+    for module in [exe, other] {
+        for name in [name1, name2] {
+            let mut info = WNDCLASSW::default();
+            // SAFETY: `info` is writable and `name` is a valid class string.
+            unsafe { GetClassInfoW(Some(HINSTANCE(module.0)), name, &mut info) }
+                .expect("class info per module");
+            assert_eq!(
+                info.lpfnWndProc.map(|procedure| procedure as usize),
+                Some(deferred_window_procedure as *const () as usize)
+            );
+        }
+    }
 }

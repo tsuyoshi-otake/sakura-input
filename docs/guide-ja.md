@@ -109,8 +109,11 @@ sakura_settings.exe diagnostics show tsv
 | `logs\logon.status` | サインイン時の自己修復結果 |
 | `dumps\` | 最大 5 個のローカル WER minidump |
 | `update\` | 更新 opt-in、検証中 installer、install log |
+| `ai-codex-tmp\` | Codex CLI の作業ディレクトリ。リクエストごとに新しい空のディレクトリを作成し、残ったものは作成から10分経過後に後続リクエストが削除（1回最大32個、削除できないものはスキップ） |
 
 バックアップは設定画面または CLI の辞書・学習エクスポートを優先してください。エンジン実行中に `log.bin` を直接コピーするより、整合したスナップショットを取得できます。
+
+学習ログ全体を書き直す処理（圧縮、消去、旧形式からの変換）は、一時ファイルに書き込んでから 1 回の置換で `log.bin` に反映します。次に学習ログを開くときに、中断で残った一時ファイルを削除します。`log.bin` が無い場合は、圧縮時のバックアップを、それが無ければ旧形式からの変換時のバックアップを `log.bin` に戻します。戻す候補が複数あるときは何も戻しません。学習を初期化するには、設定画面の消去または `sakura_settings.exe learning clear` を使ってください。`log.bin` を手動で削除すると、バックアップから戻されることがあります。旧形式から変換した際に残る `log.v1.bak`／`log.v2.bak`（同名のファイルがあると末尾に番号が付きます）は変換前の学習内容を含み、消去しても削除されません。
 
 ## 6. 更新
 
@@ -124,6 +127,8 @@ sakura_settings.exe update disable
 ```
 
 更新処理は HTTPS 配布元を allowlist で制限し、manifest の厳密な形式、installer の宣言サイズ、SHA-256、Authenticode 署名を確認します。いずれかが一致しなければ installer を削除して実行しません。新しい runtime は `Program Files\Sakura Input\versions\<version>-<build-id>` に先にコピーされ、COM 登録を新しい DLL に切り替えてから旧世代を解放します。通常のサイレント更新の終了コードは `0` で、再起動は要求しません。旧 DLL が使用中なら、その versioned ディレクトリをログオン時の SYSTEM メンテナンスタスクが後で削除します。削除できない場合は次回ログオンへ残します。
+
+Program Files 以外にインストールされた Sakura Input を更新しようとすると、インストーラーはエラーで停止します。この場合は先にアンインストールしてから、Program Files 内に再インストールしてください。
 
 ## 7. 診断と復旧
 
@@ -157,6 +162,6 @@ Issue #32 の実験的 neural reranker は、自作の `Sakura-Rerank-Tiny-v1` �
 
 この worker はネットワークへ送信しません。engine が分類済み `Normal` scope の通常変換の読みからローカルで作った候補 snapshot だけを、同一マシン内の IPC で渡します。Password、URL、Email、Digits、未知または未分類 scope、直接入力、`test_only` 入力、短い読み、候補が 1 件だけの場合は worker を起動せず、入力内容も送信しません。通常の診断ログへ入力文字列を記録せず、自動アップロードもしません。
 
-変換のキー経路は worker の応答を待ちません。worker／モデルの欠落、起動失敗、異常応答、timeout、または一致しない古い結果では、従来のローカル順位のまま表示します。候補表示後に遅い結果で順序を変更することはありません。明示的な学習、完全一致 cache、ユーザー辞書の優先順位はモデルより上です。
+変換のキー経路は worker の応答を待ちません。worker／モデルの欠落、起動失敗、異常応答、timeout、または一致しない古い結果では、従来のローカル順位のまま表示します。ハッシュまたはサイズがworker内の固定値と一致しないモデルは使用せず、従来のローカル順位で変換します。候補表示後に遅い結果で順序を変更することはありません。明示的な学習、完全一致 cache、ユーザー辞書の優先順位はモデルより上です。
 
 `15 MiB` の private working-set 予算は TSF/engine 本体の予算であり、任意 worker のモデル、ONNX Runtime、working setは含みません。Sakuraモデルのworking setとcold/warm latencyは別途計測します。自作モデルはMITライセンスで配布承認済みですが、既存評価ではGate A未通過・final holdout未使用です。これは品質合格を示すものではありません。設定の neural reranker scope を `off` にすると無効化でき、`all-normal-conversions` にすると短い読みを含む通常変換へ広げられます。

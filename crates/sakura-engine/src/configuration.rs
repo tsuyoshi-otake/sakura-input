@@ -384,15 +384,48 @@ fn upgrade(
         return Err(error);
     }
 
-    fs::rename(path, &backup)?;
+    // The retained upgrade backup is a synced copy: the canonical file is
+    // never renamed away, so it cannot be missing at any instant (#360 A4).
+    if let Err(error) = copy_synced(path, &backup) {
+        let _ = fs::remove_file(&backup);
+        let _ = fs::remove_file(&temporary);
+        return Err(error);
+    }
     if let Err(error) = fs::rename(&temporary, path) {
-        // Best-effort rollback keeps the original active if publishing the
-        // canonical replacement fails after the backup rename.
-        let _ = fs::rename(&backup, path);
         let _ = fs::remove_file(&temporary);
         return Err(error);
     }
     Ok(backup)
+}
+
+fn copy_synced(source: &Path, destination: &Path) -> io::Result<()> {
+    take_backup_copy_fault(destination)?;
+    fs::copy(source, destination)?;
+    OpenOptions::new().write(true).open(destination)?.sync_all()
+}
+
+// Test-only fault: the backup copy fails after a partial backup file
+// exists, exercising the caller's cleanup of both partial artifacts.
+#[cfg(test)]
+thread_local! {
+    static UPGRADE_BACKUP_COPY_FAULT: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+#[cfg(test)]
+fn take_backup_copy_fault(destination: &Path) -> io::Result<()> {
+    if UPGRADE_BACKUP_COPY_FAULT.with(|flag| flag.replace(false)) {
+        fs::write(destination, b"partial backup")?;
+        return Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            "injected config upgrade backup copy fault",
+        ));
+    }
+    Ok(())
+}
+
+#[cfg(not(test))]
+fn take_backup_copy_fault(_destination: &Path) -> io::Result<()> {
+    Ok(())
 }
 
 fn unique_sibling(path: &Path, suffix: &str) -> PathBuf {
@@ -592,6 +625,112 @@ mod tests {
         assert!(profiles.iter().any(|profile| profile.matches("code.exe")));
 
         watcher.stop().expect("watcher stops and joins");
+        let _ = fs::remove_dir_all(path.parent().expect("parent"));
+    }
+
+    // #360 A4 helpers and contracts: the upgrade publishes with a single
+    // rename, so the canonical file is never absent (E1); a failed publish
+    // keeps it byte-identical with no temporary left (E2); the retained
+    // backup is a synced copy holding the pre-upgrade bytes (E3).
+
+    fn sibling_names(path: &Path) -> Vec<String> {
+        let mut names = fs::read_dir(path.parent().expect("sibling directory"))
+            .expect("list siblings")
+            .map(|entry| {
+                entry
+                    .expect("directory entry")
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect::<Vec<_>>();
+        names.sort();
+        names
+    }
+
+    #[cfg(windows)]
+    fn hold_without_delete_share(path: &Path) -> fs::File {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_SHARE_READ: u32 = 0x0000_0001;
+        const FILE_SHARE_WRITE: u32 = 0x0000_0002;
+        OpenOptions::new()
+            .read(true)
+            .write(true)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+            .open(path)
+            .expect("held handle without delete share")
+    }
+
+    // E1/E3: a successful upgrade leaves exactly the canonical file plus the
+    // retained v1 backup holding the original bytes byte-for-byte.
+    #[test]
+    fn upgrade_leaves_no_publish_artifacts_and_retains_exact_backup() {
+        let path = temporary_config("upgrade-clean");
+        let previous = "[settings]\nformat-version = \"1\"\nkeymap = \"atok\"\n";
+        fs::write(&path, previous).expect("previous config");
+
+        load(&path).expect("upgrade");
+
+        assert_eq!(
+            sibling_names(&path),
+            vec!["config.toml".to_owned(), "config.toml.v1.bak".to_owned()]
+        );
+        assert_eq!(
+            fs::read_to_string(path.with_file_name("config.toml.v1.bak")).expect("backup"),
+            previous
+        );
+        let _ = fs::remove_dir_all(path.parent().expect("parent"));
+    }
+
+    // E2/E3: when the replacement rename cannot run, the old file stays
+    // byte-identical, no temporary is stranded, and the synced backup copy
+    // still holds the pre-upgrade bytes.
+    #[test]
+    #[cfg(windows)]
+    fn upgrade_publish_failure_keeps_canonical_and_removes_temporary() {
+        let path = temporary_config("upgrade-failure");
+        let previous = "[settings]\nformat-version = \"1\"\nkeymap = \"atok\"\n";
+        fs::write(&path, previous).expect("previous config");
+        let _held = hold_without_delete_share(&path);
+
+        load(&path).expect_err("publish rename blocked");
+
+        assert_eq!(fs::read_to_string(&path).expect("canonical"), previous);
+        for name in sibling_names(&path) {
+            assert!(!name.contains(".tmp"), "publish temporary stranded: {name}");
+        }
+        assert_eq!(
+            fs::read_to_string(path.with_file_name("config.toml.v1.bak")).expect("retained backup"),
+            previous
+        );
+        drop(_held);
+        let _ = fs::remove_dir_all(path.parent().expect("parent"));
+    }
+
+    // E2/E3: a backup-copy failure removes the partial backup and the
+    // temporary file and leaves the canonical config untouched; the next load
+    // without the fault upgrades normally.
+    #[test]
+    fn upgrade_backup_copy_failure_keeps_canonical_and_removes_artifacts() {
+        let path = temporary_config("upgrade-backup-failure");
+        let previous = "[settings]\nformat-version = \"1\"\nkeymap = \"atok\"\n";
+        fs::write(&path, previous).expect("previous config");
+
+        UPGRADE_BACKUP_COPY_FAULT.with(|flag| flag.set(true));
+        load(&path).expect_err("backup copy failure");
+
+        assert_eq!(fs::read_to_string(&path).expect("canonical"), previous);
+        assert_eq!(
+            sibling_names(&path),
+            vec!["config.toml".to_owned()],
+            "partial backup and temporary were removed"
+        );
+
+        load(&path).expect("upgrade retries");
+        assert_eq!(
+            sibling_names(&path),
+            vec!["config.toml".to_owned(), "config.toml.v1.bak".to_owned()]
+        );
         let _ = fs::remove_dir_all(path.parent().expect("parent"));
     }
 }

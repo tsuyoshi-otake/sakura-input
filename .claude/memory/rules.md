@@ -47,7 +47,7 @@ claims in its scope. Multiple rows can apply to one issue.
 | --- | --- |
 | Performance, normalization, SIMD, or benchmark design/claims | `docs/rules/performance.md` |
 | CI/workflows, test validity, sandbox claims, persistence tests, diagnostic/error semantics | `docs/rules/ci-verification.md` |
-| Windows real-process tests, UI Automation, named pipes, installer/uninstaller, watchdogs, child deadlines, DPI | `docs/rules/windows.md` |
+| Windows real-process tests, UI Automation, named pipes, installer/uninstaller, watchdogs, child deadlines, DPI, window classes, DLL pinning, `cdylib` tests, or junction/reparse-point checks | `docs/rules/windows.md` |
 | Any Cargo, PowerShell, shell text edit, release-artifact lookup, or candidate-popup capture on this machine | `docs/rules/this-machine.md` |
 | TSF/COM re-entrancy, candidate begin/update/teardown, callback authority, cleanup, or borrow refusal | `docs/rules/tsf-reentrancy.md` |
 | Dictionary/prediction limits, overflow fixtures, packaging regexes, line endings, or raw-hash evidence | `docs/rules/overflow-packaging.md` |
