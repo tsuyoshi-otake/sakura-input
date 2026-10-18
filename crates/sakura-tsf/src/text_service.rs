@@ -4202,24 +4202,30 @@ fn classify_input_scope_with_cookie(context: &ITfContext, ec: u32) -> Result<Inp
 ///
 /// `property` is the `GetProperty(&GUID_PROP_INPUTSCOPE)` result and
 /// `read_value` performs the `GetValue(ec, range)` call on it, so the error
-/// policy for both reads lives here exactly once. A refused read of either
-/// step classifies as `Normal`: the only documented refusal is the E_FAIL
-/// WinForms and classic EDIT return instead of VT_EMPTY, which is "no
-/// restriction", not a classification failure.
+/// policy for both reads lives here exactly once.
+///
+/// E_FAIL is the one documented host refusal: WinForms and classic EDIT
+/// controls refuse the input-scope property with it instead of handing back
+/// VT_EMPTY, and their fields must stay ordinary so they keep learning. Any
+/// other error means Windows could not report the scope at all. That is
+/// `Unclassified`, which is fail closed for persistence (#360 A8;
+/// `docs/decisions/developer-history.md`). Unknown scope is reported as
+/// `Ok(Unclassified)` rather than `Err` on purpose: `read_input_scope`
+/// answers `Err` with the scope cached from an earlier field, which would
+/// silently apply a different field's class to this one.
 fn classify_scope_reads<P>(
     property: Result<P>,
     read_value: impl FnOnce(&P) -> Result<VARIANT>,
 ) -> Result<InputScope> {
     let property = match property {
         Ok(property) => property,
-        // WinForms and classic EDIT often refuse the property object with
-        // E_FAIL instead of handing back VT_EMPTY. That is "no restriction",
-        // not a classification failure.
-        Err(_) => return Ok(InputScope::Normal),
+        Err(error) if error.code() == E_FAIL => return Ok(InputScope::Normal),
+        Err(_) => return Ok(InputScope::Unclassified),
     };
     let value = match read_value(&property) {
         Ok(value) => value,
-        Err(_) => return Ok(InputScope::Normal),
+        Err(error) if error.code() == E_FAIL => return Ok(InputScope::Normal),
+        Err(_) => return Ok(InputScope::Unclassified),
     };
     classify_input_scope_variant(value)
 }

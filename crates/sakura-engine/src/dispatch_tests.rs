@@ -3,6 +3,7 @@ use std::fmt::Write as _;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use crate::correction::CorrectionTrail;
 use crate::input_history::{HistoryScope, InputHistoryRecord, InputHistoryService};
 use sakura_core::keymap::{KeyMap, State};
 use sakura_core::width::{
@@ -8450,6 +8451,15 @@ fn a_temporary_kana_transform_commits_without_teaching_the_reading_its_katakana_
         .expect("dispatcher");
     let mut out = OutputBuf::new();
     let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
+    // #360 A8: learning stays fail closed until the host's scope report is
+    // positively classified, as the TSF publish path does for a real field.
+    dispatcher.dispatch(
+        &Request::SetInputScope {
+            session,
+            scope: InputScope::Normal,
+        },
+        &mut out,
+    );
 
     let generation_before = learning.generation();
     type_word(&mut dispatcher, session, "ka", &mut out);
@@ -9869,6 +9879,18 @@ fn process_shared_learning_reselects_a_homophone_in_a_new_session() {
         .expect("shipped defaults");
     let mut out = OutputBuf::new();
     let first_session = create_session(&mut first, &mut out, "first.exe");
+    // #360 A8: learning stays fail closed until the host's scope report is
+    // positively classified, as the TSF publish path does for a real field.
+    assert_eq!(
+        first.dispatch(
+            &Request::SetInputScope {
+                session: first_session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        ),
+        Reply::Message(Response::Ok)
+    );
     type_word(&mut first, first_session, "kana", &mut out);
     for code in [KeyCode::Space, KeyCode::Down, KeyCode::Enter] {
         first.dispatch(
@@ -10631,6 +10653,242 @@ fn password_scope_cannot_reach_persistent_learning() {
             general: None,
         }
     );
+}
+
+/// E1 — K3 (safety, #360 A8): a commit in an unclassified session is never
+/// staged or learned, exactly like a sensitive-scope commit and like input
+/// history already refuses it (docs/decisions/developer-history.md).
+#[test]
+fn unclassified_scope_cannot_reach_persistent_learning() {
+    let learning = LearningService::memory();
+    let mut session = Session::new("unknown-field.exe");
+    session.apply_input_scope(InputScope::Unclassified);
+    session.preedit.push_str("かな").expect("bounded reading");
+
+    record_learning(
+        &mut session,
+        Some(&learning),
+        true,
+        None,
+        ExecutionPolicy::Apply,
+        "加奈",
+        0,
+    );
+    learning.confirm_all_staged();
+
+    assert_eq!(
+        learning.preference("かな", 0, [("仮名", 0), ("加奈", 0)]),
+        LearningPreference {
+            exact: None,
+            general: None,
+        }
+    );
+}
+
+/// E2 — K4 (unchanged, liveness, #360 A8): a commit in a classified Normal
+/// session is learned as before; the unclassified guard must not weaken
+/// ordinary learning.
+#[test]
+fn normal_scope_learning_baseline_for_unclassified_guard() {
+    let learning = LearningService::memory();
+    let mut session = Session::new("ordinary-field.exe");
+    session.apply_input_scope(InputScope::Normal);
+    session.preedit.push_str("かな").expect("bounded reading");
+
+    record_learning(
+        &mut session,
+        Some(&learning),
+        true,
+        None,
+        ExecutionPolicy::Apply,
+        "加奈",
+        0,
+    );
+    learning.confirm_all_staged();
+
+    assert_eq!(
+        learning
+            .preference("かな", 0, [("仮名", 0), ("加奈", 0)])
+            .exact,
+        Some(1)
+    );
+}
+
+/// E3 — K4 (unchanged, liveness, #360 A8): an unclassified commit still
+/// stands between the caret and the previously staged commit, so that
+/// commit is learned as it stands (#277), while the unclassified commit
+/// itself is never learned (K3).
+#[test]
+fn unclassified_commit_confirms_previous_staged_but_is_not_learned() {
+    let learning = LearningService::memory();
+    let mut session = Session::new("scope-swap.exe");
+    session.apply_input_scope(InputScope::Normal);
+    session.preedit.push_str("かな").expect("bounded reading");
+    record_learning(
+        &mut session,
+        Some(&learning),
+        true,
+        None,
+        ExecutionPolicy::Apply,
+        "仮名",
+        0,
+    );
+    // Staged only: still invisible to ranking.
+    assert_eq!(
+        learning
+            .preference("かな", 0, [("仮名", 0), ("加奈", 0)])
+            .exact,
+        None
+    );
+
+    session.apply_input_scope(InputScope::Unclassified);
+    session.preedit.clear();
+    session.preedit.push_str("なに").expect("bounded reading");
+    record_learning(
+        &mut session,
+        Some(&learning),
+        true,
+        None,
+        ExecutionPolicy::Apply,
+        "何",
+        0,
+    );
+
+    assert_eq!(
+        learning
+            .preference("かな", 0, [("仮名", 0), ("加奈", 0)])
+            .exact,
+        Some(0),
+        "the previous commit is learned as it stands without confirm_all_staged"
+    );
+    learning.confirm_all_staged();
+    assert_eq!(
+        learning.preference("なに", 0, [("何", 0)]),
+        LearningPreference {
+            exact: None,
+            general: None,
+        },
+        "the unclassified commit is never learned"
+    );
+}
+
+/// E4 — K3 (safety, #360 A8): an unclassified commit tracks no correction.
+/// A trail that already held an erase run must be cleared by the commit,
+/// never turned into a staged reject-only record (#305).
+#[test]
+fn unclassified_commit_clears_the_correction_trail() {
+    let learning = LearningService::memory();
+    let mut session = Session::new("unknown-field.exe");
+    session.apply_input_scope(InputScope::Unclassified);
+    session.correction_trail_mut().erase();
+    session.correction_trail_mut().erase();
+    assert_ne!(
+        *session.correction_trail_mut(),
+        CorrectionTrail::default(),
+        "the test must start with a populated trail"
+    );
+    session.preedit.push_str("かな").expect("bounded reading");
+
+    record_learning(
+        &mut session,
+        Some(&learning),
+        true,
+        None,
+        ExecutionPolicy::Apply,
+        "加奈",
+        0,
+    );
+
+    assert_eq!(
+        *session.correction_trail_mut(),
+        CorrectionTrail::default(),
+        "an unclassified commit tracks no correction"
+    );
+    learning.confirm_all_staged();
+    assert_eq!(
+        learning.test_rejection("かな", 0, "加奈"),
+        None,
+        "no reject-only record was staged either"
+    );
+}
+
+/// E5 — K5 (reachability, #360 A8): Request::SetInputScope { Unclassified }
+/// reaches apply_input_scope and blocks learning end to end through the
+/// dispatcher, while the same key sequence in a classified Normal session
+/// learns the pair.
+#[test]
+fn unclassified_scope_blocks_learning_end_to_end_through_dispatcher() {
+    let learning = Arc::new(LearningService::memory());
+    let mut dispatcher = conversion_dispatcher();
+    dispatcher.observed_learning_generation = learning.generation();
+    dispatcher.learning = Some(Arc::clone(&learning));
+    let mut out = OutputBuf::new();
+
+    let session = create_session(&mut dispatcher, &mut out, "unknown-field.exe");
+    assert_eq!(
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Unclassified,
+            },
+            &mut out,
+        ),
+        Reply::Message(Response::Ok)
+    );
+    let generation_before = learning.generation();
+    type_word(&mut dispatcher, session, "kana", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Space),
+        },
+        &mut out,
+    );
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Enter),
+        },
+        &mut out,
+    );
+    assert_eq!(out.commit_text(), Some("仮名"));
+    assert_eq!(
+        learning.generation(),
+        generation_before,
+        "an unclassified commit must not move the learning epoch"
+    );
+    learning.confirm_all_staged();
+    assert_eq!(learned_kana_choice(&learning), None);
+
+    let ordinary = create_session(&mut dispatcher, &mut out, "ordinary-field.exe");
+    assert_eq!(
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session: ordinary,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        ),
+        Reply::Message(Response::Ok)
+    );
+    type_word(&mut dispatcher, ordinary, "kana", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session: ordinary,
+            key: named_key(KeyCode::Space),
+        },
+        &mut out,
+    );
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session: ordinary,
+            key: named_key(KeyCode::Enter),
+        },
+        &mut out,
+    );
+    assert_eq!(out.commit_text(), Some("仮名"));
+    learning.confirm_all_staged();
+    assert_eq!(learned_kana_choice(&learning), Some(0));
 }
 
 #[test]

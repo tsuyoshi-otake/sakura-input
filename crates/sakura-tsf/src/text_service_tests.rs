@@ -1073,6 +1073,99 @@ fn an_empty_variant_classifies_as_normal_and_other_shapes_stay_fail_closed() {
     assert!(classify_input_scope_variant(VARIANT::from(42i32)).is_err());
 }
 
+/// T1 — K1 (safety, #360 A8): a scope read that fails with any error other
+/// than E_FAIL, whether GetProperty or GetValue raised it, classifies the
+/// field as Unclassified so persistence stays fail closed.
+#[test]
+fn input_scope_read_errors_other_than_e_fail_classify_unclassified() {
+    let codes = [
+        ("E_NOTIMPL", windows::core::HRESULT(0x8000_4001u32 as i32)),
+        (
+            "E_UNEXPECTED",
+            windows::core::HRESULT(0x8000_FFFFu32 as i32),
+        ),
+        (
+            "E_ACCESSDENIED",
+            windows::core::HRESULT(0x8007_0005u32 as i32),
+        ),
+        (
+            "E_INVALIDARG",
+            windows::core::HRESULT(0x8007_0057u32 as i32),
+        ),
+        (
+            "E_OUTOFMEMORY",
+            windows::core::HRESULT(0x8007_000Eu32 as i32),
+        ),
+        ("TF_E_NOLOCK", windows::core::HRESULT(0x8004_0201u32 as i32)),
+    ];
+    for (name, code) in codes {
+        let property_read =
+            classify_scope_reads::<()>(Err(Error::from_hresult(code)), |_| Ok(VARIANT::default()));
+        assert_eq!(
+            property_read.expect("a refused property read still classifies"),
+            InputScope::Unclassified,
+            "GetProperty {name}"
+        );
+        let value_read = classify_scope_reads::<()>(Ok(()), |_| Err(Error::from_hresult(code)));
+        assert_eq!(
+            value_read.expect("a refused value read still classifies"),
+            InputScope::Unclassified,
+            "GetValue {name}"
+        );
+    }
+}
+
+/// T2 — K2 (unchanged, liveness, #360 A8): E_FAIL is the one documented
+/// host refusal, so GetProperty or GetValue answering it still classifies
+/// as Normal and WinForms/classic EDIT fields keep learning. A successful
+/// read of an empty VARIANT is ordinary text as before.
+#[test]
+fn input_scope_e_fail_and_empty_variant_still_classify_normal() {
+    let e_fail = windows::core::HRESULT(0x8000_4005u32 as i32);
+    assert_eq!(
+        classify_scope_reads::<()>(Err(Error::from_hresult(e_fail)), |_| {
+            Ok(VARIANT::default())
+        })
+        .expect("E_FAIL is the documented host refusal"),
+        InputScope::Normal
+    );
+    assert_eq!(
+        classify_scope_reads::<()>(Ok(()), |_| Err(Error::from_hresult(e_fail)))
+            .expect("E_FAIL is the documented host refusal"),
+        InputScope::Normal
+    );
+    assert_eq!(
+        classify_scope_reads::<()>(Ok(()), |_| Ok(VARIANT::default()))
+            .expect("a successful read classifies"),
+        InputScope::Normal
+    );
+}
+
+/// T3 (#360 A8): a refused GetProperty must not fall through to GetValue —
+/// the read is already a failure and the value cannot be trusted either.
+#[test]
+fn input_scope_property_error_never_attempts_the_value_read() {
+    let calls = Cell::new(0u32);
+    let result = classify_scope_reads::<()>(
+        Err(Error::from_hresult(windows::core::HRESULT(
+            0x8007_0005u32 as i32,
+        ))),
+        |_| {
+            calls.set(calls.get() + 1);
+            Ok(VARIANT::default())
+        },
+    );
+    assert_eq!(
+        result.expect("a refused property read still classifies"),
+        InputScope::Unclassified
+    );
+    assert_eq!(
+        calls.get(),
+        0,
+        "GetValue must not run after a property error"
+    );
+}
+
 #[test]
 fn lifecycle_revocation_prevents_an_inflight_callback_from_republishing_state() {
     let mut owner = CompositionWriteOwner::default();
