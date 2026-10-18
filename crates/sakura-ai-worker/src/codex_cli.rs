@@ -1,4 +1,4 @@
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
@@ -229,21 +229,32 @@ fn classify_cli_error(stderr: &[u8]) -> &'static str {
 fn resolve_codex_cli() -> Option<PathBuf> {
     // Prefer the npm-installed command because it owns the user's normal Codex
     // CLI authentication. Standalone codex.exe remains a supported fallback.
+    resolve_codex_cli_with(where_lookup)
+}
+
+fn resolve_codex_cli_with(
+    mut lookup: impl FnMut(&str) -> io::Result<Option<PathBuf>>,
+) -> Option<PathBuf> {
     for name in ["codex.cmd", "codex.exe"] {
-        let output = Command::new("where.exe").arg(name).output().ok()?;
-        if !output.status.success() {
-            continue;
-        }
-        if let Some(path) = String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .map(str::trim)
-            .find(|line| !line.is_empty())
-            .map(PathBuf::from)
-        {
-            return Some(path);
+        match lookup(name) {
+            Ok(Some(path)) => return Some(path),
+            Ok(None) => continue,
+            Err(_) => return None,
         }
     }
     None
+}
+
+fn where_lookup(name: &str) -> io::Result<Option<PathBuf>> {
+    let output = Command::new("where.exe").arg(name).output()?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(PathBuf::from))
 }
 
 fn developer_instructions(operation: Operation, style: Style) -> String {
@@ -309,8 +320,12 @@ impl EmptyWorkdir {
             .ok_or(())?
             .join("SakuraInput")
             .join("ai-codex-tmp");
-        std::fs::create_dir_all(&base).map_err(|_| ())?;
-        let path = base.join(format!("{}-{id}", std::process::id()));
+        Self::create_in(&base, std::process::id(), id)
+    }
+
+    fn create_in(base: &Path, pid: u32, id: u64) -> Result<Self, ()> {
+        std::fs::create_dir_all(base).map_err(|_| ())?;
+        let path = base.join(format!("{pid}-{id}"));
         std::fs::create_dir(&path).map_err(|_| ())?;
         Ok(Self(path))
     }
