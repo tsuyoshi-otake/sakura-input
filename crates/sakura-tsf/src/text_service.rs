@@ -3992,10 +3992,10 @@ impl Drop for SyncClaimOnExit<'_> {
 /// from sharing a single (name, instance) pair — the newer DLL would otherwise
 /// inherit the older copy's `deferred_window_procedure` (issue #360, A2).
 ///
-/// There is deliberately no `UnregisterClassW`: it cannot run from `DllMain`,
-/// and it fails while another thread still owns a window of the class. The
-/// module pin in `exports.rs` keeps this procedure's code resident until
-/// process exit, so leaving the class registered is safe.
+/// There is deliberately no class unregistration: it cannot run from
+/// `DllMain`, and it fails while another thread still owns a window of the
+/// class. The module pin in `exports.rs` keeps this procedure's code
+/// resident until process exit, so leaving the class registered is safe.
 ///
 /// A second call with the class already present is fine only when the
 /// registered procedure is ours; any other procedure means a foreign module
