@@ -487,8 +487,11 @@ enum TempClass {
     Foreign,
 }
 
-/// A failed recovery delete or roll forward is `Busy` for a sharing or
-/// permission failure and `Io` otherwise, so callers can retry busy state.
+/// A failed recovery delete or roll forward maps `PermissionDenied`
+/// (`ERROR_ACCESS_DENIED`) to `Busy`, the same rule `lock()` uses, and every
+/// other error to `Io`. Rust std reports `ERROR_SHARING_VIOLATION` as
+/// `Uncategorized`, so a sharing violation is `Io`. Callers render both as
+/// unavailable.
 fn io_error(error: io::Error) -> TotpStoreError {
     if error.kind() == io::ErrorKind::PermissionDenied {
         TotpStoreError::Busy
