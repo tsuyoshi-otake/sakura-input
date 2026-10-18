@@ -222,6 +222,38 @@ pub(crate) fn record_at(
         .map(|record| (payload_end, record))
 }
 
+/// Whether the unreadable tail of the current-format log `open` read —
+/// everything from `offset` (the end of the valid prefix `scan_records`
+/// returned) to `bytes.len()` — is a torn append rather than mid-file
+/// corruption (#360 A3). A torn tail is truncated quietly as before; a
+/// corrupt middle is quarantined first so no verified-after-the-fact byte
+/// is destroyed without a copy. Anything ambiguous is corruption: an
+/// extra copy only costs disk space.
+///
+/// Torn when:
+/// - (t1) the rest is shorter than one record envelope, or
+/// - (t2) the frame's declared length stays within `MAX_RECORD_BYTES` but
+///   runs past the end of what was read, or
+/// - (t3) every byte of the rest is zero — what NTFS returns past the
+///   valid data length after a power loss.
+pub(crate) fn unreadable_tail_is_torn(bytes: &[u8], offset: usize) -> bool {
+    let rest = &bytes[offset.min(bytes.len())..];
+    if rest.len() < RECORD_ENVELOPE_LEN {
+        return true;
+    }
+    if rest.iter().all(|byte| *byte == 0) {
+        return true;
+    }
+    let length = usize::try_from(u32::from_le_bytes(
+        rest[..4].try_into().expect("checked envelope"),
+    ))
+    .unwrap_or(usize::MAX);
+    if length > MAX_RECORD_BYTES {
+        return false;
+    }
+    rest.len() < RECORD_ENVELOPE_LEN + length
+}
+
 pub(crate) fn scan_records(bytes: &[u8], version: u16) -> io::Result<(usize, u64)> {
     if read_header(bytes)? != version {
         return Err(io::Error::new(
@@ -341,6 +373,80 @@ mod rejection_tests {
         );
         let oversized = "x".repeat(MAX_RECORD_BYTES);
         assert_eq!(rejection_surface("かな", &oversized), None);
+    }
+}
+
+#[cfg(test)]
+mod tail_classification_tests {
+    use super::{crc32, encode_record, header, unreadable_tail_is_torn};
+    use crate::learning::format::{
+        HEADER_LEN, LEARNING_FORMAT_VERSION, MAX_RECORD_BYTES, RECORD_ENVELOPE_LEN,
+    };
+
+    /// A header plus one valid frame; `last_good` is the end of that frame,
+    /// so everything appended after it is the unreadable tail.
+    fn log_with_tail(tail: &[u8]) -> (Vec<u8>, usize) {
+        let payload = encode_record("かな", "加奈", 3, 4, 20_000).unwrap();
+        let mut bytes = header(LEARNING_FORMAT_VERSION).to_vec();
+        bytes.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(&crc32(&payload).to_le_bytes());
+        bytes.extend_from_slice(&payload);
+        let last_good = bytes.len();
+        bytes.extend_from_slice(tail);
+        assert!(last_good > HEADER_LEN);
+        (bytes, last_good)
+    }
+
+    #[test]
+    fn a_rest_shorter_than_an_envelope_is_torn() {
+        let (bytes, last_good) = log_with_tail(&[9, 0, 0]);
+        assert!(unreadable_tail_is_torn(&bytes, last_good));
+    }
+
+    #[test]
+    fn a_frame_running_past_the_end_is_torn() {
+        let mut tail = 100u32.to_le_bytes().to_vec();
+        tail.extend_from_slice(&0u32.to_le_bytes());
+        let (bytes, last_good) = log_with_tail(&tail);
+        assert!(unreadable_tail_is_torn(&bytes, last_good));
+    }
+
+    #[test]
+    fn an_all_zero_rest_is_torn() {
+        let (bytes, last_good) = log_with_tail(&[0u8; 64]);
+        assert!(unreadable_tail_is_torn(&bytes, last_good));
+    }
+
+    #[test]
+    fn a_complete_frame_with_bad_crc_is_corruption() {
+        let payload = encode_record("かな", "仮名", 3, 4, 20_000).unwrap();
+        let mut damaged = payload.clone();
+        *damaged.last_mut().unwrap() ^= 0xFF;
+        let mut tail = (damaged.len() as u32).to_le_bytes().to_vec();
+        tail.extend_from_slice(&crc32(&payload).to_le_bytes());
+        tail.extend_from_slice(&damaged);
+        let (bytes, last_good) = log_with_tail(&tail);
+        assert!(!unreadable_tail_is_torn(&bytes, last_good));
+    }
+
+    #[test]
+    fn a_complete_frame_that_does_not_decode_is_corruption() {
+        // Valid CRC over a payload whose text is not UTF-8.
+        let mut payload = encode_record("かな", "加奈", 3, 4, 20_000).unwrap();
+        *payload.last_mut().unwrap() = 0xFF;
+        let mut tail = (payload.len() as u32).to_le_bytes().to_vec();
+        tail.extend_from_slice(&crc32(&payload).to_le_bytes());
+        tail.extend_from_slice(&payload);
+        let (bytes, last_good) = log_with_tail(&tail);
+        assert!(!unreadable_tail_is_torn(&bytes, last_good));
+    }
+
+    #[test]
+    fn an_oversized_length_field_is_corruption() {
+        let mut tail = ((MAX_RECORD_BYTES + 1) as u32).to_le_bytes().to_vec();
+        tail.extend_from_slice(&[0xAA; RECORD_ENVELOPE_LEN]);
+        let (bytes, last_good) = log_with_tail(&tail);
+        assert!(!unreadable_tail_is_torn(&bytes, last_good));
     }
 }
 
