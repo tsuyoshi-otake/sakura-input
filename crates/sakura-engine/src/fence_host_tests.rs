@@ -147,8 +147,23 @@ fn fence_host_key_is_cleared_by_reset() {
         Some("\u{3000}"),
         "a leaked live claim would suppress this Space as well"
     );
-    // The dispatcher itself no longer fences under the stale host key.
+    // The dispatcher itself no longer fences under the stale host key:
+    // a new claim must be taken under the new session's own name.
     let session = create_session(&mut dispatcher, &mut out, "y.exe");
+    send_key(&mut dispatcher, session, char_key('a'), &mut out);
+    assert!(
+        fence.any_active("y.exe"),
+        "the post-reset claim must be keyed by the session name"
+    );
+    assert!(
+        !fence.any_active("host-a.exe"),
+        "a retained host-a.exe key would have taken this claim instead"
+    );
+    dispatcher.dispatch(&Request::Revert { session }, &mut out);
+    assert!(
+        !fence.any_active("y.exe"),
+        "the released claim must not survive Revert"
+    );
     send_key(
         &mut dispatcher,
         session,
