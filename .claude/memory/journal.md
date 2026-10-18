@@ -3212,3 +3212,10 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - New unconfirmed candidate: the learning log has no cross-process lock, so the settings offline clear (`sakura-settings/src/learning.rs:97,119`) can overlap an engine started by the watchdog.
 - Verification: issue body re-read after edit (17,882 chars, original 7 findings retained); summary comment issuecomment-6242876717. No code changed.
 - Learning: when citing a doc as evidence for a policy, quote the subject of the sentence; a release note about one feature is not a policy for another.
+
+## 2026-10-18 #360 A5 TOTP store temp-file recovery (6cb3cc1)
+- Symptom: one transient ReplaceFileW/MoveFileExW failure left a temp next to the canonical record; read() then returned Corrupt forever, so a TOTP-enabled Pad could not be unlocked or disabled.
+- Root cause: publish() returned early on failure without deleting the temp, and read() treated any temp as corruption. Additionally, with no backup name ReplaceFileW can fail with ERROR_UNABLE_TO_MOVE_REPLACEMENT (1176) where the canonical file is already gone; deleting the temp there would lose the store.
+- Fix: publish() deletes the temp on write/sync failure and routes replace failures through resolve_replace_failure (canonical present -> delete temp; canonical gone -> roll forward with MoveFileExW). read() recovers under the store lock: complete temp rolls forward, torn temp is deleted, foreign temp fails closed as Corrupt.
+- Verification: fmt/clippy clean; cargo test -p sakura-renderer all green (8 new recovery tests); dep/facade/policy/process-clean gates pass. Fail-before on 0070110: T1-T5 fail, T6 passes (old code already Corrupt on foreign). Six injected faults each caught by named tests. No verification/ diff.
+- Learning: a complete temp is security state (accepted step, failures, backoff); deleting it rolls back replay/brute-force protection, so recovery must classify before deleting, and roll forward rather than discard. Windows replace failures must be decided from post-failure disk state, not the error code alone.
