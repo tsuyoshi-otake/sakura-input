@@ -100,6 +100,16 @@ fn fence_spoofed_session_name_does_not_fence_the_named_host() {
         Some("\u{3000}"),
         "a spoofed session name must not arm the named host's teardown latch"
     );
+    // K2: the armed latch belongs to the attacker's image, so a same-image
+    // peer under a different session name spends it.
+    let mut sibling = fence_dispatcher(&fence, "attacker.exe");
+    let s = create_session(&mut sibling, &mut out, "sibling.exe");
+    send_key(&mut sibling, s, named_key(KeyCode::Space), &mut out);
+    assert_ne!(
+        out.commit_text(),
+        Some("\u{3000}"),
+        "the attacker's teardown latch must be spent by a same-image peer"
+    );
 }
 
 /// K5: `reset()` releases every claim and clears the host key, so a new
