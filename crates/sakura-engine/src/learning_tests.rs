@@ -1950,6 +1950,87 @@ fn startup_recovery_rejects_ambiguous_compact_backups() {
     let _ = fs::remove_dir_all(path.parent().expect("parent"));
 }
 
+// E4/E5: two upgrade backups with no canonical file are ambiguous and fail
+// closed like the compaction case — nothing is renamed, `clear.bak` keeps
+// its evidence, and only `*.tmp*` siblings are removed.
+#[test]
+fn startup_recovery_rejects_ambiguous_version_backups() {
+    for (name, second_extension) in [
+        ("recover-ambiguous-versions", "v2.bak"),
+        ("recover-ambiguous-version-copies", "v1.bak.42.7"),
+    ] {
+        let path = temporary_log(name);
+        let first = write_version_one_log(&path.with_extension("v1.bak"), "かな", "加奈");
+        let second = b"other version backup".to_vec();
+        fs::write(path.with_extension(second_extension), &second).expect("second backup");
+        fs::write(path.with_extension("clear.bak"), b"cleared").expect("clear.bak");
+        fs::write(path.with_extension("upgrade.tmp"), b"partial").expect("upgrade.tmp");
+
+        let error =
+            LearningService::open(&path).expect_err("ambiguous version backups fail closed");
+
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert!(!path.exists(), "nothing was restored");
+        assert_eq!(
+            fs::read(path.with_extension("v1.bak")).expect("first backup"),
+            first
+        );
+        assert_eq!(
+            fs::read(path.with_extension(second_extension)).expect("second backup"),
+            second
+        );
+        assert!(path.with_extension("clear.bak").exists());
+        assert!(
+            !path.with_extension("upgrade.tmp").exists(),
+            "temporaries are still swept"
+        );
+        let _ = fs::remove_dir_all(path.parent().expect("parent"));
+    }
+}
+
+// E4/E5: recovery matches this log's own stem and the `.{pid}.{id}` tail
+// exactly, so another base name's files and foreign suffixes or tails are
+// left untouched while an empty canonical log is created.
+#[test]
+fn startup_recovery_without_canonical_ignores_other_base_names() {
+    let path = temporary_log("recover-other-base-names");
+    let fixtures: [(&str, &[u8]); 6] = [
+        ("other.compact.bak", b"other compact"),
+        ("other.v1.bak", b"other v1"),
+        ("logx.compact.bak", b"logx compact"),
+        ("log.compact.bakx", b"wrong suffix"),
+        ("log.compact.bak.x.7", b"non-numeric tail"),
+        ("log.compact.bak.1.2.3", b"three-part tail"),
+    ];
+    for (name, bytes) in fixtures {
+        fs::write(path.with_file_name(name), bytes).expect(name);
+    }
+
+    let reopened = LearningService::open(&path).expect("open with unrelated siblings");
+
+    assert!(read_snapshot(&path)
+        .expect("empty snapshot")
+        .records
+        .is_empty());
+    assert_eq!(
+        sibling_names(&path),
+        vec![
+            "log.bin".to_owned(),
+            "log.compact.bak.1.2.3".to_owned(),
+            "log.compact.bak.x.7".to_owned(),
+            "log.compact.bakx".to_owned(),
+            "logx.compact.bak".to_owned(),
+            "other.compact.bak".to_owned(),
+            "other.v1.bak".to_owned(),
+        ]
+    );
+    for (name, bytes) in fixtures {
+        assert_eq!(fs::read(path.with_file_name(name)).expect(name), bytes);
+    }
+    drop(reopened);
+    let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
 // E1/E2: `clear` publishes with one rename; a successful clear leaves no
 // `*.tmp*` or rollback `*.bak*` sibling.
 #[test]
