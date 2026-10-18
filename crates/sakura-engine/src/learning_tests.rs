@@ -2282,3 +2282,5 @@ fn compaction_post_publish_reopen_failure_keeps_published_compaction() {
 mod correction;
 #[path = "learning_quarantine_tests.rs"]
 mod quarantine;
+#[path = "learning_version_backup_tests.rs"]
+mod version_backup;
