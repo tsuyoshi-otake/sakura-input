@@ -122,11 +122,9 @@ fn sweep_keeps_fresh_workdirs() {
     assert!(leaked_path.exists(), "a fresh workdir survives the sweep");
 }
 
-/// K3 (liveness): a lookup `Err` falls through to the next name; the order
-/// stays `codex.cmd` then `codex.exe`.
+/// K3 (a): the first found path wins and no later name is asked.
 #[test]
-fn lookup_error_falls_through_to_the_next_name() {
-    // (a) first name hits: no second lookup.
+fn lookup_first_hit_skips_the_remaining_names() {
     let mut asked = Vec::new();
     let p1 = PathBuf::from("C:\\tools\\codex.cmd");
     let result = resolve_codex_cli_with(|name| {
@@ -135,8 +133,12 @@ fn lookup_error_falls_through_to_the_next_name() {
     });
     assert_eq!(result, Some(p1));
     assert_eq!(asked, ["codex.cmd"]);
+}
 
-    // (b) codex.cmd spawn failure: codex.exe is still tried and wins.
+/// K3 (b) (liveness): a `where.exe` spawn failure for `codex.cmd` still
+/// tries `codex.exe`. The order is unchanged.
+#[test]
+fn lookup_error_falls_through_to_the_next_name() {
     let mut asked = Vec::new();
     let p2 = PathBuf::from("C:\\tools\\codex.exe");
     let result = resolve_codex_cli_with(|name| {
@@ -149,8 +151,12 @@ fn lookup_error_falls_through_to_the_next_name() {
     });
     assert_eq!(result, Some(p2));
     assert_eq!(asked, ["codex.cmd", "codex.exe"]);
+}
 
-    // (c) both miss: None, both names asked in order.
+/// K3 (c): when every name misses, the result is `None` and both names
+/// were asked in order.
+#[test]
+fn lookup_all_misses_returns_none_in_order() {
     let mut asked = Vec::new();
     let result = resolve_codex_cli_with(|name| {
         asked.push(name.to_owned());
