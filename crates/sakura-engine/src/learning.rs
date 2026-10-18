@@ -745,9 +745,7 @@ struct State {
 
 impl State {
     /// Applies one learned commit to ranking and the log; `false` when the
-    /// log append failed. The durable append runs first, so a record the log
-    /// could not keep is never ranked in memory — in-memory learning and the
-    /// on-disk log always agree (#360 A4, E7).
+    /// log append failed and the commit lives only in memory.
     fn learn(
         &mut self,
         reading: &str,
@@ -756,13 +754,6 @@ impl State {
         right_context: u16,
         day: u32,
     ) -> bool {
-        if self
-            .log
-            .append(reading, surface, left_context, right_context, day)
-            .is_err()
-        {
-            return false;
-        }
         self.sequence = self.sequence.saturating_add(1);
         let sequence = self.sequence;
         self.index
@@ -770,13 +761,15 @@ impl State {
         reinstate(&mut self.rejections, reading, surface, left_context);
         self.prediction_history
             .learn(reading, surface, right_context, day, sequence);
-        true
+        self.log
+            .append(reading, surface, left_context, right_context, day)
+            .is_ok()
     }
 
     /// Records that the user corrected `surface` of `reading` away in
-    /// `left_context` (#305); `false` when the log append failed. A pair the
-    /// log could not record is not applied in memory either, so ranking never
-    /// hides a spelling the durable log still contains (#360 A4, E7).
+    /// `left_context` (#305); `false` when the log append failed and the
+    /// rejection lives only in memory. A pair the log could not replay
+    /// exactly is not applied at all.
     fn reject(
         &mut self,
         reading: &str,
@@ -788,13 +781,6 @@ impl State {
         if !rejection_is_recordable(reading, surface) {
             return true;
         }
-        if self
-            .log
-            .append_rejection(reading, surface, left_context, right_context, day)
-            .is_err()
-        {
-            return false;
-        }
         self.sequence = self.sequence.saturating_add(1);
         apply_rejection(
             &mut self.index,
@@ -805,7 +791,9 @@ impl State {
             right_context,
             self.sequence,
         );
-        true
+        self.log
+            .append_rejection(reading, surface, left_context, right_context, day)
+            .is_ok()
     }
 
     fn take_staged(&mut self, owner: u64) -> Option<StagedCommit> {
@@ -1355,14 +1343,12 @@ impl LearningService {
         let day = self.today();
         let mut state = self.lock_state();
         let hash = text_hash(reading);
-        if state.repair_suppress.contains(&hash) {
+        if !state.repair_suppress.insert(hash) {
             return;
         }
         if state.log.append_repair_suppress(reading, day).is_err() {
             self.skipped_writes.fetch_add(1, Ordering::Relaxed);
-            return;
         }
-        state.repair_suppress.insert(hash);
         drop(state);
         self.generation.fetch_add(1, Ordering::Release);
     }

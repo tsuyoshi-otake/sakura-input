@@ -2087,10 +2087,15 @@ fn clear_post_publish_reopen_failure_leaves_published_state() {
     assert!(read_snapshot(&path).expect("snapshot").records.is_empty());
     assert!(service.maintenance_failures() >= 1);
 
-    // Learning while the writer is down cannot keep the record, so it is not
-    // learned in memory either — memory and disk agree at every point (E7).
+    // `State::learn` documents the degraded mode: "`false` when the log
+    // append failed and the commit lives only in memory". A record learned
+    // while the writer is down is ranked in memory but never persisted.
+    // The restoring `maintain` goes through `compact_for_open`, whose
+    // `Compacted` path rebuilds the indexes from the on-disk log — so the
+    // unpersisted record is dropped and memory and disk agree again
+    // (pre-existing semantics).
     service.learn("reading", "blocked", 5, 6);
-    assert!(!history_contains(&service, "reading", "blocked"));
+    assert!(history_contains(&service, "reading", "blocked"));
     assert!(service.skipped_writes() >= 1);
     assert_eq!(
         service.maintain().expect("maintain restores the writer"),
