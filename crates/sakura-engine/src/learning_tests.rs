@@ -2105,5 +2105,54 @@ fn clear_post_publish_reopen_failure_leaves_published_state() {
     let _ = fs::remove_dir_all(path.parent().expect("parent"));
 }
 
+// E7: a writer-reopen failure after a published compaction returns the error
+// while the disk keeps the compacted content — never rolled back to the
+// pre-compaction bytes. This also proves the publish is a single rename: a
+// two-step implementation would restore the old canonical file here.
+#[test]
+fn compaction_post_publish_reopen_failure_keeps_published_compaction() {
+    let path = temporary_log("compact-post-publish");
+    let service = LearningService::open(&path).expect("open");
+    for _ in 0..4 {
+        service.learn("かな", "仮名", 3, 4);
+    }
+    service.learn("かな", "加奈", 3, 4);
+    service.maintain().expect("flush");
+
+    {
+        let mut state = service
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let _fault = ForgetFaultScope::new(&[ForgetFaultPoint::PostPublishAppendOpen]);
+        compact_state(&mut state, 1_024, 2).expect_err("writer reopen after publish");
+    }
+
+    // The published compacted file stands: only the two retained records.
+    let snapshot = read_snapshot(&path).expect("snapshot");
+    assert_eq!(snapshot.records.len(), 2);
+    assert!(snapshot
+        .records
+        .iter()
+        .all(|record| record.reading == "かな"));
+    assert_eq!(
+        sibling_names(&path),
+        vec!["log.bin".to_owned()],
+        "no rollback artifact is created"
+    );
+    // The log mirrors the disk and the next maintain() restores the writer.
+    assert_eq!(
+        service.maintain().expect("maintain restores the writer"),
+        MaintenanceOutcome::Compacted
+    );
+    service.learn("かな", "仮字", 3, 4);
+    assert_eq!(
+        service.maintain().expect("flush relearned record"),
+        MaintenanceOutcome::Flushed
+    );
+    drop(service);
+    let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
 #[path = "learning_correction_tests.rs"]
 mod correction;
