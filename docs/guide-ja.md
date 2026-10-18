@@ -109,6 +109,7 @@ sakura_settings.exe diagnostics show tsv
 | `logs\logon.status` | サインイン時の自己修復結果 |
 | `dumps\` | 最大 5 個のローカル WER minidump |
 | `update\` | 更新 opt-in、検証中 installer、install log |
+| `ai-codex-tmp\` | Codex CLI の作業ディレクトリ。リクエストごとに新しい空のディレクトリを作成し、残ったものは作成から10分経過後に後続リクエストが削除（1回最大32個、削除できないものはスキップ） |
 
 バックアップは設定画面または CLI の辞書・学習エクスポートを優先してください。エンジン実行中に `log.bin` を直接コピーするより、整合したスナップショットを取得できます。
 
