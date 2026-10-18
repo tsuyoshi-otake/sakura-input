@@ -155,6 +155,28 @@ mod tests {
         let _ = fs::remove_dir_all(directory);
     }
 
+    /// K5 (#360 bak): the offline clear route — `sakura_settings.exe
+    /// learning clear` with no engine running — deletes the retained
+    /// `v{N}.bak` upgrade backups, exact or numbered, along with the
+    /// records.
+    #[test]
+    fn offline_clear_deletes_version_backups() {
+        let directory = temporary_directory("version-backup");
+        let path = directory.join("learning.bin");
+        let (mut log, _, _) = LearningLog::open(&path, |_| ()).expect("open");
+        log.append("さくら", "桜", 1, 2, 20708).expect("append");
+        drop(log);
+        fs::write(directory.join("learning.v1.bak"), b"v1 backup").expect("v1.bak");
+        fs::write(directory.join("learning.v2.bak.1.2"), b"v2 numbered").expect("v2.bak.1.2");
+        assert_eq!(
+            clear_offline(&path).expect("clear"),
+            ClearRoute::Offline { cleared_records: 1 }
+        );
+        assert!(!directory.join("learning.v1.bak").exists());
+        assert!(!directory.join("learning.v2.bak.1.2").exists());
+        let _ = fs::remove_dir_all(directory);
+    }
+
     #[test]
     fn missing_learning_file_views_and_exports_as_empty_current_format() {
         let directory = temporary_directory("missing");

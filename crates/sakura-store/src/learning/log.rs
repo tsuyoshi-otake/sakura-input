@@ -564,6 +564,11 @@ impl LearningLog {
             // published. A removal failure aborts the clear here, before
             // anything is written, and `log.bin` stays unchanged.
             quarantine::remove_copies(&path)?;
+            // #360 bak: the retained `v{N}.bak` upgrade backups hold the
+            // pre-upgrade learning the user asked to erase, so they are
+            // removed too. As above, a failure aborts the clear before
+            // anything is written, and `log.bin` stays unchanged.
+            remove_version_backups(&path)?;
             if let Some(file) = self.file.as_ref() {
                 file.sync_data()?;
             }
@@ -915,7 +920,8 @@ enum PublishLeftover {
     CompactBackup,
     ClearBackup,
     /// `v{N}.bak` retained upgrade backup. Only v1/v2 are restore candidates;
-    /// every versioned backup is always kept.
+    /// startup recovery never deletes a versioned backup — only `clear` does
+    /// (#360 bak).
     VersionBackup(u16),
     Temporary,
 }
@@ -972,7 +978,8 @@ fn classify_publish_leftover(rest: &str) -> Option<PublishLeftover> {
 /// (#360 A4), run during `open` after the forget recovery and before
 /// `create_if_missing` so a recovered log is never overwritten empty.
 /// Matching is exact on this log's own stem: siblings of any other base name
-/// are never touched, and `v{N}.bak` files are never deleted.
+/// are never touched, and `v{N}.bak` files are never deleted here — only
+/// `clear` removes them (#360 bak).
 ///
 /// - Canonical present: every `compact.bak*`, `clear.bak*`, and publish
 ///   `*.tmp*` sibling is deleted.
@@ -1056,6 +1063,49 @@ fn recover_publish_artifacts_at_startup(path: &Path) -> io::Result<()> {
     remove_all(&clear_backups)?;
     if let Some(candidate) = restore {
         fs::rename(candidate, path)?;
+    }
+    Ok(())
+}
+
+/// Removes every regular file matching this log's retained `v{N}.bak`
+/// upgrade backups — the exact name or the `.{pid}.{id}` numbered form
+/// `unique_sibling` produces — of any version number (#360 bak). Called by
+/// `clear` before the empty log is published, under the same error rules as
+/// `quarantine::remove_copies`: listing and per-entry errors propagate, a
+/// `NotFound` removal is fine, and any other removal error is returned so
+/// the clear fails before anything is written.
+fn remove_version_backups(path: &Path) -> io::Result<()> {
+    let Some(parent) = path.parent() else {
+        return Ok(());
+    };
+    let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+        return Ok(());
+    };
+    let stem_prefix = format!("{stem}.");
+    for entry in fs::read_dir(parent)? {
+        let entry = entry?;
+        // A directory or link carrying a backup's name is not a backup this
+        // code created, so only regular files are removed.
+        if !entry.file_type()?.is_file() {
+            continue;
+        }
+        let name = entry.file_name();
+        let Some(rest) = name
+            .to_str()
+            .and_then(|name| name.strip_prefix(stem_prefix.as_str()))
+        else {
+            continue;
+        };
+        if matches!(
+            classify_publish_leftover(rest),
+            Some(PublishLeftover::VersionBackup(_))
+        ) {
+            match fs::remove_file(entry.path()) {
+                Ok(()) => {}
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
+            }
+        }
     }
     Ok(())
 }
@@ -1354,9 +1404,10 @@ fn reopen_append(path: &Path) -> io::Result<File> {
     open_append(path)
 }
 
-/// Copies the canonical file to its retained `v{N}.bak` backup and fsyncs the
-/// copy. The backup exists before the canonical rename below, and a failure
-/// here leaves the canonical file untouched.
+/// Copies the canonical file to its `v{N}.bak` backup and fsyncs the copy.
+/// The backup exists before the canonical rename below, and a failure here
+/// leaves the canonical file untouched. The backup is retained: startup
+/// recovery never deletes it, and only `clear` removes it (#360 bak).
 fn copy_synced(source: &Path, destination: &Path) -> io::Result<()> {
     fs::copy(source, destination)?;
     OpenOptions::new().write(true).open(destination)?.sync_all()
