@@ -4190,16 +4190,34 @@ fn classify_input_scope_with_cookie(context: &ITfContext, ec: u32) -> Result<Inp
     };
     // SAFETY: `context` and `range` belong to the active edit session that
     // issued `ec`.
-    let property = match unsafe { context.GetProperty(&GUID_PROP_INPUTSCOPE) } {
+    let property = unsafe { context.GetProperty(&GUID_PROP_INPUTSCOPE) };
+    classify_scope_reads(property, |property| {
+        // SAFETY: the property and range belong to this context and `ec` is
+        // the active edit cookie.
+        unsafe { property.GetValue(ec, &range) }
+    })
+}
+
+/// Routes the two input-scope reads through one decision point.
+///
+/// `property` is the `GetProperty(&GUID_PROP_INPUTSCOPE)` result and
+/// `read_value` performs the `GetValue(ec, range)` call on it, so the error
+/// policy for both reads lives here exactly once. A refused read of either
+/// step classifies as `Normal`: the only documented refusal is the E_FAIL
+/// WinForms and classic EDIT return instead of VT_EMPTY, which is "no
+/// restriction", not a classification failure.
+fn classify_scope_reads<P>(
+    property: Result<P>,
+    read_value: impl FnOnce(&P) -> Result<VARIANT>,
+) -> Result<InputScope> {
+    let property = match property {
         Ok(property) => property,
         // WinForms and classic EDIT often refuse the property object with
         // E_FAIL instead of handing back VT_EMPTY. That is "no restriction",
         // not a classification failure.
         Err(_) => return Ok(InputScope::Normal),
     };
-    // SAFETY: the property and range belong to this context and `ec` is the
-    // active edit cookie.
-    let value = match unsafe { property.GetValue(ec, &range) } {
+    let value = match read_value(&property) {
         Ok(value) => value,
         Err(_) => return Ok(InputScope::Normal),
     };
