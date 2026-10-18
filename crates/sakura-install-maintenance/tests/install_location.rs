@@ -11,14 +11,44 @@ use std::path::{Path, PathBuf};
 
 use sakura_install_maintenance::install_location::{verify_admin_only_payload, Rejection};
 
-fn temp_root(name: &str) -> PathBuf {
+fn temp_root(name: &str) -> TempDir {
     let base = std::env::var_os("USERPROFILE")
         .map(PathBuf::from)
         .expect("USERPROFILE is always set on Windows")
         .join("tmp")
         .join(format!("sakura-a1-{name}-{}", std::process::id()));
     std::fs::create_dir_all(&base).expect("create temp root");
-    base
+    TempDir {
+        root: base,
+        junctions: Vec::new(),
+    }
+}
+
+/// A temporary directory that deletes itself even when a test fails.
+///
+/// `junctions` are removed first with `remove_dir` — a plain `remove_dir_all`
+/// on the root must never be trusted near a reparse point, so the links are
+/// deleted as links before the real tree is removed.
+struct TempDir {
+    root: PathBuf,
+    junctions: Vec<PathBuf>,
+}
+
+impl TempDir {
+    fn path(&self) -> &Path {
+        &self.root
+    }
+}
+
+impl Drop for TempDir {
+    fn drop(&mut self) {
+        for link in &self.junctions {
+            let _ = std::fs::remove_dir(link);
+        }
+        if self.root.exists() {
+            let _ = std::fs::remove_dir_all(&self.root);
+        }
+    }
 }
 
 /// C8 (liveness): the real system layout — `cmd.exe` under `System32`,
@@ -71,10 +101,10 @@ fn the_installed_program_files_layout_passes_when_present() {
 #[test]
 fn a_payload_in_a_user_owned_directory_is_rejected() {
     let root = temp_root("userowned");
-    let payload = root.join("sakura_regtool.exe");
+    let payload = root.path().join("sakura_regtool.exe");
     std::fs::write(&payload, b"payload").expect("write payload");
 
-    let error = verify_admin_only_payload(&root, &payload)
+    let error = verify_admin_only_payload(root.path(), &payload)
         .expect_err("a user-owned install root must fail");
     let text = error.to_string();
     assert!(
@@ -85,20 +115,19 @@ fn a_payload_in_a_user_owned_directory_is_rejected() {
         "the rejection must be ownership or a dangerous grant, got {error:?}"
     );
     assert!(text.contains("sakura"), "the error names the path: {text}");
-    std::fs::remove_dir_all(&root).expect("remove temp root");
 }
 
 /// C2: a junction anywhere in the walked chain is rejected even though a
 /// `mklink /J` needs no elevation to create.
 #[test]
 fn a_junction_in_the_chain_is_rejected() {
-    let base = temp_root("junction");
-    let real = base.join("real");
+    let mut base = temp_root("junction");
+    let real = base.path().join("real");
     std::fs::create_dir_all(&real).expect("create real dir");
     let payload = real.join("sakura_regtool.exe");
     std::fs::write(&payload, b"payload").expect("write payload");
 
-    let link = base.join("link");
+    let link = base.path().join("link");
     // New-Item's Junction target must be absolute; junction creation needs
     // no elevation.
     let status = std::process::Command::new("powershell")
@@ -114,13 +143,13 @@ fn a_junction_in_the_chain_is_rejected() {
         .status()
         .expect("run New-Item Junction");
     assert!(status.success(), "junction creation failed: {status}");
+    // Registered after creation so the guard deletes the link itself — never
+    // a recursive delete through the junction into its target.
+    base.junctions.push(link.clone());
 
     let error = verify_admin_only_payload(&link, &link.join("sakura_regtool.exe"))
         .expect_err("a junction install root must fail");
     assert_eq!(error.rejection, Rejection::ReparsePoint, "{error:?}");
-
-    std::fs::remove_dir(&link).expect("remove junction");
-    std::fs::remove_dir_all(&base).expect("remove temp root");
 }
 
 /// C1.
@@ -128,15 +157,12 @@ fn a_junction_in_the_chain_is_rejected() {
 fn a_payload_outside_the_root_is_rejected() {
     let root = temp_root("root");
     let elsewhere = temp_root("elsewhere");
-    let payload = elsewhere.join("sakura_regtool.exe");
+    let payload = elsewhere.path().join("sakura_regtool.exe");
     std::fs::write(&payload, b"payload").expect("write payload");
 
-    let error = verify_admin_only_payload(&root, &payload)
+    let error = verify_admin_only_payload(root.path(), &payload)
         .expect_err("a payload outside the install root must fail");
     assert_eq!(error.rejection, Rejection::OutsideInstallRoot, "{error:?}");
-
-    std::fs::remove_dir_all(&root).expect("remove temp root");
-    std::fs::remove_dir_all(&elsewhere).expect("remove temp root");
 }
 
 /// A component that cannot be opened at all must fail closed with
@@ -217,12 +243,44 @@ fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
         .unwrap_or_else(|| panic!("{signature} must exist"));
     let after = start + signature.len();
     let rest = &source[after..];
-    let end = rest
-        .find("\nfn ")
-        .or_else(|| rest.find("\npub fn "))
-        .map(|offset| after + offset)
-        .unwrap_or(source.len());
+    // The next top-level item ends the slice: whichever of these markers
+    // comes first, not whichever happens to match at all.
+    let end = [
+        "\nfn ",
+        "\npub fn ",
+        "\n#[cfg(",
+        "\nmod ",
+        "\nstruct ",
+        "\nenum ",
+    ]
+    .iter()
+    .filter_map(|marker| rest.find(marker))
+    .min()
+    .map(|offset| after + offset)
+    .unwrap_or(source.len());
     &source[start..end]
+}
+
+#[test]
+fn function_body_stops_at_the_next_top_level_item() {
+    let source =
+        "fn a() {\n    one();\n}\npub fn b() {\n    two();\n}\nfn c() {\n    three();\n}\n";
+    assert_eq!(
+        function_body(source, "fn a"),
+        "fn a() {\n    one();\n}",
+        "a following pub fn must end the slice"
+    );
+    assert_eq!(
+        function_body(source, "pub fn b"),
+        "pub fn b() {\n    two();\n}",
+        "a following fn must end the slice"
+    );
+    let with_attrs = "fn a() {\n    one();\n}\n#[cfg(test)]\nmod tests {}\n";
+    assert_eq!(
+        function_body(with_attrs, "fn a"),
+        "fn a() {\n    one();\n}",
+        "a following cfg/test module must end the slice"
+    );
 }
 
 /// C10: the installer guards the location in `PrepareToInstall` before the
