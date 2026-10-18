@@ -85,6 +85,17 @@ pub unsafe extern "system" fn DllGetClassObject(
     riid: *const GUID,
     ppv: *mut *mut c_void,
 ) -> HRESULT {
+    get_class_object(rclsid, riid, ppv, ensure_module_pinned)
+}
+
+/// The body of `DllGetClassObject`, with the module pin behind `pin` so
+/// tests can drive the failure path without kernel fault injection (D2).
+fn get_class_object(
+    rclsid: *const GUID,
+    riid: *const GUID,
+    ppv: *mut *mut c_void,
+    pin: impl FnOnce() -> HRESULT,
+) -> HRESULT {
     if ppv.is_null() {
         return E_POINTER;
     }
@@ -108,9 +119,9 @@ pub unsafe extern "system" fn DllGetClassObject(
     // dangling procedure pointer for the next `versions\...\sakura_tsf.dll`
     // this host loads (issue #360, A2). Fail closed: an unpinned DLL must
     // not create COM objects that register the class.
-    let pin = ensure_module_pinned();
-    if pin.is_err() {
-        return pin;
+    let pin_result = pin();
+    if pin_result.is_err() {
+        return pin_result;
     }
 
     let factory: IClassFactory = TextServiceFactory::new().into();
@@ -141,9 +152,21 @@ fn ensure_module_pinned() -> HRESULT {
             )
         } {
             Ok(()) => S_OK,
-            Err(error) => error.code(),
+            Err(error) => pin_error_hresult(error.code()),
         }
     })
+}
+
+/// A failed pin must never be reported as success. `Error::code()` normally
+/// carries a real failure HRESULT, but a `GetModuleHandleExW` failure with
+/// no thread last-error would surface `S_OK`; remap any non-failure code to
+/// `E_UNEXPECTED` so `DllGetClassObject` stays fail closed (D2).
+fn pin_error_hresult(code: HRESULT) -> HRESULT {
+    if code.is_err() {
+        code
+    } else {
+        E_UNEXPECTED
+    }
 }
 
 /// Reports whether COM may unload this DLL.
@@ -197,5 +220,73 @@ fn to_hresult(result: windows_core::Result<()>) -> HRESULT {
                 code
             }
         }
+    }
+}
+
+// `expect` and `panic!` are denied for this crate because it is loaded into
+// applications that are not ours to crash. Test code is not loaded into
+// anything, and a test that cannot fail loudly is not a test.
+#[cfg(test)]
+#[allow(clippy::expect_used, clippy::panic)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+    use windows::Win32::Foundation::E_ACCESSDENIED;
+
+    /// D2: a failed pin returns its exact HRESULT and hands out no factory.
+    #[test]
+    fn class_object_fails_closed_when_the_module_pin_fails() {
+        // A non-null sentinel proves the body clears the out-pointer before
+        // failing, not merely that it never wrote.
+        let mut ppv: *mut c_void = std::ptr::dangling_mut::<c_void>();
+        let hr = get_class_object(
+            &sakura_reg::CLSID_SAKURA_TSF,
+            &IClassFactory::IID,
+            &mut ppv,
+            || E_ACCESSDENIED,
+        );
+        assert_eq!(hr, E_ACCESSDENIED);
+        assert!(ppv.is_null(), "no factory may escape a failed pin");
+    }
+
+    /// D1 companion: a successful pin hands out a real class factory.
+    #[test]
+    fn class_object_returns_a_factory_when_the_pin_succeeds() {
+        let mut ppv: *mut c_void = core::ptr::null_mut();
+        let hr = get_class_object(
+            &sakura_reg::CLSID_SAKURA_TSF,
+            &IClassFactory::IID,
+            &mut ppv,
+            || S_OK,
+        );
+        assert_eq!(hr, S_OK);
+        assert!(!ppv.is_null(), "a factory must be returned");
+        // SAFETY: `ppv` is a live IClassFactory returned add-ref'd; dropping
+        // the wrapper releases exactly that reference.
+        drop(unsafe { IClassFactory::from_raw(ppv) });
+    }
+
+    /// A foreign CLSID is rejected before the pin is even consulted.
+    #[test]
+    fn class_object_rejects_other_clsids_without_pinning() {
+        let pin_called = Cell::new(false);
+        let mut ppv: *mut c_void = core::ptr::null_mut();
+        let unknown = GUID::from_u128(0x9aabbccd_0011_2233_4455_66778899aabb);
+        let hr = get_class_object(&unknown, &IClassFactory::IID, &mut ppv, || {
+            pin_called.set(true);
+            S_OK
+        });
+        assert_eq!(hr, CLASS_E_CLASSNOTAVAILABLE);
+        assert!(!pin_called.get(), "pin must not run for a foreign CLSID");
+        assert!(ppv.is_null());
+    }
+
+    /// D2 belt: a pin failure that somehow reports a non-failure code is
+    /// rewritten to E_UNEXPECTED, never to S_OK.
+    #[test]
+    fn pin_error_mapping_never_reports_success() {
+        assert_eq!(pin_error_hresult(S_OK), E_UNEXPECTED);
+        assert_eq!(pin_error_hresult(S_FALSE), E_UNEXPECTED);
+        assert_eq!(pin_error_hresult(E_ACCESSDENIED), E_ACCESSDENIED);
     }
 }

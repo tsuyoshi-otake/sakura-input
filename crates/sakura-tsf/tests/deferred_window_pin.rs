@@ -31,11 +31,14 @@ type DllGetClassObjectFn = unsafe extern "system" fn(
 /// The test executable lives in `target/<triple>/<profile>/deps/`; the
 /// cdylib sits one level up. `cargo test` never builds a cdylib lib target
 /// (nothing links it), so the test builds it itself — otherwise it would be
-/// asserting on a stale or absent DLL.
+/// asserting on a stale or absent DLL. Only the library is built
+/// (`cargo build -p sakura-tsf --lib --locked`, matching CI's `--locked`):
+/// building the package's bins too would unify features differently from
+/// the outer `cargo test --workspace --features ...` run.
 fn locate_sakura_tsf_dll() -> PathBuf {
     let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
     let status = std::process::Command::new(cargo)
-        .args(["build", "-p", "sakura-tsf"])
+        .args(["build", "-p", "sakura-tsf", "--lib", "--locked"])
         .env("CARGO_HTTP_CHECK_REVOKE", "false")
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .status()
@@ -111,8 +114,16 @@ fn dll_get_class_object_pins_the_module_until_process_exit() {
     drop(factory);
 
     unsafe { FreeLibrary(module) }.expect("FreeLibrary");
+    // A leaked +1 refcount (PIN flag dropped) survives one FreeLibrary but
+    // not an over-release: only a real pin keeps the module mapped after
+    // the count would have gone negative. Results are ignored; on an
+    // unpinned build the first free already unmapped the DLL and these are
+    // harmless ERROR_INVALID_HANDLE failures.
+    for _ in 0..3 {
+        let _ = unsafe { FreeLibrary(module) };
+    }
     assert!(
         module_handle_if_loaded(&dll).is_some(),
-        "pin: module must remain loaded after FreeLibrary"
+        "pin: module must remain loaded after over-release"
     );
 }

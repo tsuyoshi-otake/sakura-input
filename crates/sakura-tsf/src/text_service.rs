@@ -1056,28 +1056,7 @@ impl TextService {
         }
 
         // The hidden window owns exactly one deferred-work message per thread.
-        let module = module_handle();
-        ensure_deferred_window_class(module, DEFERRED_WINDOW_CLASS)?;
-        // SAFETY: the class is registered above under this module's handle, all
-        // remaining optional handles are null, and the zero-sized window is
-        // never shown.
-        let window_result = unsafe {
-            CreateWindowExW(
-                WINDOW_EX_STYLE::default(),
-                DEFERRED_WINDOW_CLASS,
-                DEFERRED_WINDOW_CLASS,
-                WS_OVERLAPPED,
-                0,
-                0,
-                0,
-                0,
-                None,
-                None,
-                Some(HINSTANCE(module.0)),
-                None,
-            )
-        };
-        let window = window_result?;
+        let window = create_deferred_window_in(module_handle(), DEFERRED_WINDOW_CLASS)?;
         // SAFETY: `window` was returned by `CreateWindowExW` and the value is a
         // pointer-sized owner token read only by this window's procedure.
         unsafe {
@@ -4052,6 +4031,32 @@ fn ensure_deferred_window_class(module: HMODULE, class_name: PCWSTR) -> Result<(
             E_UNEXPECTED,
             "deferred window class already registered to a different procedure",
         ))
+    }
+}
+
+/// Registers `class_name` under `module` and creates the deferred-work
+/// window with the same handle (D3). Split from `create_deferred_window` so
+/// tests can drive registration and creation against a module other than
+/// this DLL's own.
+fn create_deferred_window_in(module: HMODULE, class_name: PCWSTR) -> Result<HWND> {
+    ensure_deferred_window_class(module, class_name)?;
+    // SAFETY: the class is registered above under `module`, all remaining
+    // optional handles are null, and the zero-sized window is never shown.
+    unsafe {
+        CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            class_name,
+            class_name,
+            WS_OVERLAPPED,
+            0,
+            0,
+            0,
+            0,
+            None,
+            None,
+            Some(HINSTANCE(module.0)),
+            None,
+        )
     }
 }
 
