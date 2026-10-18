@@ -29,6 +29,7 @@ mod indicator;
 mod memo_protection;
 mod pad;
 mod pad_caption;
+mod pad_clipboard;
 mod pad_crypto_client;
 mod pad_gesture;
 mod pad_hardware;
