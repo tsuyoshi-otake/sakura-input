@@ -619,6 +619,16 @@ brackets = "square"
         sleep(Duration::from_millis(25));
     }
     assert_eq!(comma_output.as_deref(), Some("あ，"));
+    // #360 A9: the loop exits with the session still composing. Its fence
+    // claim is keyed by this test binary's image, so leaving it live would
+    // suppress the bracket session below — return it to Idle like the
+    // punctuation phase above does.
+    let _ = client.call(
+        &Request::Revert {
+            session: punctuation_session,
+        },
+        PATIENT,
+    );
 
     let bracket_session = session_for(&mut client, "settings-bracket-e2e.exe");
     assert!(matches!(
