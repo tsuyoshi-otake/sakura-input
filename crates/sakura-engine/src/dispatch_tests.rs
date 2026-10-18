@@ -8453,12 +8453,15 @@ fn a_temporary_kana_transform_commits_without_teaching_the_reading_its_katakana_
     let session = create_session(&mut dispatcher, &mut out, "notepad.exe");
     // #360 A8: learning stays fail closed until the host's scope report is
     // positively classified, as the TSF publish path does for a real field.
-    dispatcher.dispatch(
-        &Request::SetInputScope {
-            session,
-            scope: InputScope::Normal,
-        },
-        &mut out,
+    assert_eq!(
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        ),
+        Reply::Message(Response::Ok)
     );
 
     let generation_before = learning.generation();
