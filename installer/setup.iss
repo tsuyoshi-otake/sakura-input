@@ -74,9 +74,9 @@ en.UnsafeInstallLocation=This install location can be modified by standard users
 #ifndef AppBuildId
 #define AppBuildId "dev"
 #endif
-#define AppProductVersion "2.0.17"
+#define AppProductVersion "2.0.18"
 #ifndef AppVersionedDir
-#define AppVersionedDir "{app}\versions\2.0.17-dev"
+#define AppVersionedDir "{app}\versions\2.0.18-dev"
 #endif
 #ifndef IncludeJapaneseWordNet
 #define IncludeJapaneseWordNet 0
