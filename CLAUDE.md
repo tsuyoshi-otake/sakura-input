@@ -43,6 +43,7 @@ Read only the decision files relevant to the task:
 | IME key behavior | `docs/decisions/input-behavior.md` |
 | Developer input history | `docs/decisions/developer-history.md` |
 | Correction learning / Issue #305 | `docs/decisions/issue-305-correction-learning.md` |
+| Hardening choices / Issue #360 (A3, #3, A6, A8, A9, bak) | `docs/decisions/issue-360-hardening.md` |
 
 Consult `.claude/memory/rules.md` for verified rules relevant to the code or
 command being changed. These rules include machine-specific Cargo constraints,
