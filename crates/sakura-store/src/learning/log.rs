@@ -510,13 +510,13 @@ impl LearningLog {
     /// never missing (#360 A4). Terminal states: on success the log is empty
     /// with a live writer. On a publish failure the old canonical file and its
     /// records are untouched and the old writer is restored. If reopening the
-    /// append writer fails after publication, the error is returned but the
-    /// published empty file is never rolled back: `self` then mirrors the disk
-    /// (`records == 0`, `bytes == HEADER_LEN`, `file: None`). In that state
-    /// `append` returns `BrokenPipe`, and the next `maintain` rewrites the
-    /// published file through `compact_for_open`, which restores the writer.
-    /// The caller sees `Err`, so the caller-side indexes keep their pre-clear
-    /// contents until a later successful mutation or restart.
+    /// append writer fails after publication, the clear still took effect
+    /// durably: `prepare` runs on the empty view, `self` mirrors the disk
+    /// (`records == 0`, `bytes == HEADER_LEN`, `file: None`), the failure is
+    /// reported through `maintenance_failure_delta`, and `Ok` is returned.
+    /// In that state `append` returns `BrokenPipe`, and the next `maintain`
+    /// rewrites the published file through `compact_for_open`, which restores
+    /// the writer.
     pub fn clear<T>(
         &mut self,
         prepare: impl FnOnce(ReplayView<'_>) -> T,
@@ -546,24 +546,16 @@ impl LearningLog {
                 return Err(error);
             }
             let file = match reopen_append(&path) {
-                Ok(file) => file,
-                Err(error) => {
+                Ok(file) => Some(file),
+                Err(_error) => {
                     receipt.maintenance_failure_delta =
                         receipt.maintenance_failure_delta.saturating_add(1);
-                    *self = LearningLog {
-                        file: None,
-                        path: Some(path),
-                        bytes: HEADER_LEN as u64,
-                        records: 0,
-                        dirty_records: 0,
-                        forget_artifacts: ForgetArtifacts::default(),
-                    };
-                    return Err(error);
+                    None
                 }
             };
             let prepared = prepare(ReplayView::from_verified(&empty, LEARNING_FORMAT_VERSION));
             *self = LearningLog {
-                file: Some(file),
+                file,
                 path: Some(path),
                 bytes: HEADER_LEN as u64,
                 records: 0,
@@ -679,6 +671,7 @@ pub enum LearningFaultPoint {
     BackupCleanup,
     TemporaryCleanup,
     PostPublishAppendOpen,
+    UpgradeBackupCopy,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -693,6 +686,7 @@ enum LearningFaultPoint {
     BackupCleanup,
     TemporaryCleanup,
     PostPublishAppendOpen,
+    UpgradeBackupCopy,
 }
 
 #[cfg(any(test, feature = "test-hooks"))]
@@ -1338,11 +1332,24 @@ fn copy_synced(source: &Path, destination: &Path) -> io::Result<()> {
     OpenOptions::new().write(true).open(destination)?.sync_all()
 }
 
+/// Fault-injectable wrapper around `copy_synced` for the upgrade backup: the
+/// injected failure leaves a partial backup file behind so the caller's
+/// cleanup is exercised exactly as after a real mid-copy failure.
+fn copy_upgrade_backup(path: &Path, backup: &Path) -> io::Result<()> {
+    if take_learning_fault(LearningFaultPoint::UpgradeBackupCopy) {
+        fs::write(backup, b"partial upgrade backup")?;
+        return Err(injected_learning_error(
+            LearningFaultPoint::UpgradeBackupCopy,
+        ));
+    }
+    copy_synced(path, backup)
+}
+
 fn publish_upgrade(path: &Path, bytes: &[u8], source_version: u16) -> io::Result<()> {
     let temporary = unique_sibling(path, "upgrade.tmp");
     let backup = unique_sibling(path, &format!("v{source_version}.bak"));
     write_new_file(&temporary, bytes)?;
-    if let Err(error) = copy_synced(path, &backup) {
+    if let Err(error) = copy_upgrade_backup(path, &backup) {
         let _ = fs::remove_file(&backup);
         let _ = fs::remove_file(&temporary);
         return Err(error);
