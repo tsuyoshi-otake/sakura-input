@@ -100,6 +100,14 @@ fn run_child_process() {
         stdout,
         stderr,
     );
+    for case in ["case T1: ok", "case T2: ok", "case T3: ok"] {
+        assert!(
+            stdout.contains(case),
+            "child output is missing `{case}`\nstdout:\n{}\nstderr:\n{}",
+            stdout,
+            stderr,
+        );
+    }
 }
 
 fn station_thread_main() {
@@ -149,9 +157,42 @@ fn station_thread_main() {
         .expect("create message-only window");
         let _window = WindowGuard(window);
 
-        t1_protected_copy_is_marked_and_pasteable(window);
-        t2_normal_copy_is_text_only(window);
-        t3_marker_failure_empties_the_clipboard(window);
+        // Each case runs under catch_unwind so one failure cannot hide the
+        // rest; the wrapper reports exactly one `case NAME: ok|FAILED` line
+        // and leaves the clipboard closed for the next case.
+        let mut passed = true;
+        passed &= run_case("T1", || t1_protected_copy_is_marked_and_pasteable(window));
+        passed &= run_case("T2", || t2_normal_copy_is_text_only(window));
+        passed &= run_case("T3", || t3_marker_failure_empties_the_clipboard(window));
+        assert!(passed, "at least one clipboard case failed");
+    }
+}
+
+fn run_case(name: &str, case: impl FnOnce()) -> bool {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(case)) {
+        Ok(()) => {
+            println!("case {name}: ok");
+            true
+        }
+        Err(payload) => {
+            // SAFETY: a panicked case can leave the clipboard open; the error
+            // is ignored on purpose.
+            unsafe {
+                let _ = CloseClipboard();
+            }
+            println!("case {name}: FAILED: {}", panic_message(&*payload));
+            false
+        }
+    }
+}
+
+fn panic_message(payload: &(dyn std::any::Any + Send)) -> &str {
+    if let Some(message) = payload.downcast_ref::<&str>() {
+        message
+    } else if let Some(message) = payload.downcast_ref::<String>() {
+        message.as_str()
+    } else {
+        "<non-string panic>"
     }
 }
 
