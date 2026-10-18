@@ -76,3 +76,15 @@
   sweep that followed silently ran the old engine. After restoring a swapped
   file, `touch` it (or copy with bash `cp` without `-p`), and confirm that the
   next build prints `Compiling <crate>` before trusting the run.
+
+- **Driving an agent in a sakura-tmux pane needs pane IDs and no MSYS path
+  conversion.** Verified 2026-10-18 (#360 A1): the Sakura Editor `sakura-tmux`
+  shim rejects `new-session -c` at runtime ("unsupported-surface"), and a
+  detached session or new window never starts its shell (the pane stays 80x24
+  with an empty title), so only an already-visible pane can host the agent.
+  Address it by pane ID (`-t %3`); a session target must be quoted (`'$2'`).
+  From Git Bash, `send-keys /clear` is rewritten to a Windows path unless the
+  call is prefixed with `MSYS_NO_PATHCONV=1 MSYS2_ARG_CONV_EXCL='*'`. Send the
+  text with `send-keys -l`, then `Enter` as a separate call, and watch for a
+  standalone marker line rather than a substring, because the agent's own
+  todo list echoes the marker text.
