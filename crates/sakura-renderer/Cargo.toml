@@ -56,5 +56,12 @@ features = [
     "Win32_UI_HiDpi",
 ]
 
+# Private window-station clipboard tests in pad_clipboard_tests.rs create a
+# station and desktop; kept in dev-dependencies so release builds do not gain
+# the feature.
+[dev-dependencies.windows]
+workspace = true
+features = ["Win32_System_StationsAndDesktops"]
+
 [lints]
 workspace = true
