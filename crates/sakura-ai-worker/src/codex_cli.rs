@@ -1,9 +1,9 @@
-use std::io::{Read, Write};
+use std::io::{self, Read, Write};
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 use sakura_ai_proto::{Effort, Operation, Request, Status, Style, MAX_TEXT_BYTES, MODEL};
 use serde_json::Value;
@@ -229,21 +229,30 @@ fn classify_cli_error(stderr: &[u8]) -> &'static str {
 fn resolve_codex_cli() -> Option<PathBuf> {
     // Prefer the npm-installed command because it owns the user's normal Codex
     // CLI authentication. Standalone codex.exe remains a supported fallback.
+    resolve_codex_cli_with(where_lookup)
+}
+
+fn resolve_codex_cli_with(
+    mut lookup: impl FnMut(&str) -> io::Result<Option<PathBuf>>,
+) -> Option<PathBuf> {
     for name in ["codex.cmd", "codex.exe"] {
-        let output = Command::new("where.exe").arg(name).output().ok()?;
-        if !output.status.success() {
-            continue;
-        }
-        if let Some(path) = String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .map(str::trim)
-            .find(|line| !line.is_empty())
-            .map(PathBuf::from)
-        {
+        if let Ok(Some(path)) = lookup(name) {
             return Some(path);
         }
     }
     None
+}
+
+fn where_lookup(name: &str) -> io::Result<Option<PathBuf>> {
+    let output = Command::new("where.exe").arg(name).output()?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(PathBuf::from))
 }
 
 fn developer_instructions(operation: Operation, style: Style) -> String {
@@ -300,6 +309,10 @@ fn terminal(status: Status, code: &'static str, attempts: u32) -> Execution {
     }
 }
 
+// A live request is bounded by the engine's WORKER_DEADLINE (30 s), so a
+// directory 10 minutes old belongs to a killed worker.
+const STALE_WORKDIR_AGE: Duration = Duration::from_secs(10 * 60);
+
 struct EmptyWorkdir(PathBuf);
 
 impl EmptyWorkdir {
@@ -309,10 +322,21 @@ impl EmptyWorkdir {
             .ok_or(())?
             .join("SakuraInput")
             .join("ai-codex-tmp");
-        std::fs::create_dir_all(&base).map_err(|_| ())?;
-        let path = base.join(format!("{}-{id}", std::process::id()));
-        std::fs::create_dir(&path).map_err(|_| ())?;
-        Ok(Self(path))
+        Self::create_in(&base, std::process::id(), id)
+    }
+
+    fn create_in(base: &Path, pid: u32, id: u64) -> Result<Self, ()> {
+        std::fs::create_dir_all(base).map_err(|_| ())?;
+        sweep_stale_workdirs(base, SystemTime::now());
+        for attempt in 0..16 {
+            let path = base.join(format!("{pid}-{id}-{attempt}"));
+            match std::fs::create_dir(&path) {
+                Ok(()) => return Ok(Self(path)),
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+                Err(_) => return Err(()),
+            }
+        }
+        Err(())
     }
 
     fn path(&self) -> &Path {
@@ -325,6 +349,62 @@ impl Drop for EmptyWorkdir {
         // This exact process/id directory was created by `create`; Codex is
         // ephemeral and any incidental contents belong to this one request.
         let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn sweep_stale_workdirs(base: &Path, now: SystemTime) {
+    let Ok(entries) = std::fs::read_dir(base) else {
+        return;
+    };
+    let mut removed = 0usize;
+    for entry in entries.take(256) {
+        if removed >= 32 {
+            break;
+        }
+        let Ok(entry) = entry else {
+            continue;
+        };
+        let name = entry.file_name();
+        let Some(name) = name.to_str() else {
+            continue;
+        };
+        if !is_workdir_name(name) {
+            continue;
+        }
+        // `symlink_metadata` never follows a reparse point: on Windows a
+        // junction or symlink reports `is_dir() == false` here, so only real
+        // directories pass.
+        let Ok(metadata) = std::fs::symlink_metadata(entry.path()) else {
+            continue;
+        };
+        if !metadata.is_dir() {
+            continue;
+        }
+        let Ok(created) = metadata.created() else {
+            continue;
+        };
+        let stale = now
+            .duration_since(created)
+            .map(|age| age >= STALE_WORKDIR_AGE)
+            .unwrap_or(false);
+        if !stale {
+            continue;
+        }
+        if std::fs::remove_dir_all(entry.path()).is_ok() {
+            removed += 1;
+        }
+    }
+}
+
+fn is_workdir_name(name: &str) -> bool {
+    fn all_digits(part: &str) -> bool {
+        !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit())
+    }
+    let mut parts = name.split('-');
+    match (parts.next(), parts.next(), parts.next(), parts.next()) {
+        (Some(a), Some(b), None, None) => all_digits(a) && all_digits(b),
+        (Some(a), Some(b), Some(c), None) => all_digits(a) && all_digits(b) && all_digits(c),
+        _ => false,
     }
 }
 
@@ -405,3 +485,7 @@ mod tests {
         assert_eq!(classify_cli_error("秘密本文".as_bytes()), "codex_cli_error");
     }
 }
+
+#[cfg(test)]
+#[path = "codex_cli_workdir_tests.rs"]
+mod workdir_tests;
