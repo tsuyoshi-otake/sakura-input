@@ -4,13 +4,17 @@
 
 use core::ffi::c_void;
 use std::sync::atomic::{AtomicIsize, AtomicU32, Ordering};
+use std::sync::OnceLock;
 
 use windows::Win32::Foundation::{
     CLASS_E_CLASSNOTAVAILABLE, E_POINTER, E_UNEXPECTED, HINSTANCE, HMODULE, S_FALSE, S_OK,
 };
 use windows::Win32::System::Com::IClassFactory;
-use windows::Win32::System::LibraryLoader::DisableThreadLibraryCalls;
-use windows_core::{Interface, GUID, HRESULT};
+use windows::Win32::System::LibraryLoader::{
+    DisableThreadLibraryCalls, GetModuleHandleExW, GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+    GET_MODULE_HANDLE_EX_FLAG_PIN,
+};
+use windows_core::{Interface, GUID, HRESULT, PCWSTR};
 
 use crate::class_factory::TextServiceFactory;
 
@@ -27,6 +31,10 @@ static MODULE_HANDLE: AtomicIsize = AtomicIsize::new(0);
 /// unloading with objects outstanding turns every later call into a jump into
 /// freed memory.
 static LIVE_OBJECTS: AtomicU32 = AtomicU32::new(0);
+
+/// Result of the one-time module pin, kept so `DllGetClassObject` can replay
+/// the same outcome (including the failure HRESULT) on every later call.
+static MODULE_PIN: OnceLock<HRESULT> = OnceLock::new();
 
 /// Returns the module this code was loaded as.
 pub fn module_handle() -> HMODULE {
@@ -94,9 +102,48 @@ pub unsafe extern "system" fn DllGetClassObject(
         return CLASS_E_CLASSNOTAVAILABLE;
     }
 
+    // Pin the module before handing out anything that can register the
+    // deferred-window class. The class's wndproc is process-wide state that
+    // survives `CoFreeUnusedLibraries`, so an unloadable DLL would leave a
+    // dangling procedure pointer for the next `versions\...\sakura_tsf.dll`
+    // this host loads (issue #360, A2). Fail closed: an unpinned DLL must
+    // not create COM objects that register the class.
+    let pin = ensure_module_pinned();
+    if pin.is_err() {
+        return pin;
+    }
+
     let factory: IClassFactory = TextServiceFactory::new().into();
     // SAFETY: `riid` is non-null and readable, `ppv` is non-null and writable.
     unsafe { factory.query(riid, ppv) }
+}
+
+/// Pins this DLL into the process exactly once.
+///
+/// `GetModuleHandleExW` with `FLAG_PIN` raises the module's reference count
+/// to a value the loader never decrements, so the DLL stays mapped until
+/// process exit no matter what `DllCanUnloadNow` or `CoFreeUnusedLibraries`
+/// decide. It is deliberately called here, on the first real class-object
+/// request, and never inside `DllMain` (loader lock). The outcome is cached:
+/// a first-call failure is replayed, not retried, so the pin remains a
+/// once-per-process operation.
+fn ensure_module_pinned() -> HRESULT {
+    *MODULE_PIN.get_or_init(|| {
+        let mut module = HMODULE::default();
+        // SAFETY: with FROM_ADDRESS, the loader interprets the address of a
+        // function inside this DLL as a module reference, not a string. PIN
+        // asks it to keep the module mapped for the rest of the process.
+        match unsafe {
+            GetModuleHandleExW(
+                GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_PIN,
+                PCWSTR(ensure_module_pinned as *const () as *const u16),
+                &mut module,
+            )
+        } {
+            Ok(()) => S_OK,
+            Err(error) => error.code(),
+        }
+    })
 }
 
 /// Reports whether COM may unload this DLL.
