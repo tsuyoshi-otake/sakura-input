@@ -804,6 +804,13 @@ DeleteSession
 privacy-exclusion counters; protocol versioning rejects older layouts rather
 than interpreting a short payload as a valid zero-valued response.
 
+The `CreateSession` process name is a wire claim: it selects that session's
+app profiles and host policy, and within one connection it keys the
+same-host duplicate-delivery check. Effects across connections, such as the
+idle-Space composition fence, are keyed by the image file name of the client
+PID the kernel reports for the accepted pipe — `pid:<n>` when the image
+cannot be read — so a client cannot affect another app by naming it.
+
 The same API serves macOS/Linux frontends later; nothing in it is
 TSF-shaped. The DLL is a dumb translator between this protocol and TSF
 edit sessions.
