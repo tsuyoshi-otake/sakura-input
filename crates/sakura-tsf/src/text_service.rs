@@ -29,7 +29,8 @@
 use std::cell::{Cell, RefCell};
 
 use windows::Win32::Foundation::{
-    E_FAIL, E_INVALIDARG, E_NOINTERFACE, E_POINTER, E_UNEXPECTED, HWND, LPARAM, LRESULT, WPARAM,
+    ERROR_CLASS_ALREADY_EXISTS, E_FAIL, E_INVALIDARG, E_NOINTERFACE, E_POINTER, E_UNEXPECTED,
+    HINSTANCE, HMODULE, HWND, LPARAM, LRESULT, WPARAM,
 };
 use windows::Win32::System::Com::{CoCreateInstance, CoTaskMemFree, CLSCTX_INPROC_SERVER};
 use windows::Win32::System::Variant::{
@@ -51,12 +52,13 @@ use windows::Win32::UI::TextServices::{
     TF_LBI_STYLE_HIDDENSTATUSCONTROL, TF_LBI_STYLE_TEXTCOLORICON, TF_PRESERVEDKEY,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, GetWindowLongPtrW, KillTimer, PostMessageW,
-    RegisterClassW, SetTimer, SetWindowLongPtrW, GWLP_USERDATA, WINDOW_EX_STYLE, WM_APP, WM_TIMER,
-    WNDCLASSW, WS_OVERLAPPED,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, GetClassInfoW, GetWindowLongPtrW, KillTimer,
+    PostMessageW, RegisterClassW, SetTimer, SetWindowLongPtrW, GWLP_USERDATA, WINDOW_EX_STYLE,
+    WM_APP, WM_TIMER, WNDCLASSW, WS_OVERLAPPED,
 };
 use windows_core::{
     implement, Error, IUnknown, IUnknownImpl, Interface, OutRef, Ref, Result, BOOL, BSTR, GUID,
+    PCWSTR,
 };
 
 use sakura_ipc::diagnostics::DisconnectReason;
@@ -84,7 +86,7 @@ use crate::engine::{
 use crate::engine_recovery::{
     EngineRecoveryFence, RecoveryKeyDisposition, RecoveryStart, RecoveryTerminal, RecoveryToken,
 };
-use crate::exports::{on_object_created, on_object_destroyed};
+use crate::exports::{module_handle, on_object_created, on_object_destroyed};
 use crate::key_handler;
 use crate::mode_item::{self, MenuCommand};
 use crate::reconversion;
@@ -1054,35 +1056,7 @@ impl TextService {
         }
 
         // The hidden window owns exactly one deferred-work message per thread.
-        // SAFETY: the callback and class name are static, and registration does
-        // not borrow any Rust state.
-        unsafe {
-            let class = WNDCLASSW {
-                lpfnWndProc: Some(deferred_window_procedure),
-                lpszClassName: DEFERRED_WINDOW_CLASS,
-                ..Default::default()
-            };
-            RegisterClassW(&class);
-        }
-        // SAFETY: the class is registered above, all optional handles are null,
-        // and the zero-sized window is never shown.
-        let window_result = unsafe {
-            CreateWindowExW(
-                WINDOW_EX_STYLE::default(),
-                DEFERRED_WINDOW_CLASS,
-                DEFERRED_WINDOW_CLASS,
-                WS_OVERLAPPED,
-                0,
-                0,
-                0,
-                0,
-                None,
-                None,
-                None,
-                None,
-            )
-        };
-        let window = window_result?;
+        let window = create_deferred_window_in(module_handle(), DEFERRED_WINDOW_CLASS)?;
         // SAFETY: `window` was returned by `CreateWindowExW` and the value is a
         // pointer-sized owner token read only by this window's procedure.
         unsafe {
@@ -4008,6 +3982,81 @@ struct SyncClaimOnExit<'a>(&'a TextService);
 impl Drop for SyncClaimOnExit<'_> {
     fn drop(&mut self) {
         self.0.sync_live_claim();
+    }
+}
+
+/// Registers the deferred-work window class under this DLL's module handle.
+///
+/// Binding the class to `module` (not the NULL `hInstance` of a process-wide
+/// registration) keeps two `versions\...\sakura_tsf.dll` copies in one host
+/// from sharing a single (name, instance) pair — the newer DLL would otherwise
+/// inherit the older copy's `deferred_window_procedure` (issue #360, A2).
+///
+/// There is deliberately no class unregistration: it cannot run from
+/// `DllMain`, and it fails while another thread still owns a window of the
+/// class. The module pin in `exports.rs` keeps this procedure's code
+/// resident until process exit, so leaving the class registered is safe.
+///
+/// A second call with the class already present is fine only when the
+/// registered procedure is ours; any other procedure means a foreign module
+/// claimed the name under our own handle, which is a hard error.
+fn ensure_deferred_window_class(module: HMODULE, class_name: PCWSTR) -> Result<()> {
+    // SAFETY: the class name is a valid null-terminated string for the call
+    // and the procedure is a function in this module.
+    let atom = unsafe {
+        RegisterClassW(&WNDCLASSW {
+            lpfnWndProc: Some(deferred_window_procedure),
+            hInstance: HINSTANCE(module.0),
+            lpszClassName: class_name,
+            ..Default::default()
+        })
+    };
+    if atom != 0 {
+        return Ok(());
+    }
+    let error = Error::from_thread();
+    if error.code() != ERROR_CLASS_ALREADY_EXISTS.to_hresult() {
+        return Err(error);
+    }
+    let mut info = WNDCLASSW::default();
+    // SAFETY: `info` is a writable WNDCLASSW for the duration of the call and
+    // `class_name` remains a valid string.
+    unsafe { GetClassInfoW(Some(HINSTANCE(module.0)), class_name, &mut info) }?;
+    if info.lpfnWndProc.map(|procedure| procedure as usize)
+        == Some(deferred_window_procedure as *const () as usize)
+    {
+        Ok(())
+    } else {
+        Err(Error::new(
+            E_UNEXPECTED,
+            "deferred window class already registered to a different procedure",
+        ))
+    }
+}
+
+/// Registers `class_name` under `module` and creates the deferred-work
+/// window with the same handle (D3). Split from `create_deferred_window` so
+/// tests can drive registration and creation against a module other than
+/// this DLL's own.
+fn create_deferred_window_in(module: HMODULE, class_name: PCWSTR) -> Result<HWND> {
+    ensure_deferred_window_class(module, class_name)?;
+    // SAFETY: the class is registered above under `module`, all remaining
+    // optional handles are null, and the zero-sized window is never shown.
+    unsafe {
+        CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            class_name,
+            class_name,
+            WS_OVERLAPPED,
+            0,
+            0,
+            0,
+            0,
+            None,
+            None,
+            Some(HINSTANCE(module.0)),
+            None,
+        )
     }
 }
 

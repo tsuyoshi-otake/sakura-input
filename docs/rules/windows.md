@@ -125,3 +125,25 @@
   junction in a test, `New-Item -ItemType Junction` requires an absolute
   `-Target`; invoking `mklink` through `cmd /c` from Rust `Command` mangles
   the argv pieces (#360 A1, 2026-10-18).
+- **Never use `user32.dll` as the "other module" when testing per-module
+  window classes.** Its instance handle is reserved for system classes.
+  Observed 2026-10-18 (#360 A2): in a pwsh P/Invoke probe, `RegisterClassW`
+  failed with error 87 under the `user32.dll` handle, even for a fresh class
+  name. In a Rust test exe, a duplicate name under it failed the same way.
+  Ordinary modules (exe, `kernel32.dll`, `version.dll`, `comdlg32.dll`)
+  register the same class name in either order. Test with such a module, and
+  test both orders.
+
+- **A module pin needs an over-release test.** Observed 2026-10-18 (#360 A2):
+  `GetModuleHandleExW(FROM_ADDRESS)` without `UNCHANGED_REFCOUNT` adds a
+  reference the caller never frees. That leaked reference survives one
+  `FreeLibrary` just like `GET_MODULE_HANDLE_EX_FLAG_PIN` does. Call
+  `FreeLibrary` on the same handle several more times, then assert the module
+  is still mapped. Only a real pin passes. The test caught the dropped-PIN
+  fault only after this change.
+
+- **`cargo test` never builds a `cdylib` target.** Nothing links the library.
+  A test that loads `sakura_tsf.dll` must first run `cargo build -p sakura-tsf
+  --lib --locked` itself. Otherwise it tests a stale DLL. Observed 2026-10-18
+  (#360 A2): after the sources were restored, the test still loaded a
+  leftover DLL that contained the injected fault.
