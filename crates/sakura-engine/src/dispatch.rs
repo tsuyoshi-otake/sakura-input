@@ -2608,11 +2608,17 @@ fn record_learning(
     // only if the corrected commit survives (#305). A sensitive commit is
     // never tracked, and nothing typed before it is next to the caret.
     let sensitive = scope_is_sensitive(session.scope);
-    let correction = if sensitive {
+    // A session whose scope could not be classified is fail closed for
+    // learning exactly as input history already is (#360 A8,
+    // docs/decisions/developer-history.md): it teaches nothing, tracks no
+    // correction, and is treated like a sensitive commit below. The field
+    // may still hold a credential the host failed to declare.
+    let teaches = !sensitive && session.scope_classified();
+    let correction = if teaches {
+        session.track_commit_correction(surface, chosen_right_id)
+    } else {
         session.correction_trail_mut().clear();
         None
-    } else {
-        session.track_commit_correction(surface, chosen_right_id)
     };
     let scope = ScopeClass::from_scope(session.scope, session.scope_classified());
     if scope != ScopeClass::Sensitive {
@@ -2630,7 +2636,7 @@ fn record_learning(
     let Some(service) = learning else {
         return;
     };
-    if learnable && !sensitive {
+    if learnable && teaches {
         service.stage(
             session.process_unique_id(),
             session.preedit.as_str(),
