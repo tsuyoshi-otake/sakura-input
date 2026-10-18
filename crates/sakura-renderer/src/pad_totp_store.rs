@@ -4,6 +4,19 @@
 //! anti-tamper boundary. A user able to replace/delete local files or change
 //! this process can bypass it. The caller must bind this API to the verified
 //! protected document ID, and must reauthenticate before disabling it.
+//!
+//! Publication is write-temp-then-replace, so a crash or a failed write can
+//! leave the temp file next to the canonical record. Every `read()` recovers
+//! while the store lock is held: a complete temp (DPAPI-verified and accepted
+//! by `decode` for this document and scope) is rolled forward so accepted
+//! steps, failure counts, and back-off are never rolled back; a torn temp is
+//! deleted; a foreign temp (valid DPAPI envelope but a record `decode`
+//! rejects) fails closed as `Corrupt`. If a publication reported an error
+//! in-process and its temp could not be deleted, the next `read()` rolls that
+//! temp forward, so a transition reported as failed (for example a confirmed
+//! enrollment or an authorized disable) can become effective later. That is
+//! stricter or already authorized, never a bypass: the record being rolled
+//! forward was fully written and verified.
 
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
@@ -228,11 +241,119 @@ impl PadTotpStore {
             })
     }
 
+    /// Recover an interrupted publication before reading the canonical
+    /// record. Runs only while `self.lock()` is held and only ever touches
+    /// `self.path` and `self.temp`.
+    fn recover_temp(&self) -> Result<Option<Record>, TotpStoreError> {
+        if !self.temp.exists() {
+            return Ok(None);
+        }
+        match self.classify_temp()? {
+            TempClass::Complete(record) => {
+                // A complete temp is never discarded: discarding it would roll
+                // back the accepted step, failure count, and back-off, which
+                // weakens replay and brute-force protection.
+                let temp = wide(&self.temp);
+                let target = wide(&self.path);
+                if self.path.exists() {
+                    // SAFETY: both NUL-terminated buffers remain live during
+                    // the call.
+                    unsafe {
+                        ReplaceFileW(
+                            windows_core::PCWSTR(target.as_ptr()),
+                            windows_core::PCWSTR(temp.as_ptr()),
+                            windows_core::PCWSTR::null(),
+                            REPLACE_FILE_FLAGS(0),
+                            None,
+                            None,
+                        )
+                    }
+                    .map_err(win32_error)?;
+                } else {
+                    // SAFETY: both NUL-terminated buffers remain live during
+                    // the call.
+                    unsafe {
+                        MoveFileExW(
+                            windows_core::PCWSTR(temp.as_ptr()),
+                            windows_core::PCWSTR(target.as_ptr()),
+                            MOVEFILE_WRITE_THROUGH,
+                        )
+                    }
+                    .map_err(win32_error)?;
+                }
+                Ok(Some(record))
+            }
+            TempClass::Torn => {
+                fs::remove_file(&self.temp).map_err(io_error)?;
+                // `publish` replaces or removes the canonical file only
+                // after the temp is complete and synced, so a torn temp with
+                // no canonical file means no record was ever published. The
+                // canonical read that follows reports the record or absence.
+                Ok(None)
+            }
+            // A crash cannot produce a well-formed record that `decode`
+            // rejects, so a foreign temp means tampering or a wrong store.
+            // Fail closed and touch nothing.
+            TempClass::Foreign => Err(TotpStoreError::Corrupt),
+        }
+    }
+
+    /// Classify a leftover temp file. "Complete" means DPAPI `unprotect`
+    /// succeeds and `decode` accepts the record for this store. "Torn" is
+    /// every failure a crash or a failed write can produce: oversized,
+    /// unprotect failure, or wrong decrypted length or magic. "Foreign" is a
+    /// valid DPAPI envelope whose record `decode` rejects.
+    fn classify_temp(&self) -> Result<TempClass, TotpStoreError> {
+        let mut file = File::open(&self.temp)?;
+        if file.metadata()?.len() > MAX_FILE {
+            return Ok(TempClass::Torn);
+        }
+        let mut encrypted = Vec::new();
+        file.read_to_end(&mut encrypted)?;
+        let clear = match unprotect(&encrypted) {
+            Ok(clear) => clear,
+            Err(_) => return Ok(TempClass::Torn),
+        };
+        if clear.len() != RECORD_LEN || &clear[..8] != MAGIC {
+            return Ok(TempClass::Torn);
+        }
+        match self.decode(&clear) {
+            Ok(record) => Ok(TempClass::Complete(record)),
+            Err(_) => Ok(TempClass::Foreign),
+        }
+    }
+
+    /// Decide what to do with the temp after `ReplaceFileW` or `MoveFileExW`
+    /// failed inside `publish`, based on the disk state.
+    ///
+    /// Canonical still present: the old record is still correct. Delete the
+    /// temp and report `error`. Canonical gone (the `ReplaceFileW`
+    /// `ERROR_UNABLE_TO_MOVE_REPLACEMENT` path): the temp holds the only
+    /// complete record, so roll it forward with `MoveFileExW`; a failed roll
+    /// forward keeps the temp for `read()` to recover later.
+    fn resolve_replace_failure(&self, error: TotpStoreError) -> Result<(), TotpStoreError> {
+        if self.path.exists() {
+            // A failed delete leaves the temp for `read()` recovery; the
+            // original failure is what the caller needs to see.
+            let _ = fs::remove_file(&self.temp);
+            return Err(error);
+        }
+        let temp = wide(&self.temp);
+        let target = wide(&self.path);
+        // SAFETY: both NUL-terminated buffers remain live during the call.
+        unsafe {
+            MoveFileExW(
+                windows_core::PCWSTR(temp.as_ptr()),
+                windows_core::PCWSTR(target.as_ptr()),
+                MOVEFILE_WRITE_THROUGH,
+            )
+        }
+        .map_err(|_| error)
+    }
+
     fn read(&self) -> Result<Option<Record>, TotpStoreError> {
-        // Any interrupted publication needs explicit recovery; never silently
-        // use an older accepted-step snapshot while a temp is present.
-        if self.temp.exists() {
-            return Err(TotpStoreError::Corrupt);
+        if let Some(record) = self.recover_temp()? {
+            return Ok(Some(record));
         }
         let mut file = match File::open(&self.path) {
             Ok(f) => f,
@@ -319,12 +440,17 @@ impl PadTotpStore {
             .write(true)
             .create_new(true)
             .open(&self.temp)?;
-        file.write_all(&encrypted)?;
-        file.sync_all()?;
+        if let Err(e) = file.write_all(&encrypted).and_then(|()| file.sync_all()) {
+            // The canonical file was never touched; delete the partial temp.
+            // A failed delete leaves it for `read()` recovery, and the
+            // original failure is what the caller needs to see.
+            let _ = fs::remove_file(&self.temp);
+            return Err(e.into());
+        }
         drop(file);
         let temp = wide(&self.temp);
         let target = wide(&self.path);
-        if self.path.exists() {
+        let replaced = if self.path.exists() {
             // SAFETY: both NUL-terminated buffers remain live during the call.
             unsafe {
                 ReplaceFileW(
@@ -336,7 +462,7 @@ impl PadTotpStore {
                     None,
                 )
             }
-            .map_err(|_| TotpStoreError::Corrupt)?;
+            .is_ok()
         } else {
             // SAFETY: both NUL-terminated buffers remain live during the call.
             unsafe {
@@ -346,10 +472,36 @@ impl PadTotpStore {
                     MOVEFILE_WRITE_THROUGH,
                 )
             }
-            .map_err(|_| TotpStoreError::Corrupt)?;
+            .is_ok()
+        };
+        if !replaced {
+            return self.resolve_replace_failure(TotpStoreError::Corrupt);
         }
         Ok(())
     }
+}
+
+enum TempClass {
+    Complete(Record),
+    Torn,
+    Foreign,
+}
+
+/// A failed recovery delete or roll forward maps `PermissionDenied`
+/// (`ERROR_ACCESS_DENIED`) to `Busy`, the same rule `lock()` uses, and every
+/// other error to `Io`. Rust std reports `ERROR_SHARING_VIOLATION` as
+/// `Uncategorized`, so a sharing violation is `Io`. Callers render both as
+/// unavailable.
+fn io_error(error: io::Error) -> TotpStoreError {
+    if error.kind() == io::ErrorKind::PermissionDenied {
+        TotpStoreError::Busy
+    } else {
+        TotpStoreError::Io(error)
+    }
+}
+
+fn win32_error(error: windows_core::Error) -> TotpStoreError {
+    io_error(io::Error::from_raw_os_error(error.code().0 & 0xffff))
 }
 
 fn verify_record(record: &mut Record, code: &str, unix_seconds: u64) -> Result<(), TotpError> {
@@ -613,3 +765,7 @@ mod tests {
         fs::remove_dir_all(dir).unwrap();
     }
 }
+
+#[cfg(test)]
+#[path = "pad_totp_store_recovery_tests.rs"]
+mod recovery_tests;
