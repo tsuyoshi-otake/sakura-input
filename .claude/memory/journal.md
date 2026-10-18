@@ -3363,6 +3363,7 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Learning: when a cleanup set is chosen by a timestamp order, exclude the artifact the same call just created before ordering; wall-clock order is not creation order once the clock has moved back.
 - Learning: a listing helper that returns an empty list on error turns every fail-closed caller into fail-open; return the error and let best-effort callers drop it explicitly.
 - Learning: never slice a file-name `str` at a fixed byte index after only a length check; validate the bytes (or use `split_at_checked`) first, because directory listings return whatever names a user or tool created. A verifier caveat outside the rubric is a lead to confirm, not noise.
+
 ## 2026-10-18 #360 orig#3 TOTP clock-rollback reset (Devin o3)
 - Symptom: `PadTotp::verify` kept `greatest_observed_step`, so once the Windows clock had been ahead and was corrected, every code failed with a counted `ClockRollback` until real time passed the recorded step; `last_accepted_step` and `blocked_until_ms` blocked the same way, and deleting the store file was the only recovery.
 - Root cause: the clock floor was forward-only with no reset path, and the rollback was also counted as a failure.
