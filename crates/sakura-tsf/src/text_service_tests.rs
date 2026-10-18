@@ -2068,10 +2068,12 @@ fn deferred_window_class_registration_is_idempotent_and_owns_its_procedure() {
 
 /// A module loaded in this process that is not the test exe, so tests can
 /// prove (name, hInstance) scoping instead of the exe-attributed NULL class.
-/// `user32.dll` is deliberately avoided: Windows reserves its instance
-/// handle for system classes, so `RegisterClassW` under it fails with
-/// `ERROR_INVALID_PARAMETER` regardless of order — not representative of
-/// two ordinary DLLs in one host.
+/// `user32.dll` is deliberately avoided: observed behavior under it differs
+/// by process. In this test process a fresh-name registration under
+/// `user32.dll` succeeded while a duplicate name was rejected with
+/// `ERROR_INVALID_PARAMETER`; in a separate probe process even a fresh name
+/// was rejected with `ERROR_INVALID_PARAMETER`. Its behavior is therefore
+/// process-dependent and does not stand for an ordinary DLL.
 fn non_exe_module() -> HMODULE {
     // SAFETY: querying a loaded system module by name cannot fail here.
     unsafe { GetModuleHandleW(windows_core::w!("kernel32.dll")) }.expect("kernel32 module")
