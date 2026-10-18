@@ -464,15 +464,12 @@ fn fence_spoofed_session_name_cannot_fence_the_named_image() {
     handshake(&mut attacker);
     let session = session_for(&mut attacker, "space-victim.exe");
     let _ = send_char(&mut attacker, session, 'a');
+    // Both halves are collected before asserting so a fail-before run
+    // exercises the teardown half even when the live-claim half is wrong.
     let first = fence_child_idle_space_commit(
         &engine,
         "space-victim.exe",
         "fence_spoofed_session_name_cannot_fence_the_named_image",
-    );
-    assert_eq!(
-        first.as_deref(),
-        Some("\u{3000}"),
-        "a live claim under the attacker's image must not suppress space-victim.exe"
     );
     drop(attacker);
     let second = fence_child_idle_space_commit(
@@ -480,10 +477,13 @@ fn fence_spoofed_session_name_cannot_fence_the_named_image() {
         "space-victim.exe",
         "fence_spoofed_session_name_cannot_fence_the_named_image",
     );
+    // One assertion reports both halves so a failing run shows whether the
+    // live claim and the teardown latch each stayed on the attacker's image.
     assert_eq!(
-        second.as_deref(),
-        Some("\u{3000}"),
-        "the attacker's teardown latch must not be armed for space-victim.exe"
+        (first.as_deref(), second.as_deref()),
+        (Some("\u{3000}"), Some("\u{3000}")),
+        "a spoofed session name must neither suppress space-victim.exe's idle \
+         Space nor arm its teardown latch"
     );
     let _ = engine.cleanup();
 }
