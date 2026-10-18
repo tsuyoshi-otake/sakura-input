@@ -11,6 +11,7 @@
 #![cfg(windows)]
 
 pub mod diagnostics;
+pub mod install_location;
 pub mod launcher;
 pub mod maintenance;
 pub mod payloads;

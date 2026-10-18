@@ -15,7 +15,7 @@ Microsoft IMEに近い既定キー操作を保ちながら、IT用語辞書、�
 1. GitHub Releases の `sakura_setup.exe` を取得します。
 2. ReleaseページのSHA-256と、PowerShellの`(Get-FileHash .\sakura_setup.exe -Algorithm SHA256).Hash`が一致することを確認します。
 3. 署名済みリリースでは、ファイルのプロパティにある「デジタル署名」または`Get-AuthenticodeSignature .\sakura_setup.exe`でも署名が有効か確認します。owner承認の未署名リリースは、リリースノートにその旨を明記し、手動インストールだけを案内します。
-4. インストーラーを実行します。管理者権限はマシン全体の TSF 登録に使われ、入力方式の有効化はサインイン中のユーザーとして実行されます。
+4. インストーラーを実行します。管理者権限はマシン全体の TSF 登録に使われ、入力方式の有効化はサインイン中のユーザーとして実行されます。セキュリティ上の理由から、インストール先は Program Files 内のフォルダーに限られます。以前のバージョンが Program Files 以外にインストールされている場合は、先にアンインストールしてから Program Files 内に再インストールしてください。
 5. Windows の入力方式切り替え（`Win`+`Space`）から「Sakura Input」を選びます。反映されない場合は一度サインアウトして再度サインインしてください。
 
 アップグレード時の TSF DLL、エンジン、renderer、設定 payload、辞書は、`Program Files\Sakura Input\versions\<version>-<build-id>` に新しい世代としてコピーされます。コピー完了後に COM 登録の参照先だけを切り替えるため、ホストアプリが旧 DLL を読み込んでいても通常更新に Windows の再起動は不要です。使用中の旧世代はロックが解けるまで残りますが、登録解除済みです。管理者権限の隠しメンテナンスタスクがログオンごとに旧世代の削除を再試行するため、UAC を毎回表示せずに後片付けできます。

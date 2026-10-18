@@ -125,6 +125,8 @@ sakura_settings.exe update disable
 
 更新処理は HTTPS 配布元を allowlist で制限し、manifest の厳密な形式、installer の宣言サイズ、SHA-256、Authenticode 署名を確認します。いずれかが一致しなければ installer を削除して実行しません。新しい runtime は `Program Files\Sakura Input\versions\<version>-<build-id>` に先にコピーされ、COM 登録を新しい DLL に切り替えてから旧世代を解放します。通常のサイレント更新の終了コードは `0` で、再起動は要求しません。旧 DLL が使用中なら、その versioned ディレクトリをログオン時の SYSTEM メンテナンスタスクが後で削除します。削除できない場合は次回ログオンへ残します。
 
+Program Files 以外にインストールされた Sakura Input を更新しようとすると、インストーラーはエラーで停止します。この場合は先にアンインストールしてから、Program Files 内に再インストールしてください。
+
 ## 7. 診断と復旧
 
 ### 入力方式が見つからない

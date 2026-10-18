@@ -57,6 +57,20 @@ Properties the script must hold to, learned from how IMEs fail:
   `-C target-feature=+avx,+ssse3` (`.cargo/config.toml`), so installing
   without either feature would let the DLL fault inside every process that
   loads it instead of failing here, cleanly.
+- **The install location is restricted to Program Files (issue #360, A1).**
+  `NextButtonClick(wpSelectDir)` rejects any directory that is not a subfolder
+  of `{autopf}`, and `PrepareToInstall` repeats the same check on `{app}`
+  before the existing `sakura_regtool.exe` is executed, so upgrades and
+  silent installs of a custom-folder install stop with a localized error
+  instead of running user-replaceable code elevated. As defense in depth,
+  `sakura_regtool --install-cleanup-task` and `--register` call
+  `sakura_install_maintenance::install_location::verify_admin_only_payload`,
+  which walks the payload file, every directory up to and including the
+  install root, and every ancestor up to the volume root, refusing reparse
+  points, non-SYSTEM/Administrators/TrustedInstaller owners, NULL DACLs, and
+  non-allowlisted ACEs holding a dangerous right. A folder such as
+  `C:\SakuraInput` (which inherits `Authenticated Users: Modify` from `C:\`)
+  is therefore refused twice: by the wizard and by regtool itself.
 - **No x86 payload.** This product targets Windows 11 on x86_64 only
   (DESIGN 3.2), so `[Run]` calls `regtool --register --no-wow64` explicitly
   rather than relying on its `Wow64::Auto` default, and 32-bit host
