@@ -306,6 +306,64 @@ mod tests {
         fs::remove_dir_all(path).unwrap();
     }
 
+    /// M1: a manifest with the reviewed hash but a wrong `bytes` field is
+    /// rejected by the size half of the pin check.
+    #[test]
+    fn rejects_manifest_with_wrong_bytes_field_and_reviewed_hash() {
+        let path = directory();
+        let manifest = fs::read_to_string(path.join("manifest.json")).unwrap();
+        fs::write(
+            path.join("manifest.json"),
+            manifest.replacen(
+                &format!("\"bytes\":{}", MODEL_BYTES),
+                &format!("\"bytes\":{}", MODEL_BYTES - 1),
+                1,
+            ),
+        )
+        .unwrap();
+        assert_eq!(validate(&path).unwrap_err(), "manifest pin mismatch");
+        fs::remove_dir_all(path).unwrap();
+    }
+
+    /// M1: a manifest with the reviewed size but a wrong `sha256` field is
+    /// rejected by the hash half of the pin check.
+    #[test]
+    fn rejects_manifest_with_wrong_sha256_field_and_reviewed_size() {
+        let path = directory();
+        let manifest = fs::read_to_string(path.join("manifest.json")).unwrap();
+        fs::write(
+            path.join("manifest.json"),
+            manifest.replacen(
+                &format!("\"sha256\":\"{}\"", MODEL_SHA256),
+                "\"sha256\":\"0000000000000000000000000000000000000000000000000000000000000000\"",
+                1,
+            ),
+        )
+        .unwrap();
+        assert_eq!(validate(&path).unwrap_err(), "manifest pin mismatch");
+        fs::remove_dir_all(path).unwrap();
+    }
+
+    /// M1/M5: a manifest that records the pinned hash in uppercase is
+    /// accepted, matching the pre-pin case-insensitive comparison.
+    #[test]
+    fn accepts_uppercase_pinned_hash_in_manifest() {
+        let path = directory();
+        let manifest = fs::read_to_string(path.join("manifest.json")).unwrap();
+        fs::write(
+            path.join("manifest.json"),
+            manifest.replacen(
+                &format!("\"sha256\":\"{}\"", MODEL_SHA256),
+                &format!("\"sha256\":\"{}\"", MODEL_SHA256.to_ascii_uppercase()),
+                1,
+            ),
+        )
+        .unwrap();
+        let validated = validate(&path).unwrap();
+        assert_eq!(validated.model_hash, MODEL_SHA256);
+        fs::remove_dir_all(path).unwrap();
+    }
+
     /// M3: the compiled pins equal both scripts' pins and the tracked model.
     #[test]
     fn pins_match_scripts_and_tracked_model() {
