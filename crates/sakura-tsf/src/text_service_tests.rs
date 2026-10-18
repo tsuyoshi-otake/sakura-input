@@ -2068,9 +2068,13 @@ fn deferred_window_class_registration_is_idempotent_and_owns_its_procedure() {
 
 /// A module loaded in this process that is not the test exe, so tests can
 /// prove (name, hInstance) scoping instead of the exe-attributed NULL class.
+/// `user32.dll` is deliberately avoided: Windows reserves its instance
+/// handle for system classes, so `RegisterClassW` under it fails with
+/// `ERROR_INVALID_PARAMETER` regardless of order — not representative of
+/// two ordinary DLLs in one host.
 fn non_exe_module() -> HMODULE {
     // SAFETY: querying a loaded system module by name cannot fail here.
-    unsafe { GetModuleHandleW(windows_core::w!("user32.dll")) }.expect("user32 module")
+    unsafe { GetModuleHandleW(windows_core::w!("kernel32.dll")) }.expect("kernel32 module")
 }
 
 /// D4: a class pre-registered under the same name and module with a different
@@ -2129,27 +2133,33 @@ fn deferred_window_registers_and_creates_under_the_given_module() {
 }
 
 /// D3 isolation: the same class name under two different module handles
-/// resolves independently, mirroring two DLL versions in one host.
+/// resolves independently in either registration order, mirroring two DLL
+/// versions in one host.
 #[test]
 fn deferred_window_class_is_scoped_per_module() {
     let exe = current_test_module();
     let other = non_exe_module();
-    let name = windows_core::w!("SakuraInputTsfDeferredTestIsolation");
 
-    // Windows rejects a foreign-`hInstance` registration with
-    // E_INVALIDARG when the class name already exists under another
-    // instance, so register under the non-exe module first.
-    ensure_deferred_window_class(other, name).expect("foreign module registration");
-    ensure_deferred_window_class(exe, name).expect("exe module registration");
+    // Order 1: exe first, then the foreign module.
+    let name1 = windows_core::w!("SakuraInputTsfDeferredTestIsolation1");
+    ensure_deferred_window_class(exe, name1).expect("exe module registration");
+    ensure_deferred_window_class(other, name1).expect("foreign module registration");
+
+    // Order 2: foreign module first, then the exe.
+    let name2 = windows_core::w!("SakuraInputTsfDeferredTestIsolation2");
+    ensure_deferred_window_class(other, name2).expect("foreign module registration");
+    ensure_deferred_window_class(exe, name2).expect("exe module registration");
 
     for module in [exe, other] {
-        let mut info = WNDCLASSW::default();
-        // SAFETY: `info` is writable and `name` is a valid class string.
-        unsafe { GetClassInfoW(Some(HINSTANCE(module.0)), name, &mut info) }
-            .expect("class info per module");
-        assert_eq!(
-            info.lpfnWndProc.map(|procedure| procedure as usize),
-            Some(deferred_window_procedure as *const () as usize)
-        );
+        for name in [name1, name2] {
+            let mut info = WNDCLASSW::default();
+            // SAFETY: `info` is writable and `name` is a valid class string.
+            unsafe { GetClassInfoW(Some(HINSTANCE(module.0)), name, &mut info) }
+                .expect("class info per module");
+            assert_eq!(
+                info.lpfnWndProc.map(|procedure| procedure as usize),
+                Some(deferred_window_procedure as *const () as usize)
+            );
+        }
     }
 }
