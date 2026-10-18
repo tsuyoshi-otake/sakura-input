@@ -139,6 +139,24 @@ mod tests {
         ))
     }
 
+    /// Removes its directory on drop so a failed assertion leaves nothing
+    /// behind. Used by tests that must clean up even on panic.
+    struct TemporaryDirectory(std::path::PathBuf);
+
+    impl TemporaryDirectory {
+        fn new(name: &str) -> Self {
+            let directory = temporary_directory(name);
+            fs::create_dir_all(&directory).expect("temporary directory");
+            Self(directory)
+        }
+    }
+
+    impl Drop for TemporaryDirectory {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
     #[test]
     fn offline_clear_replaces_live_and_durable_history() {
         let directory = temporary_directory("clear");
@@ -161,7 +179,8 @@ mod tests {
     /// records.
     #[test]
     fn offline_clear_deletes_version_backups() {
-        let directory = temporary_directory("version-backup");
+        let temporary = TemporaryDirectory::new("version-backup");
+        let directory = &temporary.0;
         let path = directory.join("learning.bin");
         let (mut log, _, _) = LearningLog::open(&path, |_| ()).expect("open");
         log.append("さくら", "桜", 1, 2, 20708).expect("append");
@@ -174,7 +193,6 @@ mod tests {
         );
         assert!(!directory.join("learning.v1.bak").exists());
         assert!(!directory.join("learning.v2.bak.1.2").exists());
-        let _ = fs::remove_dir_all(directory);
     }
 
     #[test]
