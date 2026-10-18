@@ -36,8 +36,7 @@ use sakura_store::learning::{
     test_crc32 as crc32, test_encode_record as encode_record, test_header as header,
     test_read_header as read_header, test_read_within_bound as read_within_bound,
     LearningFaultPoint as ForgetFaultPoint, LearningFaultScope as ForgetFaultScope,
-    FORMAT_VERSION_1, FORMAT_VERSION_2, HEADER_LEN, RECORD_COMMIT, RECORD_ENVELOPE_LEN,
-    REPAIR_SUPPRESS_SURFACE,
+    FORMAT_VERSION_1, FORMAT_VERSION_2, HEADER_LEN, RECORD_COMMIT, REPAIR_SUPPRESS_SURFACE,
 };
 
 use self::rejection::{RejectionGate, RejectionKey, RejectionTable};

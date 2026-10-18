@@ -8,6 +8,7 @@
 //! `sibling_names` — never through the store's quarantine helpers.
 
 use super::*;
+use sakura_store::learning::RECORD_ENVELOPE_LEN;
 
 /// Sibling names of `path` that are quarantine copies: `log.corrupt-`
 /// followed by the stamp shape (8 digits, `T`, 6 digits, `Z`) and an
