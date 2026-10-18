@@ -137,7 +137,7 @@ Issue #32 の実験的 neural reranker は、自作の `Sakura-Rerank-Tiny-v1` �
 
 この機能は Rust 製の `sakura_neural_worker.exe` を `sakura_engine.exe` と同じディレクトリから遅延起動し、`neural/sakura-rerank-tiny-v1/` の `model.onnx` と `manifest.json` を使います。workerは同じディレクトリのONNX Runtime DLLを動的に読み込みます。TSF DLLとengine本体にML runtimeやモデルを読み込ませません。workerとの通信は同一マシン内の標準入出力IPCだけで、クラウド送信、入力内容の診断ログへの記録、自動アップロードは行いません。
 
-manifestは固定モデル名、contract version、ONNX opset/runtime、研究manifestのSHA-256、Gate A失敗・final holdout未使用、MITライセンスと配布承認、artifactのサイズとSHA-256をworker起動時に厳密検証します。入力はprotocol v1で既に渡していた候補表記とlocal costだけです。最大6候補、表記32 Unicode scalar、固定feature 6次元に制限し、上限超過時は従来順位へ戻します。
+manifestは固定モデル名、contract version、ONNX opset/runtime、研究manifestのSHA-256、Gate A失敗・final holdout未使用、MITライセンスと配布承認、artifactのサイズとSHA-256をworker起動時に厳密検証します。さらにworkerは `model.onnx` をworker本体にコンパイル済みのSHA-256とサイズ（manifest.rsの `MODEL_SHA256` / `MODEL_BYTES`）と照合し、ファイルを一度だけ読み込んで、その検証済みのバイト列そのものをONNX Runtimeへ読み込ませます。入力はprotocol v1で既に渡していた候補表記とlocal costだけです。最大6候補、表記32 Unicode scalar、固定feature 6次元に制限し、上限超過時は従来順位へ戻します。
 
 engine は分類済みの `Normal` scope にある通常変換の読みをローカルで候補 snapshot にし、worker へは再順位付けに必要な候補 snapshot だけを渡します。Password、URL、Email、Digits、未知または未分類の scope、直接入力、`test_only` 入力、短い読み、候補が 1 件だけの場合は除外されます。候補 UI を表示した後には、遅い worker 結果で順位を並べ替えません。モデルの結果は session、composition generation、reading、candidate set が完全一致する場合だけ利用し、明示的な学習・完全一致 cache・ユーザー辞書の優先順位を上書きしません。
 
