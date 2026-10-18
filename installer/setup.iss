@@ -377,8 +377,11 @@ function InstallDirIsSafe(const Dir: String): Boolean;
 var
   ProgramFiles, Normalized: String;
 begin
-  ProgramFiles := AddBackslash(ExpandConstant('{autopf}'));
-  Normalized := AddBackslash(Dir);
+  { ExpandFileName resolves "." and ".." so a typed or /DIR=-supplied value
+    such as "C:\Program Files\..\SakuraInput" cannot smuggle a directory
+    outside Program Files through the plain-text prefix compare. }
+  ProgramFiles := AddBackslash(ExpandFileName(ExpandConstant('{autopf}')));
+  Normalized := AddBackslash(ExpandFileName(Dir));
   Result := (Length(Normalized) > Length(ProgramFiles)) and
     (CompareText(Copy(Normalized, 1, Length(ProgramFiles)), ProgramFiles) = 0);
 end;

@@ -139,45 +139,90 @@ fn a_payload_outside_the_root_is_rejected() {
     std::fs::remove_dir_all(&elsewhere).expect("remove temp root");
 }
 
+/// A component that cannot be opened at all must fail closed with
+/// `Unreadable`: containment passes on the literal (uncanonicalizable) paths,
+/// then `inspect` fails at the missing payload. An uninspectable path must
+/// never silently pass.
+#[test]
+fn an_uninspectable_payload_fails_closed_as_unreadable() {
+    let base = std::env::var_os("USERPROFILE")
+        .map(PathBuf::from)
+        .expect("USERPROFILE is always set on Windows")
+        .join("tmp")
+        .join(format!("sakura-a1-missing-{}", std::process::id()));
+    // The root is deliberately never created; cleanup must still be a no-op.
+    let root = base.join("never-created");
+    let payload = root.join("sakura_regtool.exe");
+
+    let error = verify_admin_only_payload(&root, &payload)
+        .expect_err("a payload that cannot be opened must fail closed");
+    assert!(
+        matches!(error.rejection, Rejection::Unreadable(_)),
+        "expected Unreadable, got {error:?}"
+    );
+    assert!(!base.exists(), "the test must not create the root");
+}
+
 /// C9 (ordering): `register_cleanup_task` must run the location check before
 /// any Task Scheduler call. Verified textually — the alternative, observing
 /// the Task Scheduler service, requires the very machine state the check
-/// exists to prevent.
+/// exists to prevent. The search is scoped to the function body so moving
+/// the call after `connect()`, or into another function, fails the test.
 #[test]
 fn the_cleanup_task_checks_the_location_before_contacting_task_scheduler() {
     let source =
         std::fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/maintenance.rs"))
             .expect("read maintenance.rs");
-    let check = source
+    let body = function_body(&source, "pub fn register_cleanup_task");
+    let check = body
         .find("verify_admin_only_payload")
         .expect("register_cleanup_task must call the location check");
-    let scheduler = source
+    let scheduler = body
         .find("let service = connect()?;")
         .expect("register_cleanup_task connects to Task Scheduler");
     assert!(
         check < scheduler,
-        "the location check must precede the Task Scheduler connection"
+        "the location check must precede the Task Scheduler connection \
+         inside register_cleanup_task"
     );
 }
 
 /// C9 (ordering): `--register` verifies the DLL(s) before any registry write
-/// (`sakura_reg::register_all`).
+/// (`sakura_reg::register_all`). Scoped to the `register` function body.
 #[test]
 fn register_verifies_the_dll_before_any_hklm_write() {
     let source = std::fs::read_to_string(
         Path::new(env!("CARGO_MANIFEST_DIR")).join("../sakura-regtool/src/main.rs"),
     )
     .expect("read regtool main.rs");
-    let check = source
+    let body = function_body(&source, "fn register(");
+    let check = body
         .find("verify_admin_only_payload")
         .expect("register must call the location check");
-    let write = source
+    let write = body
         .find("sakura_reg::register_all")
         .expect("register writes the registration");
     assert!(
         check < write,
-        "the DLL location check must precede the HKLM write"
+        "the DLL location check must precede the HKLM write inside register"
     );
+}
+
+/// The slice of `source` between `signature` and the next top-level item, so
+/// ordering assertions cannot pass on a call that lives in a different
+/// function.
+fn function_body<'a>(source: &'a str, signature: &str) -> &'a str {
+    let start = source
+        .find(signature)
+        .unwrap_or_else(|| panic!("{signature} must exist"));
+    let after = start + signature.len();
+    let rest = &source[after..];
+    let end = rest
+        .find("\nfn ")
+        .or_else(|| rest.find("\npub fn "))
+        .map(|offset| after + offset)
+        .unwrap_or(source.len());
+    &source[start..end]
 }
 
 /// C10: the installer guards the location in `PrepareToInstall` before the
@@ -202,5 +247,22 @@ fn prepare_to_install_checks_the_location_before_running_regtool() {
     assert!(
         guard < exec,
         "the location check must precede the existing regtool exec"
+    );
+
+    // Review R1: the guard must normalize `..` itself — a plain-text prefix
+    // compare would let `C:\Program Files\..\SakuraInput` through. Both
+    // sides of the comparison must go through `ExpandFileName`.
+    let guard_start = source
+        .find("function InstallDirIsSafe")
+        .expect("setup.iss must define InstallDirIsSafe");
+    let guard_end = source[guard_start..]
+        .find("\nend;")
+        .map(|offset| guard_start + offset)
+        .expect("InstallDirIsSafe must terminate with end;");
+    let guard_body = &source[guard_start..guard_end];
+    assert_eq!(
+        guard_body.matches("ExpandFileName(").count(),
+        2,
+        "InstallDirIsSafe must ExpandFileName-normalize both sides"
     );
 }
