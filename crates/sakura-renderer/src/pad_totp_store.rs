@@ -692,6 +692,30 @@ mod tests {
         fs::remove_dir_all(dir).unwrap();
     }
 
+    /// S1 (K1, K4): after the clock moves far ahead and back, a correct
+    /// code at the real time is accepted, the reset state persists across a
+    /// reopen, and the accepted step still rejects replays.
+    #[test]
+    fn clock_reset_accepts_real_code_and_keeps_replay_after_reopen() {
+        let (dir, store) = fixture();
+        enroll(&store);
+        let rec = store.read().unwrap().unwrap();
+        let future = format!(
+            "{:06}",
+            crate::pad_totp::hotp(&rec.secret, 1_000_000).unwrap()
+        );
+        store.verify(&future, 30_000_000).unwrap();
+        let now = format!("{:06}", crate::pad_totp::hotp(&rec.secret, 20).unwrap());
+        store.verify(&now, 600).unwrap();
+        let reopened = PadTotpStore::new(&dir, [7; 16], TotpScope::Pad).unwrap();
+        assert_eq!(reopened.status().unwrap(), EnrollmentStatus::Enabled);
+        assert!(matches!(
+            reopened.verify(&now, 600),
+            Err(TotpStoreError::Verify(TotpError::InvalidCode))
+        ));
+        fs::remove_dir_all(dir).unwrap();
+    }
+
     #[test]
     fn disable_consumes_fresh_step_and_retains_tombstone() {
         let (dir, store) = fixture();
