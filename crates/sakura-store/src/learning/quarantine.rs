@@ -86,12 +86,14 @@ pub(crate) fn corrupt_copy_name_is(rest: &str) -> bool {
     if stamped.len() < STAMP_LEN {
         return false;
     }
-    let (stamp, tail) = stamped.split_at(STAMP_LEN);
-    let bytes = stamp.as_bytes();
+    let bytes = stamped.as_bytes();
     let digits = |slice: &[u8]| slice.iter().all(|byte| byte.is_ascii_digit());
     if !digits(&bytes[..8]) || bytes[8] != b'T' || !digits(&bytes[9..15]) || bytes[15] != b'Z' {
         return false;
     }
+    // Every byte before STAMP_LEN is ASCII now, so this index is a char
+    // boundary — a multi-byte sibling name can never panic here.
+    let tail = &stamped[STAMP_LEN..];
     tail.is_empty() || tail.strip_prefix('.').is_some_and(artifact_tail_is)
 }
 
@@ -209,6 +211,22 @@ mod tests {
             "corrupt-20261018T031500Z.12",
             "corrupt-notes",
             "compact.bak",
+        ] {
+            assert!(!corrupt_copy_name_is(rest), "{rest:?}");
+        }
+    }
+
+    /// A sibling name whose byte at index 16 is inside a multi-byte
+    /// character must return `false`, never panic on a `str` boundary.
+    #[test]
+    fn non_ascii_names_do_not_match_or_panic() {
+        assert!(corrupt_copy_name_is("corrupt-20261018T031500Z"));
+        assert!(corrupt_copy_name_is("corrupt-20261018T031500Z.12.3"));
+        for rest in [
+            "corrupt-あいうえおか",
+            "corrupt-202610180000000あ",
+            "corrupt-20261018T031500Zあ",
+            "corrupt-2026１018T031500Z",
         ] {
             assert!(!corrupt_copy_name_is(rest), "{rest:?}");
         }

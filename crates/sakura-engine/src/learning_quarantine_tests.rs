@@ -24,8 +24,7 @@ fn corrupt_copy_names(path: &Path) -> Vec<String> {
             if rest.len() < 16 {
                 return false;
             }
-            let (stamp, tail) = rest.split_at(16);
-            let bytes = stamp.as_bytes();
+            let bytes = rest.as_bytes();
             let digits = |slice: &[u8]| slice.iter().all(|byte| byte.is_ascii_digit());
             if !digits(&bytes[..8])
                 || bytes[8] != b'T'
@@ -34,6 +33,7 @@ fn corrupt_copy_names(path: &Path) -> Vec<String> {
             {
                 return false;
             }
+            let tail = &rest[16..];
             tail.is_empty()
                 || tail.strip_prefix('.').is_some_and(|tail| {
                     let mut parts = tail.split('.');
@@ -524,4 +524,59 @@ fn a_v1_upgrade_creates_no_copy() {
     assert!(history_contains(&upgraded, "かな", "加奈"));
     drop(upgraded);
     let _ = fs::remove_dir_all(path.parent().expect("parent"));
+}
+
+/// K4, K6: sibling names that are not valid UTF-8 stamp shapes — including
+/// names whose byte 16 sits inside a multi-byte character — are ignored by
+/// both quarantine retention and `clear`, and never panic.
+#[test]
+fn non_ascii_sibling_names_never_break_quarantine_or_clear() {
+    let path = temporary_log("quarantine-non-ascii");
+    {
+        let service = LearningService::open(&path).expect("open");
+        service.learn("かな", "加奈", 3, 4);
+        service.learn("きく", "菊", 5, 6);
+    }
+    let directory = path.parent().unwrap();
+    for (name, contents) in [
+        ("log.corrupt-あいうえおか", b"hiragana".as_slice()),
+        ("log.corrupt-202610180000000あ", b"long digits".as_slice()),
+    ] {
+        fs::write(directory.join(name), contents).expect("staged non-ASCII sibling");
+    }
+    damage_frame_payload(&path, 1);
+
+    let reopened = LearningService::open(&path).expect("reopen damaged log");
+
+    let copies = corrupt_copy_names(&path);
+    assert_eq!(copies.len(), 1, "exactly one stamped copy: {copies:?}");
+    for (name, contents) in [
+        ("log.corrupt-あいうえおか", b"hiragana".as_slice()),
+        ("log.corrupt-202610180000000あ", b"long digits".as_slice()),
+    ] {
+        assert_eq!(
+            fs::read(directory.join(name)).expect(name),
+            contents,
+            "quarantine touched a non-matching name"
+        );
+    }
+
+    reopened.clear().expect("clear");
+
+    assert!(
+        corrupt_copy_names(&path).is_empty(),
+        "clear left a stamped copy"
+    );
+    for (name, contents) in [
+        ("log.corrupt-あいうえおか", b"hiragana".as_slice()),
+        ("log.corrupt-202610180000000あ", b"long digits".as_slice()),
+    ] {
+        assert_eq!(
+            fs::read(directory.join(name)).expect(name),
+            contents,
+            "clear removed a non-matching name"
+        );
+    }
+    drop(reopened);
+    let _ = fs::remove_dir_all(directory);
 }
