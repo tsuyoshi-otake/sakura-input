@@ -152,3 +152,7 @@ mod tests {
         assert!(!is_busy());
     }
 }
+
+#[cfg(test)]
+#[path = "ai_wait_cursor_restore_tests.rs"]
+mod restore_tests;
