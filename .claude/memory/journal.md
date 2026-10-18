@@ -3212,3 +3212,10 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - New unconfirmed candidate: the learning log has no cross-process lock, so the settings offline clear (`sakura-settings/src/learning.rs:97,119`) can overlap an engine started by the watchdog.
 - Verification: issue body re-read after edit (17,882 chars, original 7 findings retained); summary comment issuecomment-6242876717. No code changed.
 - Learning: when citing a doc as evidence for a policy, quote the subject of the sentence; a release note about one feature is not a policy for another.
+
+- 2026-10-18 #360 #1 (11487f1, docs 590aaee): sakura-neural-worker manifest hash check was self-referential and model.onnx was opened twice (TOCTOU).
+  - Symptom: a consistent rewrite of model.onnx + manifest.json passed every check; ORT parsed bytes from a second open.
+  - Root cause: artifact hash compared only to the manifest record in the same directory, never to a compiled constant; commit_from_file reopened the file.
+  - Fix: compiled MODEL_SHA256/MODEL_BYTES pins, 'manifest pin mismatch' after the file-set check, single File::open + bounded take() read, bytes returned in ValidatedManifest and parsed via commit_from_memory.
+  - Verification: fmt/clippy/tests, dependency/facade/dep-policy gates, staged real-model probe + ignored e2e + negative probe (fatal: manifest pin mismatch), fail-before against 0070110 (P1 fails, P2+5 pass), mutations (a)/(d) caught, (b)/(c) equivalent/uncatchable recorded in the report.
+  - Learning: a hash pin must anchor to a constant outside the artifact directory; tests cannot detect a second same-path open without a racing writer, so single-open must be a structural property, not only a tested one.
