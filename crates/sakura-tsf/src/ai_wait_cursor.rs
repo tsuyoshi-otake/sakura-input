@@ -8,7 +8,7 @@
 
 use std::cell::Cell;
 
-use windows::Win32::Foundation::{LPARAM, POINT, WPARAM};
+use windows::Win32::Foundation::{HWND, LPARAM, POINT, WPARAM};
 #[cfg(test)]
 use windows::Win32::UI::WindowsAndMessaging::GetCursor;
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -64,6 +64,10 @@ fn restore_host_cursor() {
     if hwnd.is_invalid() {
         return;
     }
+    send_restore(hwnd);
+}
+
+fn send_restore(hwnd: HWND) {
     let hit = HTCLIENT & 0xffff;
     let mouse = WM_MOUSEMOVE << 16;
     let lparam = LPARAM((mouse | hit) as isize);
