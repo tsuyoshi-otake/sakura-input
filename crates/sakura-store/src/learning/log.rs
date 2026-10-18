@@ -6,16 +6,18 @@ use std::io::{self, Read, Write};
 use std::os::windows::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::SystemTime;
 
 use super::codec::{
     crc32, decode_record, encode_record, header, read_header, record_at, record_meaning,
-    rejection_surface, scan_records, upgrade_to_current, RecordMeaning,
+    rejection_surface, scan_records, unreadable_tail_is_torn, upgrade_to_current, RecordMeaning,
 };
 use super::format::{
     LearningRecord, LearningSnapshot, FORMAT_VERSION_1, FORMAT_VERSION_2, HEADER_LEN,
     LEARNING_FORMAT_VERSION, MAX_LEARNING_LOG_BYTES, MAX_RECORD_BYTES, RECORD_ENVELOPE_LEN,
     REPAIR_SUPPRESS_CONTEXT, REPAIR_SUPPRESS_SURFACE,
 };
+use super::quarantine;
 use super::replay::ReplayView;
 
 const COMPACTION_TRIGGER_BYTES: u64 = 16 * 1024 * 1024;
@@ -104,22 +106,45 @@ impl LearningLog {
                 .read_to_end(&mut bytes)?;
             let mut over_cap = file_len.saturating_sub(bytes.len() as u64);
             let version = read_header(&bytes)?;
-            if matches!(version, FORMAT_VERSION_1 | FORMAT_VERSION_2) {
-                bytes = upgrade_to_current(&bytes, version)?;
-                let cap = usize::try_from(MAX_LEARNING_LOG_BYTES).unwrap_or(usize::MAX);
-                if bytes.len() > cap {
-                    over_cap = over_cap.saturating_add((bytes.len() - cap) as u64);
-                    bytes.truncate(cap);
+            let upgraded_from = match version {
+                FORMAT_VERSION_1 | FORMAT_VERSION_2 => {
+                    bytes = upgrade_to_current(&bytes, version)?;
+                    let cap = usize::try_from(MAX_LEARNING_LOG_BYTES).unwrap_or(usize::MAX);
+                    if bytes.len() > cap {
+                        over_cap = over_cap.saturating_add((bytes.len() - cap) as u64);
+                        bytes.truncate(cap);
+                    }
+                    publish_upgrade(path, &bytes, version)?;
+                    Some(version)
                 }
-                publish_upgrade(path, &bytes, version)?;
-            } else if version != LEARNING_FORMAT_VERSION {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("unsupported learning format version {version}"),
-                ));
-            }
+                LEARNING_FORMAT_VERSION => None,
+                _ => {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("unsupported learning format version {version}"),
+                    ));
+                }
+            };
 
             let (last_good, records) = scan_records(&bytes, LEARNING_FORMAT_VERSION)?;
+            // #360 A3: an unreadable frame inside the bytes that were read
+            // is mid-file corruption, not a torn append. Copy everything
+            // `open` read aside before truncating, so the truncation never
+            // destroys a record without leaving a copy (K1). If the copy
+            // cannot be made, `open` fails here and `log.bin` stays
+            // byte-for-byte unchanged (K5).
+            // - Bytes past `MAX_LEARNING_LOG_BYTES` were never read, so the
+            //   over-cap tail is not in the copy.
+            // - A v1/v2 upgrade needs no copy: `publish_upgrade` already
+            //   kept the original bytes in `log.v{N}.bak`, and the upgraded
+            //   bytes it published are valid to their end.
+            if bytes.len() > last_good
+                && upgraded_from.is_none()
+                && !unreadable_tail_is_torn(&bytes, last_good)
+            {
+                let stamp = quarantine::utc_stamp(SystemTime::now());
+                quarantine::quarantine(path, &bytes, &stamp)?;
+            }
             let prepared = prepare(ReplayView::from_verified(
                 &bytes[..last_good],
                 LEARNING_FORMAT_VERSION,
@@ -534,6 +559,16 @@ impl LearningLog {
                 receipt.maintenance_failure_delta = 1;
                 return Err(error);
             }
+            // #360 A3 (K6): quarantined copies hold the learning the user
+            // asked to erase, so they are removed before the empty log is
+            // published. A removal failure aborts the clear here, before
+            // anything is written, and `log.bin` stays unchanged.
+            quarantine::remove_copies(&path)?;
+            // #360 bak: the retained `v{N}.bak` upgrade backups hold the
+            // pre-upgrade learning the user asked to erase, so they are
+            // removed too. As above, a failure aborts the clear before
+            // anything is written, and `log.bin` stays unchanged.
+            remove_version_backups(&path)?;
             if let Some(file) = self.file.as_ref() {
                 file.sync_data()?;
             }
@@ -885,7 +920,8 @@ enum PublishLeftover {
     CompactBackup,
     ClearBackup,
     /// `v{N}.bak` retained upgrade backup. Only v1/v2 are restore candidates;
-    /// every versioned backup is always kept.
+    /// startup recovery never deletes a versioned backup — only `clear` does
+    /// (#360 bak).
     VersionBackup(u16),
     Temporary,
 }
@@ -942,7 +978,8 @@ fn classify_publish_leftover(rest: &str) -> Option<PublishLeftover> {
 /// (#360 A4), run during `open` after the forget recovery and before
 /// `create_if_missing` so a recovered log is never overwritten empty.
 /// Matching is exact on this log's own stem: siblings of any other base name
-/// are never touched, and `v{N}.bak` files are never deleted.
+/// are never touched, and `v{N}.bak` files are never deleted here — only
+/// `clear` removes them (#360 bak).
 ///
 /// - Canonical present: every `compact.bak*`, `clear.bak*`, and publish
 ///   `*.tmp*` sibling is deleted.
@@ -1026,6 +1063,49 @@ fn recover_publish_artifacts_at_startup(path: &Path) -> io::Result<()> {
     remove_all(&clear_backups)?;
     if let Some(candidate) = restore {
         fs::rename(candidate, path)?;
+    }
+    Ok(())
+}
+
+/// Removes every regular file matching this log's retained `v{N}.bak`
+/// upgrade backups — the exact name or the `.{pid}.{id}` numbered form
+/// `unique_sibling` produces — of any version number (#360 bak). Called by
+/// `clear` before the empty log is published, under the same error rules as
+/// `quarantine::remove_copies`: listing and per-entry errors propagate, a
+/// `NotFound` removal is fine, and any other removal error is returned so
+/// the clear fails before anything is written.
+fn remove_version_backups(path: &Path) -> io::Result<()> {
+    let Some(parent) = path.parent() else {
+        return Ok(());
+    };
+    let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) else {
+        return Ok(());
+    };
+    let stem_prefix = format!("{stem}.");
+    for entry in fs::read_dir(parent)? {
+        let entry = entry?;
+        // A directory or link carrying a backup's name is not a backup this
+        // code created, so only regular files are removed.
+        if !entry.file_type()?.is_file() {
+            continue;
+        }
+        let name = entry.file_name();
+        let Some(rest) = name
+            .to_str()
+            .and_then(|name| name.strip_prefix(stem_prefix.as_str()))
+        else {
+            continue;
+        };
+        if matches!(
+            classify_publish_leftover(rest),
+            Some(PublishLeftover::VersionBackup(_))
+        ) {
+            match fs::remove_file(entry.path()) {
+                Ok(()) => {}
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error),
+            }
+        }
     }
     Ok(())
 }
@@ -1291,7 +1371,7 @@ fn open_append(path: &Path) -> io::Result<File> {
     }
 }
 
-fn unique_sibling(path: &Path, suffix: &str) -> PathBuf {
+pub(crate) fn unique_sibling(path: &Path, suffix: &str) -> PathBuf {
     let preferred = path.with_extension(suffix);
     if !preferred.exists() {
         return preferred;
@@ -1300,7 +1380,7 @@ fn unique_sibling(path: &Path, suffix: &str) -> PathBuf {
     path.with_extension(format!("{suffix}.{}.{id}", std::process::id()))
 }
 
-fn write_new_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
+pub(crate) fn write_new_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
     let result = (|| -> io::Result<()> {
         let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
         file.write_all(bytes)?;
@@ -1324,9 +1404,10 @@ fn reopen_append(path: &Path) -> io::Result<File> {
     open_append(path)
 }
 
-/// Copies the canonical file to its retained `v{N}.bak` backup and fsyncs the
-/// copy. The backup exists before the canonical rename below, and a failure
-/// here leaves the canonical file untouched.
+/// Copies the canonical file to its `v{N}.bak` backup and fsyncs the copy.
+/// The backup exists before the canonical rename below, and a failure here
+/// leaves the canonical file untouched. The backup is retained: startup
+/// recovery never deletes it, and only `clear` removes it (#360 bak).
 fn copy_synced(source: &Path, destination: &Path) -> io::Result<()> {
     fs::copy(source, destination)?;
     OpenOptions::new().write(true).open(destination)?.sync_all()

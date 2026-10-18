@@ -3,6 +3,7 @@
 mod codec;
 pub mod format;
 mod log;
+mod quarantine;
 mod replay;
 
 #[cfg(feature = "test-hooks")]

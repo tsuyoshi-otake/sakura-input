@@ -763,3 +763,73 @@ fn the_sort_control_names_the_order_it_cycles_to() {
     assert_eq!(seen, ["更新順", "作成順", "名前順"]);
     assert_eq!(state_sort, crate::pad_storage::PadSort::default());
 }
+
+/// K4: an open protected memo copies its text with protected privacy.
+#[test]
+fn memo_copy_of_open_memo_is_protected() {
+    let open = OpenMemo {
+        id: 7,
+        title: Zeroizing::new("秘密".to_owned()),
+        body: Zeroizing::new("本文".to_owned()),
+        session: None,
+        dirty: false,
+        revision: 0,
+    };
+    match memo_copy(Some(&open), None) {
+        MemoCopy::Copy { markdown, privacy } => {
+            assert_eq!(privacy, ClipboardPrivacy::Protected);
+            assert_eq!(markdown.as_str(), "# 秘密\n\n本文");
+        }
+        _ => panic!("an open memo must produce a copy"),
+    }
+    let blank_title = OpenMemo {
+        id: 7,
+        title: Zeroizing::new("  ".to_owned()),
+        body: Zeroizing::new("本文".to_owned()),
+        session: None,
+        dirty: false,
+        revision: 0,
+    };
+    match memo_copy(Some(&blank_title), None) {
+        MemoCopy::Copy { markdown, privacy } => {
+            assert_eq!(privacy, ClipboardPrivacy::Protected);
+            assert_eq!(markdown.as_str(), "本文");
+        }
+        _ => panic!("an open memo must produce a copy"),
+    }
+}
+
+/// K4/K2: a plain memo in the list copies with normal privacy, same shape.
+#[test]
+fn memo_copy_of_plain_memo_is_normal() {
+    let memo = PadMemo::new(3, "題名", "内容", 0);
+    match memo_copy(None, Some(&memo)) {
+        MemoCopy::Copy { markdown, privacy } => {
+            assert_eq!(privacy, ClipboardPrivacy::Normal);
+            assert_eq!(markdown.as_str(), "# 題名\n\n内容");
+        }
+        _ => panic!("a plain memo must produce a copy"),
+    }
+    let blank_title = PadMemo::new(4, "", "内容", 0);
+    match memo_copy(None, Some(&blank_title)) {
+        MemoCopy::Copy { markdown, privacy } => {
+            assert_eq!(privacy, ClipboardPrivacy::Normal);
+            assert_eq!(markdown.as_str(), "内容");
+        }
+        _ => panic!("a plain memo must produce a copy"),
+    }
+}
+
+/// K4: a protected memo that is not open copies nothing, and no memo at all
+/// is missing rather than locked.
+#[test]
+fn memo_copy_of_locked_protected_memo_needs_unlock() {
+    let mut memo = PadMemo::new(5, "題名", "内容", 0);
+    memo.protect_with_envelope(vec![1; 32])
+        .expect("protect the memo");
+    assert!(matches!(
+        memo_copy(None, Some(&memo)),
+        MemoCopy::NeedsUnlock
+    ));
+    assert!(matches!(memo_copy(None, None), MemoCopy::Missing));
+}

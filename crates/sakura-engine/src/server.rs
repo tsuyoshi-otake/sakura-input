@@ -999,6 +999,23 @@ fn worker(shared: Arc<Shared>, instance: PipeInstance, slot: InstanceSlot, endpo
     worker_with_gate(shared, instance, slot, endpoint, None);
 }
 
+/// The composition-fence host key for one accepted connection (#360 A9).
+///
+/// Success: the client image's file name, so processes that share an image
+/// file name still share counts exactly like same-name processes did.
+/// Failure: `pid:<n>`, which only that one process's connections share. A
+/// file name can never contain ':', so the fallback cannot collide with a
+/// real image name.
+pub(crate) fn connection_host_key(
+    process_id: u32,
+    image: windows::core::Result<String>,
+) -> Box<str> {
+    match image {
+        Ok(name) => Box::from(name),
+        Err(_) => Box::from(format!("pid:{process_id}")),
+    }
+}
+
 fn worker_with_gate(
     shared: Arc<Shared>,
     instance: PipeInstance,
@@ -1128,6 +1145,21 @@ fn worker_with_gate(
                 ClientTrust::Unknown
             }
         };
+
+        // The composition-fence host identity comes from the same
+        // kernel-reported PID, not from the `process_name` a client sends in
+        // CreateSession (#360 A9). On failure the connection is still served
+        // under a `pid:<n>` key that only this process's connections share.
+        let image = security::client_image_file_name(process_id);
+        if let Err(error) = image.as_ref() {
+            report(
+                &shared,
+                format_args!(
+                    "could not read client pid {process_id} image name; fencing it as pid:{process_id}: {error}"
+                ),
+            );
+        }
+        dispatcher.set_fence_host(connection_host_key(process_id, image));
 
         ensure_spare_instance_for(&shared, endpoint);
 

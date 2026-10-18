@@ -4190,18 +4190,42 @@ fn classify_input_scope_with_cookie(context: &ITfContext, ec: u32) -> Result<Inp
     };
     // SAFETY: `context` and `range` belong to the active edit session that
     // issued `ec`.
-    let property = match unsafe { context.GetProperty(&GUID_PROP_INPUTSCOPE) } {
+    let property = unsafe { context.GetProperty(&GUID_PROP_INPUTSCOPE) };
+    classify_scope_reads(property, |property| {
+        // SAFETY: the property and range belong to this context and `ec` is
+        // the active edit cookie.
+        unsafe { property.GetValue(ec, &range) }
+    })
+}
+
+/// Routes the two input-scope reads through one decision point.
+///
+/// `property` is the `GetProperty(&GUID_PROP_INPUTSCOPE)` result and
+/// `read_value` performs the `GetValue(ec, range)` call on it, so the error
+/// policy for both reads lives here exactly once.
+///
+/// E_FAIL is the one documented host refusal: WinForms and classic EDIT
+/// controls refuse the input-scope property with it instead of handing back
+/// VT_EMPTY, and their fields must stay ordinary so they keep learning. Any
+/// other error means Windows could not report the scope at all. That is
+/// `Unclassified`, which is fail closed for persistence (#360 A8;
+/// `docs/decisions/developer-history.md`). Unknown scope is reported as
+/// `Ok(Unclassified)` rather than `Err` on purpose: `read_input_scope`
+/// answers `Err` with the scope cached from an earlier field, which would
+/// silently apply a different field's class to this one.
+fn classify_scope_reads<P>(
+    property: Result<P>,
+    read_value: impl FnOnce(&P) -> Result<VARIANT>,
+) -> Result<InputScope> {
+    let property = match property {
         Ok(property) => property,
-        // WinForms and classic EDIT often refuse the property object with
-        // E_FAIL instead of handing back VT_EMPTY. That is "no restriction",
-        // not a classification failure.
-        Err(_) => return Ok(InputScope::Normal),
+        Err(error) if error.code() == E_FAIL => return Ok(InputScope::Normal),
+        Err(_) => return Ok(InputScope::Unclassified),
     };
-    // SAFETY: the property and range belong to this context and `ec` is the
-    // active edit cookie.
-    let value = match unsafe { property.GetValue(ec, &range) } {
+    let value = match read_value(&property) {
         Ok(value) => value,
-        Err(_) => return Ok(InputScope::Normal),
+        Err(error) if error.code() == E_FAIL => return Ok(InputScope::Normal),
+        Err(_) => return Ok(InputScope::Unclassified),
     };
     classify_input_scope_variant(value)
 }

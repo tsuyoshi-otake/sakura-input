@@ -283,6 +283,20 @@ fn a_real_engine_serves_a_real_client_over_an_owned_private_pipe() {
     }
     let next_session = session_for(&mut next, "second.exe");
 
+    // The TSF client publishes the field's input scope before the first
+    // real key; this client must do the same, because an unclassified
+    // session is fail closed for learning persistence (#360 A8).
+    match next.call(
+        &Request::SetInputScope {
+            session: next_session,
+            scope: sakura_proto::InputScope::Normal,
+        },
+        PATIENT,
+    ) {
+        Ok(Response::Ok) => {}
+        other => panic!("SetInputScope: expected Ok, got {other:?}"),
+    }
+
     // Deliberately not asserting this id differs from the first. Sessions
     // are numbered by the `Dispatcher` that owns them, and per the
     // share-nothing design in `server`'s module docs each connection gets
@@ -619,6 +633,16 @@ brackets = "square"
         sleep(Duration::from_millis(25));
     }
     assert_eq!(comma_output.as_deref(), Some("あ，"));
+    // #360 A9: the loop exits with the session still composing. Its fence
+    // claim is keyed by this test binary's image, so leaving it live would
+    // suppress the bracket session below — return it to Idle like the
+    // punctuation phase above does.
+    let _ = client.call(
+        &Request::Revert {
+            session: punctuation_session,
+        },
+        PATIENT,
+    );
 
     let bracket_session = session_for(&mut client, "settings-bracket-e2e.exe");
     assert!(matches!(
