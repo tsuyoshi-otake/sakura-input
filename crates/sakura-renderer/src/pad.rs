@@ -32,7 +32,7 @@ use sakura_pad_session_proto::SecretBytes;
 use sakura_proto::AppearanceTheme;
 use sakura_proto::PadIdleLockTimeout;
 use windows::core::{Result, PCWSTR};
-use windows::Win32::Foundation::{COLORREF, HANDLE, HGLOBAL, HWND, LPARAM, LRESULT, RECT, WPARAM};
+use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     BeginPaint, CreateCompatibleBitmap, CreateCompatibleDC, CreatePatternBrush, CreatePen,
     CreateSolidBrush, DeleteDC, DeleteObject, EndPaint, GetDC, InvalidateRect, RedrawWindow,
@@ -43,7 +43,6 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, GetClipboardSequenceNumber, OpenClipboard,
 };
-use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
 use windows::Win32::System::RemoteDesktop::{
     WTSRegisterSessionNotification, WTSUnRegisterSessionNotification, NOTIFY_FOR_THIS_SESSION,
 };
@@ -85,6 +84,7 @@ use crate::memo_protection::{
     classify_envelope, MemoEnvelopeFormat, MemoError, MemoProtectionSession,
 };
 use crate::pad_caption;
+use crate::pad_clipboard::{copy_to_clipboard, ClipboardPrivacy};
 use crate::pad_crypto_client::PadCryptoCancellation;
 use crate::pad_hardware;
 use crate::pad_icon::{self, PadIcon};
@@ -2990,52 +2990,51 @@ fn storage_error(error: StorageError) -> windows::core::Error {
     )
 }
 
-/// Puts `value` on the clipboard as Unicode text.
-///
-/// The block is freed on every failing path and only on those: a successful
-/// `SetClipboardData` transfers ownership to the clipboard, and freeing it
-/// afterwards is a use-after-free the next paste would find.
-fn copy_to_clipboard(owner: HWND, value: &str) -> bool {
-    let mut wide: Vec<u16> = value.encode_utf16().collect();
-    wide.push(0);
-    let bytes = wide.len().saturating_mul(size_of::<u16>());
-    // SAFETY: every handle is checked, the copy is bounded by the allocation
-    // requested for it, and the clipboard is closed on every path.
-    unsafe {
-        let Ok(block) = GlobalAlloc(GMEM_MOVEABLE, bytes) else {
-            return false;
-        };
-        let target = GlobalLock(block);
-        if target.is_null() {
-            let _ = free_global(block);
-            return false;
-        }
-        std::ptr::copy_nonoverlapping(wide.as_ptr(), target.cast::<u16>(), wide.len());
-        let _ = GlobalUnlock(block);
-        if OpenClipboard(Some(owner)).is_err() {
-            let _ = free_global(block);
-            return false;
-        }
-        if EmptyClipboard().is_err() {
-            let _ = CloseClipboard();
-            let _ = free_global(block);
-            return false;
-        }
-        let format = windows::Win32::System::Ole::CF_UNICODETEXT.0 as u32;
-        let placed =
-            windows::Win32::System::DataExchange::SetClipboardData(format, Some(HANDLE(block.0)))
-                .is_ok();
-        let _ = CloseClipboard();
-        if !placed {
-            let _ = free_global(block);
-        }
-        placed
-    }
+/// What the copy command would put on the clipboard for the current memo
+/// state, decided without a window or the clipboard so the choice is testable.
+enum MemoCopy {
+    Copy {
+        markdown: Zeroizing<String>,
+        privacy: ClipboardPrivacy,
+    },
+    NeedsUnlock,
+    Missing,
 }
 
-fn free_global(block: HGLOBAL) -> bool {
-    // SAFETY: the block is owned by this call chain and not on the clipboard.
-    unsafe { windows::Win32::Foundation::GlobalFree(Some(block)).is_ok() }
+/// Decides the copy for Pad's copy button.
+///
+/// An open memo is always a protected memo in the unlocked state, so its copy
+/// is [`ClipboardPrivacy::Protected`]; a plain memo in the list is
+/// [`ClipboardPrivacy::Normal`]. A protected memo that is not open needs an
+/// unlock, and an absent memo copies nothing. The text shape is unchanged:
+/// `# {title}\n\n{body}`, or the body alone when the title is blank.
+fn memo_copy(open: Option<&OpenMemo>, active: Option<&PadMemo>) -> MemoCopy {
+    if let Some(open) = open {
+        let markdown = if open.title.trim().is_empty() {
+            (*open.body).clone()
+        } else {
+            format!("# {}\n\n{}", open.title.as_str(), open.body.as_str())
+        };
+        return MemoCopy::Copy {
+            markdown: Zeroizing::new(markdown),
+            privacy: ClipboardPrivacy::Protected,
+        };
+    }
+    let Some(memo) = active else {
+        return MemoCopy::Missing;
+    };
+    let Some((title, body)) = memo.plain_content() else {
+        return MemoCopy::NeedsUnlock;
+    };
+    let markdown = if title.trim().is_empty() {
+        body.to_owned()
+    } else {
+        format!("# {title}\n\n{body}")
+    };
+    MemoCopy::Copy {
+        markdown: Zeroizing::new(markdown),
+        privacy: ClipboardPrivacy::Normal,
+    }
 }
 
 fn update_layout(state: &PadState, window: HWND) {
@@ -8924,68 +8923,63 @@ impl PadState {
             if changed {
                 self.start_memo_reseal(window);
             }
-            let Some(open) = self.memo_open.as_ref() else {
+            // A reseal that closed the memo ends the command the same way the
+            // pre-refactor early return did: no notice, no status change.
+            if self.memo_open.is_none() {
                 return;
-            };
-            let mut markdown = if open.title.trim().is_empty() {
-                (*open.body).clone()
-            } else {
-                format!("# {}\n\n{}", open.title.as_str(), open.body.as_str())
-            };
-            let copied = copy_to_clipboard(window, &markdown);
-            markdown.zeroize();
-            let expiry_armed = if copied {
-                // SAFETY: this reads the clipboard sequence immediately
-                // after our successful write and owns the Pad timer below.
-                unsafe {
-                    self.protected_clipboard_sequence = Some(GetClipboardSequenceNumber());
-                    SetTimer(
-                        Some(window),
-                        PAD_PROTECTED_CLIPBOARD_TIMER,
-                        PROTECTED_CLIPBOARD_LIFETIME_MS,
-                        None,
-                    ) != 0
-                }
-            } else {
-                false
-            };
-            if copied && !expiry_armed {
-                // A protected copy must not outlive the promised clearing
-                // window when USER32 could not arm its expiration timer.
-                self.expire_protected_clipboard();
             }
-            self.notify(if expiry_armed {
-                "コピーしました。15 秒後にクリップボードを消去します".to_owned()
-            } else {
-                "コピーできません".to_owned()
-            });
-            self.update_status();
-            return;
-        }
-        if changed {
+        } else if changed {
             self.sync_rows();
             self.publish(window);
         }
-        let Some(memo) = self.document.find(self.active) else {
-            self.notify("メモがありません".to_owned());
-            self.update_status();
-            return;
-        };
-        let Some((title, body)) = memo.plain_content() else {
-            self.notify("保護されたメモは解除が必要です".to_owned());
-            self.update_status();
-            return;
-        };
-        let markdown = if title.trim().is_empty() {
-            body.to_owned()
-        } else {
-            format!("# {title}\n\n{body}")
-        };
-        self.notify(if copy_to_clipboard(window, &markdown) {
-            "コピーしました".to_owned()
-        } else {
-            "コピーできません".to_owned()
-        });
+        match memo_copy(self.memo_open.as_ref(), self.document.find(self.active)) {
+            MemoCopy::Missing => {
+                self.notify("メモがありません".to_owned());
+            }
+            MemoCopy::NeedsUnlock => {
+                self.notify("保護されたメモは解除が必要です".to_owned());
+            }
+            MemoCopy::Copy { markdown, privacy } => {
+                let copied = copy_to_clipboard(window, &markdown, privacy);
+                match privacy {
+                    ClipboardPrivacy::Protected => {
+                        let expiry_armed = if copied {
+                            // SAFETY: this reads the clipboard sequence immediately
+                            // after our successful write and owns the Pad timer below.
+                            unsafe {
+                                self.protected_clipboard_sequence =
+                                    Some(GetClipboardSequenceNumber());
+                                SetTimer(
+                                    Some(window),
+                                    PAD_PROTECTED_CLIPBOARD_TIMER,
+                                    PROTECTED_CLIPBOARD_LIFETIME_MS,
+                                    None,
+                                ) != 0
+                            }
+                        } else {
+                            false
+                        };
+                        if copied && !expiry_armed {
+                            // A protected copy must not outlive the promised clearing
+                            // window when USER32 could not arm its expiration timer.
+                            self.expire_protected_clipboard();
+                        }
+                        self.notify(if expiry_armed {
+                            "コピーしました。15 秒後にクリップボードを消去します".to_owned()
+                        } else {
+                            "コピーできません".to_owned()
+                        });
+                    }
+                    ClipboardPrivacy::Normal => {
+                        self.notify(if copied {
+                            "コピーしました".to_owned()
+                        } else {
+                            "コピーできません".to_owned()
+                        });
+                    }
+                }
+            }
+        }
         self.update_status();
     }
 
