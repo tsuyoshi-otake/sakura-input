@@ -74,8 +74,14 @@ pub(crate) fn copy_to_clipboard(owner: HWND, value: &str, privacy: ClipboardPriv
 }
 
 fn place_text(owner: HWND, value: &str, markers: &[ClipboardMarker]) -> bool {
-    let mut wide = Zeroizing::new(value.encode_utf16().collect::<Vec<u16>>());
+    // One allocation up front: a UTF-16 string never has more code units
+    // than the UTF-8 source has bytes, so the buffer never reallocates and
+    // no unzeroized copy of the secret is left on the freed heap.
+    let mut wide = Zeroizing::new(Vec::with_capacity(value.len() + 1));
+    let wide_capacity = wide.capacity();
+    wide.extend(value.encode_utf16());
     wide.push(0);
+    debug_assert_eq!(wide.capacity(), wide_capacity);
     let bytes = wide.len().saturating_mul(size_of::<u16>());
     // SAFETY: every handle is checked, the copy is bounded by the allocation
     // requested for it, the clipboard is closed on every path, and `wide` is
