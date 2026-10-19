@@ -50,9 +50,16 @@ holdout required to choose a production model or default. Use its report to
 find regressions and worker failures, then freeze a separately reviewed corpus
 before claiming a quality result.
 
-Reports use schema version 2. `baseline.evaluated` and `neural.evaluated` both
+Reports use schema version 3. `baseline.evaluated` and `neural.evaluated` both
 cover every parsed row; `neural.eligible` is a separate count for rows that
-passed the selected Tiny gate. This keeps long-only and all-normal Top-1
+passed the selected Tiny gate. The model's choice is made by
+`sakura_core::conversion::neural_listwise_choice`, the same function the engine
+calls (Issue #370): the highest score inside the strongest evidence group, with
+no local-cost term. `neural.local_fallback` (new in version 3) counts scored rows
+where that rule keeps local order: no candidate in a neural group, or a
+non-finite score. Version 2 reports used a local cost + score penalty formula
+the engine no longer ships, so their wins and losses do not describe the
+product. This keeps long-only and all-normal Top-1
 denominators comparable even when a row falls back before the worker call.
 `candidate_rank.recall_at_6` and
 `candidate_rank.mrr_milli_sum / candidate_rank.evaluated` describe the shared

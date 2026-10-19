@@ -39,8 +39,8 @@ pub use bridge::{CommitBridgeTail, CrossCommitBridge, LeftContextId, RightContex
 pub(in crate::conversion) use candidates::has_same_surface;
 pub use candidates::{ConversionCandidate, ConversionSegment};
 pub use evidence::{
-    CandidateAuthority, CandidateEvidence, CandidateEvidenceClass, CandidateOrigin, PathEvidence,
-    RepairTier,
+    neural_listwise_choice, CandidateAuthority, CandidateEvidence, CandidateEvidenceClass,
+    CandidateOrigin, PathEvidence, RepairTier,
 };
 pub use input::{ConversionInput, ConversionInputClass, LiteralPolicy};
 pub use options::{candidate_budget, ConversionOptions};
