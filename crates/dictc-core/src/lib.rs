@@ -38,14 +38,13 @@ pub const MAX_DICTIONARY_IMAGE_BYTES: usize = 128 * 1024 * 1024;
 
 pub const MOZC_UPSTREAM_COMMIT: &str = "3f235b4eb6fcff7d14ef5f0fb8ee56de7ee4c732";
 
-const ALLOWED_LICENSES: [&str; 7] = [
+const ALLOWED_LICENSES: [&str; 6] = [
     "BSD-3-Clause",
     "Apache-2.0",
     "CC0-1.0",
     "MIT",
     "LicenseRef-Sakura-InHouse",
     "LicenseRef-Mozc-Dictionary",
-    "LicenseRef-External-Category",
 ];
 
 /// One row from a human-editable dictionary TSV.

@@ -152,7 +152,6 @@
       "bytes": 123472,
       "sha256": "a77a7332b5b1d05b0da01169dea4d00973adcd83710ff54a1353a8e68268739d"
     },
-    "curated_homophone_system_details": null,
     "curated_phrase_target_entries": {
       "file": "curated-phrase-target-entries.tsv",
       "bytes": 1195,
@@ -177,8 +176,7 @@
       "file": "non-initial-boundary-policy.tsv",
       "bytes": 20811,
       "sha256": "cbe7fd29af43528c7736fc3367b03ab69dd093912fcb1545c11f3d6d08152084"
-    },
-    "system_category_dictionary": null
+    }
   },
   "artifacts": {
     "system_tsv": {

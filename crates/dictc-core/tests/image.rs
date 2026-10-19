@@ -457,12 +457,6 @@ fn source_license_and_frozen_taxonomy_are_real_gates() {
     let error = parse_entries("bad.tsv", &proprietary).expect_err("license must be rejected");
     assert!(error.to_string().contains("license"));
 
-    let external = ENTRIES.replace("BSD-3-Clause", "LicenseRef-External-Category");
-    assert!(
-        parse_entries("external.tsv", &external).is_ok(),
-        "the local external category provenance reference must remain buildable"
-    );
-
     let error = parse_connection("small.tsv", CONNECTION, true)
         .expect_err("shipping compiler freezes the taxonomy at 2672 classes");
     assert!(error.to_string().contains("2672"));
@@ -492,7 +486,7 @@ reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotati
 #[test]
 fn system_and_overlay_keep_precedence_over_a_supplement() {
     let supplement_text = concat!(
-        "# license: LicenseRef-External-Category\n",
+        "# license: CC0-1.0\n",
         "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
         "かんじ\t漢字\t1\t2\t7800\t-\t\timported supplement\n",
     );
