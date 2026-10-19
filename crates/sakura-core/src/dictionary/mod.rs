@@ -70,6 +70,13 @@ impl EntryFlags {
     /// unavailable. Unlike a plain non-predictive row it is not evidence that
     /// the typed reading is a finished word, so input repair stays available.
     pub const PREDICTION_EXCLUDED: Self = Self(1 << 6);
+    /// A conjugation stem that only ever continues into た/て/たり (a Mozc
+    /// 連用タ接続 row such as 書い, 行っ, 高かっ), so it cannot finish the
+    /// input. A path that ends the input on it pays an extra cost; inside a
+    /// longer query, or before more preedit, it is an ordinary edge (Issue
+    /// #372). Generated full forms such as 書いた share its connection class
+    /// but never carry this flag.
+    pub const NON_FINAL: Self = Self(1 << 7);
 
     pub const fn from_bits(bits: u16) -> Self {
         Self(bits)

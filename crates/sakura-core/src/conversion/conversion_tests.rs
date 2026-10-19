@@ -1913,6 +1913,47 @@ fn bos_filters_non_initial_fragments_but_compound_paths_can_use_them() {
 }
 
 #[test]
+fn issue_372_non_final_stem_pays_only_where_it_ends_the_input() {
+    let bytes = synthetic_dictionary(&[
+        fixture_entry("にかい", "二階", 1_200, EntryFlags::NONE),
+        fixture_entry("に", "に", 100, EntryFlags::NONE),
+        fixture_entry("かい", "書い", 100, EntryFlags::NON_FINAL),
+        fixture_entry("た", "た", 100, EntryFlags::NONE),
+    ]);
+    let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+    let mut converter = Converter::new();
+    let closed = ConversionOptions::default();
+    let open = ConversionOptions {
+        open_end: true,
+        ..ConversionOptions::default()
+    };
+    let top = |converter: &mut Converter, reading: &str, options: ConversionOptions| {
+        let candidates = converter
+            .convert(&dictionary, reading, options)
+            .expect("conversion");
+        (candidates[0].text().to_owned(), candidates[0].cost)
+    };
+
+    assert_eq!(
+        top(&mut converter, "にかい", closed).0,
+        "二階",
+        "a stem that cannot finish the input must not end it"
+    );
+    assert_eq!(
+        top(&mut converter, "にかい", open).0,
+        "に書い",
+        "before more preedit the stem is an ordinary edge"
+    );
+    let inside = top(&mut converter, "かいた", closed);
+    assert_eq!(inside.0, "書いた");
+    assert_eq!(
+        inside.1,
+        top(&mut converter, "かいた", open).1,
+        "inside the query the stem pays nothing extra"
+    );
+}
+
+#[test]
 fn issue_306_exact_system_evidence_controls_only_internal_alias_admission() {
     for exact_flags in [
         None,

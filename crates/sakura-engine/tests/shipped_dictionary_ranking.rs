@@ -3623,3 +3623,53 @@ fn issue_334_learning_made_on_the_old_te_form_right_id_still_applies() {
         "old right id {old_right}: the learned spelling must still lead"
     );
 }
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_372_short_readings_do_not_end_on_a_ta_connection_stem() {
+    // Authored corpus rows a4-254..a4-257. Before Issue #372 the tops were
+    // に書い, に巻い, に空い and におい: the reading ended on a 連用タ接続
+    // stem (or a kana split) that Mozc never lets finish a sentence.
+    let mut wrong = Vec::new();
+    for (reading, expected) in [
+        ("にかい", "二階"),
+        ("にまい", "二枚"),
+        ("にあい", "似合い"),
+        ("におい", "匂い"),
+        // Generated full forms share the stem's class but carry no flag.
+        ("かいた", "書いた"),
+        ("いった", "言った"),
+        ("てがみをかいた", "手紙を書いた"),
+        // The stem alone still leads when nothing else owns the reading.
+        ("いっ", "言っ"),
+    ] {
+        let top = top_text(reading);
+        if top != expected {
+            wrong.push(format!("{reading}: expected {expected}, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_372_a_segment_before_more_preedit_keeps_its_stem() {
+    // A segment the user shrank to あるい inside あるいて is followed by て,
+    // so it is open-ended and 歩い stays its first candidate; the same
+    // reading closing the input leads with something that can finish it.
+    let conversion = open_conversion();
+    let top = |open_end: bool| {
+        conversion
+            .with_candidates(
+                "あるい",
+                ConversionOptions {
+                    open_end,
+                    ..ConversionOptions::default()
+                },
+                |candidates| candidates[0].text().to_owned(),
+            )
+            .expect("あるい converts")
+    };
+    assert_eq!(top(true), "歩い");
+    assert_ne!(top(false), "歩い");
+}

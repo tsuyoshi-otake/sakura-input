@@ -191,6 +191,8 @@ pub struct Converter {
     cross_commit_scratch: Vec<ConversionCandidate>,
     sequence: u64,
     initial_right_id: u16,
+    /// Mirrors [`ConversionOptions::open_end`] for the current query.
+    open_end: bool,
     /// Present only while materializing the bounded tail+current pass.
     cross_commit_reading_boundary: Option<usize>,
     lattice_node_budget: usize,
@@ -236,6 +238,7 @@ impl Converter {
             ),
             sequence: 0,
             initial_right_id: 0,
+            open_end: false,
             cross_commit_reading_boundary: None,
             lattice_node_budget: MAX_LATTICE_NODES,
             search_state_budget: MAX_SEARCH_STATES,
@@ -423,6 +426,7 @@ impl Converter {
 
         self.reset(reading.len());
         self.initial_right_id = options.initial_right_id;
+        self.open_end = options.open_end;
         let fallback = make_lossless_fallback(dictionary, reading, self.initial_right_id)?;
         let mut search = SearchRun {
             terminal: ConversionSearchTerminal::SearchExhausted,
@@ -845,6 +849,7 @@ impl Converter {
     ) -> Result<ConversionResult<'a>, ConversionError> {
         self.reset(input.lookup_reading.len());
         self.initial_right_id = options.initial_right_id;
+        self.open_end = options.open_end;
         self.candidates.push(make_synthetic_exact(
             dictionary,
             input.lookup_reading,
@@ -893,6 +898,7 @@ impl Converter {
         };
         self.reset(input.lookup_reading.len());
         self.initial_right_id = options.initial_right_id;
+        self.open_end = options.open_end;
         let exact = make_synthetic_exact(
             dictionary,
             input.lookup_reading,
