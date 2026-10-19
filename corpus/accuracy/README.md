@@ -62,8 +62,7 @@ snapshot in the same PR.
    ./scripts/build-dictionary.ps1 -MozcSource <mozc checkout> -GlossarySource third_party/smile-chat-public -OutputDirectory artifacts/accuracy -SkipDeterminismCheck
    ```
 
-   Do not pass `-SystemCategoryDirectory`: the gate measures the shipped
-   dictionary. The report header shows the dictionary's SHA-256 and whether it
+   The gate measures the shipped dictionary. The report header shows the dictionary's SHA-256 and whether it
    equals the `system.dic` hash in `data/dictionary-build.report.json`.
 
 2. Run the gate (PowerShell 7):

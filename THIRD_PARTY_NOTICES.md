@@ -55,3 +55,11 @@ Creative Commons Attribution-ShareAlike 4.0 International License
 Documentation License. Whether these terms apply to a model trained on the
 text is not settled; this attribution is given so the training source is
 known.
+
+## Application icon
+
+The icon files in `assets/sakura-input-icon/` are colour-shifted versions of
+the Sakura Editor NEXT application icon (`sakura_editor_next.png`). The
+repository owner, tsuyoshi-otake, holds the copyright in Sakura Editor NEXT and
+its icon, and the derived icon is distributed here under this repository's MIT
+License.

@@ -136,13 +136,11 @@ fn checked_in_curated_sources_have_the_reviewed_release_shape() {
     let phrases = data_entries("curated-phrases.tsv");
     let general = data_entries("curated-general-details.tsv");
     let homophones = data_entries("curated-homophone-details.tsv");
-    let system_homophones = data_entries("curated-homophone-system-details.tsv");
     let phrase_targets = data_entries("curated-phrase-target-entries.tsv");
     let general_targets = data_entries("curated-general-target-entries.tsv");
     assert_eq!(phrases.len(), 481);
     assert_eq!(general.len(), 480);
     assert_eq!(homophones.len(), 1_163);
-    assert_eq!(system_homophones.len(), 319);
     assert_eq!(phrase_targets.len(), 14);
     assert_eq!(general_targets.len(), 3);
 
@@ -170,7 +168,7 @@ fn checked_in_curated_sources_have_the_reviewed_release_shape() {
         assert!(!entry.annotation.contains(['\r', '\n', '\t', '\0']));
     }
 
-    for entry in general.iter().chain(&homophones).chain(&system_homophones) {
+    for entry in general.iter().chain(&homophones) {
         assert!(
             identities.insert((
                 entry.reading.as_str(),

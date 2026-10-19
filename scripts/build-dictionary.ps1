@@ -3,12 +3,6 @@ param(
     [string]$MozcSource,
     [string]$GlossarySource,
     [string]$WordNetLmf,
-    # Canonical Sakura system dictionary split into fourteen category files.
-    # The source stays outside the repository and is included in the generated
-    # image when explicitly supplied. Keep the old parameter as a compatibility
-    # alias for existing local build commands.
-    [Alias('SupplementLexiconDirectory')]
-    [string]$SystemCategoryDirectory,
     [string]$OutputDirectory = (Join-Path $env:USERPROFILE 'tmp\sakura-input-dictionary-build'),
     [switch]$SkipDeterminismCheck,
     [switch]$UpdateCheckedInData
@@ -32,7 +26,6 @@ $CuratedTerms = Join-Path $RepositoryRoot 'data\curated-terms.tsv'
 $CuratedPhrases = Join-Path $RepositoryRoot 'data\curated-phrases.tsv'
 $CuratedGeneralDetails = Join-Path $RepositoryRoot 'data\curated-general-details.tsv'
 $CuratedHomophoneDetails = Join-Path $RepositoryRoot 'data\curated-homophone-details.tsv'
-$CuratedHomophoneSystemDetails = Join-Path $RepositoryRoot 'data\curated-homophone-system-details.tsv'
 $CuratedPhraseTargetEntries = Join-Path $RepositoryRoot 'data\curated-phrase-target-entries.tsv'
 $CuratedGeneralTargetEntries = Join-Path $RepositoryRoot 'data\curated-general-target-entries.tsv'
 $ConversionPriorities = Join-Path $RepositoryRoot 'data\conversion-priorities.tsv'
@@ -40,22 +33,6 @@ $VerbCollocationEdges = Join-Path $RepositoryRoot 'data\verb-collocation-edges.t
 $NonInitialBoundaryPolicy = Join-Path $RepositoryRoot 'data\non-initial-boundary-policy.tsv'
 $LlmDetailTargetDirectory = Join-Path $RepositoryRoot 'data\llm-detail-targets\000010'
 $LlmDetailReleaseDirectory = Join-Path $RepositoryRoot 'data\llm-details\releases\000010'
-$ExpectedSystemCategoryFiles = @(
-    '01-grammar-function.tsv',
-    '02-inflectional.tsv',
-    '03-general-lexicon.tsv',
-    '04-fixed-expressions.tsv',
-    '05-numeric-time-units.tsv',
-    '06-person-names.tsv',
-    '07-place-names.tsv',
-    '08-organizations-products.tsv',
-    '09-katakana-loanwords.tsv',
-    '10-abbreviations-ascii.tsv',
-    '11-it-engineering.tsv',
-    '12-specialist-domains.tsv',
-    '13-symbols-emoji.tsv',
-    '14-orthography-variants.tsv'
-)
 $CategoryDictionaryFiles = @(
     '01_文法・機能語.tsv',
     '02_活用語.tsv',
@@ -263,87 +240,6 @@ function Resolve-WordNetLmf {
     return $resolved
 }
 
-function Resolve-SystemCategoryDictionary {
-    param([AllowEmptyString()][string]$Directory)
-
-    if ([string]::IsNullOrWhiteSpace($Directory)) {
-        return $null
-    }
-
-    $resolved = [IO.Path]::GetFullPath($Directory)
-    if (-not [IO.Directory]::Exists($resolved)) {
-        throw "system category dictionary directory does not exist: $resolved"
-    }
-    $manifestPath = Join-Path $resolved 'manifest.json'
-    if (-not [IO.File]::Exists($manifestPath)) {
-        throw "system category dictionary manifest is missing: $manifestPath"
-    }
-    try {
-        $manifest = [IO.File]::ReadAllText($manifestPath, [Text.UTF8Encoding]::new($false)) |
-            ConvertFrom-Json
-    }
-    catch {
-        throw "cannot parse system category dictionary manifest ${manifestPath}: $($_.Exception.Message)"
-    }
-
-    if ($manifest.schema_version -ne 1) {
-        throw "unsupported system category dictionary manifest schema: $($manifest.schema_version)"
-    }
-    if ($manifest.license_declaration -ne 'LicenseRef-External-Category') {
-        throw 'system category dictionary manifest is not compatible with this build'
-    }
-    if ([string]$manifest.source_scope -notlike '*user dictionaries excluded*') {
-        throw 'system category dictionary manifest does not prove that user dictionaries were excluded'
-    }
-    [long]$uniquePairs = 0
-    if (-not [long]::TryParse([string]$manifest.unique_safely_mapped_pairs, [ref]$uniquePairs) -or $uniquePairs -lt 1200000) {
-        throw "system category dictionary has fewer than 1,200,000 safely mapped pairs: $($manifest.unique_safely_mapped_pairs)"
-    }
-
-    $categories = @($manifest.categories)
-    if ($categories.Count -ne $ExpectedSystemCategoryFiles.Count) {
-        throw "system category dictionary manifest must contain exactly $($ExpectedSystemCategoryFiles.Count) categories, found $($categories.Count)"
-    }
-    $byFile = @{}
-    foreach ($category in $categories) {
-        $file = [string]$category.file
-        if ([string]::IsNullOrWhiteSpace($file) -or $byFile.ContainsKey($file)) {
-            throw "system category dictionary manifest has a missing or duplicate category file: $file"
-        }
-        $byFile[$file] = $category
-    }
-
-    $categoryPaths = [Collections.Generic.List[string]]::new()
-    $directoryPrefix = if ($resolved.EndsWith([IO.Path]::DirectorySeparatorChar)) {
-        $resolved
-    }
-    else {
-        $resolved + [IO.Path]::DirectorySeparatorChar
-    }
-    for ($index = 0; $index -lt $ExpectedSystemCategoryFiles.Count; $index++) {
-        $file = $ExpectedSystemCategoryFiles[$index]
-        if (-not $byFile.ContainsKey($file)) {
-            throw "system category dictionary manifest is missing category file: $file"
-        }
-        if ($byFile[$file].id -ne ($index + 1)) {
-            throw "system category file $file does not match its required id"
-        }
-        $path = [IO.Path]::GetFullPath((Join-Path $resolved $file))
-        if (-not $path.StartsWith($directoryPrefix, [StringComparison]::OrdinalIgnoreCase)) {
-            throw "system category file escaped its declared dictionary directory: $path"
-        }
-        if (-not [IO.File]::Exists($path)) {
-            throw "system category file is missing: $path"
-        }
-        $categoryPaths.Add($path)
-    }
-
-    return [pscustomobject]@{
-        manifest = $manifestPath
-        paths = $categoryPaths.ToArray()
-    }
-}
-
 function Invoke-BuildPass {
     param(
         [Parameter(Mandatory)][AllowEmptyString()][string]$Suffix,
@@ -358,14 +254,12 @@ function Invoke-BuildPass {
         [Parameter(Mandatory)][string]$CuratedPhrasesPath,
         [Parameter(Mandatory)][string]$CuratedGeneralDetailsPath,
         [Parameter(Mandatory)][string]$CuratedHomophoneDetailsPath,
-        [Parameter(Mandatory)][AllowEmptyString()][string]$CuratedHomophoneSystemDetailsPath,
         [Parameter(Mandatory)][string]$CuratedPhraseTargetEntriesPath,
         [Parameter(Mandatory)][string]$CuratedGeneralTargetEntriesPath,
         [Parameter(Mandatory)][string]$ConversionPrioritiesPath,
         [Parameter(Mandatory)][string]$VerbCollocationEdgesPath,
         [Parameter(Mandatory)][string]$NonInitialBoundaryPolicyPath,
-        [Parameter(Mandatory)][string]$WordNetLmfPath,
-        [string[]]$SystemCategoryPaths = @()
+        [Parameter(Mandatory)][string]$WordNetLmfPath
     )
 
     $options = [IO.EnumerationOptions]::new()
@@ -452,19 +346,6 @@ function Invoke-BuildPass {
         '--system-category', '4', $CuratedPhraseTargetEntriesPath,
         '--output-dir', $categoryDirectory
     )
-    # PowerShell unwraps an empty array passed through a parameter, so the
-    # no-category build can arrive here as `$null` even though the parameter
-    # is declared as `string[]`. Normalize it before reading Count or indexing.
-    $systemCategoryPathArray = @(
-        foreach ($path in @($SystemCategoryPaths)) {
-            if (-not [string]::IsNullOrWhiteSpace([string]$path)) {
-                [string]$path
-            }
-        }
-    )
-    for ($index = 0; $index -lt $systemCategoryPathArray.Count; $index++) {
-        $categoryArguments += @('--system-category', ($index + 1), $systemCategoryPathArray[$index])
-    }
     Invoke-Rtk -Arguments $categoryArguments
 
     $categoryFiles = [Collections.Generic.List[string]]::new()
@@ -495,9 +376,6 @@ function Invoke-BuildPass {
         '--curated-detail-source', $CuratedGeneralDetailsPath,
         '--detail-only-source', $CuratedHomophoneDetailsPath
     )
-    if (-not [string]::IsNullOrWhiteSpace($CuratedHomophoneSystemDetailsPath)) {
-        $dictionaryArguments += @('--detail-only-source', $CuratedHomophoneSystemDetailsPath)
-    }
     $dictionaryArguments += @(
         '--curated-detail-report', $curatedDetailReport,
         '--detail-coverage-output', $detailCoverage,
@@ -563,18 +441,7 @@ if ([string]::IsNullOrWhiteSpace($GlossarySource)) {
 }
 $GlossarySource = Resolve-PinnedSource -ProvidedPath $GlossarySource -Repository $GlossaryRepository `
     -Revision $GlossaryRevision -ManagedName 'smile-chat' -SparsePaths @('frontend/public')
-$SystemCategoryDictionary = Resolve-SystemCategoryDictionary -Directory $SystemCategoryDirectory
 $WordNetLmfPath = Resolve-WordNetLmf -ProvidedPath $WordNetLmf
-if ($UpdateCheckedInData -and $null -ne $SystemCategoryDictionary) {
-    throw '-UpdateCheckedInData cannot be combined with -SystemCategoryDirectory; canonical category source files remain local only'
-}
-$SystemCategoryPaths = if ($null -eq $SystemCategoryDictionary) { @() } else { [string[]]$SystemCategoryDictionary.paths }
-$CuratedHomophoneSystemDetailsPath = if ($null -eq $SystemCategoryDictionary) {
-    ''
-}
-else {
-    $CuratedHomophoneSystemDetails
-}
 
 $mozcDictionaryDirectory = Join-Path $MozcSource 'src\data\dictionary_oss'
 $glossaryDirectory = Join-Path $GlossarySource 'frontend\public\glossaries'
@@ -619,13 +486,12 @@ try {
         -CuratedPhrasesPath $CuratedPhrases `
         -CuratedGeneralDetailsPath $CuratedGeneralDetails `
         -CuratedHomophoneDetailsPath $CuratedHomophoneDetails `
-        -CuratedHomophoneSystemDetailsPath $CuratedHomophoneSystemDetailsPath `
         -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
         -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
         -ConversionPrioritiesPath $ConversionPriorities `
         -VerbCollocationEdgesPath $VerbCollocationEdges `
         -NonInitialBoundaryPolicyPath $NonInitialBoundaryPolicy `
-        -WordNetLmfPath $WordNetLmfPath -SystemCategoryPaths $SystemCategoryPaths
+        -WordNetLmfPath $WordNetLmfPath
 
     $scalarArtifactNames = @('system_tsv', 'trim_report', 'overlay_tsv', 'overlay_report', 'inflection_tsv', 'inflection_report', 'dictionary', 'wordnet_report', 'curated_detail_report', 'llm_detail_report', 'detail_coverage')
     if (-not $SkipDeterminismCheck) {
@@ -637,13 +503,12 @@ try {
             -CuratedPhrasesPath $CuratedPhrases `
             -CuratedGeneralDetailsPath $CuratedGeneralDetails `
             -CuratedHomophoneDetailsPath $CuratedHomophoneDetails `
-            -CuratedHomophoneSystemDetailsPath $CuratedHomophoneSystemDetailsPath `
             -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
             -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
             -ConversionPrioritiesPath $ConversionPriorities `
             -VerbCollocationEdgesPath $VerbCollocationEdges `
             -NonInitialBoundaryPolicyPath $NonInitialBoundaryPolicy `
-            -WordNetLmfPath $WordNetLmfPath -SystemCategoryPaths $SystemCategoryPaths
+            -WordNetLmfPath $WordNetLmfPath
         foreach ($name in $scalarArtifactNames) {
             $firstHash = Get-Sha256 $primary[$name]
             $secondHash = Get-Sha256 $repeat[$name]
@@ -672,9 +537,6 @@ try {
         Get-ArtifactRecord $CuratedGeneralDetails
         Get-ArtifactRecord $CuratedHomophoneDetails
     )
-    if (-not [string]::IsNullOrWhiteSpace($CuratedHomophoneSystemDetailsPath)) {
-        $curatedDetailInputs += Get-ArtifactRecord $CuratedHomophoneSystemDetailsPath
-    }
     $report = [ordered]@{
         schema_version = 2
         mozc_revision = $MozcRevision
@@ -725,30 +587,11 @@ try {
             curated_phrases = Get-ArtifactRecord $CuratedPhrases
             curated_general_details = Get-ArtifactRecord $CuratedGeneralDetails
             curated_homophone_details = Get-ArtifactRecord $CuratedHomophoneDetails
-            curated_homophone_system_details = if ([string]::IsNullOrWhiteSpace($CuratedHomophoneSystemDetailsPath)) {
-                $null
-            }
-            else {
-                Get-ArtifactRecord $CuratedHomophoneSystemDetailsPath
-            }
             curated_phrase_target_entries = Get-ArtifactRecord $CuratedPhraseTargetEntries
             curated_general_target_entries = Get-ArtifactRecord $CuratedGeneralTargetEntries
             conversion_priorities = Get-ArtifactRecord $ConversionPriorities
             verb_collocation_edges = Get-ArtifactRecord $VerbCollocationEdges
             non_initial_boundary_policy = Get-ArtifactRecord $NonInitialBoundaryPolicy
-            system_category_dictionary = if ($null -eq $SystemCategoryDictionary) {
-                $null
-            }
-            else {
-                [ordered]@{
-                    manifest = Get-ArtifactRecord $SystemCategoryDictionary.manifest
-                    categories = @(
-                        foreach ($path in $SystemCategoryDictionary.paths) {
-                            Get-ArtifactRecord $path
-                        }
-                    )
-                }
-            }
         }
         artifacts = [ordered]@{}
     }

@@ -74,9 +74,7 @@ loanwords, abbreviations/ASCII, IT/engineering, specialist domains,
 symbols/emoji, and orthographic variants). They are the main system dictionary,
 not a user dictionary or a separate candidate layer. `category-split`
 accepts them with `--system-category`; `--supplement` is retained only as a
-backward-compatible command-line alias. The PowerShell pipeline names the input
-directory `-SystemCategoryDirectory` (the old `-SupplementLexiconDirectory`
-name is accepted only for compatibility). Place-name import drops the address
+backward-compatible command-line alias. Place-name import drops the address
 layer: postal-code readings (`001`, `001-0000`), placeholders such as
 `(そのた)`, and prefecture-qualified municipal surfaces (`北海道厚岸郡浜中町横浜`).
 Short toponyms (`東京`, `渋谷`, `横浜`, `渋谷区`) remain. The source TSV is
@@ -85,9 +83,7 @@ left unchanged; the filter runs at compile time.
 Run `scripts/build-dictionary.ps1` to fetch the pinned Mozc tree, read the
 vendored smile-chat MIT glossary under `third_party/smile-chat-public`,
 regenerate every intermediate, compile `system.dic`, repeat the build, and
-compare SHA-256 digests. Provide the canonical fourteen-category source
-directory with `-SystemCategoryDirectory` when generating the full Sakura
-dictionary. Generated artifacts go under `~/tmp/` by default. The checked-in
+compare SHA-256 digests. Generated artifacts go under `~/tmp/` by default. The checked-in
 overlay can only be replaced when the script is given `-UpdateCheckedInData`.
 CI does not use a private-repository token for smile-chat.
 
