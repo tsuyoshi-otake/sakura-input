@@ -3549,3 +3549,11 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   - The rubric verifier (sonnet) passed 10/10.
 - Open on #372: にしゅうかん → に習慣 (Mozc BOS → particle に is cheap).
 - Learning: a connection-class fix in the matrix also hits every generated entry that reuses the class (inflection.tsv rows share the stem's ids). Use an entry flag set where the provenance is known (mozc_trim). Before changing a generated right id, check the data calibrated against it (verb-collocation-edges.tsv).
+
+## 2026-10-19 Integrate #373/#374/#375 and prepare 2.0.19 (#376)
+
+- Integration: branch `claude/integrate-371-370-372` from origin/main 98678f5 in the existing checkout (no worktree), merging the heads of PR #373 (c45395b), #374 (d445e7f) and #375 (80f090e). Conflicts: journal (both sides kept), conversion corpus and snapshot (union, 1,520 rows, ids unique), README count 1,520, accuracy floors re-accepted with the integrated dictionary; gate `--check` exit 0.
+- Gates on the integrated tree: fmt check; clippy -D warnings with the release.yml feature set; wrapped workspace tests PASS; check-dependency-rules, check-facade, dep-policy and dep-policy -SelfTest exit 0; release build; check-dll-size PASS (441344 of 1048576 bytes); process-clean clean. measure-irv -Compare exit 0 with three WARNs: IRV-HISTORY-STORE +161.7% and IRV-CI +19.4% as on main, plus IRV-CORE-CONVERSION +11.2% (was +9.9% on main; the #372 lattice end-of-input helper crossed the +10% warning line).
+- Release prep: workspace version and Cargo.lock 2.0.18 -> 2.0.19 (28 workspace packages, `cargo update --workspace --offline`), installer product version and versioned directory, release.yml default tag v2.0.19, release sequence 26 -> 27. docs/release-notes-v2.0.19.md (CRLF) describes #371 phrases, #372 short readings (にしゅうかん still open), #370 as a tool-only change, that learned entries still take precedence, and that no on-screen check was done.
+- Release gates: release-workflow-policy and -SelfTest exit 0; test-update-signing-v2 exit 0; wrapped update_trust, packaging_version and updater tests with --locked PASS; process-clean clean.
+- Signing key for publish: `%LOCALAPPDATA%\SakuraInput\release-signing\sakura-update-active-<key id>.pkcs8.dpapi`, KeyId = `key.0.id` (active) in data/update-signing/public-keys-v1.txt.
