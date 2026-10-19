@@ -3503,3 +3503,24 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Releases: recreated oldest first with the same tags, names, bodies and assets; v2.0.18 is Latest. The latest manifest, signature and installer URLs return 200 with the original sizes, so installed updaters keep working.
 - Lost: one star, Actions run history, attestations for releases before the rewrite, and the CodeRabbit and Codex review app connections.
 - Learning: creating a repository and pushing tags starts tag-triggered workflows immediately; disable Actions on the empty repository before the first push. Rulesets and auto-merge are unavailable on a private free-plan repository.
+
+## 2026-10-19 - Short readings stop ending on a 連用タ接続 stem (#372)
+
+- Symptom: with learning and the reranker off, にかい converted to に書い, にまい to に巻い, にあい to に空い. In the shipped dictionary に + 書い cost 5,046 against 6,422 for 二階.
+- Root cause: every end-of-input cell `connection(r, 0)` of the pinned Mozc matrix is 0. A path ending on a stem that Mozc only ever follows with た/て/たり pays nothing for ending there.
+- Rejected 1: pricing the EOS column per class as `cost(r, 。)`. Generated full forms (言った, 書いた, inflection.tsv) carry left = right = the stem's class, so they paid the same penalty, and with a different amount per class: いった fell to the kana いった, and 言っ/行っ left the page for いっ.
+- Rejected 2: giving the generated た/て/たら forms the auxiliary's right id. The Mozc semantics are right, but `data/verb-collocation-edges.tsv` copies the verb form's right id and is calibrated against it by an external probe loop. Generated paths became 400-1,700 cheaper and 7 corpus rows broke with 0 fixed (窓を占めて, 見積を送って, 湧いたら, 長過ぎて, ...).
+- Fix:
+  - `EntryFlags::NON_FINAL` (bit 7, TSV `non-final`) is set by `mozc_trim` on the 8,945 Mozc rows whose right-id conjugation form is 連用タ接続. Only Mozc rows pass through mozc_trim, so generated forms stay unflagged.
+  - A NON_FINAL edge that ends the input pays 2,000 in the one helper `input_end_cost`, which covers lattice suffix costs, the best final node and the N-best/Viterbi totals.
+  - `ConversionOptions::open_end` waives the end-of-input cost for a segment followed by more preedit. The engine sets it in its four per-segment passes through `segment_conversion_options`.
+  - One pinned curated-detail row (おう/負う, a ワ行ウ音便 stem) gained the flag.
+- Verification:
+  - Accuracy gate: 4 fixed (a4-254..257), 0 broken. 8 authored rows were added, bringing the total to 1,508; floors ALL went 1330 to 1338.
+  - A 3,000-reading scan on the same dictionary at cost 0 vs 2,000 changed 64 tops: 26 to the dictionary word, 3 away (っ-final fragments only).
+  - Cost 1,000 left に書い first, and 4,000 dropped 言っ below 逸 for いっ.
+  - The core test fails with cost 0. Workspace tests, clippy, fmt, dependency rules, facade and dep-policy PASS. IRV shows only the 2 pre-existing WARNs.
+  - The ignored shipped suite had 73 passed and the 2 known failures.
+  - The rubric verifier (sonnet) passed 10/10.
+- Open on #372: にしゅうかん → に習慣 (Mozc BOS → particle に is cheap).
+- Learning: a connection-class fix in the matrix also hits every generated entry that reuses the class (inflection.tsv rows share the stem's ids). Use an entry flag set where the provenance is known (mozc_trim). Before changing a generated right id, check the data calibrated against it (verb-collocation-edges.tsv).

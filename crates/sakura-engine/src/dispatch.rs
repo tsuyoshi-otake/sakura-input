@@ -1978,6 +1978,25 @@ fn conversion_options(
     options
 }
 
+/// Options for converting one segment that ends at preedit byte
+/// `segment_end`. A segment followed by more preedit is open-ended: it is not
+/// the end of the input, so it must not pay the end-of-input connection that
+/// keeps a 連用タ接続 stem from closing a whole reading (Issue #372). Every
+/// per-segment pass (candidate window, render, commit, initial selection
+/// mapping) uses this so their candidate lists, and so their selection
+/// indices, stay identical.
+fn segment_conversion_options(
+    session: &Session,
+    initial_right_id: u16,
+    learning: Option<&LearningService>,
+    segment_end: usize,
+) -> ConversionOptions {
+    ConversionOptions {
+        open_end: segment_end < session.preedit.len(),
+        ..conversion_options(session, initial_right_id, learning)
+    }
+}
+
 fn commit_repair_readings_for(
     reading: &str,
     learning: Option<&LearningService>,
@@ -2244,6 +2263,28 @@ mod associative_conversion_setting_tests {
 
         session.association_enabled = false;
         assert_eq!(conversion_options(&session, 7, None).initial_right_id, 0);
+    }
+
+    #[test]
+    fn issue_372_only_a_segment_followed_by_more_preedit_is_open_ended() {
+        let mut session = Session::new("association-test.exe");
+        session.preedit.push_str("にかい").expect("preedit fits");
+        let whole = conversion_options(&session, 7, None);
+        assert!(!whole.open_end, "a whole-reading conversion ends the input");
+
+        let leading = segment_conversion_options(&session, 7, None, "に".len());
+        assert!(leading.open_end, "に is followed by かい");
+        assert_eq!(
+            ConversionOptions {
+                open_end: false,
+                ..leading
+            },
+            whole,
+            "open_end is the only difference"
+        );
+
+        let trailing = segment_conversion_options(&session, 7, None, session.preedit.len());
+        assert_eq!(trailing, whole, "the last segment ends the input");
     }
 }
 
@@ -4210,7 +4251,16 @@ fn commit_numbered_candidate(
     let mut invalid_mapping = false;
     let raw_repair_plans = build_local_completion_plans(session, table);
     let raw_full = !raw_repair_plans.is_empty();
-    let options = conversion_options(session, session.carry_right_id(), learning);
+    let options = segment_conversion_options(
+        session,
+        session.carry_right_id(),
+        learning,
+        if raw_full {
+            session.preedit.len()
+        } else {
+            range.end
+        },
+    );
     let result = match conversion {
         Some(service) => {
             let reading = if raw_full {
@@ -4912,7 +4962,7 @@ fn commit_converted_segments(
             return Ok(false);
         };
         let selection = session.segment_selection(index);
-        let options = conversion_options(session, context_right_id, learning);
+        let options = segment_conversion_options(session, context_right_id, learning, range.end);
         let full_span = range.start == 0 && range.end == session.preedit.len();
         let input = if full_span {
             session_conversion_input(session, reading)
@@ -5399,7 +5449,12 @@ fn initial_segment_selections(
             .get(usize::from(segment.reading_start)..usize::from(segment.reading_end))?;
         let surface =
             selected_surface.get(usize::from(segment.text_start)..usize::from(segment.text_end))?;
-        let options = conversion_options(session, right_id, learning);
+        let options = segment_conversion_options(
+            session,
+            right_id,
+            learning,
+            usize::from(segment.reading_end),
+        );
         let bridge = (index == 0)
             .then(|| session.cross_commit_bridge())
             .flatten();
@@ -6793,7 +6848,7 @@ fn render_converted_segments(
             return Ok(false);
         };
         let requested_selection = session.segment_selection(index);
-        let options = conversion_options(session, context_right_id, learning);
+        let options = segment_conversion_options(session, context_right_id, learning, range.end);
         let full_span = range.start == 0 && range.end == session.preedit.len();
         let input = if full_span {
             session_conversion_input(session, reading)

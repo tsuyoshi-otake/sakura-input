@@ -108,6 +108,9 @@ const CONJUGATION_FRAGMENT_FORM_PREFIXES: [&str; 8] = [
     "音便基本形",
 ];
 
+/// The Mozc conjugation form of a stem that only continues into た/て/たり.
+const TA_CONNECTION_FORM: &str = "連用タ接続";
+
 /// POS labels parsed from Mozc's pinned `id.def` file.
 #[derive(Debug, Default)]
 pub struct MozcPosCatalog {
@@ -122,6 +125,12 @@ pub struct MozcPosCatalog {
 impl MozcPosCatalog {
     fn labels_for(&self, id: u16) -> Option<&[String]> {
         self.labels_by_id.get(&id).map(Vec::as_slice)
+    }
+
+    fn is_ta_connection_stem(&self, id: u16) -> bool {
+        self.conjugation_forms
+            .get(&id)
+            .is_some_and(|form| form == TA_CONNECTION_FORM)
     }
 
     fn is_conjugation_fragment(&self, id: u16) -> bool {
@@ -376,6 +385,29 @@ pub fn exclude_conjugation_fragment_predictions(
         excluded += 1;
     }
     excluded
+}
+
+/// Marks every Mozc 連用タ接続 row `NON_FINAL` (Issue #372).
+///
+/// Such a row (書い, 行っ, 高かっ, なかっ) is a stem that Mozc always follows
+/// with た/て/たり, yet Mozc's matrix charges nothing for ending the input on
+/// it, so a short reading split into it (に + 書い ahead of 二階). The flag
+/// lets conversion price that ending. It reads the right id, the side that
+/// meets the end of input. Only Mozc rows pass through here; the generated
+/// full forms (書いた) share the class but are built later and stay unflagged.
+/// Returns the number of rows marked.
+pub fn mark_non_final_ta_connection_stems(
+    entries: &mut [SourceEntry],
+    catalog: &MozcPosCatalog,
+) -> usize {
+    let mut marked = 0;
+    for entry in entries {
+        if catalog.is_ta_connection_stem(entry.right_id) {
+            entry.flags = entry.flags | EntryFlags::NON_FINAL;
+            marked += 1;
+        }
+    }
+    marked
 }
 
 /// Marks lexical fragments that are meaningful only after preceding text.
@@ -1055,7 +1087,8 @@ mod tests {
 
     use super::{
         classify_existing_entry, exclude_conjugation_fragment_predictions, is_address_layer_entry,
-        mark_non_initial_allomorphs, mark_non_initial_allomorphs_with_boundary_policy,
+        mark_non_final_ta_connection_stems, mark_non_initial_allomorphs,
+        mark_non_initial_allomorphs_with_boundary_policy,
         mark_non_initial_allomorphs_with_legacy_evidence, parse_mozc_pos_catalog,
         parse_non_initial_boundary_policy, DictionaryCategory,
     };
@@ -1190,6 +1223,50 @@ mod tests {
         }
         assert!(!entries[7].flags.contains(EntryFlags::PREDICTION_EXCLUDED));
         // Conversion fields are unchanged.
+        assert!(entries.iter().all(|row| row.word_cost == 100));
+    }
+
+    #[test]
+    fn issue_372_only_ta_connection_stems_become_non_final() {
+        let catalog = parse_mozc_pos_catalog(
+            "id.def",
+            "726 動詞,自立,*,*,五段・カ行イ音便,連用タ接続,*
+             727 動詞,自立,*,*,五段・カ行イ音便,連用形,*
+             2427 形容詞,自立,*,*,形容詞・アウオ段,連用タ接続,*
+             142 助動詞,*,*,*,特殊・タ,基本形,た
+             1851 名詞,一般,*,*,*,*,*
+",
+        )
+        .expect("fixture POS catalog parses");
+        let mut entries = vec![
+            lexical_entry("かい", "書い", 726),
+            lexical_entry("たかかっ", "高かっ", 2427),
+            lexical_entry("かき", "書き", 727),
+            lexical_entry("た", "た", 142),
+            lexical_entry("にかい", "二階", 1851),
+        ];
+
+        assert_eq!(
+            mark_non_final_ta_connection_stems(&mut entries, &catalog),
+            2
+        );
+
+        for row in &entries[..2] {
+            assert!(row.flags.contains(EntryFlags::NON_FINAL), "{}", row.surface);
+            // The flag is added; prediction and conversion fields are unchanged.
+            assert!(
+                row.flags.contains(EntryFlags::PREDICTION),
+                "{}",
+                row.surface
+            );
+        }
+        for row in &entries[2..] {
+            assert!(
+                !row.flags.contains(EntryFlags::NON_FINAL),
+                "{}",
+                row.surface
+            );
+        }
         assert!(entries.iter().all(|row| row.word_cost == 100));
     }
 
