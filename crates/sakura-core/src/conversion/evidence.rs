@@ -105,6 +105,49 @@ impl CandidateEvidence {
     }
 }
 
+/// The shipped selection rule of the optional neural reranker (Issue #32).
+///
+/// The model may not cross a candidate evidence boundary.  Trustworthy
+/// one-edge whole-reading exact candidates form the strongest group.
+/// Composite lexical candidates may be reordered only when no exact candidate
+/// is present.  Generated, repaired, fallback, and raw-repair candidates never
+/// enter the choice set, so their local ordering remains authoritative.
+/// Inside the chosen group the highest model log probability wins; local cost
+/// is not added (`docs/decisions/issue-32-reranker.md`).
+///
+/// Returns `None` (keep local order) for fewer than two candidates, when no
+/// candidate has a neural group, or when a score in the chosen group is not
+/// finite.  The engine and the offline `neural-eval` evaluator both call this
+/// function, so the evaluator measures exactly what ships (Issue #370).
+pub fn neural_listwise_choice(
+    candidate_count: usize,
+    mut log_probability_at: impl FnMut(usize) -> f32,
+    mut neural_group_at: impl FnMut(usize) -> Option<u8>,
+) -> Option<usize> {
+    if candidate_count < 2 {
+        return None;
+    }
+    let target_group = (0..candidate_count)
+        .filter_map(&mut neural_group_at)
+        .max()?;
+    let mut selected = None;
+    let mut selected_score = f32::NEG_INFINITY;
+    for index in 0..candidate_count {
+        if neural_group_at(index) != Some(target_group) {
+            continue;
+        }
+        let score = log_probability_at(index);
+        if !score.is_finite() {
+            return None;
+        }
+        if selected.is_none() || score > selected_score {
+            selected = Some(index);
+            selected_score = score;
+        }
+    }
+    selected
+}
+
 /// The repair tier attached to a raw-repair plan and its accepted candidates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepairTier {

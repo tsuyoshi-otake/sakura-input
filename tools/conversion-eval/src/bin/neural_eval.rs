@@ -16,6 +16,7 @@ use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+use sakura_core::conversion::neural_listwise_choice;
 use sakura_core::{ConversionCandidate, ConversionOptions, Converter, Dictionary};
 use serde::Serialize;
 
@@ -27,8 +28,6 @@ const MINIMUM_SEGMENTED_READING_CHARS: usize = 3;
 const MINIMUM_ACCEPTANCE_CASES: usize = 600;
 const MINIMUM_CHAT_CASES: usize = 200;
 const MINIMUM_EMAIL_CASES: usize = 200;
-const MODEL_PENALTY_PER_NAT: f32 = 240.0;
-const MAXIMUM_MODEL_PENALTY: i64 = 1_200;
 
 #[derive(Debug)]
 struct Options {
@@ -72,6 +71,9 @@ struct SnapshotCandidate {
     fingerprint: u64,
     text: String,
     local_cost: i64,
+    /// `CandidateEvidence::neural_group`; the shipped rule never lets the
+    /// model choose across groups.
+    neural_group: Option<u8>,
 }
 
 #[derive(Debug, Serialize)]
@@ -115,6 +117,9 @@ struct NeuralScore {
     eligible: usize,
     attempted: usize,
     applied: usize,
+    /// Scored rows where the shipped rule keeps local order (no candidate in a
+    /// neural group, or a non-finite score inside the chosen group).
+    local_fallback: usize,
     fallback: usize,
     correct: usize,
 }
@@ -321,13 +326,14 @@ fn run() -> Result<(), String> {
     let report = evaluate(&dictionary, &cases, &options)?;
     write_report(&options.report, &report)?;
     println!(
-        "neural-eval {:?}: baseline {}/{}, neural {}/{} (applied {}, fallback {}), candidate recall@6 {}/{}, MRR@6 {:.3}, wins/losses/ties {}/{}/{}",
+        "neural-eval {:?}: baseline {}/{}, neural {}/{} (applied {}, local-fallback {}, worker-fallback {}), candidate recall@6 {}/{}, MRR@6 {:.3}, wins/losses/ties {}/{}/{}",
         report.mode,
         report.baseline.correct,
         report.baseline.evaluated,
         report.neural.correct,
         report.neural.evaluated,
         report.neural.applied,
+        report.neural.local_fallback,
         report.neural.fallback,
         report.candidate_rank.recall_at_6,
         report.candidate_rank.evaluated,
@@ -543,9 +549,15 @@ fn evaluate(
                 .and_then(|worker| worker.score(request_id, &candidates, options.timeout));
             request_id = request_id.wrapping_add(1);
             match scored.and_then(|scores| select_top1(&candidates, &scores)) {
-                Ok(index) => {
+                Ok(Some(index)) => {
                     neural.applied += 1;
                     ("applied", None, candidates[index].text.clone())
+                }
+                // The engine keeps local order here (`RerankState::LocalFallback`);
+                // the worker answered correctly, so it is not restarted.
+                Ok(None) => {
+                    neural.local_fallback += 1;
+                    ("local-fallback", None, baseline_top1.clone())
                 }
                 Err(error) => {
                     client = None;
@@ -600,7 +612,7 @@ fn evaluate(
         });
     }
     Ok(Report {
-        schema_version: 2,
+        schema_version: 3,
         evaluator: "dictc/neural-eval",
         mode: options.mode,
         corpus_contract: "static, explicitly supplied Normal-scope corpus; no live input, history, or user dictionary",
@@ -636,6 +648,7 @@ fn snapshot_candidates(candidates: &[ConversionCandidate]) -> Vec<SnapshotCandid
             fingerprint: candidate_fingerprint(candidate.text(), candidate.cost),
             text: candidate.text().to_owned(),
             local_cost: candidate.cost,
+            neural_group: candidate.evidence_class().neural_group(),
         })
         .collect()
 }
@@ -661,36 +674,35 @@ fn eligibility(
     None
 }
 
-fn select_top1(candidates: &[SnapshotCandidate], scores: &[(u64, f32)]) -> Result<usize, String> {
+/// Mirrors `LongConversionService::selection`: every candidate must have a
+/// score from the worker (`Err` otherwise, which restarts the worker); any
+/// non-finite score keeps local order (`Ok(None)`); otherwise the shipped
+/// `neural_listwise_choice` rule picks the candidate.
+fn select_top1(
+    candidates: &[SnapshotCandidate],
+    scores: &[(u64, f32)],
+) -> Result<Option<usize>, String> {
     if candidates.len() < 2 || scores.len() != candidates.len() {
         return Err("score count does not match candidates".to_owned());
     }
-    let maximum = scores
-        .iter()
-        .map(|(_, score)| *score)
-        .reduce(f32::max)
-        .filter(|score| score.is_finite())
-        .ok_or("no finite score")?;
-    let mut selected = 0usize;
-    let mut selected_cost = i64::MAX;
-    for (index, candidate) in candidates.iter().enumerate() {
+    let mut log_probabilities = Vec::with_capacity(candidates.len());
+    for candidate in candidates {
         let score = scores
             .iter()
             .find_map(|(fingerprint, score)| {
                 (*fingerprint == candidate.fingerprint).then_some(*score)
             })
-            .filter(|score| score.is_finite())
-            .ok_or("missing finite candidate score")?;
-        let penalty = ((maximum - score) * MODEL_PENALTY_PER_NAT)
-            .round()
-            .clamp(0.0, MAXIMUM_MODEL_PENALTY as f32) as i64;
-        let combined = candidate.local_cost.saturating_add(penalty);
-        if combined < selected_cost {
-            selected = index;
-            selected_cost = combined;
-        }
+            .ok_or("missing candidate score")?;
+        log_probabilities.push(score);
     }
-    Ok(selected)
+    if log_probabilities.iter().any(|score| !score.is_finite()) {
+        return Ok(None);
+    }
+    Ok(neural_listwise_choice(
+        candidates.len(),
+        |index| log_probabilities[index],
+        |index| candidates[index].neural_group,
+    ))
 }
 
 fn encode_request(request_id: u64, candidates: &[SnapshotCandidate]) -> Result<Vec<u8>, String> {
@@ -792,24 +804,50 @@ mod tests {
     }
 
     fn candidate(fingerprint: u64, text: &str, local_cost: i64) -> SnapshotCandidate {
+        grouped(fingerprint, text, local_cost, Some(2))
+    }
+
+    fn grouped(
+        fingerprint: u64,
+        text: &str,
+        local_cost: i64,
+        neural_group: Option<u8>,
+    ) -> SnapshotCandidate {
         SnapshotCandidate {
             fingerprint,
             text: text.to_owned(),
             local_cost,
+            neural_group,
         }
     }
 
     #[test]
-    fn selection_uses_the_engine_penalty_formula() {
-        let candidates = vec![candidate(1, "local", 100), candidate(2, "model", 500)];
+    fn selection_uses_the_shipped_listwise_rule() {
+        // Issue #370: the engine ignores local cost inside the chosen group,
+        // so a far costlier exact candidate with a slightly higher score wins.
+        let candidates = vec![candidate(1, "local", 100), candidate(2, "model", 9_000)];
         assert_eq!(
-            select_top1(&candidates, &[(1, -10.0), (2, 0.0)]).unwrap(),
-            1
+            select_top1(&candidates, &[(1, -0.2), (2, 0.0)]).unwrap(),
+            Some(1)
         );
+        // An exact candidate outranks a composite top whatever their scores.
+        let mixed = vec![
+            grouped(1, "composite", 100, Some(1)),
+            grouped(2, "exact", 9_000, Some(2)),
+        ];
         assert_eq!(
-            select_top1(&candidates, &[(1, 0.0), (2, -10.0)]).unwrap(),
-            0
+            select_top1(&mixed, &[(1, 5.0), (2, -5.0)]).unwrap(),
+            Some(1)
         );
+        // No neural group or a non-finite score: local order, worker kept.
+        let derived = vec![grouped(1, "a", 1, None), grouped(2, "b", 2, None)];
+        assert_eq!(select_top1(&derived, &[(1, 0.0), (2, 1.0)]).unwrap(), None);
+        assert_eq!(
+            select_top1(&candidates, &[(1, f32::NAN), (2, 0.0)]).unwrap(),
+            None
+        );
+        // A missing score is a worker error.
+        assert!(select_top1(&candidates, &[(1, 0.0), (3, 0.0)]).is_err());
     }
 
     #[test]

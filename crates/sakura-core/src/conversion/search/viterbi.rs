@@ -135,11 +135,7 @@ impl Converter {
         let final_node = *self.path.last().ok_or(ConversionError::NoPath)?;
         let cost = self.nodes[final_node]
             .best_cost
-            .saturating_add(connection_cost(
-                dictionary,
-                RightContextId::new(self.nodes[final_node].right_id),
-                LeftContextId::new(0),
-            ));
+            .saturating_add(self.input_end_cost(dictionary, &self.nodes[final_node]));
         let candidate = make_candidate(
             CandidateMaterialization {
                 dictionary,
@@ -229,11 +225,9 @@ impl Converter {
                 if !candidate_path_is_coherent(&self.nodes, &self.path) {
                     continue;
                 }
-                let total = state.cost.saturating_add(connection_cost(
-                    dictionary,
-                    RightContextId::new(lattice_node.right_id),
-                    LeftContextId::new(0),
-                ));
+                let total = state
+                    .cost
+                    .saturating_add(self.input_end_cost(dictionary, &lattice_node));
                 // A later (costlier) path stitching together to more than
                 // `MAX_PREEDIT_BYTES` is an unremarkable, expected outcome
                 // once enough alternatives exist. Skipping it and continuing

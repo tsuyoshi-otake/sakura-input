@@ -221,3 +221,44 @@ reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
 さいしゅうばん	最終版	1851	1851	6200	-		
 しょうたい	招待	1841	1841	4110	5310	predict	
 ふどうしょうすうてん	浮動小数点	1851	1851	11600	-	it	
+#
+# Issue #371: everyday phrases the developer history kept converting wrong,
+# measured on the 2.0.18 dictionary with learning and the reranker off.
+# Each row lands 60 below the path that led (the #94 margin), measured as a
+# lattice total, so the old leader stays the second candidate.
+#
+# のないように: the particle の that continues to 内容 connects 1,600 cheaper
+# than the one before ない, so 失礼のないように and 誤解のないように split
+# into の内容に. Whole-phrase edges (left id of the noun, right id of the
+# final に, as Mozc's own trimmed 失礼のないように row at 7838) fix only these
+# set phrases; a general のないように edge would also take メールの内容に誤りが.
+#
+# 精度/制度 and 形勢/形成: 制度 and 形成 rightly lead the bare readings and
+# every other context (制度を変える, 形成する). The compound edges cover the
+# collocations where only 精度 or 形勢 makes sense: 精度 + が/も/の + 高い/低い
+# (the adjective's terminal form, right id 2425) and 形勢が逆転. Other
+# inflections (精度が高く) and particles still convert as before.
+#
+# 成金: Mozc prices 成金 at 8200, above the 6900 trim ceiling, so only 成り金
+# (6279) reached the dictionary; the row admits 成金 at 6219.
+#
+# まるまる: the kana adverb edge (16/16, 4038) sat 45 below 丸々 (4083) and
+# the placeholder 〇〇 (1851, 4532) led both through a cheaper connection.
+# 丸々 is re-priced 60 below the kana edge, and 〇〇 moves 5 behind the kana
+# spelling, third on the page; 〇〇さん still leads its own reading.
+#
+# Not here: にかい -> に書い and にしゅうかん -> に習慣 win because a path ending
+# in a 連用タ接続 form or a bare particle split pays no end-of-input penalty;
+# that is a lattice rule, not a price (Issue #341 owns the numeral readings).
+けいせいがぎゃくてん	形勢が逆転	1851	1841	10907	-		
+ごかいのないように	誤解のないように	1841	327	8252	-		
+しつれいのないように	失礼のないように	1841	327	8966	-		
+せいどがたかい	精度が高い	1851	2425	7684	-		
+せいどがひくい	精度が低い	1851	2425	8374	-		
+せいどのたかい	精度の高い	1851	2425	8080	-		
+せいどのひくい	精度の低い	1851	2425	8770	-		
+せいどもたかい	精度も高い	1851	2425	8690	-		
+せいどもひくい	精度も低い	1851	2425	9380	-		
+なりきん	成金	1851	1851	6219	-		
+まるまる	〇〇	1851	1851	5708	6908	predict	
+まるまる	丸々	16	16	3978	5178	predict	

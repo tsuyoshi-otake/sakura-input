@@ -79,6 +79,12 @@ pub struct ConversionOptions {
     /// (Issue #99); it never rewrites a surface to match, which stays the
     /// width choke point's job.
     pub punctuation: PunctuationStyle,
+    /// When true, more preedit follows this reading that is not part of the
+    /// conversion (a non-final segment the user resized), so a path may end
+    /// in any class. When false (the default) the reading ends the input and
+    /// each path pays the end-of-input connection, which prices an ending
+    /// that cannot finish a sentence, such as a 連用タ接続 stem (Issue #372).
+    pub open_end: bool,
 }
 
 impl Default for ConversionOptions {
@@ -93,6 +99,7 @@ impl Default for ConversionOptions {
             skip_input_repair: false,
             raw_repair_budget: RawRepairBudget::default(),
             punctuation: PunctuationStyle::default(),
+            open_end: false,
         }
     }
 }

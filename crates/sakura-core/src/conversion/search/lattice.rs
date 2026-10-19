@@ -16,6 +16,14 @@ use super::super::{
     RUN_COST_PER_CHAR,
 };
 
+/// Extra cost of ending the input on a `NON_FINAL` stem (Issue #372). It must
+/// clear the margin by which a split such as に + 書い beat 二階 (1,376 in the
+/// shipped dictionary) while the stem stays near the top when the reading is
+/// that stem alone (いっ keeps 言っ, 行っ first). Measured on the shipped
+/// dictionary: 1,000 left に書い first; 4,000 dropped 言っ below 逸 and 一;
+/// 2,000 fixed にかい and kept 言っ first. None changed an accuracy-gate row.
+const NON_FINAL_INPUT_END_COST: i64 = 2_000;
+
 /// The per-reading-length cap on dictionary edges: the historical baseline
 /// rows first, then one edge per distinct surface up to
 /// [`MAX_DICTIONARY_SURFACES_PER_READING`].
@@ -854,6 +862,31 @@ impl Converter {
         Ok(())
     }
 
+    /// Cost of ending a path on `node`: the end-of-input connection plus
+    /// [`NON_FINAL_INPUT_END_COST`] for a `NON_FINAL` stem, or nothing when
+    /// the caller marked the reading open-ended
+    /// ([`super::super::ConversionOptions::open_end`]).
+    pub(in crate::conversion) fn input_end_cost(
+        &self,
+        dictionary: &Dictionary<'_>,
+        node: &Node,
+    ) -> i64 {
+        if self.open_end {
+            return 0;
+        }
+        let connection = connection_cost(
+            dictionary,
+            RightContextId::new(node.right_id),
+            LeftContextId::new(0),
+        );
+        match node.surface {
+            Surface::Dictionary { entry, .. } if entry.flags.contains(EntryFlags::NON_FINAL) => {
+                connection.saturating_add(NON_FINAL_INPUT_END_COST)
+            }
+            _ => connection,
+        }
+    }
+
     pub(in crate::conversion) fn compute_suffix_costs(
         &mut self,
         dictionary: &Dictionary<'_>,
@@ -862,11 +895,7 @@ impl Converter {
         for index in (0..self.nodes.len()).rev() {
             let node = self.nodes[index];
             self.nodes[index].suffix_cost = if node.end == reading_len {
-                connection_cost(
-                    dictionary,
-                    RightContextId::new(node.right_id),
-                    LeftContextId::new(0),
-                )
+                self.input_end_cost(dictionary, &node)
             } else {
                 let mut next = self.starts_at[node.end];
                 let mut best = i64::MAX;
@@ -899,11 +928,9 @@ impl Converter {
         let mut best_cost = i64::MAX;
         while current != NONE {
             let node = self.nodes[current];
-            let cost = node.best_cost.saturating_add(connection_cost(
-                dictionary,
-                RightContextId::new(node.right_id),
-                LeftContextId::new(0),
-            ));
+            let cost = node
+                .best_cost
+                .saturating_add(self.input_end_cost(dictionary, &node));
             if cost < best_cost {
                 best = current;
                 best_cost = cost;

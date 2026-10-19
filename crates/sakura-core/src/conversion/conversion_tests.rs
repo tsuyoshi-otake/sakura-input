@@ -1031,6 +1031,48 @@ fn derived_repair_evidence_stays_outside_neural_lexical_groups() {
 }
 
 #[test]
+fn neural_listwise_choice_stays_inside_the_strongest_evidence_group() {
+    use super::neural_listwise_choice;
+    let groups = [
+        CandidateEvidence::CompositeLexical,
+        CandidateEvidence::ExactSystem,
+        CandidateEvidence::Generated,
+        CandidateEvidence::ExactSystem,
+    ];
+    let group = |index: usize| groups[index].neural_group();
+    // A higher score on a composite or generated candidate never crosses
+    // into the exact group, and local cost (list order) is not consulted.
+    let scores = [50.0, -3.0, 90.0, -1.0];
+    assert_eq!(
+        neural_listwise_choice(4, |index| scores[index], group),
+        Some(3)
+    );
+    // The first of equal scores inside the group wins.
+    let tie = [0.0, 2.0, 0.0, 2.0];
+    assert_eq!(
+        neural_listwise_choice(4, |index| tie[index], group),
+        Some(1)
+    );
+    // A non-finite score outside the group is ignored; inside it, local order.
+    let outside = [f32::NAN, 1.0, f32::INFINITY, 0.0];
+    assert_eq!(
+        neural_listwise_choice(4, |index| outside[index], group),
+        Some(1)
+    );
+    let inside = [0.0, f32::NAN, 0.0, 1.0];
+    assert_eq!(
+        neural_listwise_choice(4, |index| inside[index], group),
+        None
+    );
+    // No neural group, or fewer than two candidates: keep local order.
+    assert_eq!(
+        neural_listwise_choice(2, |_| 0.0, |_| CandidateEvidence::Fallback.neural_group()),
+        None
+    );
+    assert_eq!(neural_listwise_choice(1, |_| 0.0, group), None);
+}
+
+#[test]
 fn candidate_evidence_keeps_exact_and_composite_homophones_distinct() {
     let bytes = synthetic_dictionary(&[
         fixture_entry("ろうりょく", "労力", 0, EntryFlags::NONE),
@@ -1867,6 +1909,47 @@ fn bos_filters_non_initial_fragments_but_compound_paths_can_use_them() {
             .iter()
             .map(|candidate| candidate.text())
             .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn issue_372_non_final_stem_pays_only_where_it_ends_the_input() {
+    let bytes = synthetic_dictionary(&[
+        fixture_entry("にかい", "二階", 1_200, EntryFlags::NONE),
+        fixture_entry("に", "に", 100, EntryFlags::NONE),
+        fixture_entry("かい", "書い", 100, EntryFlags::NON_FINAL),
+        fixture_entry("た", "た", 100, EntryFlags::NONE),
+    ]);
+    let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+    let mut converter = Converter::new();
+    let closed = ConversionOptions::default();
+    let open = ConversionOptions {
+        open_end: true,
+        ..ConversionOptions::default()
+    };
+    let top = |converter: &mut Converter, reading: &str, options: ConversionOptions| {
+        let candidates = converter
+            .convert(&dictionary, reading, options)
+            .expect("conversion");
+        (candidates[0].text().to_owned(), candidates[0].cost)
+    };
+
+    assert_eq!(
+        top(&mut converter, "にかい", closed).0,
+        "二階",
+        "a stem that cannot finish the input must not end it"
+    );
+    assert_eq!(
+        top(&mut converter, "にかい", open).0,
+        "に書い",
+        "before more preedit the stem is an ordinary edge"
+    );
+    let inside = top(&mut converter, "かいた", closed);
+    assert_eq!(inside.0, "書いた");
+    assert_eq!(
+        inside.1,
+        top(&mut converter, "かいた", open).1,
+        "inside the query the stem pays nothing extra"
     );
 }
 

@@ -7,8 +7,9 @@ use std::time::Instant;
 
 use dictc_core::{
     category::{
-        exclude_conjugation_fragment_predictions, mark_non_initial_allomorphs_with_boundary_policy,
-        parse_mozc_pos_catalog, parse_non_initial_boundary_policy, NonInitialBoundaryReport,
+        exclude_conjugation_fragment_predictions, mark_non_final_ta_connection_stems,
+        mark_non_initial_allomorphs_with_boundary_policy, parse_mozc_pos_catalog,
+        parse_non_initial_boundary_policy, NonInitialBoundaryReport,
     },
     entries_to_tsv, parse_mozc_entries, MozcTrimmer, TrimPolicy, TrimReport, MOZC_UPSTREAM_COMMIT,
 };
@@ -83,6 +84,7 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     )?;
     trim_report.non_initial_entries = boundary_report.remaining_non_initial_entries;
     let prediction_excluded = exclude_conjugation_fragment_predictions(&mut entries, &pos_catalog);
+    let non_final = mark_non_final_ta_connection_stems(&mut entries, &pos_catalog);
     trim_report.output_entries = entries.len();
     let boundary_policy_sha256 = sha256_hex(&boundary_policy_bytes);
     let tsv = entries_to_tsv(&entries, OUTPUT_LICENSE).map_err(|error| error.to_string())?;
@@ -109,6 +111,7 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
         started.elapsed().as_secs_f64()
     );
     println!("excluded {prediction_excluded} conjugation-fragment rows from prediction");
+    println!("marked {non_final} 連用タ接続 rows non-final");
     Ok(())
 }
 

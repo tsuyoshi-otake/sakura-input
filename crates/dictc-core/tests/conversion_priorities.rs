@@ -470,3 +470,48 @@ fn kanji_spellings_land_below_the_kana_edge_they_must_lead() {
         );
     }
 }
+
+#[test]
+fn issue_371_phrase_edges_and_reprices_keep_their_calibrated_prices() {
+    const MARGIN: i32 = 60;
+    // Whole-phrase edges: left id of the first word, right id of the last.
+    // Prices were calibrated as lattice totals (60 below the old leader) on
+    // the 2.0.18 dictionary; the ignored engine tests hold the ranking claim.
+    let wanted = [
+        ("しつれいのないように", "失礼のないように", 1841, 327, 8966),
+        ("ごかいのないように", "誤解のないように", 1841, 327, 8252),
+        ("せいどがたかい", "精度が高い", 1851, 2425, 7684),
+        ("せいどがひくい", "精度が低い", 1851, 2425, 8374),
+        ("せいどのたかい", "精度の高い", 1851, 2425, 8080),
+        ("せいどのひくい", "精度の低い", 1851, 2425, 8770),
+        ("せいどもたかい", "精度も高い", 1851, 2425, 8690),
+        ("せいどもひくい", "精度も低い", 1851, 2425, 9380),
+        ("けいせいがぎゃくてん", "形勢が逆転", 1851, 1841, 10907),
+        // 60 below Mozc's 成り金 (6279), the only spelling under the trim ceiling.
+        ("なりきん", "成金", 1851, 1851, 6279 - MARGIN),
+        // 60 below the kana adverb edge まるまる (16/16, 4038).
+        ("まるまる", "丸々", 16, 16, 4038 - MARGIN),
+        ("まるまる", "〇〇", 1851, 1851, 5708),
+    ];
+    let overlay = overlay();
+    for (reading, surface, left_id, right_id, word_cost) in wanted {
+        let entry = overlay
+            .iter()
+            .find(|entry| {
+                entry.reading == reading
+                    && entry.surface == surface
+                    && entry.left_id == left_id
+                    && entry.right_id == right_id
+            })
+            .unwrap_or_else(|| panic!("missing {reading} -> {surface}"));
+        assert_eq!(entry.word_cost, word_cost, "{reading} -> {surface}");
+    }
+    // Only the listed set phrases: a bare のないように edge would also take
+    // メールの内容に誤りが, and the bare readings せいど / けいせい keep 制度 / 形成.
+    for reading in ["のないように", "ないように", "せいど", "けいせい"] {
+        assert!(
+            !overlay.iter().any(|entry| entry.reading == reading),
+            "{reading} must not be re-priced by the overlay"
+        );
+    }
+}
