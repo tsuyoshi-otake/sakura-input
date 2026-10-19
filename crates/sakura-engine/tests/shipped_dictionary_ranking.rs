@@ -3450,6 +3450,58 @@ fn issue_337_ordinary_kana_writings_keep_leading() {
     assert!(wrong.is_empty(), "{wrong:#?}");
 }
 
+/// Issue #371: set phrases and collocations the developer history converted
+/// wrong with learning and the reranker off (reading, expected top).
+const ISSUE_371_LEADERS: &[(&str, &str)] = &[
+    ("しつれいのないように", "失礼のないように"),
+    ("ごかいのないように", "誤解のないように"),
+    ("せいどがたかい", "精度が高い"),
+    ("せいどもたかい", "精度も高い"),
+    ("せいどのひくい", "精度の低い"),
+    ("けいせいがぎゃくてんした", "形勢が逆転した"),
+    ("なりきん", "成金"),
+    ("まるまる", "丸々"),
+];
+
+/// Issue #371: the words the new edges compete with keep their own contexts.
+const ISSUE_371_CONTROLS: &[(&str, &str)] = &[
+    ("このないようについて", "この内容について"),
+    (
+        "めーるのないようにあやまりがあります",
+        "メールの内容に誤りがあります",
+    ),
+    ("せいど", "制度"),
+    ("せいどをかえる", "制度を変える"),
+    ("けいせいする", "形成する"),
+    ("まるまるさん", "〇〇さん"),
+];
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_371_set_phrases_and_collocations_lead() {
+    let mut wrong = Vec::new();
+    for &(reading, expected) in ISSUE_371_LEADERS {
+        let top = top_text(reading);
+        if top != expected {
+            wrong.push(format!("{reading}: expected {expected}, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_371_competing_words_keep_their_own_contexts() {
+    let mut wrong = Vec::new();
+    for &(reading, expected) in ISSUE_371_CONTROLS {
+        let top = top_text(reading);
+        if top != expected {
+            wrong.push(format!("{reading}: expected {expected}, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
+
 #[test]
 #[ignore = "needs the built system dictionary in artifacts/release"]
 fn issue_334_function_words_stay_separate_from_the_next_word() {
