@@ -1031,6 +1031,48 @@ fn derived_repair_evidence_stays_outside_neural_lexical_groups() {
 }
 
 #[test]
+fn neural_listwise_choice_stays_inside_the_strongest_evidence_group() {
+    use super::neural_listwise_choice;
+    let groups = [
+        CandidateEvidence::CompositeLexical,
+        CandidateEvidence::ExactSystem,
+        CandidateEvidence::Generated,
+        CandidateEvidence::ExactSystem,
+    ];
+    let group = |index: usize| groups[index].neural_group();
+    // A higher score on a composite or generated candidate never crosses
+    // into the exact group, and local cost (list order) is not consulted.
+    let scores = [50.0, -3.0, 90.0, -1.0];
+    assert_eq!(
+        neural_listwise_choice(4, |index| scores[index], group),
+        Some(3)
+    );
+    // The first of equal scores inside the group wins.
+    let tie = [0.0, 2.0, 0.0, 2.0];
+    assert_eq!(
+        neural_listwise_choice(4, |index| tie[index], group),
+        Some(1)
+    );
+    // A non-finite score outside the group is ignored; inside it, local order.
+    let outside = [f32::NAN, 1.0, f32::INFINITY, 0.0];
+    assert_eq!(
+        neural_listwise_choice(4, |index| outside[index], group),
+        Some(1)
+    );
+    let inside = [0.0, f32::NAN, 0.0, 1.0];
+    assert_eq!(
+        neural_listwise_choice(4, |index| inside[index], group),
+        None
+    );
+    // No neural group, or fewer than two candidates: keep local order.
+    assert_eq!(
+        neural_listwise_choice(2, |_| 0.0, |_| CandidateEvidence::Fallback.neural_group()),
+        None
+    );
+    assert_eq!(neural_listwise_choice(1, |_| 0.0, group), None);
+}
+
+#[test]
 fn candidate_evidence_keeps_exact_and_composite_homophones_distinct() {
     let bytes = synthetic_dictionary(&[
         fixture_entry("ろうりょく", "労力", 0, EntryFlags::NONE),
