@@ -295,12 +295,25 @@ fn take_place(reading: &str, markers: &[&str], place: u32) -> Option<(u32, usize
     let (digit, digit_bytes) = take_ones(reading, true).unwrap_or((1, 0));
     let rest = reading.get(digit_bytes..)?;
     for marker in markers {
-        if rest.starts_with(marker) {
-            let value = digit.checked_mul(place)?;
-            return Some((value, digit_bytes + marker.len()));
+        if !rest.starts_with(marker) || !marker_allowed_after(marker, &reading[..digit_bytes]) {
+            continue;
         }
+        let value = digit.checked_mul(place)?;
+        return Some((value, digit_bytes + marker.len()));
     }
     None
+}
+
+/// Voiced and sokuon place markers are phonologically conditioned allomorphs:
+/// `ぜん` and `びゃく` voice only after さん (さんぜん, さんびゃく) or なん, and
+/// `ぴゃく` only follows the sokuon digits ろっ and はっ. Without the check a
+/// lexical phrase like `しぜんに` (自然に) parses as 4*1000+2 = 4002 (#380).
+fn marker_allowed_after(marker: &str, prefix: &str) -> bool {
+    match marker {
+        "ぜん" | "びゃく" => matches!(prefix, "さん" | "なん"),
+        "ぴゃく" => matches!(prefix, "ろっ" | "はっ"),
+        _ => true,
+    }
 }
 
 fn take_ones(reading: &str, in_place: bool) -> Option<(u32, usize)> {
@@ -345,10 +358,7 @@ fn followed_by_counter_or_place(rest: &str) -> bool {
     COUNTERS.iter().any(|(token, _)| rest.starts_with(token))
         || rest.starts_with("じゅう")
         || rest.starts_with("ひゃく")
-        || rest.starts_with("びゃく")
-        || rest.starts_with("ぴゃく")
         || rest.starts_with("せん")
-        || rest.starts_with("ぜん")
         || rest.starts_with("まん")
 }
 
@@ -472,15 +482,56 @@ mod tests {
     }
 
     #[test]
-    fn senjitsu_is_not_a_thousand_days() {
-        // 先日 / 全日 are ordinary words. The day counter is にち, never じつ.
-        for reading in ["せんじつ", "ぜんじつ"] {
-            let parsed = parse_numeric_prefix(reading).expect(reading);
-            assert_eq!(parsed.counter, None, "{reading}");
+    fn voiced_place_markers_need_their_conditioned_digits() {
+        // #380: ぜん voices only after さん (or なん), びゃく likewise, and
+        // ぴゃく only after the sokuon digits ろっ / はっ. Without the check,
+        // しぜんに (自然に) parsed as 4*1000+2 = 4002 and the whole-reading
+        // numeric candidate dropped every lexical split.
+        for reading in [
+            "しぜんに",
+            "ぜんに",
+            "ぜん",
+            "よんぜん",
+            "ごぜんに",
+            "しびゃく",
+            "ななびゃく",
+            "いっぴゃく",
+            "びゃく",
+            "ぴゃく",
+        ] {
+            let parsed = parse_numeric_prefix(reading);
             assert!(
-                parsed.bytes < reading.len(),
-                "{reading} must not consume the じつ ending as a day count"
+                parsed.is_none_or(|span| span.bytes < reading.len()),
+                "{reading} must not fully parse as a number, got {parsed:?}"
             );
         }
+        for (reading, value) in [
+            ("さんぜん", 3000),
+            ("さんびゃく", 300),
+            ("ろっぴゃく", 600),
+            ("はっぴゃく", 800),
+            ("よんせんに", 4002),
+            ("いっせん", 1000),
+            ("しせん", 4000),
+            ("くせん", 9000),
+            ("にじゅう", 20),
+        ] {
+            let span = parse_numeric_prefix(reading).expect(reading);
+            assert_eq!(span.value, value, "{reading}");
+            assert_eq!(span.bytes, reading.len(), "{reading}");
+        }
+    }
+
+    #[test]
+    fn senjitsu_is_not_a_thousand_days() {
+        // 先日 / 全日 are ordinary words. The day counter is にち, never じつ.
+        // ぜん cannot open a numeric prefix at all (#380 voiced-marker rule).
+        assert!(parse_numeric_prefix("ぜんじつ").is_none());
+        let parsed = parse_numeric_prefix("せんじつ").expect("せんじつ");
+        assert_eq!(parsed.counter, None);
+        assert!(
+            parsed.bytes < "せんじつ".len(),
+            "せんじつ must not consume the じつ ending as a day count"
+        );
     }
 }

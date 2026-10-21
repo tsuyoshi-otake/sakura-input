@@ -1847,6 +1847,39 @@ fn bare_spoken_numbers_defer_to_common_words_but_keep_numeric_forms() {
 
 #[test]
 #[ignore = "needs the built system dictionary in artifacts/release"]
+fn voiced_place_markers_do_not_steal_lexical_phrases() {
+    // #380: ぜん voices only after さん/なん, so しぜんに must not parse as
+    // 4*1000+2. Before the fix the whole-reading numeral dropped every
+    // lexical split and 4002 was committed.
+    for (reading, wrong_top, expected_top) in [
+        ("しぜんに", "4002", "自然に"),
+        ("ごぜんに", "5002", "午前に"),
+    ] {
+        let candidates = candidates_for(reading);
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some(expected_top),
+            "{reading}: unexpected first candidate ({:?})",
+            &candidates[..candidates.len().min(9)]
+        );
+        assert!(
+            !candidates.iter().any(|candidate| candidate == wrong_top),
+            "{reading}: {wrong_top} stayed reachable ({:?})",
+            &candidates[..candidates.len().min(12)]
+        );
+    }
+    // The conditioned forms still parse where they are phonologically legal.
+    let candidates = candidates_for("よんせんに");
+    assert_eq!(
+        candidates.first().map(String::as_str),
+        Some("4002"),
+        "よんせんに: the numeric forms were lost ({:?})",
+        &candidates[..candidates.len().min(9)]
+    );
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
 fn counter_and_calendar_number_readings_keep_their_strong_forms() {
     for (reading, expected) in [("せんにち", "千日"), ("にじゅうよんにち", "24日")] {
         let candidates = candidates_for(reading);
