@@ -2134,6 +2134,45 @@ fn trustworthy_exact_word_suppresses_unconfirmed_repairs_and_costly_mosaics() {
 }
 
 #[test]
+fn unconfirmed_repair_shadow_cannot_eclipse_the_direct_entry() {
+    // A dakuten repair edge undercut the direct entry on cost and popped
+    // first; surface dedup then discarded the real edge, and the
+    // exact-lexical quality gate removed the repair candidate — ふかい lost
+    // 深い entirely. Surface dedup must prefer the path without unconfirmed
+    // repair evidence.
+    let bytes = synthetic_dictionary(&[
+        fixture_entry("ふかい", "深い", 2_137, EntryFlags::NONE),
+        fixture_entry("ふかい", "不快", 3_426, EntryFlags::NONE),
+        fixture_entry("ぶかい", "深い", 14, EntryFlags::NONE),
+    ]);
+    let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+    let mut converter = Converter::new();
+    let candidates = converter
+        .convert(&dictionary, "ふかい", ConversionOptions::default())
+        .expect("conversion");
+    let ranking = candidates
+        .iter()
+        .map(|candidate| (candidate.text(), candidate.cost, candidate.path_evidence()))
+        .collect::<Vec<_>>();
+    let deep = candidates
+        .iter()
+        .find(|candidate| candidate.text() == "深い")
+        .unwrap_or_else(|| panic!("direct 深い must survive the repair shadow: {ranking:?}"));
+    assert!(
+        !deep.path_evidence().has_unconfirmed_repair(),
+        "the surviving 深い must be the direct entry, not the repair path: {ranking:?}"
+    );
+    assert_eq!(
+        candidates
+            .iter()
+            .filter(|candidate| candidate.text() == "深い")
+            .count(),
+        1,
+        "深い must appear exactly once: {ranking:?}"
+    );
+}
+
+#[test]
 fn repair_candidate_remains_available_when_no_trustworthy_exact_word_exists() {
     let bytes = synthetic_dictionary(&[fixture_entry("ずがい", "頭蓋", 100, EntryFlags::NONE)]);
     let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");

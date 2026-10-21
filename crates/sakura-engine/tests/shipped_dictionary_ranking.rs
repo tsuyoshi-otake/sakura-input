@@ -1880,6 +1880,42 @@ fn voiced_place_markers_do_not_steal_lexical_phrases() {
 
 #[test]
 #[ignore = "needs the built system dictionary in artifacts/release"]
+fn dakuten_repair_shadow_cannot_eclipse_direct_entries() {
+    // #385: a voiced-repair path (ぶかい→深い) undercut the direct entry's
+    // cost and claimed the surface first; dedup kept it, then the
+    // exact-lexical quality gate removed it and 深い vanished outright.
+    // Same-shape losses measured: 111 readings. These lead the recovered
+    // set; every expected surface must stay reachable at top.
+    for (reading, expected_top) in [
+        ("ふかい", "深い"),
+        ("つらい", "辛い"),
+        ("ふそく", "不足"),
+        ("すすき", "鈴木"),
+        ("はぜがわ", "長谷川"),
+        ("あんとう", "安藤"),
+        ("ふしい", "藤井"),
+    ] {
+        let candidates = candidates_for(reading);
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some(expected_top),
+            "{reading}: unexpected first candidate ({:?})",
+            &candidates[..candidates.len().min(9)]
+        );
+    }
+    // The repriced IT term keeps its sentence lead (same incident, priced 60
+    // below the 境界+地 mosaic that the un-shadowed comparison exposed).
+    let candidates = candidates_for("きょうかいちのてすとがふそく");
+    assert_eq!(
+        candidates.first().map(String::as_str),
+        Some("境界値のテストが不足"),
+        "unexpected first candidate ({:?})",
+        &candidates[..candidates.len().min(9)]
+    );
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
 fn counter_and_calendar_number_readings_keep_their_strong_forms() {
     for (reading, expected) in [("せんにち", "千日"), ("にじゅうよんにち", "24日")] {
         let candidates = candidates_for(reading);
