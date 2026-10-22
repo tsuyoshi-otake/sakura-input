@@ -416,6 +416,53 @@ fn a_native_row_of_another_class_with_the_same_spelling_sets_no_floor() {
 }
 
 #[test]
+fn kana_lemma_forms_leave_prediction_to_an_as_common_kanji_lemma() {
+    // Issue #392: kana lemmas conjugate too. When a kanji lemma of the same
+    // reading and POS id costs no more (出る 41 next to でる 1,269), the kana
+    // forms stay convertible but leave prediction, so で… completes 出て and
+    // not でて. Where Mozc prices the kana lemma lower (くださる 1,239 under
+    // 下さる 2,574), or the kanji lemma has another class, they keep it.
+    let lemmas = vec![
+        lemma("でる", "出る", 680, 41),
+        lemma("でる", "でる", 680, 1_269),
+        lemma("つなぐ", "繋ぐ", 837, 3_000),
+        lemma("つなぐ", "つなぐ", 837, 3_000),
+        lemma("くださる", "下さる", 837, 2_574),
+        lemma("くださる", "くださる", 837, 1_239),
+        lemma("ふさぐ", "塞ぐ", 723, 1_000),
+        lemma("ふさぐ", "ふさぐ", 837, 2_000),
+    ];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    for (reading, surface) in [
+        ("でて", "でて"),
+        ("でました", "でました"),
+        ("つないで", "つないで"),
+    ] {
+        let form = pair(&entries, reading, surface);
+        assert_eq!(form.flags, EntryFlags::NONE, "{reading} -> {surface}");
+        assert_eq!(form.prediction_cost, i32::MAX, "{reading} -> {surface}");
+    }
+    assert_eq!(pair(&entries, "でて", "でて").word_cost, 1_269 + 20);
+    for (reading, surface) in [
+        ("でて", "出て"),
+        ("つないで", "繋いで"),
+        ("くださって", "くださって"),
+        ("ふさいで", "ふさいで"),
+    ] {
+        let form = pair(&entries, reading, surface);
+        assert_eq!(form.flags, EntryFlags::PREDICTION, "{reading} -> {surface}");
+    }
+    let unpredicted = entries
+        .iter()
+        .filter(|entry| entry.surface == entry.reading && entry.flags == EntryFlags::NONE)
+        .filter(|entry| entry.reading.starts_with("で") || entry.reading.starts_with("つな"))
+        .filter(|entry| entry.reading.chars().count() >= 2)
+        .count();
+    assert!(unpredicted > 0);
+    assert_eq!(report.kana_forms_unpredicted, unpredicted);
+}
+
+#[test]
 fn existing_surfaces_are_not_duplicated() {
     let lemmas = vec![
         lemma("くる", "来る", 610, 7),

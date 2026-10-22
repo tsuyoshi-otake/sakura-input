@@ -136,6 +136,9 @@ pub struct InflectionReport {
     /// Generated forms left below a native sibling form whose lemma is rarer
     /// than theirs (読んで under a native 詠んで).
     pub kept_under_rarer_native: usize,
+    /// Forms of a kana lemma kept out of prediction because a kanji lemma of
+    /// the same reading and POS id is at least as common (でて next to 出て).
+    pub kana_forms_unpredicted: usize,
 }
 
 /// Mozc `id.def` row of the auxiliary a contracted form connects as on its
@@ -335,6 +338,12 @@ const ADJ_BA: FormSpec = FormSpec {
 /// conjugation type and lemma column as the lemma, and one of the form's
 /// 活用形. A row that only shares the spelling (the 五段 未然形 みた of 満つ next
 /// to the kana た-form of the auxiliary みる, cost 0) is no sibling.
+///
+/// A kana lemma conjugates like any other. When a kanji lemma of the same
+/// reading and POS id costs no more (出る 41 next to でる 1,269), the kana
+/// forms keep their conversion price but leave prediction, so a prefix
+/// completes the kanji form. Where Mozc prices the kana lemma lower (くださる
+/// under 下さる, いる under 居る), the kana forms stay predictable (Issue #392).
 pub fn expand_inflections(
     lemmas: &[SourceEntry],
     catalog: &InflectionPosCatalog,
@@ -347,6 +356,7 @@ pub fn expand_inflections(
             .push(entry);
     }
     let native_siblings = native_siblings(lemmas, catalog, &native_rows);
+    let kanji_lemma_costs = kanji_lemma_costs(lemmas);
     let mut emitted = Vec::new();
     let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
     let mut report = InflectionReport::default();
@@ -367,6 +377,10 @@ pub fn expand_inflections(
             LemmaForms::Forms(row, forms) => (row, forms),
         };
         report.lemma_entries = report.lemma_entries.saturating_add(1);
+        let defers_to_kanji = lemma.surface == lemma.reading
+            && kanji_lemma_costs
+                .get(&(lemma.reading.as_str(), lemma.left_id))
+                .is_some_and(|kanji_cost| *kanji_cost <= lemma.word_cost);
         for form in forms {
             if native_rows.contains_key(&(form.reading.as_str(), form.surface.as_str()))
                 || !seen.insert((form.reading.clone(), form.surface.clone()))
@@ -414,8 +428,12 @@ pub fn expand_inflections(
             } else if rarer.is_some_and(|cost| cost > word_cost) {
                 report.kept_under_rarer_native = report.kept_under_rarer_native.saturating_add(1);
             }
-            let prediction_worthy =
+            let mut prediction_worthy =
                 form.reading.chars().count() >= 2 && prediction_base <= PREDICTION_COST_LIMIT;
+            if prediction_worthy && defers_to_kanji {
+                prediction_worthy = false;
+                report.kana_forms_unpredicted = report.kana_forms_unpredicted.saturating_add(1);
+            }
             emitted.push(SourceEntry::derived(
                 Arc::clone(&source),
                 emitted.len().saturating_add(1),
@@ -506,6 +524,22 @@ fn native_siblings(
         }
     }
     siblings
+}
+
+/// Cheapest kanji-spelled row by reading and POS id: the lemma a kana lemma of
+/// the same reading and class leaves prediction to when it costs no more.
+fn kanji_lemma_costs(lemmas: &[SourceEntry]) -> BTreeMap<(&str, u16), i32> {
+    let mut costs: BTreeMap<(&str, u16), i32> = BTreeMap::new();
+    for entry in lemmas
+        .iter()
+        .filter(|entry| entry.surface.chars().any(is_han))
+    {
+        costs
+            .entry((entry.reading.as_str(), entry.left_id))
+            .and_modify(|cost| *cost = (*cost).min(entry.word_cost))
+            .or_insert(entry.word_cost);
+    }
+    costs
 }
 
 /// Whether a native row's POS id is one of the given 活用形 of the lemma's

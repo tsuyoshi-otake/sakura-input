@@ -488,6 +488,38 @@ fn issue_393_typed_reading_keeps_the_top_over_a_close_repair() {
     }
 }
 
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_392_kana_forms_leave_prediction_to_an_as_common_kanji_lemma() {
+    // Kana lemmas whose kanji lemma costs no more (でる next to 出る, おいしい
+    // next to 美味しい) no longer fill the nine with kana forms, so 飛行機 and
+    // 野球 reach them from half the reading. Kana forms of lemmas Mozc prices
+    // below their kanji lemma (くださる, いただく) keep completing.
+    for (prefix, surface) in [("ひこ", "飛行機"), ("やき", "野球")] {
+        let predictions = predictions_for(prefix);
+        assert!(
+            predictions.iter().take(9).any(|(_, s)| s == surface),
+            "{prefix}: {surface} must be in the nine: {predictions:?}"
+        );
+    }
+    for (prefix, kana) in [("でまし", "でました"), ("おいしくな", "おいしくない")]
+    {
+        let predictions = predictions_for(prefix);
+        assert!(
+            !predictions.iter().any(|(_, s)| s == kana),
+            "{prefix}: the kana form {kana} must leave prediction: {predictions:?}"
+        );
+    }
+    for (prefix, kana) in [("くださっ", "くださって"), ("いただけま", "いただけます")]
+    {
+        let predictions = predictions_for(prefix);
+        assert!(
+            predictions.iter().any(|(_, s)| s == kana),
+            "{prefix}: the kana form {kana} must stay predictable: {predictions:?}"
+        );
+    }
+}
+
 fn top_text(reading: &str) -> String {
     let candidates = candidates_for(reading);
     assert!(
