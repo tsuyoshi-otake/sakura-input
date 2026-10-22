@@ -412,6 +412,36 @@ fn issue_94_kana_fragment_splices_leave_the_candidate_page() {
     );
 }
 
+/// Issue #348: `inflection-expand` expanded the generic 五段動詞 class (Mozc OSS
+/// id 837, which files す/む/つ/ぐ/ぶ/ぬ verbs as well as る verbs) only with ラ行
+/// endings, so 踏んで, 飲みます or 待ったら had no fused edge and the lattice had
+/// to assemble them from a stem and a function word, usually losing to a noun
+/// splice. The generic class now takes its endings from the kana that ends the
+/// dictionary form; these readings are one fused edge in the shipped dictionary.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_348_generic_godan_verbs_convert_as_one_fused_edge() {
+    for (reading, expected) in [
+        ("ふんで", "踏んで"),
+        ("うんで", "生んで"),
+        ("ふせいで", "防いで"),
+        ("かんだ", "噛んだ"),
+        ("のみます", "飲みます"),
+        ("まったら", "待ったら"),
+        ("やくだった", "役立った"),
+        ("まって", "待って"),
+        ("みたして", "満たして"),
+        ("のがした", "逃した"),
+    ] {
+        let candidates = candidates_for(reading);
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some(expected),
+            "{reading}: {expected} must lead the shipped page: {candidates:?}"
+        );
+    }
+}
+
 fn top_text(reading: &str) -> String {
     let candidates = candidates_for(reading);
     assert!(

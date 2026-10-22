@@ -447,7 +447,7 @@ fn conjugate_verb(row: &PosRow, lemma: &SourceEntry) -> Option<Vec<ConjugatedFor
         ]);
     }
 
-    let endings = verb_endings(&row.ctype)?;
+    let endings = verb_endings(&row.ctype, &lemma.reading)?;
     let mut forms = Vec::new();
     push_replaced(&mut forms, lemma, VERB_TE, &endings.dict, &endings.te);
     push_replaced(&mut forms, lemma, VERB_TA, &endings.dict, &endings.ta);
@@ -539,7 +539,10 @@ struct VerbEndings {
     tenai: String,
 }
 
-fn verb_endings(ctype: &str) -> Option<VerbEndings> {
+/// Endings of a verb class. `reading` is the lemma's reading: the generic
+/// 五段動詞 class carries no row of its own, so its endings follow the kana that
+/// ends the dictionary form.
+fn verb_endings(ctype: &str, reading: &str) -> Option<VerbEndings> {
     Some(match ctype {
         "カ変・クル" | "カ変・来ル" => literal_endings(
             "くる",
@@ -602,15 +605,19 @@ fn verb_endings(ctype: &str) -> Option<VerbEndings> {
         "五段・カ行促音便" | "五段・カ行促音便ユク" => {
             godan("く", "って", "った", "か", "き", "け", "こ")
         }
-        "五段・ガ行" => godan("ぐ", "いで", "いだ", "が", "ぎ", "げ", "ご"),
-        "五段・サ行" => godan("す", "して", "した", "さ", "し", "せ", "そ"),
-        "五段・タ行" => godan("つ", "って", "った", "た", "ち", "て", "と"),
-        "五段・ナ行" => godan("ぬ", "んで", "んだ", "な", "に", "ね", "の"),
-        "五段・バ行" => godan("ぶ", "んで", "んだ", "ば", "び", "べ", "ぼ"),
-        "五段・マ行" => godan("む", "んで", "んだ", "ま", "み", "め", "も"),
-        "五段・ラ行" | "五段動詞" | "五段・ラ行アル" => {
-            godan("る", "って", "った", "ら", "り", "れ", "ろ")
-        }
+        "五段・ガ行" => godan_row('ぐ')?,
+        "五段・サ行" => godan_row('す')?,
+        "五段・タ行" => godan_row('つ')?,
+        "五段・ナ行" => godan_row('ぬ')?,
+        "五段・バ行" => godan_row('ぶ')?,
+        "五段・マ行" => godan_row('む')?,
+        "五段・ラ行" | "五段・ラ行アル" => godan_row('る')?,
+        // Mozc OSS id.def files every godan verb that has no class of its own
+        // (ids 833-842) here, る and す/む/つ/ぐ/ぶ/ぬ verbs alike (Issue #348).
+        // く and う verbs have their own classes above; their 音便 is not
+        // decidable from the kana alone, so a generic row ending on them is
+        // left unsupported.
+        "五段動詞" => godan_row(reading.chars().last()?)?,
         "五段・ラ行特殊" => literal_endings(
             "る",
             "って",
@@ -675,6 +682,21 @@ fn literal_endings(
         teiru: teiru.to_string(),
         tenai: tenai.to_string(),
     }
+}
+
+/// Godan endings by the kana that ends the dictionary form, for the rows whose
+/// 音便 follows from that kana alone.
+fn godan_row(dict: char) -> Option<VerbEndings> {
+    Some(match dict {
+        'ぐ' => godan("ぐ", "いで", "いだ", "が", "ぎ", "げ", "ご"),
+        'す' => godan("す", "して", "した", "さ", "し", "せ", "そ"),
+        'つ' => godan("つ", "って", "った", "た", "ち", "て", "と"),
+        'ぬ' => godan("ぬ", "んで", "んだ", "な", "に", "ね", "の"),
+        'ぶ' => godan("ぶ", "んで", "んだ", "ば", "び", "べ", "ぼ"),
+        'む' => godan("む", "んで", "んだ", "ま", "み", "め", "も"),
+        'る' => godan("る", "って", "った", "ら", "り", "れ", "ろ"),
+        _ => return None,
+    })
 }
 
 fn godan(
@@ -788,6 +810,14 @@ fn replace_surface(surface: &str, read_from: &str, read_to: &str) -> Option<Stri
     if stem_surface.is_empty() {
         return Some(read_to.to_string());
     }
+    // When the okurigana spells less than the dictionary ending, the stem's
+    // last character carries the rest of it (来る -> 来て). Only a kanji does
+    // that: a katakana or Latin spelling such as ムス (むす) has no okurigana
+    // at all, and gluing the new ending onto the whole word (ムスて) spells no
+    // form of it.
+    if okuri != read_from && !stem_surface.ends_with(is_han) {
+        return None;
+    }
     let from_morae = morae(read_from);
     let to_morae = morae(read_to);
     let okuri_morae = morae(okuri);
@@ -820,6 +850,12 @@ fn is_hiragana(character: char) -> bool {
     matches!(character, '\u{3041}'..='\u{3096}' | 'ー')
 }
 
+/// The same character class as the glossary's han predicate: a kanji, or an
+/// iteration mark that stands for one.
+fn is_han(character: char) -> bool {
+    matches!(character, '\u{4e00}'..='\u{9fff}' | '々' | '〆')
+}
+
 fn morae(text: &str) -> Vec<String> {
     let mut units: Vec<String> = Vec::new();
     for character in text.chars() {
@@ -847,6 +883,15 @@ mod tests {
             replace_mora_ending("くる", "来る", "くる", "きて").expect("来るて形");
         assert_eq!(reading, "きて");
         assert_eq!(surface, "来て");
+    }
+
+    #[test]
+    fn katakana_spelling_has_no_okurigana_to_replace() {
+        assert_eq!(replace_mora_ending("むす", "ムス", "す", "して"), None);
+        assert_eq!(
+            replace_mora_ending("あるある", "あるアル", "る", "って"),
+            None
+        );
     }
 
     #[test]

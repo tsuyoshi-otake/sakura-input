@@ -8,8 +8,8 @@ makes some rows worse is visible even when the totals look fine. The tool is
 
 | File | Role | Edited by |
 | --- | --- | --- |
-| `conversion.tsv` | 1,520 authored sentences: `id, slice, reading, expected, variants` (`\|`-separated) | hand |
-| `prediction.tsv` | 1,600 authored words: `id, reading, surface, slice, pos` | hand |
+| `conversion.tsv` | 1,566 authored sentences: `id, slice, reading, expected, variants` (`\|`-separated) | hand |
+| `prediction.tsv` | 1,605 authored words: `id, reading, surface, slice, pos` | hand |
 | `conversion.snapshot.tsv` | per row: `id, state, top` (state 2 = expected, 1 = variant, 0 = wrong) | `--accept` |
 | `prediction.snapshot.tsv` | per word: `id, full, half, k9, k1` (ranks inside the nine suggestions; 0 = absent) | `--accept` |
 | `floors.tsv` | integer floors per slice and `ALL` | `--accept` |

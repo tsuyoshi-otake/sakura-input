@@ -37,6 +37,13 @@ const POS: &str = "\
 735 動詞,自立,*,*,五段・カ行促音便,連用形,行く
 728 動詞,自立,*,*,五段・カ行促音便,仮定形,行く
 730 動詞,自立,*,*,五段・カ行促音便,命令ｅ,行く
+833 動詞,自立,*,*,五段動詞,仮定形,*
+836 動詞,自立,*,*,五段動詞,命令ｅ,*
+837 動詞,自立,*,*,五段動詞,基本形,*
+838 動詞,自立,*,*,五段動詞,未然ウ接続,*
+839 動詞,自立,*,*,五段動詞,未然形,*
+841 動詞,自立,*,*,五段動詞,連用タ接続,*
+842 動詞,自立,*,*,五段動詞,連用形,*
 633 動詞,自立,*,*,サ変・スル,基本形,*
 637 動詞,自立,*,*,サ変・スル,未然形,*
 634 動詞,自立,*,*,サ変・スル,未然ウ接続,*
@@ -192,6 +199,122 @@ fn ichidan_and_godan_and_sa_and_adjective_forms_are_emitted() {
     assert_eq!(pair(&entries, "みて", "見て").left_id, 701);
     assert_eq!(pair(&entries, "かいて", "書いて").left_id, 726);
     assert_eq!(pair(&entries, "いって", "行って").left_id, 734);
+}
+
+#[test]
+fn generic_godan_lemmas_conjugate_by_the_kana_that_ends_the_reading() {
+    // Issue #348: Mozc OSS files every godan verb without a class of its own
+    // under the generic 五段動詞 class (ids 833-842), so す/む/つ/ぐ/ぶ/ぬ verbs sit
+    // next to る verbs on id 837. Only ラ行 endings were generated: 待って, 読んで,
+    // 遊んで and 話して were missing and まってる converted to 舞ってる.
+    let lemmas = vec![
+        lemma("まつ", "待つ", 837, 100),
+        lemma("よむ", "読む", 837, 100),
+        lemma("よぶ", "呼ぶ", 837, 100),
+        lemma("およぐ", "泳ぐ", 837, 100),
+        lemma("しぬ", "死ぬ", 837, 100),
+        lemma("はなす", "話す", 837, 100),
+        lemma("とる", "取る", 837, 100),
+    ];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    for (reading, surface, left_id) in [
+        ("まって", "待って", 841_u16),
+        ("まった", "待った", 841),
+        ("まったら", "待ったら", 841),
+        ("またない", "待たない", 839),
+        ("まちます", "待ちます", 842),
+        ("まちたい", "待ちたい", 842),
+        ("まてば", "待てば", 833),
+        ("まとう", "待とう", 838),
+        ("まて", "待て", 836),
+        ("まってる", "待ってる", 841),
+        ("まっている", "待っている", 841),
+        ("まってない", "待ってない", 841),
+        ("よんで", "読んで", 841),
+        ("よんだ", "読んだ", 841),
+        ("よまない", "読まない", 839),
+        ("よみます", "読みます", 842),
+        ("よんで", "呼んで", 841),
+        ("よばない", "呼ばない", 839),
+        ("およいで", "泳いで", 841),
+        ("およいだ", "泳いだ", 841),
+        ("しんで", "死んで", 841),
+        ("はなして", "話して", 841),
+        ("はなさない", "話さない", 839),
+        ("はなします", "話します", 842),
+        ("とって", "取って", 841),
+    ] {
+        let form = pair(&entries, reading, surface);
+        assert_eq!(form.left_id, left_id, "{reading} -> {surface}");
+        assert_eq!(
+            form.word_cost,
+            100 + form_delta(reading),
+            "{reading} -> {surface}"
+        );
+    }
+    assert_eq!(report.skipped_unsupported, 0);
+}
+
+/// Conversion cost delta of a generated form (inflection.rs FormSpec table).
+fn form_delta(reading: &str) -> i32 {
+    if reading.ends_with("てる") || reading.ends_with("でる") {
+        2_035
+    } else if reading.ends_with("ている") || reading.ends_with("でいる") {
+        2_040
+    } else if reading.ends_with("てない") || reading.ends_with("でない") {
+        2_845
+    } else if reading.ends_with("たら") || reading.ends_with("だら") {
+        30
+    } else if reading.ends_with("って")
+        || reading.ends_with("んで")
+        || reading.ends_with("いで")
+        || reading.ends_with("して")
+    {
+        20
+    } else if reading.ends_with("った") || reading.ends_with("んだ") || reading.ends_with("いだ")
+    {
+        25
+    } else if reading.ends_with("ない") {
+        30
+    } else if reading.ends_with("ます") {
+        40
+    } else if reading.ends_with("たい") {
+        45
+    } else if reading.ends_with("ば") {
+        35
+    } else if reading.ends_with("う") {
+        40
+    } else {
+        60
+    }
+}
+
+#[test]
+fn generic_godan_lemmas_without_a_godan_ending_stay_unsupported() {
+    // Rows whose reading ends on a kana that no godan row owns (noise filed
+    // under id 837) emit nothing and are counted, as before.
+    let lemmas = vec![lemma("ぼたん", "ボタン", 837, 100)];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    assert!(entries.is_empty());
+    assert_eq!(report.skipped_unsupported, 1);
+}
+
+#[test]
+fn spellings_without_okurigana_for_the_ending_stay_unsupported() {
+    // A katakana or mixed spelling ends on no hiragana, so no okurigana
+    // carries the dictionary ending. Nothing can be replaced, and the only
+    // "forms" would glue the new ending onto the whole word (ムス + て).
+    let lemmas = vec![
+        lemma("むす", "ムス", 837, 100),
+        lemma("あるある", "あるアル", 837, 100),
+    ];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    let emitted: Vec<(&str, &str)> = entries
+        .iter()
+        .map(|entry| (entry.reading.as_str(), entry.surface.as_str()))
+        .collect();
+    assert!(emitted.is_empty(), "{emitted:?}");
+    assert_eq!(report.skipped_unsupported, 2);
 }
 
 #[test]

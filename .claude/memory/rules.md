@@ -73,3 +73,16 @@ provenance; active work should load the smaller matching topic extracts above.
 - A user-deletable trust record that is well-formed but weaker than the embedded
   binary floor is equivalent to absence, then rewritten from verified input.
   Malformed records remain terminal and identify the recoverable full path.
+- A change to dictionary costs or to a generator is measured beyond the
+  authored corpus: write a scratch corpus for the affected class, run
+  `accuracy-gate --corpus-dir <dir>` with placeholder snapshot rows
+  (`id<TAB>0<TAB>-`) and `--accept` against main's build, then measure the
+  new build and report every losing class with its count (kana lemma,
+  sibling homograph, repair path) instead of only the rows the change was
+  meant to fix. A probe whose expected surface is the cheapest lemma cannot
+  see those classes (#348).
+- `scripts/build-dictionary.ps1 -MozcSource` inside `pwsh -Command` takes a
+  Windows path; a `/c/...` path resolves to `C:\c\...`, the script throws,
+  and the stale `artifacts/accuracy` build stays in place, so a gate run
+  after a failed build measures the old dictionary. Check the build exit
+  code and the `system.dic` hash before reading any gate result.
