@@ -6,7 +6,7 @@ use crate::dictionary::Dictionary;
 use crate::user_dictionary::UserDictionary;
 
 use super::super::{
-    connection_cost, has_same_surface, make_candidate, CandidateMaterialization, ConversionError,
+    connection_cost, make_candidate, CandidateMaterialization, ConversionError,
     ConversionSearchTerminal, Converter, LeftContextId, RightContextId, Surface, NONE, NONE_STATE,
 };
 use super::Node;
@@ -253,7 +253,29 @@ impl Converter {
                     }
                     Err(error) => return Err(error),
                 };
-                if !has_same_surface(&self.candidates, candidate.text()) {
+                if let Some(index) = self
+                    .candidates
+                    .iter()
+                    .position(|existing| existing.text() == candidate.text())
+                {
+                    // A repair edge can surface the same text as a direct
+                    // lexical edge at a penalty-adjusted cost (ぶかい→深い via
+                    // a dakuten swap undercuts ふかい→深い). The repair pops
+                    // first; if surface dedup simply skipped the later clean
+                    // path, the exact-lexical quality gate would then remove
+                    // the repair candidate and lose the surface outright.
+                    // Prefer the path without unconfirmed repair evidence,
+                    // but keep it at the position its own cost earned: taking
+                    // the repair's earlier slot would over-promote the clean
+                    // path above candidates that legitimately outrank it.
+                    let existing_repair = self.candidates[index]
+                        .path_evidence()
+                        .has_unconfirmed_repair();
+                    if existing_repair && !candidate.path_evidence().has_unconfirmed_repair() {
+                        self.candidates.remove(index);
+                        self.candidates.push(candidate);
+                    }
+                } else {
                     self.candidates.push(candidate);
                     if self.candidates.len() >= wanted {
                         return Ok(SearchRun {

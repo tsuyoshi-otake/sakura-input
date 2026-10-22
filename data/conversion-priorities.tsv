@@ -262,3 +262,12 @@ reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
 なりきん	成金	1851	1851	6219	-		
 まるまる	〇〇	1851	1851	5708	6908	predict	
 まるまる	丸々	16	16	3978	5178	predict	
+#
+# Issue #385: the repair-shadow fix exposed a latent mispricing. In
+# きょうかいちのてすとがふそく the clean 境界値 path (13519) loses by 5 to a
+# 境界+地 mosaic using a ぶそく->不足 repair edge (13514); before the fix a
+# repair-shadowed 境界値 path had led anyway. The edge is re-priced
+# to 6000 -- the ceiling that still carries prediction (predict cost
+# 7200 sits on upstream's 7485 page) -- so the IT term leads with
+# margin to spare and stays predictable.
+きょうかいち	境界値	1851	1949	6000	7200	it,predict	
