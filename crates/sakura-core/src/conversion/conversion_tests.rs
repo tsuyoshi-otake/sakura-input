@@ -2193,6 +2193,65 @@ fn repair_candidate_remains_available_when_no_trustworthy_exact_word_exists() {
     assert!(!repaired.is_trustworthy_whole_reading_exact());
 }
 
+/// Issue #393: a repair edge spans from its start to the end of the input as
+/// one word, so a fused inflection (明かした, one generated edge) reached by
+/// dropping a typed っ undercut the typed reading's own multi-word path
+/// (悪化 + した) by less than the old 1,200 penalty. A clean path within the
+/// repair penalty keeps the top; a typed reading far dearer than the repaired
+/// word still converts to the repair.
+#[test]
+fn clean_path_within_the_repair_penalty_keeps_the_top() {
+    let top = |rows: &[FixtureEntry]| {
+        let bytes = synthetic_dictionary(rows);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert(&dictionary, "あっかした", ConversionOptions::default())
+            .expect("conversion");
+        let ranking = candidates
+            .iter()
+            .map(|candidate| {
+                (
+                    candidate.text().to_owned(),
+                    candidate.cost,
+                    candidate.path_evidence().has_unconfirmed_repair(),
+                )
+            })
+            .collect::<Vec<_>>();
+        (ranking[0].clone(), ranking)
+    };
+
+    let close = [
+        fixture_entry("あっか", "悪化", 2_000, EntryFlags::NONE),
+        fixture_entry("した", "した", 1_000, EntryFlags::NONE),
+        fixture_entry("あかした", "明かした", 1_500, EntryFlags::NONE),
+    ];
+    let (first, ranking) = top(&close);
+    assert_eq!(
+        (first.0.as_str(), first.2),
+        ("悪化した", false),
+        "the typed reading's own path must lead a repair it is within the penalty of: {ranking:?}"
+    );
+    assert!(
+        ranking
+            .iter()
+            .any(|(text, _, repair)| text == "明かした" && *repair),
+        "the repair stays on the page: {ranking:?}"
+    );
+
+    let far = [
+        fixture_entry("あっか", "悪化", 3_000, EntryFlags::NONE),
+        fixture_entry("した", "した", 1_000, EntryFlags::NONE),
+        fixture_entry("あかした", "明かした", 1_500, EntryFlags::NONE),
+    ];
+    let (first, ranking) = top(&far);
+    assert_eq!(
+        (first.0.as_str(), first.2),
+        ("明かした", true),
+        "a typed reading dearer than the repaired word plus the penalty still repairs: {ranking:?}"
+    );
+}
+
 #[test]
 fn english_spelling_repair_is_not_promoted_to_exact_evidence() {
     let bytes =

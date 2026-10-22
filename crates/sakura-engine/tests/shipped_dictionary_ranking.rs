@@ -467,6 +467,27 @@ fn issue_390_generated_forms_stay_behind_native_sibling_forms() {
     }
 }
 
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_393_typed_reading_keeps_the_top_over_a_close_repair() {
+    // A repair edge covers the rest of the input as one word: the small-っ
+    // repair of あっかした reached the fused 明かした and the dakuten repair of
+    // たして reached 出して, both within 1,200 of the typed reading's own path.
+    // A real typo whose typed path is far dearer still converts.
+    for (reading, expected) in [
+        ("れいてんしがあっかした", "レイテンシが悪化した"),
+        ("3に5をたして", "3に5を足して"),
+        ("ちょっとおぐれます", "ちょっと遅れます"),
+    ] {
+        let candidates = candidates_for(reading);
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some(expected),
+            "{reading}: {expected} must lead the shipped page: {candidates:?}"
+        );
+    }
+}
+
 fn top_text(reading: &str) -> String {
     let candidates = candidates_for(reading);
     assert!(
