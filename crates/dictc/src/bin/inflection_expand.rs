@@ -41,11 +41,13 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     replacing_write(&config.output, tsv.as_bytes())?;
     replacing_write(&config.report, report_json(&report)?.as_bytes())?;
     println!(
-        "expanded {} 基本形 lemmas into {} missing conjugations ({} already present, {} unsupported) in {:.2}s",
+        "expanded {} 基本形 lemmas into {} missing conjugations ({} already present, {} unsupported, {} raised to a native sibling, {} kept under a rarer native) in {:.2}s",
         report.lemma_entries,
         report.emitted_entries,
         report.skipped_existing,
         report.skipped_unsupported,
+        report.raised_to_native,
+        report.kept_under_rarer_native,
         started.elapsed().as_secs_f64()
     );
     Ok(())
@@ -91,11 +93,13 @@ fn report_json(report: &InflectionReport) -> Result<String, String> {
     let mut output = String::new();
     writeln!(
         &mut output,
-        "{{\n  \"schema_version\": 1,\n  \"lemma_entries\": {},\n  \"emitted_entries\": {},\n  \"skipped_existing\": {},\n  \"skipped_unsupported\": {}\n}}",
+        "{{\n  \"schema_version\": 2,\n  \"lemma_entries\": {},\n  \"emitted_entries\": {},\n  \"skipped_existing\": {},\n  \"skipped_unsupported\": {},\n  \"raised_to_native\": {},\n  \"kept_under_rarer_native\": {}\n}}",
         report.lemma_entries,
         report.emitted_entries,
         report.skipped_existing,
-        report.skipped_unsupported
+        report.skipped_unsupported,
+        report.raised_to_native,
+        report.kept_under_rarer_native
     )
     .map_err(|error| error.to_string())?;
     Ok(output)

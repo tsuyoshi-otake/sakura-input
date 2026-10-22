@@ -442,6 +442,31 @@ fn issue_348_generic_godan_verbs_convert_as_one_fused_edge() {
     }
 }
 
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_390_generated_forms_stay_behind_native_sibling_forms() {
+    // A generated form no longer undercuts a Mozc-native form of the same
+    // reading whose lemma is at least as common (推したら, 係り, 息詰まら), and a
+    // native row that only shares the spelling (満つ's 未然形 みた) sets no
+    // floor for 見た / 見て.
+    for (reading, expected) in [
+        ("おしたら", "押したら"),
+        ("あんだら", "編んだら"),
+        ("かかわり", "関わり"),
+        ("いきづまら", "行き詰まら"),
+        ("ふりかえよう", "振り替えよう"),
+        ("みた", "見た"),
+        ("みて", "見て"),
+    ] {
+        let candidates = candidates_for(reading);
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some(expected),
+            "{reading}: {expected} must lead the shipped page: {candidates:?}"
+        );
+    }
+}
+
 fn top_text(reading: &str) -> String {
     let candidates = candidates_for(reading);
     assert!(

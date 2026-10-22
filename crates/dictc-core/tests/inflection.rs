@@ -318,6 +318,104 @@ fn spellings_without_okurigana_for_the_ending_stay_unsupported() {
 }
 
 #[test]
+fn generated_forms_never_undercut_a_native_sibling_form_of_a_cheaper_lemma() {
+    // Issue #390: Mozc prices its own fused rows far above the lemma (押す
+    // 2,716 but 押したら 4,762) while a generated form costs the lemma plus a
+    // small delta, so 推したら (推す 4,209 + 30) undercut 押したら. A generated
+    // form stays behind every native sibling form of its reading whose lemma
+    // is at least as common as its own; prediction climbs by the same amount.
+    let lemmas = vec![
+        lemma("おす", "押す", 837, 2_716),
+        lemma("おす", "推す", 837, 4_209),
+        lemma("おしたら", "押したら", 842, 4_762),
+    ];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    let raised = pair(&entries, "おしたら", "推したら");
+    assert_eq!(raised.word_cost, 4_763);
+    assert_eq!(raised.prediction_cost, 4_763 + 1_200);
+    assert_eq!(pair(&entries, "おして", "推して").word_cost, 4_209 + 20);
+    assert_eq!(pair(&entries, "おして", "押して").word_cost, 2_716 + 20);
+    assert!(!entries
+        .iter()
+        .any(|entry| entry.reading == "おしたら" && entry.surface == "押したら"));
+    assert_eq!(report.raised_to_native, 1);
+    assert_eq!(report.kept_under_rarer_native, 0);
+}
+
+#[test]
+fn the_floor_is_the_dearest_qualifying_native_and_can_leave_prediction() {
+    // Two native siblings of cheaper lemmas: the generated form lands above
+    // both, and a floor past the prediction limit drops the predict flag.
+    let lemmas = vec![
+        lemma("おす", "押す", 837, 2_716),
+        lemma("おす", "捺す", 837, 4_000),
+        lemma("おす", "推す", 837, 4_209),
+        lemma("おしたら", "押したら", 842, 4_762),
+        lemma("おしたら", "捺したら", 842, 6_000),
+    ];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    let raised = pair(&entries, "おしたら", "推したら");
+    assert_eq!(raised.word_cost, 6_001);
+    assert_eq!(raised.prediction_cost, i32::MAX);
+    assert_eq!(raised.flags, EntryFlags::NONE);
+    assert_eq!(report.raised_to_native, 1);
+}
+
+#[test]
+fn a_native_form_of_a_rarer_lemma_leaves_the_common_sibling_alone() {
+    // 詠んで is a native row while 読んで is generated; 詠む (5,000) is the
+    // rarer lemma, so 読んで keeps 読む's price instead of climbing past 詠んで.
+    let lemmas = vec![
+        lemma("よむ", "読む", 837, 2_121),
+        lemma("よむ", "詠む", 837, 5_000),
+        lemma("よんで", "詠んで", 841, 5_100),
+    ];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    assert_eq!(pair(&entries, "よんで", "読んで").word_cost, 2_121 + 20);
+    assert_eq!(report.raised_to_native, 0);
+    assert_eq!(report.kept_under_rarer_native, 1);
+}
+
+#[test]
+fn a_native_row_the_generator_does_not_derive_sets_no_floor() {
+    // 済まない is filed as an i-adjective lemma, not as a form of 住む, and
+    // 不毛 is a noun: neither is a sibling form, so 住まない and 踏もう keep
+    // their lemma's price.
+    let lemmas = vec![
+        lemma("すむ", "住む", 837, 2_785),
+        lemma("すまない", "済まない", 2425, 3_987),
+        lemma("ふむ", "踏む", 837, 4_063),
+        lemma("ふもう", "不毛", 1931, 4_762),
+    ];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    assert_eq!(pair(&entries, "すまない", "住まない").word_cost, 2_785 + 30);
+    assert_eq!(pair(&entries, "ふもう", "踏もう").word_cost, 4_063 + 40);
+    assert_eq!(report.raised_to_native, 0);
+    assert_eq!(report.kept_under_rarer_native, 0);
+}
+
+#[test]
+fn a_native_row_of_another_class_with_the_same_spelling_sets_no_floor() {
+    // The kana lemma みる (cost 0 here, like the auxiliary みる) has the
+    // た-form みた, and Mozc has a row みた, but that row is the 五段 未然形 of
+    // 満つ, not an 一段 form: matching on spelling alone priced 見た (1,521) at
+    // 5,017. The same holds for a native row of the right family but another
+    // 活用形 (the 一段 未然形 いて is no て-form).
+    let lemmas = vec![
+        lemma("みる", "見る", 680, 1_496),
+        lemma("みる", "みる", 680, 0),
+        lemma("みた", "みた", 839, 5_016),
+        lemma("いる", "射る", 680, 4_800),
+        lemma("いる", "いる", 680, 0),
+        lemma("いて", "いて", 694, 5_013),
+    ];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    assert_eq!(pair(&entries, "みた", "見た").word_cost, 1_496 + 25);
+    assert_eq!(pair(&entries, "いて", "射て").word_cost, 4_800 + 20);
+    assert_eq!(report.raised_to_native, 0);
+}
+
+#[test]
 fn existing_surfaces_are_not_duplicated() {
     let lemmas = vec![
         lemma("くる", "来る", 610, 7),

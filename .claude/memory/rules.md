@@ -81,8 +81,13 @@ provenance; active work should load the smaller matching topic extracts above.
   sibling homograph, repair path) instead of only the rows the change was
   meant to fix. A probe whose expected surface is the cheapest lemma cannot
   see those classes (#348).
-- `scripts/build-dictionary.ps1 -MozcSource` inside `pwsh -Command` takes a
-  Windows path; a `/c/...` path resolves to `C:\c\...`, the script throws,
-  and the stale `artifacts/accuracy` build stays in place, so a gate run
-  after a failed build measures the old dictionary. Check the build exit
-  code and the `system.dic` hash before reading any gate result.
+- Run `scripts/build-dictionary.ps1` from Git Bash through a `.ps1` file
+  (`pwsh -File build.ps1` with the paths inside it), not `pwsh -Command`:
+  MSYS rewrites a `/c/...` path to `C:\c\...` and a `C:/...` argument as a
+  path list (`...\sakura-input\C`, #390). Either way the script throws and
+  the stale `artifacts/accuracy` build stays in place, so a gate run after a
+  failed build measures the old dictionary. Check the build exit code and
+  the `system.dic` hash before reading any gate result.
+- A generator that reprices rows from native evidence matches a native row
+  by POS class, not by spelling: `(reading, surface)` collides across verbs
+  and across 活用形 (満つ's 未然形 みた floored 見た at 5,017, #390).
