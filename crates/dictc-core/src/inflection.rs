@@ -130,6 +130,15 @@ pub struct InflectionReport {
     pub emitted_entries: usize,
     pub skipped_existing: usize,
     pub skipped_unsupported: usize,
+    /// Generated forms priced up to a native sibling form of the same reading
+    /// whose lemma is at least as common.
+    pub raised_to_native: usize,
+    /// Generated forms left below a native sibling form whose lemma is rarer
+    /// than theirs (読んで under a native 詠んで).
+    pub kept_under_rarer_native: usize,
+    /// Forms of a kana lemma kept out of prediction because a kanji lemma of
+    /// the same reading and POS id is at least as common (でて next to 出て).
+    pub kana_forms_unpredicted: usize,
 }
 
 /// Mozc `id.def` row of the auxiliary a contracted form connects as on its
@@ -316,40 +325,66 @@ const ADJ_BA: FormSpec = FormSpec {
 /// Existing `(reading, surface)` pairs are left untouched. Connection ids come
 /// from the lemma's Mozc POS family; a form is skipped rather than invented
 /// when that family has no matching 活用形 id.
+///
+/// A generated form is priced at its lemma plus a small delta, far below the
+/// price Mozc gives its own fused rows (押す 2,716 but 押したら 4,762), so it
+/// never undercuts a native sibling form of the same reading whose lemma is at
+/// least as common: its cost is raised to one above the dearest such sibling,
+/// and prediction climbs by the same amount. A native sibling of a rarer lemma
+/// (詠んで next to a generated 読んで) sets no floor (Issue #390).
+///
+/// A native sibling is a row the generator derives again from another lemma
+/// *and* whose POS id is that form's class: same part of speech, sub-part,
+/// conjugation type and lemma column as the lemma, and one of the form's
+/// 活用形. A row that only shares the spelling (the 五段 未然形 みた of 満つ next
+/// to the kana た-form of the auxiliary みる, cost 0) is no sibling.
+///
+/// A kana lemma conjugates like any other. When a kanji lemma of the same
+/// reading and POS id costs no more (出る 41 next to でる 1,269), the kana
+/// forms keep their conversion price but leave prediction, so a prefix
+/// completes the kanji form. Where Mozc prices the kana lemma lower (くださる
+/// under 下さる, いる under 居る), the kana forms stay predictable (Issue #392).
 pub fn expand_inflections(
     lemmas: &[SourceEntry],
     catalog: &InflectionPosCatalog,
 ) -> Result<(Vec<SourceEntry>, InflectionReport), String> {
-    let existing: BTreeSet<(String, String)> = lemmas
-        .iter()
-        .map(|entry| (entry.reading.clone(), entry.surface.clone()))
-        .collect();
+    let mut native_rows: BTreeMap<(&str, &str), Vec<&SourceEntry>> = BTreeMap::new();
+    for entry in lemmas {
+        native_rows
+            .entry((entry.reading.as_str(), entry.surface.as_str()))
+            .or_default()
+            .push(entry);
+    }
+    let native_siblings = native_siblings(lemmas, catalog, &native_rows);
+    let kanji_lemma_costs = kanji_lemma_costs(lemmas);
     let mut emitted = Vec::new();
-    let mut seen = existing.clone();
+    let mut seen: BTreeSet<(String, String)> = BTreeSet::new();
     let mut report = InflectionReport::default();
     let source: Arc<str> = Arc::from("inflection-expand");
 
     for lemma in lemmas {
-        let Some(row) = catalog.row(lemma.left_id) else {
-            report.skipped_unsupported = report.skipped_unsupported.saturating_add(1);
-            continue;
-        };
-        if row.cform != "基本形" {
-            continue;
-        }
-        if row.subpos == "接尾" {
-            continue;
-        }
-        report.lemma_entries = report.lemma_entries.saturating_add(1);
-        let forms = match conjugate(row, lemma) {
-            Some(forms) if !forms.is_empty() => forms,
-            Some(_) | None => {
+        let (row, forms) = match lemma_forms(catalog, lemma) {
+            LemmaForms::NoPosRow => {
                 report.skipped_unsupported = report.skipped_unsupported.saturating_add(1);
                 continue;
             }
+            LemmaForms::NotALemma => continue,
+            LemmaForms::Unconjugable => {
+                report.lemma_entries = report.lemma_entries.saturating_add(1);
+                report.skipped_unsupported = report.skipped_unsupported.saturating_add(1);
+                continue;
+            }
+            LemmaForms::Forms(row, forms) => (row, forms),
         };
+        report.lemma_entries = report.lemma_entries.saturating_add(1);
+        let defers_to_kanji = lemma.surface == lemma.reading
+            && kanji_lemma_costs
+                .get(&(lemma.reading.as_str(), lemma.left_id))
+                .is_some_and(|kanji_cost| *kanji_cost <= lemma.word_cost);
         for form in forms {
-            if !seen.insert((form.reading.clone(), form.surface.clone())) {
+            if native_rows.contains_key(&(form.reading.as_str(), form.surface.as_str()))
+                || !seen.insert((form.reading.clone(), form.surface.clone()))
+            {
                 report.skipped_existing = report.skipped_existing.saturating_add(1);
                 continue;
             }
@@ -369,10 +404,36 @@ pub fn expand_inflections(
                     catalog.lookup(aux.pos, aux.subpos, aux.ctype, aux.cform, aux_lemma)
                 })
                 .unwrap_or(class_id);
-            let word_cost = lemma.word_cost.saturating_add(form.spec.cost_delta);
-            let prediction_base = lemma.word_cost.saturating_add(form.spec.prediction_delta);
-            let prediction_worthy =
+            let mut word_cost = lemma.word_cost.saturating_add(form.spec.cost_delta);
+            let mut prediction_base = lemma.word_cost.saturating_add(form.spec.prediction_delta);
+            let siblings = native_siblings
+                .get(form.reading.as_str())
+                .map(Vec::as_slice)
+                .unwrap_or(&[]);
+            let floor = siblings
+                .iter()
+                .filter(|sibling| sibling.lemma_cost <= lemma.word_cost)
+                .map(|sibling| sibling.cost.saturating_add(1))
+                .max();
+            let rarer = siblings
+                .iter()
+                .filter(|sibling| sibling.lemma_cost > lemma.word_cost)
+                .map(|sibling| sibling.cost)
+                .max();
+            if let Some(floor) = floor.filter(|floor| *floor > word_cost) {
+                let raise = floor.saturating_sub(word_cost);
+                word_cost = floor;
+                prediction_base = prediction_base.saturating_add(raise);
+                report.raised_to_native = report.raised_to_native.saturating_add(1);
+            } else if rarer.is_some_and(|cost| cost > word_cost) {
+                report.kept_under_rarer_native = report.kept_under_rarer_native.saturating_add(1);
+            }
+            let mut prediction_worthy =
                 form.reading.chars().count() >= 2 && prediction_base <= PREDICTION_COST_LIMIT;
+            if prediction_worthy && defers_to_kanji {
+                prediction_worthy = false;
+                report.kana_forms_unpredicted = report.kana_forms_unpredicted.saturating_add(1);
+            }
             emitted.push(SourceEntry::derived(
                 Arc::clone(&source),
                 emitted.len().saturating_add(1),
@@ -415,6 +476,106 @@ pub fn expand_inflections(
     Ok((emitted, report))
 }
 
+/// A Mozc-native row that the generator derives again from one of the lemmas:
+/// a sibling form of every generated form with the same reading, remembered
+/// with the cost of the lemma it belongs to.
+#[derive(Clone, Copy)]
+struct NativeSibling {
+    cost: i32,
+    lemma_cost: i32,
+}
+
+/// Native sibling forms by reading: every conjugated form that already exists
+/// as a row of that form's class, with the cost of the lemma that produced it.
+fn native_siblings(
+    lemmas: &[SourceEntry],
+    catalog: &InflectionPosCatalog,
+    native_rows: &BTreeMap<(&str, &str), Vec<&SourceEntry>>,
+) -> BTreeMap<String, Vec<NativeSibling>> {
+    let mut siblings: BTreeMap<String, Vec<NativeSibling>> = BTreeMap::new();
+    for lemma in lemmas {
+        let LemmaForms::Forms(lemma_row, forms) = lemma_forms(catalog, lemma) else {
+            continue;
+        };
+        for form in forms {
+            let Some(rows) = native_rows.get(&(form.reading.as_str(), form.surface.as_str()))
+            else {
+                continue;
+            };
+            let cost = rows
+                .iter()
+                .filter(|row| {
+                    catalog
+                        .row(row.left_id)
+                        .is_some_and(|native| is_form_of(native, lemma_row, form.spec.cforms))
+                })
+                .map(|row| row.word_cost)
+                .min();
+            let Some(cost) = cost else {
+                continue;
+            };
+            siblings
+                .entry(form.reading)
+                .or_default()
+                .push(NativeSibling {
+                    cost,
+                    lemma_cost: lemma.word_cost,
+                });
+        }
+    }
+    siblings
+}
+
+/// Cheapest kanji-spelled row by reading and POS id: the lemma a kana lemma of
+/// the same reading and class leaves prediction to when it costs no more.
+fn kanji_lemma_costs(lemmas: &[SourceEntry]) -> BTreeMap<(&str, u16), i32> {
+    let mut costs: BTreeMap<(&str, u16), i32> = BTreeMap::new();
+    for entry in lemmas
+        .iter()
+        .filter(|entry| entry.surface.chars().any(is_han))
+    {
+        costs
+            .entry((entry.reading.as_str(), entry.left_id))
+            .and_modify(|cost| *cost = (*cost).min(entry.word_cost))
+            .or_insert(entry.word_cost);
+    }
+    costs
+}
+
+/// Whether a native row's POS id is one of the given 活用形 of the lemma's
+/// conjugation family.
+fn is_form_of(native: &PosRow, lemma: &PosRow, cforms: &[&str]) -> bool {
+    native.pos == lemma.pos
+        && native.subpos == lemma.subpos
+        && native.ctype == lemma.ctype
+        && native.lemma == lemma.lemma
+        && cforms.contains(&native.cform.as_str())
+}
+
+enum LemmaForms<'a> {
+    /// The row's POS id is not in the catalog.
+    NoPosRow,
+    /// A row that is no 基本形 lemma (an inflected form, a suffix): nothing to
+    /// conjugate.
+    NotALemma,
+    /// A lemma whose class or spelling yields no form.
+    Unconjugable,
+    Forms(&'a PosRow, Vec<ConjugatedForm>),
+}
+
+fn lemma_forms<'a>(catalog: &'a InflectionPosCatalog, lemma: &SourceEntry) -> LemmaForms<'a> {
+    let Some(row) = catalog.row(lemma.left_id) else {
+        return LemmaForms::NoPosRow;
+    };
+    if row.cform != "基本形" || row.subpos == "接尾" {
+        return LemmaForms::NotALemma;
+    }
+    match conjugate(row, lemma) {
+        Some(forms) if !forms.is_empty() => LemmaForms::Forms(row, forms),
+        Some(_) | None => LemmaForms::Unconjugable,
+    }
+}
+
 struct ConjugatedForm {
     spec: FormSpec,
     reading: String,
@@ -447,7 +608,7 @@ fn conjugate_verb(row: &PosRow, lemma: &SourceEntry) -> Option<Vec<ConjugatedFor
         ]);
     }
 
-    let endings = verb_endings(&row.ctype)?;
+    let endings = verb_endings(&row.ctype, &lemma.reading)?;
     let mut forms = Vec::new();
     push_replaced(&mut forms, lemma, VERB_TE, &endings.dict, &endings.te);
     push_replaced(&mut forms, lemma, VERB_TA, &endings.dict, &endings.ta);
@@ -539,7 +700,10 @@ struct VerbEndings {
     tenai: String,
 }
 
-fn verb_endings(ctype: &str) -> Option<VerbEndings> {
+/// Endings of a verb class. `reading` is the lemma's reading: the generic
+/// 五段動詞 class carries no row of its own, so its endings follow the kana that
+/// ends the dictionary form.
+fn verb_endings(ctype: &str, reading: &str) -> Option<VerbEndings> {
     Some(match ctype {
         "カ変・クル" | "カ変・来ル" => literal_endings(
             "くる",
@@ -602,15 +766,19 @@ fn verb_endings(ctype: &str) -> Option<VerbEndings> {
         "五段・カ行促音便" | "五段・カ行促音便ユク" => {
             godan("く", "って", "った", "か", "き", "け", "こ")
         }
-        "五段・ガ行" => godan("ぐ", "いで", "いだ", "が", "ぎ", "げ", "ご"),
-        "五段・サ行" => godan("す", "して", "した", "さ", "し", "せ", "そ"),
-        "五段・タ行" => godan("つ", "って", "った", "た", "ち", "て", "と"),
-        "五段・ナ行" => godan("ぬ", "んで", "んだ", "な", "に", "ね", "の"),
-        "五段・バ行" => godan("ぶ", "んで", "んだ", "ば", "び", "べ", "ぼ"),
-        "五段・マ行" => godan("む", "んで", "んだ", "ま", "み", "め", "も"),
-        "五段・ラ行" | "五段動詞" | "五段・ラ行アル" => {
-            godan("る", "って", "った", "ら", "り", "れ", "ろ")
-        }
+        "五段・ガ行" => godan_row('ぐ')?,
+        "五段・サ行" => godan_row('す')?,
+        "五段・タ行" => godan_row('つ')?,
+        "五段・ナ行" => godan_row('ぬ')?,
+        "五段・バ行" => godan_row('ぶ')?,
+        "五段・マ行" => godan_row('む')?,
+        "五段・ラ行" | "五段・ラ行アル" => godan_row('る')?,
+        // Mozc OSS id.def files every godan verb that has no class of its own
+        // (ids 833-842) here, る and す/む/つ/ぐ/ぶ/ぬ verbs alike (Issue #348).
+        // く and う verbs have their own classes above; their 音便 is not
+        // decidable from the kana alone, so a generic row ending on them is
+        // left unsupported.
+        "五段動詞" => godan_row(reading.chars().last()?)?,
         "五段・ラ行特殊" => literal_endings(
             "る",
             "って",
@@ -675,6 +843,21 @@ fn literal_endings(
         teiru: teiru.to_string(),
         tenai: tenai.to_string(),
     }
+}
+
+/// Godan endings by the kana that ends the dictionary form, for the rows whose
+/// 音便 follows from that kana alone.
+fn godan_row(dict: char) -> Option<VerbEndings> {
+    Some(match dict {
+        'ぐ' => godan("ぐ", "いで", "いだ", "が", "ぎ", "げ", "ご"),
+        'す' => godan("す", "して", "した", "さ", "し", "せ", "そ"),
+        'つ' => godan("つ", "って", "った", "た", "ち", "て", "と"),
+        'ぬ' => godan("ぬ", "んで", "んだ", "な", "に", "ね", "の"),
+        'ぶ' => godan("ぶ", "んで", "んだ", "ば", "び", "べ", "ぼ"),
+        'む' => godan("む", "んで", "んだ", "ま", "み", "め", "も"),
+        'る' => godan("る", "って", "った", "ら", "り", "れ", "ろ"),
+        _ => return None,
+    })
 }
 
 fn godan(
@@ -788,6 +971,14 @@ fn replace_surface(surface: &str, read_from: &str, read_to: &str) -> Option<Stri
     if stem_surface.is_empty() {
         return Some(read_to.to_string());
     }
+    // When the okurigana spells less than the dictionary ending, the stem's
+    // last character carries the rest of it (来る -> 来て). Only a kanji does
+    // that: a katakana or Latin spelling such as ムス (むす) has no okurigana
+    // at all, and gluing the new ending onto the whole word (ムスて) spells no
+    // form of it.
+    if okuri != read_from && !stem_surface.ends_with(is_han) {
+        return None;
+    }
     let from_morae = morae(read_from);
     let to_morae = morae(read_to);
     let okuri_morae = morae(okuri);
@@ -820,6 +1011,12 @@ fn is_hiragana(character: char) -> bool {
     matches!(character, '\u{3041}'..='\u{3096}' | 'ー')
 }
 
+/// The same character class as the glossary's han predicate: a kanji, or an
+/// iteration mark that stands for one.
+fn is_han(character: char) -> bool {
+    matches!(character, '\u{4e00}'..='\u{9fff}' | '々' | '〆')
+}
+
 fn morae(text: &str) -> Vec<String> {
     let mut units: Vec<String> = Vec::new();
     for character in text.chars() {
@@ -847,6 +1044,15 @@ mod tests {
             replace_mora_ending("くる", "来る", "くる", "きて").expect("来るて形");
         assert_eq!(reading, "きて");
         assert_eq!(surface, "来て");
+    }
+
+    #[test]
+    fn katakana_spelling_has_no_okurigana_to_replace() {
+        assert_eq!(replace_mora_ending("むす", "ムス", "す", "して"), None);
+        assert_eq!(
+            replace_mora_ending("あるある", "あるアル", "る", "って"),
+            None
+        );
     }
 
     #[test]

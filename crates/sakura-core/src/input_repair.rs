@@ -13,9 +13,19 @@ use crate::dictionary::EntryFlags;
 use crate::preferences::InputSupport;
 
 /// Soft cost added when a lattice edge used a repaired reading prefix.
-pub const REPAIR_PENALTY: i64 = 1_200;
-/// Higher penalty for the broad advanced edit-1 pass.
-pub const ADVANCED_REPAIR_PENALTY: i64 = 2_400;
+///
+/// A repair edge covers the rest of the input as one word, so it competes
+/// with the typed reading's own multi-word path. At 1,200 the small-っ repair
+/// of あっかした reached the fused form 明かした and undercut 悪化 + した by
+/// 626; 1,900 keeps a typed path within that margin first (Issue #393). On
+/// one-typo probes of the corpus, 77 of 3,612 top-1 recoveries moved to the
+/// second candidate.
+pub const REPAIR_PENALTY: i64 = 1_900;
+/// Higher penalty for the broad advanced edit-1 pass, kept 1,200 above
+/// [`REPAIR_PENALTY`]. Conversion never generates advanced variants; prediction
+/// orders repaired completions by their variant penalty, so the fixed margin
+/// keeps that order unchanged when the rule penalty moves (Issue #393).
+pub const ADVANCED_REPAIR_PENALTY: i64 = REPAIR_PENALTY + 1_200;
 /// Soft cost for English-spelling → katakana loanword recovery.
 pub const ENGLISH_KATAKANA_PENALTY: i64 = 1_800;
 /// Soft cost for a commit-history repair hint. Lower than rule repair so a

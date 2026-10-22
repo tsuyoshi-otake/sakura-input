@@ -412,6 +412,114 @@ fn issue_94_kana_fragment_splices_leave_the_candidate_page() {
     );
 }
 
+/// Issue #348: `inflection-expand` expanded the generic 五段動詞 class (Mozc OSS
+/// id 837, which files す/む/つ/ぐ/ぶ/ぬ verbs as well as る verbs) only with ラ行
+/// endings, so 踏んで, 飲みます or 待ったら had no fused edge and the lattice had
+/// to assemble them from a stem and a function word, usually losing to a noun
+/// splice. The generic class now takes its endings from the kana that ends the
+/// dictionary form; these readings are one fused edge in the shipped dictionary.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_348_generic_godan_verbs_convert_as_one_fused_edge() {
+    for (reading, expected) in [
+        ("ふんで", "踏んで"),
+        ("うんで", "生んで"),
+        ("ふせいで", "防いで"),
+        ("かんだ", "噛んだ"),
+        ("のみます", "飲みます"),
+        ("まったら", "待ったら"),
+        ("やくだった", "役立った"),
+        ("まって", "待って"),
+        ("みたして", "満たして"),
+        ("のがした", "逃した"),
+    ] {
+        let candidates = candidates_for(reading);
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some(expected),
+            "{reading}: {expected} must lead the shipped page: {candidates:?}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_390_generated_forms_stay_behind_native_sibling_forms() {
+    // A generated form no longer undercuts a Mozc-native form of the same
+    // reading whose lemma is at least as common (推したら, 係り, 息詰まら), and a
+    // native row that only shares the spelling (満つ's 未然形 みた) sets no
+    // floor for 見た / 見て.
+    for (reading, expected) in [
+        ("おしたら", "押したら"),
+        ("あんだら", "編んだら"),
+        ("かかわり", "関わり"),
+        ("いきづまら", "行き詰まら"),
+        ("ふりかえよう", "振り替えよう"),
+        ("みた", "見た"),
+        ("みて", "見て"),
+    ] {
+        let candidates = candidates_for(reading);
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some(expected),
+            "{reading}: {expected} must lead the shipped page: {candidates:?}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_393_typed_reading_keeps_the_top_over_a_close_repair() {
+    // A repair edge covers the rest of the input as one word: the small-っ
+    // repair of あっかした reached the fused 明かした and the dakuten repair of
+    // たして reached 出して, both within 1,200 of the typed reading's own path.
+    // A real typo whose typed path is far dearer still converts.
+    for (reading, expected) in [
+        ("れいてんしがあっかした", "レイテンシが悪化した"),
+        ("3に5をたして", "3に5を足して"),
+        ("ちょっとおぐれます", "ちょっと遅れます"),
+    ] {
+        let candidates = candidates_for(reading);
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some(expected),
+            "{reading}: {expected} must lead the shipped page: {candidates:?}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_392_kana_forms_leave_prediction_to_an_as_common_kanji_lemma() {
+    // Kana lemmas whose kanji lemma costs no more (でる next to 出る, おいしい
+    // next to 美味しい) no longer fill the nine with kana forms, so 飛行機 and
+    // 野球 reach them from half the reading. Kana forms of lemmas Mozc prices
+    // below their kanji lemma (くださる, いただく) keep completing.
+    for (prefix, surface) in [("ひこ", "飛行機"), ("やき", "野球")] {
+        let predictions = predictions_for(prefix);
+        assert!(
+            predictions.iter().take(9).any(|(_, s)| s == surface),
+            "{prefix}: {surface} must be in the nine: {predictions:?}"
+        );
+    }
+    for (prefix, kana) in [("でまし", "でました"), ("おいしくな", "おいしくない")]
+    {
+        let predictions = predictions_for(prefix);
+        assert!(
+            !predictions.iter().any(|(_, s)| s == kana),
+            "{prefix}: the kana form {kana} must leave prediction: {predictions:?}"
+        );
+    }
+    for (prefix, kana) in [("くださっ", "くださって"), ("いただけま", "いただけます")]
+    {
+        let predictions = predictions_for(prefix);
+        assert!(
+            predictions.iter().any(|(_, s)| s == kana),
+            "{prefix}: the kana form {kana} must stay predictable: {predictions:?}"
+        );
+    }
+}
+
 fn top_text(reading: &str) -> String {
     let candidates = candidates_for(reading);
     assert!(

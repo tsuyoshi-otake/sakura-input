@@ -37,6 +37,13 @@ const POS: &str = "\
 735 動詞,自立,*,*,五段・カ行促音便,連用形,行く
 728 動詞,自立,*,*,五段・カ行促音便,仮定形,行く
 730 動詞,自立,*,*,五段・カ行促音便,命令ｅ,行く
+833 動詞,自立,*,*,五段動詞,仮定形,*
+836 動詞,自立,*,*,五段動詞,命令ｅ,*
+837 動詞,自立,*,*,五段動詞,基本形,*
+838 動詞,自立,*,*,五段動詞,未然ウ接続,*
+839 動詞,自立,*,*,五段動詞,未然形,*
+841 動詞,自立,*,*,五段動詞,連用タ接続,*
+842 動詞,自立,*,*,五段動詞,連用形,*
 633 動詞,自立,*,*,サ変・スル,基本形,*
 637 動詞,自立,*,*,サ変・スル,未然形,*
 634 動詞,自立,*,*,サ変・スル,未然ウ接続,*
@@ -192,6 +199,267 @@ fn ichidan_and_godan_and_sa_and_adjective_forms_are_emitted() {
     assert_eq!(pair(&entries, "みて", "見て").left_id, 701);
     assert_eq!(pair(&entries, "かいて", "書いて").left_id, 726);
     assert_eq!(pair(&entries, "いって", "行って").left_id, 734);
+}
+
+#[test]
+fn generic_godan_lemmas_conjugate_by_the_kana_that_ends_the_reading() {
+    // Issue #348: Mozc OSS files every godan verb without a class of its own
+    // under the generic 五段動詞 class (ids 833-842), so す/む/つ/ぐ/ぶ/ぬ verbs sit
+    // next to る verbs on id 837. Only ラ行 endings were generated: 待って, 読んで,
+    // 遊んで and 話して were missing and まってる converted to 舞ってる.
+    let lemmas = vec![
+        lemma("まつ", "待つ", 837, 100),
+        lemma("よむ", "読む", 837, 100),
+        lemma("よぶ", "呼ぶ", 837, 100),
+        lemma("およぐ", "泳ぐ", 837, 100),
+        lemma("しぬ", "死ぬ", 837, 100),
+        lemma("はなす", "話す", 837, 100),
+        lemma("とる", "取る", 837, 100),
+    ];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    for (reading, surface, left_id) in [
+        ("まって", "待って", 841_u16),
+        ("まった", "待った", 841),
+        ("まったら", "待ったら", 841),
+        ("またない", "待たない", 839),
+        ("まちます", "待ちます", 842),
+        ("まちたい", "待ちたい", 842),
+        ("まてば", "待てば", 833),
+        ("まとう", "待とう", 838),
+        ("まて", "待て", 836),
+        ("まってる", "待ってる", 841),
+        ("まっている", "待っている", 841),
+        ("まってない", "待ってない", 841),
+        ("よんで", "読んで", 841),
+        ("よんだ", "読んだ", 841),
+        ("よまない", "読まない", 839),
+        ("よみます", "読みます", 842),
+        ("よんで", "呼んで", 841),
+        ("よばない", "呼ばない", 839),
+        ("およいで", "泳いで", 841),
+        ("およいだ", "泳いだ", 841),
+        ("しんで", "死んで", 841),
+        ("はなして", "話して", 841),
+        ("はなさない", "話さない", 839),
+        ("はなします", "話します", 842),
+        ("とって", "取って", 841),
+    ] {
+        let form = pair(&entries, reading, surface);
+        assert_eq!(form.left_id, left_id, "{reading} -> {surface}");
+        assert_eq!(
+            form.word_cost,
+            100 + form_delta(reading),
+            "{reading} -> {surface}"
+        );
+    }
+    assert_eq!(report.skipped_unsupported, 0);
+}
+
+/// Conversion cost delta of a generated form (inflection.rs FormSpec table).
+fn form_delta(reading: &str) -> i32 {
+    if reading.ends_with("てる") || reading.ends_with("でる") {
+        2_035
+    } else if reading.ends_with("ている") || reading.ends_with("でいる") {
+        2_040
+    } else if reading.ends_with("てない") || reading.ends_with("でない") {
+        2_845
+    } else if reading.ends_with("たら") || reading.ends_with("だら") {
+        30
+    } else if reading.ends_with("って")
+        || reading.ends_with("んで")
+        || reading.ends_with("いで")
+        || reading.ends_with("して")
+    {
+        20
+    } else if reading.ends_with("った") || reading.ends_with("んだ") || reading.ends_with("いだ")
+    {
+        25
+    } else if reading.ends_with("ない") {
+        30
+    } else if reading.ends_with("ます") {
+        40
+    } else if reading.ends_with("たい") {
+        45
+    } else if reading.ends_with("ば") {
+        35
+    } else if reading.ends_with("う") {
+        40
+    } else {
+        60
+    }
+}
+
+#[test]
+fn generic_godan_lemmas_without_a_godan_ending_stay_unsupported() {
+    // Rows whose reading ends on a kana that no godan row owns (noise filed
+    // under id 837) emit nothing and are counted, as before.
+    let lemmas = vec![lemma("ぼたん", "ボタン", 837, 100)];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    assert!(entries.is_empty());
+    assert_eq!(report.skipped_unsupported, 1);
+}
+
+#[test]
+fn spellings_without_okurigana_for_the_ending_stay_unsupported() {
+    // A katakana or mixed spelling ends on no hiragana, so no okurigana
+    // carries the dictionary ending. Nothing can be replaced, and the only
+    // "forms" would glue the new ending onto the whole word (ムス + て).
+    let lemmas = vec![
+        lemma("むす", "ムス", 837, 100),
+        lemma("あるある", "あるアル", 837, 100),
+    ];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    let emitted: Vec<(&str, &str)> = entries
+        .iter()
+        .map(|entry| (entry.reading.as_str(), entry.surface.as_str()))
+        .collect();
+    assert!(emitted.is_empty(), "{emitted:?}");
+    assert_eq!(report.skipped_unsupported, 2);
+}
+
+#[test]
+fn generated_forms_never_undercut_a_native_sibling_form_of_a_cheaper_lemma() {
+    // Issue #390: Mozc prices its own fused rows far above the lemma (押す
+    // 2,716 but 押したら 4,762) while a generated form costs the lemma plus a
+    // small delta, so 推したら (推す 4,209 + 30) undercut 押したら. A generated
+    // form stays behind every native sibling form of its reading whose lemma
+    // is at least as common as its own; prediction climbs by the same amount.
+    let lemmas = vec![
+        lemma("おす", "押す", 837, 2_716),
+        lemma("おす", "推す", 837, 4_209),
+        lemma("おしたら", "押したら", 842, 4_762),
+    ];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    let raised = pair(&entries, "おしたら", "推したら");
+    assert_eq!(raised.word_cost, 4_763);
+    assert_eq!(raised.prediction_cost, 4_763 + 1_200);
+    assert_eq!(pair(&entries, "おして", "推して").word_cost, 4_209 + 20);
+    assert_eq!(pair(&entries, "おして", "押して").word_cost, 2_716 + 20);
+    assert!(!entries
+        .iter()
+        .any(|entry| entry.reading == "おしたら" && entry.surface == "押したら"));
+    assert_eq!(report.raised_to_native, 1);
+    assert_eq!(report.kept_under_rarer_native, 0);
+}
+
+#[test]
+fn the_floor_is_the_dearest_qualifying_native_and_can_leave_prediction() {
+    // Two native siblings of cheaper lemmas: the generated form lands above
+    // both, and a floor past the prediction limit drops the predict flag.
+    let lemmas = vec![
+        lemma("おす", "押す", 837, 2_716),
+        lemma("おす", "捺す", 837, 4_000),
+        lemma("おす", "推す", 837, 4_209),
+        lemma("おしたら", "押したら", 842, 4_762),
+        lemma("おしたら", "捺したら", 842, 6_000),
+    ];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    let raised = pair(&entries, "おしたら", "推したら");
+    assert_eq!(raised.word_cost, 6_001);
+    assert_eq!(raised.prediction_cost, i32::MAX);
+    assert_eq!(raised.flags, EntryFlags::NONE);
+    assert_eq!(report.raised_to_native, 1);
+}
+
+#[test]
+fn a_native_form_of_a_rarer_lemma_leaves_the_common_sibling_alone() {
+    // 詠んで is a native row while 読んで is generated; 詠む (5,000) is the
+    // rarer lemma, so 読んで keeps 読む's price instead of climbing past 詠んで.
+    let lemmas = vec![
+        lemma("よむ", "読む", 837, 2_121),
+        lemma("よむ", "詠む", 837, 5_000),
+        lemma("よんで", "詠んで", 841, 5_100),
+    ];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    assert_eq!(pair(&entries, "よんで", "読んで").word_cost, 2_121 + 20);
+    assert_eq!(report.raised_to_native, 0);
+    assert_eq!(report.kept_under_rarer_native, 1);
+}
+
+#[test]
+fn a_native_row_the_generator_does_not_derive_sets_no_floor() {
+    // 済まない is filed as an i-adjective lemma, not as a form of 住む, and
+    // 不毛 is a noun: neither is a sibling form, so 住まない and 踏もう keep
+    // their lemma's price.
+    let lemmas = vec![
+        lemma("すむ", "住む", 837, 2_785),
+        lemma("すまない", "済まない", 2425, 3_987),
+        lemma("ふむ", "踏む", 837, 4_063),
+        lemma("ふもう", "不毛", 1931, 4_762),
+    ];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    assert_eq!(pair(&entries, "すまない", "住まない").word_cost, 2_785 + 30);
+    assert_eq!(pair(&entries, "ふもう", "踏もう").word_cost, 4_063 + 40);
+    assert_eq!(report.raised_to_native, 0);
+    assert_eq!(report.kept_under_rarer_native, 0);
+}
+
+#[test]
+fn a_native_row_of_another_class_with_the_same_spelling_sets_no_floor() {
+    // The kana lemma みる (cost 0 here, like the auxiliary みる) has the
+    // た-form みた, and Mozc has a row みた, but that row is the 五段 未然形 of
+    // 満つ, not an 一段 form: matching on spelling alone priced 見た (1,521) at
+    // 5,017. The same holds for a native row of the right family but another
+    // 活用形 (the 一段 未然形 いて is no て-form).
+    let lemmas = vec![
+        lemma("みる", "見る", 680, 1_496),
+        lemma("みる", "みる", 680, 0),
+        lemma("みた", "みた", 839, 5_016),
+        lemma("いる", "射る", 680, 4_800),
+        lemma("いる", "いる", 680, 0),
+        lemma("いて", "いて", 694, 5_013),
+    ];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    assert_eq!(pair(&entries, "みた", "見た").word_cost, 1_496 + 25);
+    assert_eq!(pair(&entries, "いて", "射て").word_cost, 4_800 + 20);
+    assert_eq!(report.raised_to_native, 0);
+}
+
+#[test]
+fn kana_lemma_forms_leave_prediction_to_an_as_common_kanji_lemma() {
+    // Issue #392: kana lemmas conjugate too. When a kanji lemma of the same
+    // reading and POS id costs no more (出る 41 next to でる 1,269), the kana
+    // forms stay convertible but leave prediction, so で… completes 出て and
+    // not でて. Where Mozc prices the kana lemma lower (くださる 1,239 under
+    // 下さる 2,574), or the kanji lemma has another class, they keep it.
+    let lemmas = vec![
+        lemma("でる", "出る", 680, 41),
+        lemma("でる", "でる", 680, 1_269),
+        lemma("つなぐ", "繋ぐ", 837, 3_000),
+        lemma("つなぐ", "つなぐ", 837, 3_000),
+        lemma("くださる", "下さる", 837, 2_574),
+        lemma("くださる", "くださる", 837, 1_239),
+        lemma("ふさぐ", "塞ぐ", 723, 1_000),
+        lemma("ふさぐ", "ふさぐ", 837, 2_000),
+    ];
+    let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    for (reading, surface) in [
+        ("でて", "でて"),
+        ("でました", "でました"),
+        ("つないで", "つないで"),
+    ] {
+        let form = pair(&entries, reading, surface);
+        assert_eq!(form.flags, EntryFlags::NONE, "{reading} -> {surface}");
+        assert_eq!(form.prediction_cost, i32::MAX, "{reading} -> {surface}");
+    }
+    assert_eq!(pair(&entries, "でて", "でて").word_cost, 1_269 + 20);
+    for (reading, surface) in [
+        ("でて", "出て"),
+        ("つないで", "繋いで"),
+        ("くださって", "くださって"),
+        ("ふさいで", "ふさいで"),
+    ] {
+        let form = pair(&entries, reading, surface);
+        assert_eq!(form.flags, EntryFlags::PREDICTION, "{reading} -> {surface}");
+    }
+    let unpredicted = entries
+        .iter()
+        .filter(|entry| entry.surface == entry.reading && entry.flags == EntryFlags::NONE)
+        .filter(|entry| entry.reading.starts_with("で") || entry.reading.starts_with("つな"))
+        .filter(|entry| entry.reading.chars().count() >= 2)
+        .count();
+    assert!(unpredicted > 0);
+    assert_eq!(report.kana_forms_unpredicted, unpredicted);
 }
 
 #[test]
