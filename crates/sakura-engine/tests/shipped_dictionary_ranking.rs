@@ -490,6 +490,26 @@ fn issue_393_typed_reading_keeps_the_top_over_a_close_repair() {
 
 #[test]
 #[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_330_typed_dictionary_reading_leads_its_repair() {
+    // Each typed span is itself a dictionary reading (ひと 人, ばす バス, しってる
+    // 知ってる), yet an IT-boosted or cheaper word one repair away (ヒント, パス,
+    // してる) led the page.
+    for (reading, expected) in [
+        ("めがねをかけてるひと", "メガネをかけてる人"),
+        ("わたしにとってたいせつなひと", "私にとって大切な人"),
+        ("しってる", "知ってる"),
+    ] {
+        let candidates = candidates_for(reading);
+        assert_eq!(
+            candidates.first().map(String::as_str),
+            Some(expected),
+            "{reading}: {expected} must lead the shipped page: {candidates:?}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
 fn issue_392_kana_forms_leave_prediction_to_an_as_common_kanji_lemma() {
     // Kana lemmas whose kanji lemma costs no more (でる next to 出る, おいしい
     // next to 美味しい) no longer fill the nine with kana forms, so 飛行機 and

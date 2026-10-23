@@ -26,6 +26,14 @@ pub const REPAIR_PENALTY: i64 = 1_900;
 /// orders repaired completions by their variant penalty, so the fixed margin
 /// keeps that order unchanged when the rule penalty moves (Issue #393).
 pub const ADVANCED_REPAIR_PENALTY: i64 = REPAIR_PENALTY + 1_200;
+/// Extra cost of a rule repair whose typed span is itself a system dictionary
+/// reading (Issue #330): ひと is 人, so reading it as ひんと → ヒント is a
+/// guess against a word the user typed, not the recovery of a non-word.
+/// The corpus needs more than 1,068 (大切な人 under 大切なヒント). At 1,200,
+/// 537 more of 96,902 dictionary readings typed as they are convert to their
+/// own word, and 91 of 14,294 one-typo probes lose the top recovery; 1,900
+/// added mostly rare forms (駆けってる) for 63 more lost typos (遅れていまず).
+pub const EXACT_SPAN_REPAIR_PENALTY: i64 = 1_200;
 /// Soft cost for English-spelling → katakana loanword recovery.
 pub const ENGLISH_KATAKANA_PENALTY: i64 = 1_800;
 /// Soft cost for a commit-history repair hint. Lower than rule repair so a
