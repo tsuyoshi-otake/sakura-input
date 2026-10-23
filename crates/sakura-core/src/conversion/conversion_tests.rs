@@ -2290,6 +2290,39 @@ fn repair_of_a_typed_dictionary_reading_does_not_lead() {
     );
 }
 
+/// A SPELLING_CORRECTION row is itself a correction of a misspelled reading,
+/// not proof that the user typed a real word: a rule repair over the same span
+/// pays no exact-span penalty for it (Issue #330 review on #401).
+#[test]
+fn spelling_correction_row_is_not_exact_span_evidence_for_a_repair() {
+    let repair_cost = |entries: &[FixtureEntry]| {
+        let bytes = synthetic_dictionary(entries);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert(&dictionary, "たいせつなひと", ConversionOptions::default())
+            .expect("conversion");
+        candidates
+            .iter()
+            .find(|candidate| candidate.text() == "大切なヒント")
+            .map(|candidate| candidate.cost)
+            .expect("the rule repair stays on the page")
+    };
+    let without_row = repair_cost(&[
+        fixture_entry("たいせつな", "大切な", 1_000, EntryFlags::NONE),
+        fixture_entry("ひんと", "ヒント", 500, EntryFlags::NONE),
+    ]);
+    let with_correction_row = repair_cost(&[
+        fixture_entry("たいせつな", "大切な", 1_000, EntryFlags::NONE),
+        fixture_entry("ひと", "ヒト社", 3_000, EntryFlags::SPELLING_CORRECTION),
+        fixture_entry("ひんと", "ヒント", 500, EntryFlags::NONE),
+    ]);
+    assert_eq!(
+        with_correction_row, without_row,
+        "a spelling-correction row must not add the exact-span repair penalty"
+    );
+}
+
 #[test]
 fn english_spelling_repair_is_not_promoted_to_exact_evidence() {
     let bytes =

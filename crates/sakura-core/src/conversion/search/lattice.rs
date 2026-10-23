@@ -518,12 +518,20 @@ impl Converter {
     /// Whether an unrepaired system dictionary edge already spans
     /// `start..end`, i.e. the typed span is itself a dictionary reading. The
     /// exact edges of a start are added before its repair edges, and user
-    /// dictionary edges after them, so only system readings count.
+    /// dictionary edges after them, so only system readings count. A
+    /// SPELLING_CORRECTION row is itself a correction of a misspelled reading,
+    /// not evidence that the user typed a real word, so it does not count.
     fn has_exact_system_edge(&self, start: usize, end: usize) -> bool {
         let mut next = self.starts_at[start];
         while next != NONE {
             let node = &self.nodes[next];
-            if node.end == end && matches!(node.surface, Surface::Dictionary { repair: None, .. }) {
+            if node.end == end
+                && matches!(
+                    node.surface,
+                    Surface::Dictionary { entry, repair: None, .. }
+                        if !entry.flags.contains(EntryFlags::SPELLING_CORRECTION)
+                )
+            {
                 return true;
             }
             next = node.next_from_start;
