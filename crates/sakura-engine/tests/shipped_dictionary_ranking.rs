@@ -510,6 +510,21 @@ fn issue_330_typed_dictionary_reading_leads_its_repair() {
 
 #[test]
 #[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_400_one_verb_no_longer_fills_the_nine() {
+    // Every generated form of 呼ぶ and 読み込む was predictable (呼びます,
+    // 呼びたい, 呼びました; 読み込んで, 読み込んだ …), so after half the
+    // reading 呼び出す and 読み込める left the nine.
+    for (prefix, surface) in [("よび", "呼び出す"), ("よみこ", "読み込める")] {
+        let predictions = predictions_for(prefix);
+        assert!(
+            predictions.iter().take(9).any(|(_, s)| s == surface),
+            "{prefix}: {surface} must be in the nine: {predictions:?}"
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
 fn issue_392_kana_forms_leave_prediction_to_an_as_common_kanji_lemma() {
     // Kana lemmas whose kanji lemma costs no more (でる next to 出る, おいしい
     // next to 美味しい) no longer fill the nine with kana forms, so 飛行機 and

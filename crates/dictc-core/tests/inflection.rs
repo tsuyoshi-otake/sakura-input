@@ -349,22 +349,27 @@ fn generated_forms_never_undercut_a_native_sibling_form_of_a_cheaper_lemma() {
     // 2,716 but 押したら 4,762) while a generated form costs the lemma plus a
     // small delta, so 推したら (推す 4,209 + 30) undercut 押したら. A generated
     // form stays behind every native sibling form of its reading whose lemma
-    // is at least as common as its own; prediction climbs by the same amount.
+    // is at least as common as its own; prediction climbs by the same amount
+    // for a form that predicts (た; たら leaves prediction, Issue #400).
     let lemmas = vec![
         lemma("おす", "押す", 837, 2_716),
         lemma("おす", "推す", 837, 4_209),
         lemma("おしたら", "押したら", 842, 4_762),
+        lemma("おした", "押した", 842, 4_500),
     ];
     let (entries, report) = expand_inflections(&lemmas, &catalog()).expect("expand");
     let raised = pair(&entries, "おしたら", "推したら");
     assert_eq!(raised.word_cost, 4_763);
-    assert_eq!(raised.prediction_cost, 4_763 + 1_200);
+    assert_eq!(raised.prediction_cost, i32::MAX);
+    let raised = pair(&entries, "おした", "推した");
+    assert_eq!(raised.word_cost, 4_501);
+    assert_eq!(raised.prediction_cost, 4_501 + 1_200);
     assert_eq!(pair(&entries, "おして", "推して").word_cost, 4_209 + 20);
     assert_eq!(pair(&entries, "おして", "押して").word_cost, 2_716 + 20);
     assert!(!entries
         .iter()
         .any(|entry| entry.reading == "おしたら" && entry.surface == "押したら"));
-    assert_eq!(report.raised_to_native, 1);
+    assert_eq!(report.raised_to_native, 2);
     assert_eq!(report.kept_under_rarer_native, 0);
 }
 
@@ -478,14 +483,54 @@ fn kana_lemma_forms_leave_prediction_to_an_as_common_kanji_lemma() {
         let form = pair(&entries, reading, surface);
         assert_eq!(form.flags, EntryFlags::PREDICTION, "{reading} -> {surface}");
     }
+    // Count the kana forms whose kanji form predicts: forms such as でない
+    // leave prediction for every lemma (Issue #400), not for a kanji sibling.
     let unpredicted = entries
         .iter()
         .filter(|entry| entry.surface == entry.reading && entry.flags == EntryFlags::NONE)
+        .filter(|entry| {
+            entries.iter().any(|other| {
+                other.reading == entry.reading && other.flags.contains(EntryFlags::PREDICTION)
+            })
+        })
         .filter(|entry| entry.reading.starts_with("で") || entry.reading.starts_with("つな"))
         .filter(|entry| entry.reading.chars().count() >= 2)
         .count();
     assert!(unpredicted > 0);
     assert_eq!(report.kana_forms_unpredicted, unpredicted);
+}
+
+#[test]
+fn a_verb_predicts_only_its_te_ta_masu_and_contracted_te_forms() {
+    // Issue #400: with every generated form predictable, the forms of one
+    // verb (振り込んで, 振り込みます, 振り込みたい …) filled the nine and pushed
+    // out other words such as 振込手数料. The other forms stay convertible.
+    let lemmas = vec![lemma("かく", "書く", 723, 50)];
+    let (entries, _) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    for (reading, surface) in [
+        ("かいて", "書いて"),
+        ("かいた", "書いた"),
+        ("かきます", "書きます"),
+        ("かいてる", "書いてる"),
+        ("かいている", "書いている"),
+        ("かいてない", "書いてない"),
+    ] {
+        let form = pair(&entries, reading, surface);
+        assert_eq!(form.flags, EntryFlags::PREDICTION, "{reading} -> {surface}");
+    }
+    for (reading, surface) in [
+        ("かいたら", "書いたら"),
+        ("かかない", "書かない"),
+        ("かきました", "書きました"),
+        ("かきたい", "書きたい"),
+        ("かけば", "書けば"),
+        ("かこう", "書こう"),
+    ] {
+        let form = pair(&entries, reading, surface);
+        assert_eq!(form.flags, EntryFlags::NONE, "{reading} -> {surface}");
+        assert_eq!(form.prediction_cost, i32::MAX, "{reading} -> {surface}");
+        assert!(form.word_cost < i32::MAX, "{reading} stays convertible");
+    }
 }
 
 #[test]

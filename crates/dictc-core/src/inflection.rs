@@ -165,6 +165,12 @@ struct FormSpec {
     /// prefix prediction of the contracted forms (their word cost can pass
     /// `PREDICTION_COST_LIMIT`).
     prediction_delta: i32,
+    /// Whether the form completes in prediction at all. A verb keeps its て,
+    /// た and ます forms and the contracted てる / ている / てない forms that
+    /// Issue #334 keeps predictable (しってる → 知ってる): with every form
+    /// predictable, one verb (振り込んで, 振り込みます, 振り込みたい …) filled the
+    /// nine and pushed out other words such as 振込手数料 (Issue #400).
+    predict: bool,
     cforms: &'static [&'static str],
 }
 
@@ -172,78 +178,91 @@ const VERB_TE: FormSpec = FormSpec {
     cost_delta: 20,
     aux: None,
     prediction_delta: 20,
+    predict: true,
     cforms: &["連用タ接続", "連用形"],
 };
 const VERB_TA: FormSpec = FormSpec {
     cost_delta: 25,
     aux: None,
     prediction_delta: 25,
+    predict: true,
     cforms: &["連用タ接続", "連用形"],
 };
 const VERB_TARA: FormSpec = FormSpec {
     cost_delta: 30,
     aux: None,
     prediction_delta: 30,
+    predict: false,
     cforms: &["連用タ接続", "連用形"],
 };
 const VERB_NAI: FormSpec = FormSpec {
     cost_delta: 30,
     aux: None,
     prediction_delta: 30,
+    predict: false,
     cforms: &["未然形"],
 };
 const VERB_NAKATTA: FormSpec = FormSpec {
     cost_delta: 40,
     aux: None,
     prediction_delta: 40,
+    predict: false,
     cforms: &["未然形"],
 };
 const VERB_MASU: FormSpec = FormSpec {
     cost_delta: 40,
     aux: None,
     prediction_delta: 40,
+    predict: true,
     cforms: &["連用形"],
 };
 const VERB_MASHITA: FormSpec = FormSpec {
     cost_delta: 50,
     aux: None,
     prediction_delta: 50,
+    predict: false,
     cforms: &["連用形"],
 };
 const VERB_TAI: FormSpec = FormSpec {
     cost_delta: 45,
     aux: None,
     prediction_delta: 45,
+    predict: false,
     cforms: &["連用形"],
 };
 const VERB_BA: FormSpec = FormSpec {
     cost_delta: 35,
     aux: None,
     prediction_delta: 35,
+    predict: false,
     cforms: &["仮定形"],
 };
 const VERB_VOLITIONAL: FormSpec = FormSpec {
     cost_delta: 40,
     aux: None,
     prediction_delta: 40,
+    predict: false,
     cforms: &["未然ウ接続"],
 };
 const VERB_IMPERATIVE: FormSpec = FormSpec {
     cost_delta: 60,
     aux: None,
     prediction_delta: 60,
+    predict: false,
     cforms: &["命令ｉ", "命令ｒｏ", "命令ｅ", "命令ｙｏ"],
 };
 const VERB_RENYOU: FormSpec = FormSpec {
     cost_delta: 15,
     aux: None,
     prediction_delta: 15,
+    predict: false,
     cforms: &["連用形"],
 };
 const VERB_MIZEN: FormSpec = FormSpec {
     cost_delta: 20,
     aux: None,
     prediction_delta: 20,
+    predict: false,
     cforms: &["未然形"],
 };
 // Contracted `て` + auxiliary forms (Issue #334). Fused into one edge they
@@ -261,6 +280,7 @@ const VERB_TERU: FormSpec = FormSpec {
         voiced_lemma: "でる",
     }),
     prediction_delta: 35,
+    predict: true,
     cforms: &["連用タ接続", "連用形"],
 };
 const VERB_TEIRU: FormSpec = FormSpec {
@@ -274,6 +294,7 @@ const VERB_TEIRU: FormSpec = FormSpec {
         voiced_lemma: "いる",
     }),
     prediction_delta: 40,
+    predict: true,
     cforms: &["連用タ接続", "連用形"],
 };
 const VERB_TENAI: FormSpec = FormSpec {
@@ -287,36 +308,42 @@ const VERB_TENAI: FormSpec = FormSpec {
         voiced_lemma: "ない",
     }),
     prediction_delta: 45,
+    predict: true,
     cforms: &["連用タ接続", "連用形"],
 };
 const ADJ_TE: FormSpec = FormSpec {
     cost_delta: 20,
     aux: None,
     prediction_delta: 20,
+    predict: true,
     cforms: &["連用テ接続"],
 };
 const ADJ_TA: FormSpec = FormSpec {
     cost_delta: 25,
     aux: None,
     prediction_delta: 25,
+    predict: true,
     cforms: &["連用タ接続"],
 };
 const ADJ_NAI: FormSpec = FormSpec {
     cost_delta: 30,
     aux: None,
     prediction_delta: 30,
+    predict: true,
     cforms: &["連用テ接続", "未然ヌ接続"],
 };
 const ADJ_NAKATTA: FormSpec = FormSpec {
     cost_delta: 40,
     aux: None,
     prediction_delta: 40,
+    predict: true,
     cforms: &["連用タ接続"],
 };
 const ADJ_BA: FormSpec = FormSpec {
     cost_delta: 35,
     aux: None,
     prediction_delta: 35,
+    predict: true,
     cforms: &["仮定形"],
 };
 
@@ -428,8 +455,9 @@ pub fn expand_inflections(
             } else if rarer.is_some_and(|cost| cost > word_cost) {
                 report.kept_under_rarer_native = report.kept_under_rarer_native.saturating_add(1);
             }
-            let mut prediction_worthy =
-                form.reading.chars().count() >= 2 && prediction_base <= PREDICTION_COST_LIMIT;
+            let mut prediction_worthy = form.spec.predict
+                && form.reading.chars().count() >= 2
+                && prediction_base <= PREDICTION_COST_LIMIT;
             if prediction_worthy && defers_to_kanji {
                 prediction_worthy = false;
                 report.kana_forms_unpredicted = report.kana_forms_unpredicted.saturating_add(1);
