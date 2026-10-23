@@ -3,7 +3,8 @@ use sakura_values::{FixedStr, MAX_PREEDIT_BYTES};
 use crate::dictionary::{Dictionary, EntryFlags};
 use crate::input_repair::{
     allows_system_entry, collect_repair_variants, english_spelling_katakana_reading, RepairKind,
-    COMMIT_HISTORY_PENALTY, ENGLISH_KATAKANA_PENALTY, MAX_REPAIR_VARIANTS,
+    COMMIT_HISTORY_PENALTY, ENGLISH_KATAKANA_PENALTY, EXACT_SPAN_REPAIR_PENALTY,
+    MAX_REPAIR_VARIANTS,
 };
 use crate::preferences::ConversionMethod;
 use crate::user_dictionary::UserDictionary;
@@ -476,12 +477,18 @@ impl Converter {
             if remaining_slots == 0 {
                 break;
             }
+            let typed_end = start + usize::from(variant.typed_end).min(typed_suffix.len());
+            let penalty = if self.has_exact_system_edge(start, typed_end) {
+                variant.penalty.saturating_add(EXACT_SPAN_REPAIR_PENALTY)
+            } else {
+                variant.penalty
+            };
             let added = self.add_repaired_dictionary_edges(
                 dictionary,
                 variant.repaired.as_str(),
                 start,
-                start + usize::from(variant.typed_end).min(typed_suffix.len()),
-                variant.penalty,
+                typed_end,
+                penalty,
                 remaining_slots,
                 options,
                 variant.kind,
@@ -506,6 +513,30 @@ impl Converter {
             }
         }
         Ok(())
+    }
+
+    /// Whether an unrepaired system dictionary edge already spans
+    /// `start..end`, i.e. the typed span is itself a dictionary reading. The
+    /// exact edges of a start are added before its repair edges, and user
+    /// dictionary edges after them, so only system readings count. A
+    /// SPELLING_CORRECTION row is itself a correction of a misspelled reading,
+    /// not evidence that the user typed a real word, so it does not count.
+    fn has_exact_system_edge(&self, start: usize, end: usize) -> bool {
+        let mut next = self.starts_at[start];
+        while next != NONE {
+            let node = &self.nodes[next];
+            if node.end == end
+                && matches!(
+                    node.surface,
+                    Surface::Dictionary { entry, repair: None, .. }
+                        if !entry.flags.contains(EntryFlags::SPELLING_CORRECTION)
+                )
+            {
+                return true;
+            }
+            next = node.next_from_start;
+        }
+        false
     }
 
     /// Adds commit-history repair edges for the full query only.

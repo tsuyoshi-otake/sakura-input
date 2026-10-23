@@ -2252,6 +2252,77 @@ fn clean_path_within_the_repair_penalty_keeps_the_top() {
     );
 }
 
+/// Issue #330: a repair whose typed span is itself a dictionary reading (ひと
+/// is 人) guesses against a word the user typed. Reading it as ひんと (ヒント)
+/// must not lead the typed reading's own path; the repair stays on the page.
+#[test]
+fn repair_of_a_typed_dictionary_reading_does_not_lead() {
+    let bytes = synthetic_dictionary(&[
+        fixture_entry("たいせつな", "大切な", 1_000, EntryFlags::NONE),
+        fixture_entry("ひと", "人", 3_000, EntryFlags::NONE),
+        fixture_entry("ひんと", "ヒント", 500, EntryFlags::NONE),
+    ]);
+    let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+    let mut converter = Converter::new();
+    let candidates = converter
+        .convert(&dictionary, "たいせつなひと", ConversionOptions::default())
+        .expect("conversion");
+    let ranking = candidates
+        .iter()
+        .map(|candidate| {
+            (
+                candidate.text().to_owned(),
+                candidate.cost,
+                candidate.path_evidence().has_unconfirmed_repair(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        (ranking[0].0.as_str(), ranking[0].2),
+        ("大切な人", false),
+        "the typed dictionary reading must lead its repair: {ranking:?}"
+    );
+    assert!(
+        ranking
+            .iter()
+            .any(|(text, _, repair)| text == "大切なヒント" && *repair),
+        "the repair stays on the page: {ranking:?}"
+    );
+}
+
+/// A SPELLING_CORRECTION row is itself a correction of a misspelled reading,
+/// not proof that the user typed a real word: a rule repair over the same span
+/// pays no exact-span penalty for it (Issue #330 review on #401).
+#[test]
+fn spelling_correction_row_is_not_exact_span_evidence_for_a_repair() {
+    let repair_cost = |entries: &[FixtureEntry]| {
+        let bytes = synthetic_dictionary(entries);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert(&dictionary, "たいせつなひと", ConversionOptions::default())
+            .expect("conversion");
+        candidates
+            .iter()
+            .find(|candidate| candidate.text() == "大切なヒント")
+            .map(|candidate| candidate.cost)
+            .expect("the rule repair stays on the page")
+    };
+    let without_row = repair_cost(&[
+        fixture_entry("たいせつな", "大切な", 1_000, EntryFlags::NONE),
+        fixture_entry("ひんと", "ヒント", 500, EntryFlags::NONE),
+    ]);
+    let with_correction_row = repair_cost(&[
+        fixture_entry("たいせつな", "大切な", 1_000, EntryFlags::NONE),
+        fixture_entry("ひと", "ヒト社", 3_000, EntryFlags::SPELLING_CORRECTION),
+        fixture_entry("ひんと", "ヒント", 500, EntryFlags::NONE),
+    ]);
+    assert_eq!(
+        with_correction_row, without_row,
+        "a spelling-correction row must not add the exact-span repair penalty"
+    );
+}
+
 #[test]
 fn english_spelling_repair_is_not_promoted_to_exact_evidence() {
     let bytes =
