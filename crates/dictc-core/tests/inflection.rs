@@ -202,6 +202,32 @@ fn ichidan_and_godan_and_sa_and_adjective_forms_are_emitted() {
 }
 
 #[test]
+fn adjective_phrases_whose_spelling_does_not_end_in_i_do_not_conjugate() {
+    // Issue #354: Mozc files phrases such as 難しい場合 under the adjective
+    // class. Their reading ends in い (ばあい) but the spelling in the kanji 合,
+    // so the ending went onto the phrase: むずかしいばあくて -> 難しい場合て.
+    let lemmas = vec![
+        lemma("むずかしいばあい", "難しい場合", 2425, 3_000),
+        lemma("ないせかい", "ない世界", 2425, 3_000),
+        lemma("たかい", "高い", 2425, 30),
+    ];
+    let (entries, _) = expand_inflections(&lemmas, &catalog()).expect("expand");
+    let phrase_forms = entries
+        .iter()
+        .filter(|entry| {
+            entry.surface.starts_with("難しい場合") || entry.surface.starts_with("ない世界")
+        })
+        .map(|entry| (entry.reading.as_str(), entry.surface.as_str()))
+        .collect::<Vec<_>>();
+    assert!(
+        phrase_forms.is_empty(),
+        "phrase lemmas conjugated: {phrase_forms:?}"
+    );
+    pair(&entries, "たかくて", "高くて");
+    pair(&entries, "たかければ", "高ければ");
+}
+
+#[test]
 fn generic_godan_lemmas_conjugate_by_the_kana_that_ends_the_reading() {
     // Issue #348: Mozc OSS files every godan verb without a class of its own
     // under the generic 五段動詞 class (ids 833-842), so す/む/つ/ぐ/ぶ/ぬ verbs sit

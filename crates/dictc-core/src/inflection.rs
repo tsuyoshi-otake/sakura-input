@@ -667,6 +667,13 @@ fn conjugate_adjective(row: &PosRow, lemma: &SourceEntry) -> Option<Vec<Conjugat
     if !row.ctype.starts_with("形容詞") {
         return None;
     }
+    // Only an い that ends the spelling conjugates. Mozc files phrases such as
+    // 難しい場合 (むずかしいばあい) under the adjective class; their reading ends
+    // in the い of 場合, and the kanji-carried ending spelled 難しい場合て
+    // (Issue #354).
+    if !lemma.surface.ends_with('い') {
+        return None;
+    }
     let mut forms = Vec::new();
     push_replaced(&mut forms, lemma, ADJ_TE, "い", "くて");
     push_replaced(&mut forms, lemma, ADJ_TA, "い", "かった");
