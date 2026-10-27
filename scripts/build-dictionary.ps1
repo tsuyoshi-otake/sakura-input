@@ -26,6 +26,7 @@ $CuratedTerms = Join-Path $RepositoryRoot 'data\curated-terms.tsv'
 $CuratedPhrases = Join-Path $RepositoryRoot 'data\curated-phrases.tsv'
 $CuratedGeneralDetails = Join-Path $RepositoryRoot 'data\curated-general-details.tsv'
 $CuratedHomophoneDetails = Join-Path $RepositoryRoot 'data\curated-homophone-details.tsv'
+$CuratedSymbolDetails = Join-Path $RepositoryRoot 'data\curated-symbol-details.tsv'
 $CuratedPhraseTargetEntries = Join-Path $RepositoryRoot 'data\curated-phrase-target-entries.tsv'
 $CuratedGeneralTargetEntries = Join-Path $RepositoryRoot 'data\curated-general-target-entries.tsv'
 $ConversionPriorities = Join-Path $RepositoryRoot 'data\conversion-priorities.tsv'
@@ -63,7 +64,7 @@ if (-not [IO.File]::Exists($VerbCollocationEdges)) {
 if (-not [IO.File]::Exists($NonInitialBoundaryPolicy)) {
     throw "non-initial boundary policy is missing: $NonInitialBoundaryPolicy"
 }
-foreach ($path in @($CuratedPhrases, $CuratedGeneralDetails, $CuratedHomophoneDetails, $CuratedPhraseTargetEntries, $CuratedGeneralTargetEntries)) {
+foreach ($path in @($CuratedPhrases, $CuratedGeneralDetails, $CuratedHomophoneDetails, $CuratedSymbolDetails, $CuratedPhraseTargetEntries, $CuratedGeneralTargetEntries)) {
     if (-not [IO.File]::Exists($path)) {
         throw "curated dictionary layer is missing: $path"
     }
@@ -254,6 +255,7 @@ function Invoke-BuildPass {
         [Parameter(Mandatory)][string]$CuratedPhrasesPath,
         [Parameter(Mandatory)][string]$CuratedGeneralDetailsPath,
         [Parameter(Mandatory)][string]$CuratedHomophoneDetailsPath,
+        [Parameter(Mandatory)][string]$CuratedSymbolDetailsPath,
         [Parameter(Mandatory)][string]$CuratedPhraseTargetEntriesPath,
         [Parameter(Mandatory)][string]$CuratedGeneralTargetEntriesPath,
         [Parameter(Mandatory)][string]$ConversionPrioritiesPath,
@@ -374,7 +376,8 @@ function Invoke-BuildPass {
         '--wordnet-report', $wordNetReport,
         '--curated-detail-source', $CuratedPhrasesPath,
         '--curated-detail-source', $CuratedGeneralDetailsPath,
-        '--detail-only-source', $CuratedHomophoneDetailsPath
+        '--detail-only-source', $CuratedHomophoneDetailsPath,
+        '--detail-only-source', $CuratedSymbolDetailsPath
     )
     $dictionaryArguments += @(
         '--curated-detail-report', $curatedDetailReport,
@@ -486,6 +489,7 @@ try {
         -CuratedPhrasesPath $CuratedPhrases `
         -CuratedGeneralDetailsPath $CuratedGeneralDetails `
         -CuratedHomophoneDetailsPath $CuratedHomophoneDetails `
+        -CuratedSymbolDetailsPath $CuratedSymbolDetails `
         -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
         -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
         -ConversionPrioritiesPath $ConversionPriorities `
@@ -503,6 +507,7 @@ try {
             -CuratedPhrasesPath $CuratedPhrases `
             -CuratedGeneralDetailsPath $CuratedGeneralDetails `
             -CuratedHomophoneDetailsPath $CuratedHomophoneDetails `
+            -CuratedSymbolDetailsPath $CuratedSymbolDetails `
             -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
             -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
             -ConversionPrioritiesPath $ConversionPriorities `
@@ -536,6 +541,7 @@ try {
         Get-ArtifactRecord $CuratedPhrases
         Get-ArtifactRecord $CuratedGeneralDetails
         Get-ArtifactRecord $CuratedHomophoneDetails
+        Get-ArtifactRecord $CuratedSymbolDetails
     )
     $report = [ordered]@{
         schema_version = 2
@@ -587,6 +593,7 @@ try {
             curated_phrases = Get-ArtifactRecord $CuratedPhrases
             curated_general_details = Get-ArtifactRecord $CuratedGeneralDetails
             curated_homophone_details = Get-ArtifactRecord $CuratedHomophoneDetails
+            curated_symbol_details = Get-ArtifactRecord $CuratedSymbolDetails
             curated_phrase_target_entries = Get-ArtifactRecord $CuratedPhraseTargetEntries
             curated_general_target_entries = Get-ArtifactRecord $CuratedGeneralTargetEntries
             conversion_priorities = Get-ArtifactRecord $ConversionPriorities
