@@ -95,3 +95,11 @@ provenance; active work should load the smaller matching topic extracts above.
 - A generator that reprices rows from native evidence matches a native row
   by POS class, not by spelling: `(reading, surface)` collides across verbs
   and across 活用形 (満つ's 未然形 みた floored 見た at 5,017, #390).
+- A bounded diagnostic log keeps its newest data. An append-only file with a
+  hard ceiling refuses everything once it is full, so it shows the start of a
+  long session and never the moment of failure (the binary IPC ring, #313; the
+  text `debug.tsv`, #406). Choose the retention when the log is added: a ring
+  for fixed slots, two-generation rotation for text. Rotation across processes
+  needs a non-blocking lock and a size re-check by path under it, and a failed
+  attempt must silence the writer with a back-off instead of costing I/O on
+  every key.

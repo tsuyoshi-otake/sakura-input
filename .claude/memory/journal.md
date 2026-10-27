@@ -3715,7 +3715,7 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Root cause:
   - The log was append-only with a hard ceiling. At the cap `append_event` returned StorageFull, and `note_disconnect` ignores that error by design (diagnostics must never fail input), so recording stopped silently.
   - The CST path recorded only the reason code.
-- Fix (commit 9a5fa33):
+- Fix (PR #405, squash commit 4155cfe):
   - `crates/sakura-ipc/src/diagnostics/ring.rs` keeps the file exactly 1 MiB:
     - an authenticated header slot ("SKRG", the record magic it serves, slot count, recorded u64, dropped u32, CRC32) and 32,767 record slots;
     - event n goes to slot 1 + n % slots;
@@ -3751,3 +3751,31 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
   - (2) `File::try_lock` on Windows is a mandatory byte-range lock, so it also keeps an older build's appender out of the converted ring.
   - (3) `cargo clippy` 1.96 rejects `x % n != 0` (`manual_is_multiple_of`); write `!x.is_multiple_of(n)`.
 - Residual: `reject_refused_request` (a RequestEditSession HRESULT failure) is tested only through `rejection_class` and the coordinator path, not end to end against a real TSF host. The installed 2.0.23 keeps the append-only layout until a release ships this.
+
+## 2026-10-27 Issue #406: the developer debug trace keeps its newest rows in two bounded generations
+
+- Symptom: `logs/debug.tsv` sat at its 2 MiB cap from 2026-08-28 to 2026-10-27 (Finding 3 of the usage check). Developer mode still enabled the trace, so the engine opened and stat-ed the file on every key reply and wrote nothing (20,926 emits, mean 241 us, max 935 us). At about 11 KB/min the file fills in about three hours, so the trace could only ever show the start of a session, never the moment of a failure.
+- Root cause: the same shape as #313. `emit_at` refused any row that would pass `MAX_DEBUG_LOG_BYTES`, and the callers ignore the result by design, so "full" meant silent loss plus per-key work that achieved nothing.
+- Fix (PR #407):
+  - `crates/sakura-ipc/src/debug_trace.rs` keeps two generations: `debug.tsv` (current) and `debug.1.tsv` (previous), each capped near 1 MiB (`MAX_GENERATION_BYTES`).
+  - A writer that finds the current generation full takes a non-blocking `File::try_lock` on `debug.lock`, re-checks the size by path under the lock, and renames the current file over the previous one. A writer that loses the lock drops its row; nothing waits or loops.
+  - After any failed attempt `emit` goes quiet for 100 ms x 2^failures (cap 60 s) plus jitter of at most half the period, on the monotonic clock, and makes no file-system call while quiet. A failure inside a quiet period does not escalate it; a success resets it.
+  - `read_text` joins the previous and the current generation under one header (it reads the current file first, so a rotation between the reads repeats rows instead of losing a generation). `clear` removes the trace, its previous generation and the lock file. The `diagnostics debug` legend names the older-rows file. `MAX_DEBUG_LOG_BYTES` was removed (no references left).
+- Rejected designs:
+  - a binary ring (the CLI prints the raw TSV text);
+  - in-place compaction (rewrites bytes other processes are appending to);
+  - remembering saturation (keeps the oldest data and still pays the first stat);
+  - generation-numbered files with `create_new` (no atomic way to retire an old name);
+  - a named mutex (another kernel object to leak across host processes);
+  - rotation by the engine only (the TSF DLL writes too, and the engine may not be running).
+- Verification:
+  - 17 unit tests (12 behavioural, 5 on internals), including 8 threads x 400 rows and 4 separate OS processes (the test binary re-executed) writing at once; every fixture is synthetic.
+  - Fail-before: the 12 behavioural tests, run against HEAD's behaviour behind shims, failed 8 (a full-file error instead of rotation, writes during a quiet period, no previous generation, StorageFull where a held lock should report WouldBlock).
+  - Seven mutants (no lock, no size re-check, no back-off, doubled header, `clear` skipping the previous file, no directory creation, over-wide jitter) were each caught by at least one test.
+  - Local gates pass: fmt, clippy -D warnings with the release.yml feature set, `cargo test --workspace` (quiet runner), check-process-clean, dependency-rules, facade, IRV (WARN only on CORE-CONVERSION, HISTORY-STORE and CI, whose files this change does not touch), dep-policy, release build and check-dll-size.
+  - An independent rubric verifier graded the criteria in a fresh context: all 9 criteria passed on the first pass (scope and hygiene, unit tests, newest rows and bound, fail-before with a byte-identical probe, key path, consumers, all 15 gates re-run, docs and IRV, module docs and dead code).
+- Learning:
+  - (1) A stress test is not proof of a lock. With 8 threads and 4 processes writing, removing the lock left both green because the size re-check under it absorbs most races; only the test that holds the lock file itself and expects `WouldBlock` failed. Removing the re-check was caught by the process test only after it asserted the invariant the race breaks (a generation is rotated away only when full, so the previous generation is never small).
+  - (2) A tool that holds a log open without `FILE_SHARE_DELETE` blocks the rotation rename (std opens with all three share bits, so only an outside tool can do it). The trace then drops rows cheaply and loses none.
+  - (3) Windows releases a closed handle's lock on its own schedule, so the rotation lock is released with an explicit `unlock`.
+- Residual: the installed 2.0.23 keeps the old behaviour until a release ships this. `ipc-timeouts.bin` still has the append-only layout with a 1 MiB cap. Concurrent writers in real TSF hosts were exercised only through child processes of the test binary. Findings 1 and 2 of the usage check (compositions lost in Chromium hosts) are untouched.

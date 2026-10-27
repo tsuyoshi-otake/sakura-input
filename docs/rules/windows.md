@@ -155,3 +155,11 @@
   surrogate (checked 2026-10-18 in the toolchain's `library/std/src/sys/fs/
   windows.rs`; #360 #2 T2). `symlink_metadata(p)?.is_dir()` alone excludes
   reparse links, so dropping only an extra `is_symlink()` is an equivalent mutant.
+
+- **A log follower that does not share DELETE blocks the rotation rename.**
+  Observed 2026-10-27 (#406): with a handle opened `FILE_SHARE_READ |
+  FILE_SHARE_WRITE` on `debug.tsv`, the rename over `debug.1.tsv` failed. The
+  trace kept every row it had and dropped new ones until the handle closed.
+  std opens files with all three share bits, so only an outside tool can do
+  this. The writer treats it like any failed rotation: one error, then a
+  back-off, no retry loop.
