@@ -34,6 +34,10 @@ scope so later work does not generalize it beyond the evidence.
 - Preserve raw bytes for release files governed by SHA-256. Pin their line
   endings and write bytes explicitly; default Windows text writes can introduce
   CRLF and invalidate embedded or reviewed artifacts.
+- The repository is public. Journal entries, rules, commits, PRs and Issues
+  that draw on the owner's history or diagnostics carry counts and patterns
+  only: no typed words or dated input examples, and no local path where the
+  private exports or backups are kept (#313 review caught both).
 - Rules in this file and `docs/rules/` must remain evidence-based. If later
   measurement disproves one, correct or remove it and record the new evidence;
   do not retain a stale rule for continuity.
