@@ -106,6 +106,7 @@ sakura_settings.exe diagnostics show tsv
 | `learning\log.bin` | 学習ログ |
 | `learning\log.corrupt-*` | 途中が読めなかった学習ログのコピー（最新 3 件を保持） |
 | `diagnostics\ipc-timeouts.bin` | 内容を含まない IPC タイムアウト統計 |
+| `diagnostics\ipc-disconnects.bin` | 内容を含まないエンジン接続リセット統計（1 MiB 固定、満杯後は古い記録から上書き） |
 | `logs\engine.log`、`engine.log.1` | サイズ制限付きライフサイクルログ |
 | `logs\logon.status` | サインイン時の自己修復結果 |
 | `dumps\` | 最大 5 個のローカル WER minidump |
@@ -144,6 +145,18 @@ Program Files 以外にインストールされた Sakura Input を更新しよ�
 ### タイムアウトを調べる
 
 `sakura_settings.exe diagnostics show text` を実行します。統計には入力文字列を含めません。消去は `diagnostics clear` です。`engine.log` も内容ではなく起動、停止、rotation、dump prune などのイベントだけを記録します。
+
+### エンジン接続のリセットを調べる
+
+同じ `diagnostics show text` が、エンジンとの接続をリセットした理由ごとの件数も表示します。`cancelled-state-terminalized` の下には発生要因の内訳が並びます。
+
+- `context-replaced`: 書き込み先の文書コンテキストが入れ替わった。
+- `rejected-*`: アプリが編集要求を拒否した。末尾は拒否の分類（`lock-unavailable`、`read-only` など）で、アプリが返したエラーコードそのものは保存しません。
+- `other`: フォーカス移動など、それ以外の要因。
+- `unclassified`: 要因を記録しなかった以前のバージョンの記録。
+- `unrecognized`: より新しいバージョンが記録した、このバージョンが知らない要因。
+
+記録ファイルは 1 MiB 固定で、満杯になると古い記録から上書きし、最新 32,767 件を保持します。`Retention:` 行は、前回の消去以降に記録した件数、上書きした件数、記録できなかった件数（別のアプリが同時に書き込んでいた、保存に失敗したなど）を示します。以前のバージョンが作った追記形式のファイルは、次の記録時にそのまま変換されます。`ring header is invalid` と表示された場合は、`diagnostics clear` で初期化するまで新しい記録を保存しません。
 
 ### クラッシュ dump
 

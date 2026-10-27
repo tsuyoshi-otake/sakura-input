@@ -2258,3 +2258,115 @@ fn deferred_window_class_is_scoped_per_module() {
         }
     }
 }
+
+fn terminal(outcome: TerminalOutcome) -> Completion<PendingWrite> {
+    Completion {
+        outcome,
+        payload: None,
+        ui_lease: None,
+    }
+}
+
+#[test]
+fn a_cancelled_state_reset_records_what_failed_first() {
+    // #313: the first completion is the operation that failed; the ones
+    // after it were only cancelled because it failed, so they never decide
+    // the trigger.
+    let cases = [
+        (
+            vec![terminal(TerminalOutcome::Rejected)],
+            None,
+            CancellationTrigger::Rejected(RejectionClass::WithoutHresult),
+        ),
+        (
+            vec![
+                terminal(TerminalOutcome::Rejected),
+                terminal(TerminalOutcome::Cancelled(CancelReason::PredecessorFailed)),
+            ],
+            Some(RejectionClass::ReadOnly),
+            CancellationTrigger::Rejected(RejectionClass::ReadOnly),
+        ),
+        (
+            vec![
+                terminal(TerminalOutcome::Cancelled(CancelReason::ContextReplaced)),
+                terminal(TerminalOutcome::Cancelled(CancelReason::PredecessorFailed)),
+            ],
+            None,
+            CancellationTrigger::ContextReplaced,
+        ),
+        (
+            vec![terminal(TerminalOutcome::Cancelled(
+                CancelReason::FocusChanged,
+            ))],
+            None,
+            CancellationTrigger::Other,
+        ),
+        (
+            vec![terminal(TerminalOutcome::Cancelled(
+                CancelReason::RequestRejected,
+            ))],
+            None,
+            CancellationTrigger::Other,
+        ),
+    ];
+    for (completions, host_rejection, expected) in cases {
+        let service = TextService::new();
+        let _ = engine::take_noted_cancellation_triggers();
+        service.settle_cancelled_writes_inner(completions, true, None, false, host_rejection);
+        assert_eq!(engine::take_noted_cancellation_triggers(), vec![expected]);
+    }
+}
+
+#[test]
+fn only_a_cancelled_state_reset_records_a_trigger() {
+    let service = TextService::new();
+    let _ = engine::take_noted_cancellation_triggers();
+
+    // Without engine reset nothing is disconnected, so nothing is recorded.
+    service.settle_cancelled_writes(vec![terminal(TerminalOutcome::Rejected)], false, None);
+    assert!(engine::take_noted_cancellation_triggers().is_empty());
+
+    // A drained journal resets through `cancelled-writes-settled`, which is a
+    // reason of its own and carries no trigger.
+    service.settle_cancelled_writes(Vec::new(), true, None);
+    assert!(engine::take_noted_cancellation_triggers().is_empty());
+}
+
+#[test]
+fn an_abandoned_projection_with_a_drained_journal_keeps_its_cancel_reason() {
+    let service = TextService::new();
+    let _ = engine::take_noted_cancellation_triggers();
+    service
+        .abandon_composition_projection(CancelReason::ContextReplaced)
+        .expect("abandon");
+    service
+        .abandon_composition_projection(CancelReason::RevisionMismatch)
+        .expect("abandon");
+    assert_eq!(
+        engine::take_noted_cancellation_triggers(),
+        vec![
+            CancellationTrigger::ContextReplaced,
+            CancellationTrigger::Other
+        ]
+    );
+}
+
+#[test]
+fn a_refused_finalizer_after_engine_commit_records_the_host_rejection() {
+    let service = TextService::new();
+    service.deferred.borrow_mut().focus_finalization = FocusFinalizationPhase::EngineCommitStarted;
+    let _ = engine::take_noted_cancellation_triggers();
+    service.settle_cancelled_writes_inner(
+        vec![terminal(TerminalOutcome::Rejected)],
+        true,
+        None,
+        false,
+        Some(RejectionClass::LockUnavailable),
+    );
+    assert_eq!(
+        engine::take_noted_cancellation_triggers(),
+        vec![CancellationTrigger::Rejected(
+            RejectionClass::LockUnavailable
+        )]
+    );
+}

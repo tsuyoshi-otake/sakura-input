@@ -38,7 +38,7 @@ use crate::callback_deadline;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
-use sakura_ipc::diagnostics::{self, DisconnectReason, TimeoutOperation};
+use sakura_ipc::diagnostics::{self, CancellationTrigger, DisconnectReason, TimeoutOperation};
 use sakura_ipc::{Client, Endpoint, Fault, ServerTrustPolicy};
 use sakura_proto::{
     AiTextOperation, AiTextStatus, ErrorCode, InputScope, KeyInput, Mode, Output, Request,
@@ -1250,6 +1250,33 @@ pub(crate) fn note_disconnect(reason: DisconnectReason) {
     // system temporary directory so `cargo test` can never append to the
     // installed user's durable diagnostics profile.
     let _ = diagnostics::record_disconnect_at(&test_disconnect_log_path(), reason);
+}
+
+/// Records a `cancelled-state-terminalized` reset with what triggered it, so
+/// a replaced document context and a refused edit request stay apart (#313).
+/// The result is discarded for the same reason as `note_disconnect`.
+#[cfg(not(test))]
+pub(crate) fn note_cancelled_state(trigger: CancellationTrigger) {
+    let _ = diagnostics::record_cancelled_state(trigger);
+}
+
+#[cfg(test)]
+pub(crate) fn note_cancelled_state(trigger: CancellationTrigger) {
+    NOTED_CANCELLATION_TRIGGERS.with(|noted| noted.borrow_mut().push(trigger));
+    let _ = diagnostics::record_cancelled_state_at(&test_disconnect_log_path(), trigger);
+}
+
+// Every test in the process shares the temporary log, so a test reads the
+// triggers its own thread noted from here instead.
+#[cfg(test)]
+thread_local! {
+    static NOTED_CANCELLATION_TRIGGERS: std::cell::RefCell<Vec<CancellationTrigger>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+pub(crate) fn take_noted_cancellation_triggers() -> Vec<CancellationTrigger> {
+    NOTED_CANCELLATION_TRIGGERS.with(|noted| std::mem::take(&mut *noted.borrow_mut()))
 }
 
 #[cfg(test)]
