@@ -3696,3 +3696,58 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Reinstall: the scratch install script (manifest keys `[a-z0-9_]+`) checked size and SHA-256 against the manifest, then ran the installer elevated with `/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /LOG=`: 4.3 s including UAC, `Installation process succeeded.`, `Need to restart Windows? No`. Engine and renderer restarted at 15:28:41 from `versions\2.0.23-6ccce6cac65d7ea7\`. All 16 payload files match the bundle (0 differ, 0 missing); installed `dict\system.dic` SHA-256 `ea23b788...e84c`. The shipped tests `issue_330_` and `issue_400_` pass with `SAKURA_SYSTEM_DIC` set to the installed file; no runner process remained.
 - Learning: (1) Under Cloudflare Gateway TLS inspection, Git for Windows' OpenSSL backend rejects github.com while `gh` (Windows certificate store) works; create tags and small commits through `gh api` instead of changing Git's TLS settings. (2) This journal entry was committed through the contents API for the same reason.
 - Residual: no on-screen typed-input check of the installed build. The local checkout could not fetch, so local `main` is behind `origin/main`. Removing the task's temporary data with `rm -rf` was denied by permission, so `~/tmp/sakura-2.0.23` (about 320 MB of measurement data and gate logs) and `~/tmp/sakura-release-2.0.23` (the downloaded candidate and install log, 76 MB) remain for the owner to delete; a retry under bypass mode was denied as well. The (1) learning of the #401 entry recurred once more during cleanup (a `cd` into `~/tmp` to list sizes); list such directories by absolute path.
+
+## 2026-10-27 Usage check of 2.0.23: lost compositions in Chromium hosts, saturated diagnostics
+
+- Scope: owner asked to check problems seen in daily use. Inputs: developer history export (197,290 records, 10-18..10-27; 2.0.23 since 10-23 15:29 = 55,988 keys), `diagnostics show|timing`, `ipc-timeouts.bin` decoded per record, `logs/engine.log`, `logs/logon.status`, learning export. Raw exports stay outside the repository (private input; not committed).
+- Finding 1, key timeouts drop the composition: 26 key/commit timeouts since 10-22, 14 of them on 10-27 (8 within 24 s in one Teams WebView2 thread). The 4 of 8 timeout host pids still running are all Chromium-based (ms-teams WebView2, ChatGPT/Codex, Claude, Chrome); the other 4 exited before the 10-26 logon and are unidentified. History shows the engine applied the key 20-130 ms after the client's 50 ms `KEY_BUDGET` expired; the next key lands in a new session, so the preedit or a just-converted segment disappears and the user retypes it. Idle time before each timeout was 12-959 ms, so the #107 page-trim-after-idle shape does not explain these. Engine timing since 10-26 11:18: request mean 1.7 ms, max 200 ms (dispatch); no per-site breakdown, so the slow stage is not identified. `prediction_eval` on the 2.0.23 dictionary (10-23 build): p99 28.6 ms, max 60 ms (#356 budget 10 ms), but the key path waits for prediction only 10 ms (`dispatch.rs` PREDICTION_TIMEOUT) and conversion never waits for the neural worker, so prediction alone cannot account for the excess.
+- Finding 2, first keys after sending a chat message: 41 bursts where each keystroke opened its own engine session and was abandoned within 1.5 s; 22 start right after an unconsumed Enter (message send) and 7 after a committing Enter. Single-key abandoned sessions per day: 10-14..10-21 export 0-8, 10-25 10, 10-26 16, 10-27 13 (half day). TSF/IPC code is unchanged between v2.0.19 and v2.0.23 (`git log v2.0.19..v2.0.23 -- crates/sakura-tsf crates/sakura-ipc` empty), so the rise comes from hosts or usage. The reset reason cannot be read: `ipc-disconnects.bin` has been at its 1 MiB cap since 2026-09-17 (#313).
+- Finding 3, saturated debug trace: `logs/debug.tsv` hit its 2 MiB cap on 2026-08-28. Developer mode still enables the trace, so the engine opens and stats the file on every key reply (20,926 emits, mean 241 us, max 935 us) and writes nothing.
+- Finding 4: `logon.status` of the 10-26 11:18 logon records `profile_repair=failed` (exit 2); the HRESULT is not recorded; the IME works in the session.
+- Conversion quality is unchanged: first candidate kept 2,577/2,645 (97.4%, #381 had 97.3%); 68 replacements are homophone/context choices of the #94/#305/#349 classes. One open question: a single-kanji homophone learned the day before under other contexts ranked 10th behind its sibling.
+- Evidence handling: the diagnostics files were backed up outside the repository before any clear. Nothing in the product changed.
+- Learning: (1) the timeout file's per-record timestamps joined with history timestamps give the client-give-up versus engine-apply gap per key; the aggregate `diagnostics show` view hides that 14 of 1,051 timeouts happened today. (2) Session id churn (one key per session) is a usable proxy for host-side composition resets while the disconnect log is saturated. (3) Two developer-mode diagnostics (disconnect log, debug trace) silently stopped collecting months ago; any investigation that relies on them must check `Capacity reached` / file size first.
+- Follow-up (owner approved, 11:16): after `cmp` proved the backup equal to the live files, `sakura_settings.exe diagnostics clear` emptied `ipc-timeouts.bin`, `ipc-disconnects.bin` and `debug.tsv`; `diagnostics show` then reported 0 valid records and `Capacity reached: false` for both logs. The disconnect log filled its 32,768 records in about 20 days last time (2026-08-28..09-17), so this restores evidence for roughly three weeks; #313 (ring retention) is the lasting fix.
+
+## 2026-10-27 Issue #313: the disconnect log keeps the newest events, and CST resets name their trigger
+
+- Symptom: `ipc-disconnects.bin` sat at its 1 MiB cap from 2026-09-17 to 2026-10-27, so the usage check could not tell why the engine link was reset. Every CancelledStateTerminalized record also had an absent detail, so even a fresh log could not say what made the cancelled state reset.
+- Root cause:
+  - The log was append-only with a hard ceiling. At the cap `append_event` returned StorageFull, and `note_disconnect` ignores that error by design (diagnostics must never fail input), so recording stopped silently.
+  - The CST path recorded only the reason code.
+- Fix (commit 9a5fa33):
+  - `crates/sakura-ipc/src/diagnostics/ring.rs` keeps the file exactly 1 MiB:
+    - an authenticated header slot ("SKRG", the record magic it serves, slot count, recorded u64, dropped u32, CRC32) and 32,767 record slots;
+    - event n goes to slot 1 + n % slots;
+    - writers take a non-blocking exclusive `File::try_lock` (mandatory on Windows). A held lock or an I/O error drops the event at once, adds one to a process-wide pending counter, and the next successful write folds that counter into the header's `dropped`;
+    - only the reader and `clear` wait, bounded at 50 x 2 ms.
+  - Legacy append-only logs are converted in place on the next event:
+    - a full one gives its oldest record to the header and counts it as dropped;
+    - torn tails and bytes past the cap are counted as dropped;
+    - a conversion interrupted after moving the first record is detected because the last slot equals record 0;
+    - an invalid header is reported as `InvalidRingHeader`, and new events are refused.
+  - CST `detail` carries `CancellationTrigger`:
+    - ContextReplaced = 1, Other = 2, Rejected = 0x100 | `RejectionClass`;
+    - the class is a closed mapping of the RequestEditSession HRESULT: lock unavailable, read-only, disconnected, invalid argument, unexpected, other, or no HRESULT;
+    - detail 0 reads as "unclassified" and unknown values as "unrecognized".
+  - `diagnostics show` prints the trigger breakdown and a Retention line. TSV output gains `# cancelled-state-trigger.*`, `# retention`, `# ring-slots`, `# recorded`, `# overwritten` and `# dropped`.
+  - `docs/guide-ja.md` gained a section on investigating engine-link resets.
+- Verification:
+  - Fail-before: two probes were appended temporarily to HEAD's `diagnostics.rs`.
+    - A full log refused a new event with StorageFull.
+    - 16 concurrent writers at capacity - 1 exceeded the cap or left an unreadable log in 6 of 20 rounds.
+  - With the fix, `a_full_log_keeps_recording_the_newest_events_within_its_cap` and `concurrent_writers_never_overwrite_each_other_or_grow_the_file` pass.
+  - Local gates all pass:
+    - fmt; clippy -D warnings with the release.yml feature set;
+    - `cargo test --workspace` (quiet runner);
+    - dependency-rules, facade and dep-policy, each with `-SelfTest`;
+    - IRV compare: WARN only on CORE-CONVERSION, HISTORY-STORE and CI, whose files this change does not touch;
+    - release build plus check-dll-size (445,952 B);
+    - check-process-clean.
+  - An independent rubric verifier graded 12 criteria (all 12 passed on the second pass. The first pass failed C9: the uncommitted usage-check entry above named the private-data directory and quoted one dated typed word. Both were redacted because the repository is public).
+  - Every fixture is synthetic and built in code.
+- Learning:
+  - (1) A diagnostics writer whose errors are deliberately ignored needs a retention policy, not a hard ceiling: ignoring the error is right for latency, but it turns "full" into silent data loss.
+  - (2) `File::try_lock` on Windows is a mandatory byte-range lock, so it also keeps an older build's appender out of the converted ring.
+  - (3) `cargo clippy` 1.96 rejects `x % n != 0` (`manual_is_multiple_of`); write `!x.is_multiple_of(n)`.
+- Residual: `reject_refused_request` (a RequestEditSession HRESULT failure) is tested only through `rejection_class` and the coordinator path, not end to end against a real TSF host. The installed 2.0.23 keeps the append-only layout until a release ships this.

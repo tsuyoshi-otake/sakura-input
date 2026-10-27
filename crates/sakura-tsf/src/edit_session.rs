@@ -6,12 +6,17 @@
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
-use windows::Win32::Foundation::E_UNEXPECTED;
+use sakura_ipc::diagnostics::RejectionClass;
+use windows::Win32::Foundation::{
+    CO_E_OBJNOTCONNECTED, E_FAIL, E_INVALIDARG, E_UNEXPECTED, RPC_E_DISCONNECTED,
+    RPC_E_SERVER_DIED, RPC_E_SERVER_DIED_DNE,
+};
 use windows::Win32::UI::TextServices::{
     ITfContext, ITfEditSession, ITfEditSession_Impl, TF_CONTEXT_EDIT_CONTEXT_FLAGS, TF_ES_ASYNC,
-    TF_ES_READ, TF_ES_READWRITE, TF_ES_SYNC,
+    TF_ES_READ, TF_ES_READWRITE, TF_ES_SYNC, TF_E_DISCONNECTED, TF_E_LOCKED, TS_E_NOLOCK,
+    TS_E_READONLY, TS_E_SYNCHRONOUS,
 };
-use windows_core::{implement, Error, IUnknownImpl, Result};
+use windows_core::{implement, Error, IUnknownImpl, Result, HRESULT};
 
 /// A document edit, packaged so TSF can call it back whenever it grants a lock.
 ///
@@ -205,6 +210,24 @@ fn in_document(
     )
 }
 
+/// Reduces a refused edit request to the bounded class the disconnect
+/// diagnostics store (#313). The HRESULT itself never leaves this function,
+/// so a record cannot carry a host's free-form error.
+pub(crate) fn rejection_class(code: HRESULT) -> RejectionClass {
+    match code {
+        TS_E_NOLOCK | TS_E_SYNCHRONOUS | TF_E_LOCKED => RejectionClass::LockUnavailable,
+        TS_E_READONLY => RejectionClass::ReadOnly,
+        TF_E_DISCONNECTED
+        | CO_E_OBJNOTCONNECTED
+        | RPC_E_DISCONNECTED
+        | RPC_E_SERVER_DIED
+        | RPC_E_SERVER_DIED_DNE => RejectionClass::Disconnected,
+        E_INVALIDARG => RejectionClass::InvalidArgument,
+        E_UNEXPECTED | E_FAIL => RejectionClass::Unexpected,
+        _ => RejectionClass::OtherFailure,
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::expect_used)]
 mod tests {
@@ -307,5 +330,32 @@ mod tests {
         assert!(action.run(1).is_ok());
         assert!(action.run(2).is_err());
         assert_eq!(action_count.get(), 1);
+    }
+
+    #[test]
+    fn a_refused_request_is_reduced_to_a_bounded_rejection_class() {
+        let cases = [
+            (TS_E_NOLOCK, RejectionClass::LockUnavailable),
+            (TS_E_SYNCHRONOUS, RejectionClass::LockUnavailable),
+            (TF_E_LOCKED, RejectionClass::LockUnavailable),
+            (TS_E_READONLY, RejectionClass::ReadOnly),
+            (TF_E_DISCONNECTED, RejectionClass::Disconnected),
+            (CO_E_OBJNOTCONNECTED, RejectionClass::Disconnected),
+            (RPC_E_DISCONNECTED, RejectionClass::Disconnected),
+            (RPC_E_SERVER_DIED, RejectionClass::Disconnected),
+            (RPC_E_SERVER_DIED_DNE, RejectionClass::Disconnected),
+            (E_INVALIDARG, RejectionClass::InvalidArgument),
+            (E_UNEXPECTED, RejectionClass::Unexpected),
+            (E_FAIL, RejectionClass::Unexpected),
+            // Any HRESULT outside the known set, so a host-specific error
+            // code is never stored.
+            (
+                HRESULT(0x8765_4321_u32 as i32),
+                RejectionClass::OtherFailure,
+            ),
+        ];
+        for (code, class) in cases {
+            assert_eq!(rejection_class(code), class, "{code:?}");
+        }
     }
 }

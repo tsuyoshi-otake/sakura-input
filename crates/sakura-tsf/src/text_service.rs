@@ -61,7 +61,7 @@ use windows_core::{
     PCWSTR,
 };
 
-use sakura_ipc::diagnostics::DisconnectReason;
+use sakura_ipc::diagnostics::{CancellationTrigger, DisconnectReason, RejectionClass};
 use sakura_proto::{
     AiTextOperation, AiTextStatus, CandidateKind, CandidateList as EngineCandidateList, InputScope,
     KeyCode, KeyInput, Mode, Modifiers, Output, Preedit, ScreenRect, UndoCommitOutcome,
@@ -1636,7 +1636,7 @@ impl TextService {
             // This only owns engine/UI teardown.  The canonical composition is
             // intentionally left untouched until the deferred/lifecycle owner
             // runs after the re-entrant composition borrow has unwound.
-            self.terminalize_cancelled_state(true);
+            self.terminalize_cancelled_state(true, CancellationTrigger::Other);
             if self.post_deferred_work().is_err() {
                 self.handoff_focus_reconciliation_to_lifecycle();
             }
@@ -1768,7 +1768,7 @@ impl TextService {
             // but repeating that idempotent terminalization makes this retry's
             // complete journal/engine/UI outcome explicit even if its original
             // caller unwound.
-            self.terminalize_cancelled_state(true);
+            self.terminalize_cancelled_state(true, CancellationTrigger::Other);
         } else {
             self.handoff_focus_reconciliation_to_lifecycle();
         }
@@ -1780,7 +1780,7 @@ impl TextService {
     /// the bounded deferred owner. Callers must not invoke this before their
     /// first attempt, or it would become an eager retry loop.
     fn defer_refused_focus_reconciliation(&self) {
-        self.terminalize_cancelled_state(true);
+        self.terminalize_cancelled_state(true, CancellationTrigger::Other);
         self.queue_focus_reconciliation();
     }
 
@@ -2158,7 +2158,7 @@ impl TextService {
             // callback's journal entry. This unknown projection still owns an
             // engine/UI terminal transition; do not let an empty completion
             // list make it an accidental terminal state.
-            self.terminalize_cancelled_state(true);
+            self.terminalize_cancelled_state(true, trigger_for_cancel(reason));
         } else {
             self.settle_cancelled_writes(cancelled, true, Some(UndoCommitOutcome::Unknown));
         }
@@ -2167,8 +2167,9 @@ impl TextService {
 
     /// Performs the non-document terminal work shared by cancelled writes and
     /// an explicit abandoned projection. It is intentionally safe to call
-    /// after the journal was already drained.
-    fn terminalize_cancelled_state(&self, reset_engine: bool) {
+    /// after the journal was already drained. `trigger` is what a reset is
+    /// recorded as.
+    fn terminalize_cancelled_state(&self, reset_engine: bool, trigger: CancellationTrigger) {
         if let Ok(mut writes) = self.writes.try_borrow_mut() {
             writes.clear_ui_lease();
         }
@@ -2177,7 +2178,7 @@ impl TextService {
             self.end_candidates();
         }
         if reset_engine {
-            self.disconnect(DisconnectReason::CancelledStateTerminalized);
+            self.disconnect_cancelled_state(trigger);
         }
     }
 
@@ -2190,7 +2191,7 @@ impl TextService {
         reset_engine: bool,
         undo_outcome: Option<UndoCommitOutcome>,
     ) {
-        self.settle_cancelled_writes_inner(completions, reset_engine, undo_outcome, false);
+        self.settle_cancelled_writes_inner(completions, reset_engine, undo_outcome, false, None);
     }
 
     /// Finishes the ordinary document/UI cleanup after the document-free
@@ -2202,16 +2203,20 @@ impl TextService {
         completions: Vec<Completion<PendingWrite>>,
         reset_engine: bool,
     ) {
-        self.settle_cancelled_writes_inner(completions, reset_engine, None, true);
+        self.settle_cancelled_writes_inner(completions, reset_engine, None, true, None);
     }
 
+    /// `host_rejection` is the class of the HRESULT with which the host
+    /// refused the edit request, when it refused one.
     fn settle_cancelled_writes_inner(
         &self,
         completions: Vec<Completion<PendingWrite>>,
         reset_engine: bool,
         undo_outcome: Option<UndoCommitOutcome>,
         undo_already_settled: bool,
+        host_rejection: Option<RejectionClass>,
     ) {
+        let trigger = cancellation_trigger(&completions, host_rejection);
         for completion in &completions {
             self.settle_engine_recovery_completion(completion);
             if let Some(record) = completion
@@ -2251,7 +2256,7 @@ impl TextService {
             // must be retired too, even when a lifecycle callback drained the
             // journal before this terminal path observes it.
             let retired = self.forget_composition().is_ok();
-            self.terminalize_cancelled_state(true);
+            self.terminalize_cancelled_state(true, trigger);
             if !retired {
                 // A borrowed `CompositionState` cannot be retired from this
                 // re-entrant stack. Transfer exactly one later document-free
@@ -2272,7 +2277,7 @@ impl TextService {
             }
             return;
         }
-        self.terminalize_cancelled_state(reset_engine);
+        self.terminalize_cancelled_state(reset_engine, trigger);
     }
 
     fn settle_engine_recovery_completion(&self, completion: &Completion<PendingWrite>) {
@@ -2753,6 +2758,16 @@ impl TextService {
     /// what it is called.
     fn disconnect(&self, reason: DisconnectReason) {
         engine::note_disconnect(reason);
+        self.drop_engine_link();
+    }
+
+    /// The `cancelled-state-terminalized` reset, recorded with its trigger.
+    fn disconnect_cancelled_state(&self, trigger: CancellationTrigger) {
+        engine::note_cancelled_state(trigger);
+        self.drop_engine_link();
+    }
+
+    fn drop_engine_link(&self) {
         self.clear_document_adjacency();
         if let Ok(mut engine) = self.engine.try_borrow_mut() {
             *engine = Engine::new();
@@ -4132,6 +4147,29 @@ fn diagnostic_cancel_code(reason: CancelReason) -> i32 {
         CancelReason::DeferredUnavailable => 9,
         CancelReason::PredecessorFailed => 10,
         CancelReason::RequestRejected => 11,
+    }
+}
+
+/// What a `cancelled-state-terminalized` reset is recorded as (#313). The first
+/// completion is the operation that failed; any after it were cancelled only
+/// because it failed.
+fn cancellation_trigger<T>(
+    completions: &[Completion<T>],
+    host_rejection: Option<RejectionClass>,
+) -> CancellationTrigger {
+    match completions.first().map(|completion| completion.outcome) {
+        Some(TerminalOutcome::Rejected) => {
+            CancellationTrigger::Rejected(host_rejection.unwrap_or(RejectionClass::WithoutHresult))
+        }
+        Some(TerminalOutcome::Cancelled(reason)) => trigger_for_cancel(reason),
+        Some(TerminalOutcome::Applied) | None => CancellationTrigger::Other,
+    }
+}
+
+fn trigger_for_cancel(reason: CancelReason) -> CancellationTrigger {
+    match reason {
+        CancelReason::ContextReplaced => CancellationTrigger::ContextReplaced,
+        _ => CancellationTrigger::Other,
     }
 }
 
@@ -5840,10 +5878,10 @@ impl TextService_Impl {
                 error.code().0,
             ),
         }
-        if requested.is_err() {
+        if let Err(refusal) = &requested {
             // If DoEditSession ran, it already terminalized the ticket.  If it
             // did not, this is the complete RequestEditSession rejection owner.
-            self.reject_requested_write(ticket, false, None);
+            self.reject_refused_request(ticket, refusal);
         }
         Ok(())
     }
@@ -6234,6 +6272,19 @@ impl TextService_Impl {
             document_may_have_changed,
             known_prefix,
             None,
+            None,
+        );
+    }
+
+    /// `RequestEditSession` refused the write. Only the bounded class of its
+    /// HRESULT is kept, for the cancelled-state reset it leads to (#313).
+    fn reject_refused_request(&self, ticket: Ticket, refusal: &Error) {
+        self.reject_requested_write_with_undo_outcome(
+            ticket,
+            false,
+            None,
+            None,
+            Some(edit_session::rejection_class(refusal.code())),
         );
     }
 
@@ -6243,6 +6294,7 @@ impl TextService_Impl {
         document_may_have_changed: bool,
         known_prefix: Option<VisibleState>,
         undo_outcome: Option<UndoCommitOutcome>,
+        host_rejection: Option<RejectionClass>,
     ) {
         let service = self.get_impl();
         service.record_diagnostic_write(
@@ -6268,7 +6320,7 @@ impl TextService_Impl {
                 return;
             }
         };
-        service.settle_cancelled_writes(terminal, true, undo_outcome);
+        service.settle_cancelled_writes_inner(terminal, true, undo_outcome, false, host_rejection);
     }
 
     fn settle_applied_write(&self, completion: Completion<PendingWrite>) {

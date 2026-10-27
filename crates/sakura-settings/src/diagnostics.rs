@@ -11,8 +11,8 @@ use std::path::Path;
 
 use sakura_ipc::diagnostics::{
     clear_disconnect_diagnostics, clear_timeout_diagnostics, read_disconnect_diagnostics,
-    read_timeout_diagnostics, DisconnectDiagnostics, DisconnectReason, ElapsedSummary,
-    TimeoutDiagnostics, TimeoutOperation,
+    read_timeout_diagnostics, CancellationTrigger, DisconnectDiagnostics, DisconnectReason,
+    ElapsedSummary, Retention, TimeoutDiagnostics, TimeoutOperation,
 };
 
 pub fn load_timeouts(path: &Path) -> io::Result<TimeoutDiagnostics> {
@@ -88,9 +88,10 @@ pub fn render_tsv(diagnostics: &TimeoutDiagnostics) -> String {
     output
 }
 
-/// Every reason is printed, including the ones sitting at zero. A reset path
-/// that never fires is an answer, and hiding it would leave the reader unable
-/// to tell "never happened" from "not measured".
+/// Every reason and every cancelled-state trigger is printed, including the
+/// ones sitting at zero. A reset path that never fires is an answer, and
+/// hiding it would leave the reader unable to tell "never happened" from "not
+/// measured".
 pub fn render_disconnects_text(diagnostics: &DisconnectDiagnostics) -> String {
     let mut output = format!(
         "Engine link resets: {} valid, {} invalid, {} trailing bytes\n",
@@ -102,12 +103,17 @@ pub fn render_disconnects_text(diagnostics: &DisconnectDiagnostics) -> String {
             reason.name(),
             diagnostics.count(reason)
         ));
+        if reason == DisconnectReason::CancelledStateTerminalized {
+            for (trigger, count) in trigger_counts(diagnostics) {
+                output.push_str(&format!("    {trigger:<32} {count}\n"));
+            }
+        }
     }
     output.push_str(&format!(
-        "First timestamp (Unix ms): {}\nLast timestamp (Unix ms): {}\nCapacity reached: {}\n",
+        "First timestamp (Unix ms): {}\nLast timestamp (Unix ms): {}\nRetention: {}\n",
         optional_timestamp(diagnostics.first_timestamp_ms),
         optional_timestamp(diagnostics.last_timestamp_ms),
-        diagnostics.reached_capacity
+        describe_retention(diagnostics.retention)
     ));
     output
 }
@@ -121,15 +127,80 @@ pub fn render_disconnects_tsv(diagnostics: &DisconnectDiagnostics) -> String {
         output.push('\n');
     }
     output.push_str(&format!(
-        "# valid-events: {}\n# invalid-records: {}\n# ignored-tail-bytes: {}\n# first-timestamp-ms: {}\n# last-timestamp-ms: {}\n# reached-capacity: {}\n",
+        "# valid-events: {}\n# invalid-records: {}\n# ignored-tail-bytes: {}\n# first-timestamp-ms: {}\n# last-timestamp-ms: {}\n",
         diagnostics.valid_events,
         diagnostics.invalid_records,
         diagnostics.ignored_tail_bytes,
         optional_timestamp(diagnostics.first_timestamp_ms),
         optional_timestamp(diagnostics.last_timestamp_ms),
-        diagnostics.reached_capacity
+    ));
+    // Comment lines, like the totals, so the rows still sum to valid events.
+    for (trigger, count) in trigger_counts(diagnostics) {
+        output.push_str(&format!("# cancelled-state-trigger.{trigger}: {count}\n"));
+    }
+    let kind = match diagnostics.retention {
+        Retention::Empty => "empty",
+        Retention::Legacy {
+            reached_capacity: false,
+        } => "append-only",
+        Retention::Legacy {
+            reached_capacity: true,
+        } => "append-only-full",
+        Retention::Ring { .. } => "ring",
+        Retention::InvalidRingHeader => "invalid-ring-header",
+    };
+    // Only the ring counts what it kept and gave up. The other layouts leave
+    // these fields empty rather than claiming a zero.
+    let [slots, recorded, overwritten, dropped] = match diagnostics.retention {
+        retention @ Retention::Ring {
+            slots,
+            recorded,
+            dropped,
+        } => [slots, recorded, retention.overwritten(), dropped].map(|value| value.to_string()),
+        _ => Default::default(),
+    };
+    output.push_str(&format!(
+        "# retention: {kind}\n# ring-slots: {slots}\n# recorded: {recorded}\n# overwritten: {overwritten}\n# dropped: {dropped}\n"
     ));
     output
+}
+
+/// The cancelled-state breakdown, in the order both renderers print it.
+fn trigger_counts(diagnostics: &DisconnectDiagnostics) -> Vec<(&'static str, u64)> {
+    let mut counts: Vec<(&'static str, u64)> = CancellationTrigger::ALL
+        .into_iter()
+        .map(|trigger| (trigger.name(), diagnostics.trigger_count(trigger)))
+        .collect();
+    counts.push(("unclassified", diagnostics.unclassified_triggers()));
+    counts.push(("unrecognized", diagnostics.unrecognized_triggers));
+    counts
+}
+
+/// Says whether the log is still recording and what it has given up to stay
+/// within its cap, so a quiet log is never mistaken for a quiet host.
+fn describe_retention(retention: Retention) -> String {
+    match retention {
+        Retention::Empty => "nothing recorded since the last clear".to_owned(),
+        Retention::Legacy {
+            reached_capacity: false,
+        } => "append-only log from an earlier build; the next reset converts it to a ring"
+            .to_owned(),
+        Retention::Legacy {
+            reached_capacity: true,
+        } => "append-only log from an earlier build, full; nothing after its last record was kept, and the next reset converts it to a ring".to_owned(),
+        Retention::Ring {
+            slots,
+            recorded,
+            dropped,
+        } => format!(
+            "newest {slots} kept; {recorded} recorded since the last clear, {} overwritten oldest first, {dropped} dropped",
+            retention.overwritten()
+        ),
+        Retention::InvalidRingHeader => {
+            "ring header is invalid, so new resets are dropped; `diagnostics clear` resets it"
+                .to_owned()
+        }
+    }
 }
 
 /// Says how long the expiries behind a counter actually waited.
@@ -154,7 +225,10 @@ fn optional_timestamp(timestamp: Option<u64>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sakura_ipc::diagnostics::{record_disconnect_at, record_timeout_at, TimeoutOperation};
+    use sakura_ipc::diagnostics::{
+        record_cancelled_state_at, record_disconnect_at, record_timeout_at, RejectionClass,
+        TimeoutOperation,
+    };
     use std::fs;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::Duration;
@@ -222,7 +296,106 @@ mod tests {
         record_disconnect_at(&path, DisconnectReason::ServiceDetached).expect("fixture");
         let as_timeouts = load_timeouts(&path).expect("load");
         assert_eq!(as_timeouts.valid_events, 0);
-        assert!(render_text(&as_timeouts).contains("IPC timeouts: 0 valid, 1 invalid"));
+        assert!(render_text(&as_timeouts).contains("IPC timeouts: 0 valid, "));
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn the_cancelled_state_breakdown_and_retention_reach_the_reader() {
+        let path = temporary_file("triggers");
+        record_cancelled_state_at(&path, CancellationTrigger::ContextReplaced).expect("fixture");
+        record_cancelled_state_at(
+            &path,
+            CancellationTrigger::Rejected(RejectionClass::LockUnavailable),
+        )
+        .expect("fixture");
+        record_cancelled_state_at(
+            &path,
+            CancellationTrigger::Rejected(RejectionClass::LockUnavailable),
+        )
+        .expect("fixture");
+        // A reset recorded the way builds before #313 recorded it.
+        record_disconnect_at(&path, DisconnectReason::CancelledStateTerminalized).expect("fixture");
+        let diagnostics = load_disconnects(&path).expect("load");
+        let _ = fs::remove_file(&path);
+
+        let text = render_disconnects_text(&diagnostics);
+        assert!(text.contains("  cancelled-state-terminalized       4\n"));
+        assert!(text.contains("    context-replaced                 1\n"));
+        assert!(text.contains("    rejected-lock-unavailable        2\n"));
+        assert!(text.contains("    rejected-read-only               0\n"));
+        assert!(text.contains("    other                            0\n"));
+        assert!(text.contains("    unclassified                     1\n"));
+        assert!(text.contains("    unrecognized                     0\n"));
+        assert!(text.contains(
+            "Retention: newest 32767 kept; 4 recorded since the last clear, 0 overwritten oldest first, 0 dropped\n"
+        ));
+        assert!(!text.contains("Capacity reached"));
+
+        let tsv = render_disconnects_tsv(&diagnostics);
+        assert!(tsv.contains("cancelled-state-terminalized\t4\n"));
+        assert!(tsv.contains("# cancelled-state-trigger.context-replaced: 1\n"));
+        assert!(tsv.contains("# cancelled-state-trigger.rejected-lock-unavailable: 2\n"));
+        assert!(tsv.contains("# cancelled-state-trigger.unclassified: 1\n"));
+        assert!(tsv.contains(
+            "# retention: ring\n# ring-slots: 32767\n# recorded: 4\n# overwritten: 0\n# dropped: 0\n"
+        ));
+        for trigger in CancellationTrigger::ALL {
+            assert!(text.contains(trigger.name()), "{}", trigger.name());
+            assert!(tsv.contains(trigger.name()), "{}", trigger.name());
+        }
+        // The breakdown is metadata: the reason rows alone still sum to the
+        // valid events.
+        let rows: u64 = tsv
+            .lines()
+            .skip(1)
+            .filter(|line| !line.starts_with('#'))
+            .map(|line| {
+                line.rsplit('\t')
+                    .next()
+                    .expect("count")
+                    .parse::<u64>()
+                    .expect("count")
+            })
+            .sum();
+        assert_eq!(rows, diagnostics.valid_events);
+    }
+
+    #[test]
+    fn every_retention_state_is_described_without_inventing_counts() {
+        let empty = DisconnectDiagnostics::default();
+        assert!(render_disconnects_text(&empty)
+            .contains("Retention: nothing recorded since the last clear\n"));
+        assert!(render_disconnects_tsv(&empty).contains(
+            "# retention: empty\n# ring-slots: \n# recorded: \n# overwritten: \n# dropped: \n"
+        ));
+
+        let with_retention = |retention| {
+            let mut diagnostics = DisconnectDiagnostics::default();
+            diagnostics.retention = retention;
+            diagnostics
+        };
+        let full_legacy = with_retention(Retention::Legacy {
+            reached_capacity: true,
+        });
+        assert!(render_disconnects_text(&full_legacy)
+            .contains("append-only log from an earlier build, full"));
+        assert!(render_disconnects_tsv(&full_legacy).contains("# retention: append-only-full\n"));
+
+        let invalid = with_retention(Retention::InvalidRingHeader);
+        assert!(render_disconnects_text(&invalid).contains("ring header is invalid"));
+        assert!(render_disconnects_tsv(&invalid).contains("# retention: invalid-ring-header\n"));
+
+        let saturated = with_retention(Retention::Ring {
+            slots: 8,
+            recorded: 20,
+            dropped: 3,
+        });
+        assert!(render_disconnects_text(&saturated).contains(
+            "Retention: newest 8 kept; 20 recorded since the last clear, 12 overwritten oldest first, 3 dropped\n"
+        ));
+        assert!(render_disconnects_tsv(&saturated).contains(
+            "# retention: ring\n# ring-slots: 8\n# recorded: 20\n# overwritten: 12\n# dropped: 3\n"
+        ));
     }
 }
