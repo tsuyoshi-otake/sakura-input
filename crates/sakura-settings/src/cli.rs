@@ -628,8 +628,10 @@ pub fn run(command: Command) -> Result<(), String> {
 # idle_fence absorb|open k0=keycode k1=test_only\n\
 # identity_pref exact|general k0=skipped_identity k1=chosen_index+1\n\
 # key_result apply|probe|commit k0=keycode k1=kind_or_255 k2=count k3=identity_top\n\
-# file {}",
-                debug_path.display()
+# file {}\n\
+# older rows {} (printed first)",
+                debug_path.display(),
+                sakura_ipc::debug_trace::previous_path(&debug_path).display()
             );
             let debug = sakura_ipc::debug_trace::read_text(&debug_path).map_err(display)?;
             if debug.is_empty() {
