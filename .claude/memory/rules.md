@@ -41,6 +41,14 @@ scope so later work does not generalize it beyond the evidence.
 - Rules in this file and `docs/rules/` must remain evidence-based. If later
   measurement disproves one, correct or remove it and record the new evidence;
   do not retain a stale rule for continuity.
+- This checkout can be shared with another session that has uncommitted work
+  in it (2026-10-28: `git commit -a` swept four foreign files into a pushed PR
+  branch, #413). Run `git status` before every commit and stage explicit
+  paths; never `git commit -a` or `git add -A`. A branch switch carries the
+  foreign changes along, so when the tree is dirty build the commit from a
+  temporary `GIT_INDEX_FILE` (`read-tree`, `update-index --cacheinfo`,
+  `write-tree`, `commit-tree`) and push its SHA, leaving HEAD and the working
+  tree alone. Check that `git pull` succeeded before branching from `main`.
 
 ## Mandatory topic routing
 
