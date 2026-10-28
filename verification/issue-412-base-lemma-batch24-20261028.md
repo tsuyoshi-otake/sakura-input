@@ -1,0 +1,15 @@
+# Issue #412: base lemma detail batch 24
+
+## Scope and acceptance
+
+Add reviewed meanings for 95 base forms and inherit meanings to eligible inflections. Extend detail-only native inheritance to godan verb stems such as `書い`, `書け` and `書こ`, without generating conversion candidates. Preserve existing details and conversion data; compare ranking and speed with the preceding image.
+
+- Verify: build twice and inspect the report. Expect: reproducible output and added details. Result: two-pass build passed; 661,428 entries and 96,101 details, up from 89,095 (+7,006). Coverage is 14.53%; 30% requires 198,429 records, leaving 102,328. The overall objective remains 100%.
+- Verify: compare all binary sections, existing detail records and relations by entry ordinal, and all 14 category TSVs. Expect: only detail sections change, old details stay identical, and category files match. Result: passed; only DIDX, DREC, DREL, DTOF and DTXT changed. Added records comprise 95 curated, 1,127 generated inflection and 5,784 native inflection details; the native increase includes both newly reviewed bases and verb stems.
+- Verify: exercise three distinct form classes, a voiced stem and a mismatching form class; verify that the generator does not add these native candidates. Expect: only matching native forms inherit. Result: focused tests passed; existing tests cover ambiguous parents, changed targets and preexisting descriptions. Image test confirms that `書い` gains the meaning of `書く`. Baseline SHA-256 `B6AC5CDA3408D9C052023AB8F1C60132835F6CE188F16472C5EEC6F22D9C374C`; final `441F207E5EA15525D6B3B70CF599C7D837F55180839585E52AD3165E80931F08`.
+- Verify: dictionary package tests, formatting, inflection report validation, affected-package clippy and release ranking tests for issues 94, 348, 390 and 392 against both images. Expect: all pass and repository test processes exit. Result: passed; final process check clean.
+- Verify: measure 400 paired alternating conversions across four readings and compare candidate count and leader; separately measure image opening and detail lookup. Expect: report values and limitations. Result: paired baseline/current p50 1.134/1.140 ms and p99 2.823/2.775 ms; all candidate-count and leader checks passed. Image open/validate p50 was 72.499/69.587 ms (31 samples), and exact detail lookup/preview p50 0.1/0.1 microseconds (101 samples). These samples do not establish a global latency bound, and uncontrolled load affects timings.
+
+## Ownership, scope and residual risk
+
+Curated base-lemma data owns meanings; the compiler's native inflection detail inheritance owns matching and preservation. Existing POS, parent-uniqueness and final-entry identity checks remain the contract; no runtime state or ranking contract changes. Investigation expanded to three native godan stem forms omitted from fused conversion-form generation. Unsupported or special endings remain excluded. Full-image comparison is necessary because detail IDs are regenerated. The decision document records the detail-only forms for future work. Individual semantic review remains necessary; the 30% milestone is incomplete.

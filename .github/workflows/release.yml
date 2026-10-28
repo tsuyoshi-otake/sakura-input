@@ -8,7 +8,7 @@ on:
       tag:
         description: Existing release tag (must match Cargo version)
         required: true
-        default: v2.0.24
+        default: v2.0.25
 
 permissions:
   contents: read
@@ -125,6 +125,9 @@ jobs:
       - name: Self-test quiet test runner
         shell: pwsh
         run: ./ci/test-run-test-quiet.ps1
+      - name: Test inflection detail report validation
+        shell: pwsh
+        run: ./scripts/test-inflection-detail-report.ps1
       - name: Test
         shell: pwsh
         run: ./ci/run-test-quiet.ps1 -Name 'workspace tests' -Command { cargo test --workspace --features 'sakura-engine/dev-fixtures,sakura-ime-eval/engine-fixture,sakura-conversion-eval/learning-replay,sakura-conversion-eval/accuracy-gate' }
@@ -228,6 +231,7 @@ jobs:
           $sourcePaths = @(
             'installer/setup.iss',
             'scripts/build-installer.ps1',
+            'scripts/inflection-detail-report.ps1',
             'scripts/build-sakura-reranker.ps1',
             'scripts/stage-sakura-rerank.ps1',
             'scripts/sign-release.ps1',
@@ -431,6 +435,7 @@ jobs:
           $requiredSourceFiles = @(
             'installer/setup.iss',
             'scripts/build-installer.ps1',
+            'scripts/inflection-detail-report.ps1',
             'scripts/build-sakura-reranker.ps1',
             'scripts/stage-sakura-rerank.ps1',
             'scripts/sign-release.ps1',

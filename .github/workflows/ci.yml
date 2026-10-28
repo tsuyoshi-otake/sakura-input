@@ -517,6 +517,10 @@ jobs:
         shell: pwsh
         run: ./ci/test-run-test-quiet.ps1
 
+      - name: Test inflection detail report validation
+        shell: pwsh
+        run: ./scripts/test-inflection-detail-report.ps1
+
       - name: Self-test TLC result and process lifecycle handling
         shell: pwsh
         run: ./scripts/verify-space-key-dispatch-tlc.ps1 -SelfTest

@@ -80,6 +80,9 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     let mut detail_only_paths = Vec::new();
     let mut curated_detail_report_path = None;
     let mut detail_coverage_output = None;
+    let mut inflection_detail_system = None;
+    let mut inflection_detail_generated = None;
+    let mut inflection_detail_report = None;
     let mut mozc_id_def_path = None;
     let mut mozc_segmenter_path = None;
     let mut mozc_single_kanji_path = None;
@@ -183,6 +186,21 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
                 next_path(&mut args, &argument)?,
                 "detail coverage output",
             )?,
+            Some("--inflection-detail-system") => set_once(
+                &mut inflection_detail_system,
+                next_path(&mut args, &argument)?,
+                "inflection detail source system",
+            )?,
+            Some("--inflection-detail-generated") => set_once(
+                &mut inflection_detail_generated,
+                next_path(&mut args, &argument)?,
+                "generated inflection source",
+            )?,
+            Some("--inflection-detail-report") => set_once(
+                &mut inflection_detail_report,
+                next_path(&mut args, &argument)?,
+                "inflection detail report",
+            )?,
             Some("--mozc-id-def") => set_once(
                 &mut mozc_id_def_path,
                 next_path(&mut args, &argument)?,
@@ -212,6 +230,7 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
                        [--curated-detail-report FILE] \
                        [--llm-detail-release-dir DIR --llm-detail-target-dir DIR --llm-detail-report FILE] \
                        [--detail-coverage-output FILE] [--mozc-id-def FILE --mozc-segmenter FILE] \
+                       [--inflection-detail-system FILE --inflection-detail-generated FILE --inflection-detail-report FILE] \
                        [--mozc-single-kanji FILE --mozc-variant-rule FILE]"
                 );
                 return Ok(());
@@ -253,6 +272,16 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     }
     if mozc_id_def_path.is_some() != mozc_segmenter_path.is_some() {
         return Err("--mozc-id-def and --mozc-segmenter must be specified together".to_owned());
+    }
+    let inflection_args = [
+        inflection_detail_system.is_some(),
+        inflection_detail_generated.is_some(),
+        inflection_detail_report.is_some(),
+    ];
+    if inflection_args.iter().any(|value| *value)
+        && (!inflection_args.iter().all(|value| *value) || mozc_id_def_path.is_none())
+    {
+        return Err("inflection detail system, generated source, report, and Mozc id.def must be specified together".into());
     }
     if mozc_single_kanji_path.is_some() != mozc_variant_rule_path.is_some() {
         return Err(
@@ -369,6 +398,48 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
             report_path,
             dictc_core::llm_details::report_json(imported.report).as_bytes(),
         )?;
+    }
+    if let (Some(system), Some(generated), Some(report_path), Some(id_def)) = (
+        inflection_detail_system.as_deref(),
+        inflection_detail_generated.as_deref(),
+        inflection_detail_report.as_deref(),
+        mozc_id_def_path.as_deref(),
+    ) {
+        let lemmas = parse_entries(&system.display().to_string(), &read_utf8(system)?)
+            .map_err(|error| error.to_string())?;
+        let generated_entries =
+            parse_entries(&generated.display().to_string(), &read_utf8(generated)?)
+                .map_err(|error| error.to_string())?;
+        let catalog = dictc_core::inflection::parse_inflection_pos_catalog(
+            &id_def.display().to_string(),
+            &read_utf8(id_def)?,
+        )?;
+        let (inherited, report) = dictc_core::inflection::inherit_inflection_details(
+            &lemmas,
+            &generated_entries,
+            &entries,
+            &details,
+            &catalog,
+        )?;
+        if merge_details(&mut details, inherited) != 0 {
+            return Err(
+                "inherited inflection details unexpectedly replaced existing details".into(),
+            );
+        }
+        let (native_inherited, native) = dictc_core::inflection::inherit_native_inflection_details(
+            &lemmas, &entries, &details, &catalog,
+        )?;
+        if merge_details(&mut details, native_inherited) != 0 {
+            return Err("native inflection details unexpectedly replaced existing details".into());
+        }
+        atomic_write(report_path, format!(
+            "{{\n  \"schema_version\": \"sakura.inflection-detail-import.v1\",\n  \"generated\": {},\n  \"emitted\": {},\n  \"ambiguous\": {},\n  \"unmapped\": {},\n  \"final_changed\": {},\n  \"existing\": {},\n  \"missing_lemma\": {},\n  \"missing_lemma_detail\": {},\n  \"native\": {{\"native_entries\": {}, \"considered\": {}, \"emitted\": {}, \"ambiguous\": {}, \"unmapped\": {}, \"final_changed\": {}, \"existing\": {}, \"missing_lemma\": {}, \"missing_lemma_detail\": {}}}\n}}\n",
+            report.generated, report.emitted, report.ambiguous, report.unmapped,
+            report.final_changed, report.existing, report.missing_lemma, report.missing_lemma_detail,
+            native.native_entries, native.considered, native.emitted, native.ambiguous,
+            native.unmapped, native.final_changed, native.existing, native.missing_lemma,
+            native.missing_lemma_detail,
+        ).as_bytes())?;
     }
     if let Some(report) = wordnet_report.as_ref() {
         let report_path = wordnet_report_path.expect("paired argument checked above");

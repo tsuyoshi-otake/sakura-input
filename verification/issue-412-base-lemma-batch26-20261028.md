@@ -1,0 +1,15 @@
+# Issue #412: base lemma detail batch 26
+
+## Scope and acceptance
+
+Add reviewed meanings for 81 base forms and inherit meanings to eligible inflections. Extend detail-only native inheritance to ichidan `体言接続特殊` forms such as `食べん`, without generating conversion candidates. Preserve existing details and conversion data; compare ranking and speed with the preceding image.
+
+- Verify: build twice and inspect the report. Expect: reproducible output and added details. Result: two-pass build passed; 661,428 entries and 103,005 details, up from 100,662 (+2,343). Coverage is 15.57%; 30% requires 198,429 records, leaving 95,424. The overall objective remains 100%.
+- Verify: compare all binary sections, existing detail records and relations by entry ordinal, and all 14 category TSVs. Expect: only detail sections change, old details stay identical, and category files match. Result: passed; only DIDX, DREC, DREL, DTOF and DTXT changed. Added records comprise 81 curated, 995 generated inflection and 1,267 native inflection details; the native increase includes both newly reviewed bases and the newly indexed form.
+- Verify: exercise the new form and a same-spelling different connection identity, and verify that the generator does not add native candidates. Expect: only the matching native form inherits. Result: focused test passed; existing tests cover ambiguous parents, changed targets and preexisting descriptions. Image test confirms that `食べん` gains the explicitly labelled base meaning of `食べる`. Baseline SHA-256 `81841ED966AED3743B3C0C491A44B8295EF5F5E772D8B56AEF94B1019D309023`; final `D84A48B1DA35C38666160FD9F71CE5AEA2F2FDF6606546E3917533EC51B85671`.
+- Verify: dictionary package tests, formatting, inflection report validation, affected-package clippy and release ranking tests for issues 94, 348, 390 and 392 against both images. Expect: all pass and repository test processes exit. Result: passed; final process check clean.
+- Verify: measure 400 paired alternating conversions across four readings and compare candidate count and leader; separately measure image opening and detail lookup. Expect: report values and limitations. Result: paired baseline/current p50 1.051/1.049 ms and p99 1.781/1.787 ms; all candidate-count and leader checks passed. Image open/validate p50 was 56.619/53.726 ms (31 samples), and exact detail lookup/preview p50 0.1/0.1 microseconds (101 samples). These samples do not establish a global latency bound, and uncontrolled load affects timings.
+
+## Ownership, scope and residual risk
+
+Curated base-lemma data owns meanings; the compiler's native inflection detail inheritance owns matching and preservation. Existing POS, parent-uniqueness and final-entry identity checks remain the contract; no runtime state or ranking contract changes. Investigation expanded to a native ichidan form omitted from fused conversion-form generation. Other connection IDs and uncertain endings remain excluded. Full-image comparison is necessary because detail IDs are regenerated. The decision document records the detail-only form for future work. Individual semantic review remains necessary; the 30% milestone is incomplete.

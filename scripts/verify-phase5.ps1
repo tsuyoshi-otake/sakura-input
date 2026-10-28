@@ -13,6 +13,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'inflection-detail-report.ps1')
 
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $dictionaryPath = [IO.Path]::GetFullPath($Dictionary)
@@ -270,9 +271,13 @@ function Test-ReleaseBundle {
                 $wordNetImport = $dictionaryReport.wordnet_import
                 $curatedImport = $dictionaryReport.curated_detail_import
                 $llmImport = $dictionaryReport.llm_detail_import
-                $expectedDetailCount = [long]$wordNetImport.details.merged_count +
-                    [long]$curatedImport.emitted_details +
-                    [long]$llmImport.report.emitted_details
+                $inflectionEmitted = Get-InflectionDetailEmittedCount $dictionaryReport
+                $expectedDetailCount = Get-CheckedDetailCountSum @(
+                    [long]$wordNetImport.details.merged_count,
+                    [long]$curatedImport.emitted_details,
+                    [long]$llmImport.report.emitted_details,
+                    $inflectionEmitted
+                )
                 if ($null -eq $details -or $details.schema_version -ne 1 -or
                     $details.source -cne 'japanese-wordnet' -or $null -ne $details.full_definition_max_bytes -or
                     $null -eq $details.count -or [long]$details.count -lt 0 -or

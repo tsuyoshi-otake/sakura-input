@@ -6,12 +6,12 @@
 //! forms from 基本形 lemmas using the pinned Mozc `id.def` taxonomy so each new
 //! edge keeps a real connection class.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Arc;
 
 use sakura_core::dictionary::EntryFlags;
 
-use crate::SourceEntry;
+use crate::{SourceDetail, SourceEntry};
 
 const PREDICTION_OFFSET: i32 = 1_200;
 const PREDICTION_COST_LIMIT: i32 = 6_000;
@@ -139,6 +139,498 @@ pub struct InflectionReport {
     /// Forms of a kana lemma kept out of prediction because a kanji lemma of
     /// the same reading and POS id is at least as common (でて next to 出て).
     pub kana_forms_unpredicted: usize,
+}
+
+/// Accounting for the generated inflection entries considered for details.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct InflectionDetailReport {
+    pub generated: usize,
+    pub emitted: usize,
+    pub ambiguous: usize,
+    pub unmapped: usize,
+    pub final_changed: usize,
+    pub existing: usize,
+    pub missing_lemma: usize,
+    pub missing_lemma_detail: usize,
+}
+
+/// Accounting for native Mozc conjugation rows eligible for base-form detail inheritance.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct NativeInflectionDetailReport {
+    pub native_entries: usize,
+    pub considered: usize,
+    pub emitted: usize,
+    pub ambiguous: usize,
+    pub unmapped: usize,
+    pub final_changed: usize,
+    pub existing: usize,
+    pub missing_lemma: usize,
+    pub missing_lemma_detail: usize,
+}
+
+#[derive(Clone, Copy)]
+enum Parent {
+    Unmapped,
+    Unique(usize),
+    Ambiguous,
+}
+
+fn entry_key(entry: &SourceEntry) -> (&str, &str, u16, u16) {
+    (
+        &entry.reading,
+        &entry.surface,
+        entry.left_id,
+        entry.right_id,
+    )
+}
+
+fn detail_key(detail: &SourceDetail) -> (&str, &str, u16, u16) {
+    (
+        &detail.reading,
+        &detail.surface,
+        detail.left_id,
+        detail.right_id,
+    )
+}
+
+fn same_generated_entry(a: &SourceEntry, b: &SourceEntry) -> bool {
+    entry_key(a) == entry_key(b)
+        && a.word_cost == b.word_cost
+        && a.prediction_cost == b.prediction_cost
+        && a.flags == b.flags
+        && a.annotation == b.annotation
+}
+
+/// Attach a base-form explanation only to a generated entry whose parent is
+/// unique across *all* eligible lemmas. The original conversion generator's
+/// first-wins deduplication is not evidence of uniqueness. Existing details
+/// retain precedence; no relations are inherited. The explicit base-form
+/// framing avoids attributing affirmative semantics to negatives or conditions.
+pub fn inherit_inflection_details(
+    lemmas: &[SourceEntry],
+    generated: &[SourceEntry],
+    final_entries: &[SourceEntry],
+    existing: &[SourceDetail],
+    catalog: &InflectionPosCatalog,
+) -> Result<(Vec<SourceDetail>, InflectionDetailReport), String> {
+    let (expected, _) = expand_inflections(lemmas, catalog)?;
+    if generated.len() != expected.len()
+        || !generated
+            .iter()
+            .zip(&expected)
+            .all(|(a, b)| same_generated_entry(a, b))
+    {
+        return Err("inflection overlay differs from the current generator output".into());
+    }
+
+    // These indexes are only queried, never iterated to produce output. The
+    // generated slice supplies deterministic output order while hash lookups
+    // keep the additional inheritance pass linear on average.
+    let mut parents: HashMap<&str, HashMap<&str, Parent>> = HashMap::new();
+    for entry in generated {
+        if parents
+            .entry(&entry.reading)
+            .or_default()
+            .insert(&entry.surface, Parent::Unmapped)
+            .is_some()
+        {
+            return Err("duplicate generated inflection pair".into());
+        }
+    }
+    for (index, lemma) in lemmas.iter().enumerate() {
+        let LemmaForms::Forms(_, forms) = lemma_forms(catalog, lemma) else {
+            continue;
+        };
+        for form in forms {
+            if let Some(parent) = parents
+                .get_mut(form.reading.as_str())
+                .and_then(|by_surface| by_surface.get_mut(form.surface.as_str()))
+            {
+                *parent = match *parent {
+                    Parent::Unmapped => Parent::Unique(index),
+                    Parent::Unique(previous)
+                        if entry_key(&lemmas[previous]) == entry_key(lemma) =>
+                    {
+                        Parent::Unique(previous)
+                    }
+                    Parent::Unique(_) | Parent::Ambiguous => Parent::Ambiguous,
+                };
+            }
+        }
+    }
+
+    let mut final_by_key = HashMap::with_capacity(final_entries.len());
+    for entry in final_entries {
+        if final_by_key.insert(entry_key(entry), entry).is_some() {
+            return Err("duplicate final entry identity".into());
+        }
+    }
+    let mut detail_by_key = HashMap::with_capacity(existing.len());
+    for detail in existing {
+        if detail_by_key.insert(detail_key(detail), detail).is_some() {
+            return Err("duplicate existing detail identity".into());
+        }
+    }
+    let mut report = InflectionDetailReport {
+        generated: generated.len(),
+        ..Default::default()
+    };
+    let mut inherited = Vec::new();
+    for target in generated {
+        let parent = match parents[target.reading.as_str()][target.surface.as_str()] {
+            Parent::Unmapped => {
+                report.unmapped += 1;
+                continue;
+            }
+            Parent::Ambiguous => {
+                report.ambiguous += 1;
+                continue;
+            }
+            Parent::Unique(index) => &lemmas[index],
+        };
+        if !final_by_key
+            .get(&entry_key(target))
+            .is_some_and(|actual| same_generated_entry(target, actual))
+        {
+            report.final_changed += 1;
+            continue;
+        }
+        if detail_by_key.contains_key(&entry_key(target)) {
+            report.existing += 1;
+            continue;
+        }
+        if !final_by_key.contains_key(&entry_key(parent)) {
+            report.missing_lemma += 1;
+            continue;
+        }
+        let Some(base) = detail_by_key.get(&entry_key(parent)) else {
+            report.missing_lemma_detail += 1;
+            continue;
+        };
+        inherited.push(SourceDetail {
+            reading: target.reading.clone(),
+            surface: target.surface.clone(),
+            left_id: target.left_id,
+            right_id: target.right_id,
+            description: format!(
+                "「{}」の活用形。基本形の意味：{}",
+                parent.surface, base.description
+            ),
+            relations: Vec::new(),
+        });
+        report.emitted += 1;
+    }
+    Ok((inherited, report))
+}
+
+/// Inherit the base-form meaning for unchanged native Mozc conjugation entries.
+/// Only a single exact 基本形 identity across all generated forms is accepted.
+pub fn inherit_native_inflection_details(
+    lemmas: &[SourceEntry],
+    final_entries: &[SourceEntry],
+    existing: &[SourceDetail],
+    catalog: &InflectionPosCatalog,
+) -> Result<(Vec<SourceDetail>, NativeInflectionDetailReport), String> {
+    let mut native_keys = HashSet::with_capacity(lemmas.len());
+    for entry in lemmas {
+        if !native_keys.insert(entry_key(entry)) {
+            return Err("duplicate native entry identity".into());
+        }
+    }
+    let mut final_by_key = HashMap::with_capacity(final_entries.len());
+    for entry in final_entries {
+        if final_by_key.insert(entry_key(entry), entry).is_some() {
+            return Err("duplicate final entry identity".into());
+        }
+    }
+    let mut detail_by_key = HashMap::with_capacity(existing.len());
+    for detail in existing {
+        if detail_by_key.insert(detail_key(detail), detail).is_some() {
+            return Err("duplicate existing detail identity".into());
+        }
+    }
+
+    // Index every generated (reading, surface) by all producing basic-form
+    // identities. This avoids rescanning all lemmas for every native row.
+    type ParentKey<'a> = (&'a str, &'a str, u16, u16);
+    type ParentForms<'a> = (
+        &'a SourceEntry,
+        &'a PosRow,
+        Vec<(&'static [&'static str], Option<u16>)>,
+    );
+    let mut parents: HashMap<(String, String), HashMap<ParentKey<'_>, ParentForms<'_>>> =
+        HashMap::new();
+    for lemma in lemmas {
+        let LemmaForms::Forms(lemma_pos, mut forms) = lemma_forms(catalog, lemma) else {
+            continue;
+        };
+        // Native adjective adverbial stems exist in Mozc but are deliberately
+        // not generated as conversion candidates. Index them only for details.
+        if lemma_pos.pos == "形容詞" {
+            push_replaced(&mut forms, lemma, ADJ_TE, "い", "く");
+            for (ending, cforms) in [
+                ("", &["ガル接続"][..]),
+                ("かっ", &["連用タ接続"][..]),
+                ("かろ", &["未然ウ接続"][..]),
+                ("けれ", &["仮定形"][..]),
+                ("けりゃ", &["仮定縮約１"][..]),
+                ("き", &["体言接続"][..]),
+                ("から", &["未然ヌ接続"][..]),
+                ("かれ", &["命令ｅ"][..]),
+                ("きゃ", &["仮定縮約２"][..]),
+                ("う", &["連用ゴザイ接続"][..]),
+                ("ぅ", &["連用ゴザイ接続"][..]),
+                ("っ", &["口語基本形-促音便"][..]),
+            ] {
+                push_replaced(
+                    &mut forms,
+                    lemma,
+                    FormSpec { cforms, ..ADJ_TE },
+                    "い",
+                    ending,
+                );
+            }
+        }
+        // These godan stems already occur as native entries. Index them for
+        // detail inheritance only, keeping their distinct Mozc form classes.
+        if lemma_pos.pos == "動詞"
+            && lemma_pos.ctype.starts_with("五段")
+            && lemma_pos.ctype != "五段・ラ行特殊"
+            && !irregular_nai_lemma(&lemma.surface, &lemma.reading)
+        {
+            if let Some(endings) = verb_endings(&lemma_pos.ctype, &lemma.reading) {
+                if endings.dict == "る" {
+                    push_replaced(
+                        &mut forms,
+                        lemma,
+                        FormSpec {
+                            cforms: &["体言接続特殊", "未然特殊"],
+                            ..VERB_TE
+                        },
+                        "る",
+                        "ん",
+                    );
+                }
+                for (ending, suffix, cforms) in [
+                    (endings.te.as_str(), "て", &["連用タ接続"][..]),
+                    (endings.te.as_str(), "で", &["連用タ接続"][..]),
+                    (endings.ba.as_str(), "ば", &["仮定形"][..]),
+                    (endings.volitional.as_str(), "う", &["未然ウ接続"][..]),
+                ] {
+                    if let Some(stem) = ending.strip_suffix(suffix) {
+                        push_replaced(
+                            &mut forms,
+                            lemma,
+                            FormSpec { cforms, ..VERB_TE },
+                            &endings.dict,
+                            stem,
+                        );
+                    }
+                }
+                if endings.renyou.chars().last().is_some_and(|c| {
+                    matches!(c, 'き' | 'ぎ' | 'し' | 'ち' | 'に' | 'び' | 'み' | 'り')
+                }) {
+                    let contracted = format!("{}ゃ", endings.renyou);
+                    push_replaced(
+                        &mut forms,
+                        lemma,
+                        FormSpec {
+                            cforms: &["仮定縮約１"],
+                            ..VERB_TE
+                        },
+                        &endings.dict,
+                        &contracted,
+                    );
+                }
+            }
+        }
+        if lemma_pos.pos == "動詞"
+            && matches!(
+                lemma_pos.ctype.as_str(),
+                "一段" | "一段・クレル" | "一段・得ル"
+            )
+        {
+            for (ending, cforms) in [
+                ("れ", &["仮定形"][..]),
+                ("よ", &["未然ウ接続", "命令ｙｏ"][..]),
+                ("りゃ", &["仮定縮約１"][..]),
+                ("ん", &["体言接続特殊"][..]),
+            ] {
+                push_replaced(
+                    &mut forms,
+                    lemma,
+                    FormSpec { cforms, ..VERB_TE },
+                    "る",
+                    ending,
+                );
+            }
+        }
+        // Existing サ変 stems are detail targets, not new conversion forms.
+        if lemma_pos.pos == "動詞" && matches!(lemma_pos.ctype.as_str(), "サ変" | "サ変・スル")
+        {
+            for (ending, cforms) in [
+                ("すれ", &["仮定形"][..]),
+                ("すりゃ", &["仮定縮約１"][..]),
+                ("しよ", &["未然ウ接続"][..]),
+            ] {
+                push_replaced(
+                    &mut forms,
+                    lemma,
+                    FormSpec { cforms, ..VERB_TE },
+                    "する",
+                    ending,
+                );
+            }
+        }
+        for form in forms {
+            let by_identity = parents
+                .entry((form.reading.clone(), form.surface.clone()))
+                .or_default();
+            let item = by_identity
+                .entry(entry_key(lemma))
+                .or_insert_with(|| (lemma, lemma_pos, Vec::new()));
+            if !item.2.contains(&(form.spec.cforms, None)) {
+                item.2.push((form.spec.cforms, None));
+            }
+        }
+        // These サ変 stems have native fused rows with different right IDs.
+        // Only the uncombined row with the exact matching form ID is eligible.
+        if lemma_pos.pos == "動詞" && matches!(lemma_pos.ctype.as_str(), "サ変" | "サ変・スル")
+        {
+            for (ending, cform) in [("せ", "未然レル接続"), ("せよ", "命令ｙｏ")] {
+                let Some(id) = catalog.lookup(
+                    &lemma_pos.pos,
+                    &lemma_pos.subpos,
+                    &lemma_pos.ctype,
+                    cform,
+                    &lemma_pos.lemma,
+                ) else {
+                    continue;
+                };
+                if !catalog
+                    .row(id)
+                    .is_some_and(|row| is_form_of(row, lemma_pos, &[cform]))
+                {
+                    continue;
+                }
+                let Some((reading, surface)) =
+                    replace_mora_ending(&lemma.reading, &lemma.surface, "する", ending)
+                else {
+                    continue;
+                };
+                let item = parents
+                    .entry((reading, surface))
+                    .or_default()
+                    .entry(entry_key(lemma))
+                    .or_insert_with(|| (lemma, lemma_pos, Vec::new()));
+                let cforms: &'static [&'static str] = match cform {
+                    "未然レル接続" => &["未然レル接続"],
+                    _ => &["命令ｙｏ"],
+                };
+                let rule = (cforms, Some(id));
+                if !item.2.contains(&rule) {
+                    item.2.push(rule);
+                }
+            }
+        }
+        // Fused negatives use a verb's 未然形 on the left and the pinned
+        // auxiliary ん on the right. Never infer this from the left ID alone.
+        if lemma_pos.pos == "動詞" && !irregular_nai_lemma(&lemma.surface, &lemma.reading) {
+            let auxiliary = catalog
+                .lookup("助動詞", "*", "不変化型", "基本形", "ん")
+                .filter(|id| catalog.row(*id).is_some_and(|row| row.lemma == "ん"));
+            if let (Some(auxiliary), Some(endings)) =
+                (auxiliary, verb_endings(&lemma_pos.ctype, &lemma.reading))
+            {
+                let ending = format!("{}ん", endings.mizen);
+                if let Some((reading, surface)) =
+                    replace_mora_ending(&lemma.reading, &lemma.surface, &endings.dict, &ending)
+                {
+                    let item = parents
+                        .entry((reading, surface))
+                        .or_default()
+                        .entry(entry_key(lemma))
+                        .or_insert_with(|| (lemma, lemma_pos, Vec::new()));
+                    let rule = (&["未然形"][..], Some(auxiliary));
+                    if !item.2.contains(&rule) {
+                        item.2.push(rule);
+                    }
+                }
+            }
+        }
+    }
+
+    let mut report = NativeInflectionDetailReport {
+        native_entries: lemmas.len(),
+        ..Default::default()
+    };
+    let mut inherited = Vec::new();
+    for target in lemmas {
+        let Some(native) = catalog.row(target.left_id) else {
+            report.unmapped += 1;
+            continue;
+        };
+        let candidates = parents.get(&(target.reading.clone(), target.surface.clone()));
+        let matching = candidates
+            .into_iter()
+            .flat_map(|by_identity| by_identity.values())
+            .filter(|(_, lemma_pos, cforms)| {
+                cforms.iter().any(|(cform, right)| {
+                    right.is_none_or(|id| target.right_id == id)
+                        && is_form_of(native, lemma_pos, cform)
+                })
+            })
+            .map(|(lemma, _, _)| *lemma)
+            .collect::<Vec<_>>();
+        if matching.is_empty() {
+            report.unmapped += 1;
+            continue;
+        }
+        report.considered += 1;
+        if matching.len() != 1 {
+            report.ambiguous += 1;
+            continue;
+        }
+        let parent = matching[0];
+        let Some(actual) = final_by_key.get(&entry_key(target)) else {
+            report.final_changed += 1;
+            continue;
+        };
+        if actual.left_id != target.left_id
+            || actual.right_id != target.right_id
+            || actual.word_cost != target.word_cost
+            || actual.prediction_cost != target.prediction_cost
+            || actual.flags != target.flags
+        {
+            report.final_changed += 1;
+            continue;
+        }
+        if detail_by_key.contains_key(&entry_key(target)) {
+            report.existing += 1;
+            continue;
+        }
+        if !final_by_key.contains_key(&entry_key(parent)) {
+            report.missing_lemma += 1;
+            continue;
+        }
+        let Some(base) = detail_by_key.get(&entry_key(parent)) else {
+            report.missing_lemma_detail += 1;
+            continue;
+        };
+        inherited.push(SourceDetail {
+            reading: target.reading.clone(),
+            surface: target.surface.clone(),
+            left_id: target.left_id,
+            right_id: target.right_id,
+            description: format!(
+                "「{}」の活用形。基本形の意味：{}",
+                parent.surface, base.description
+            ),
+            relations: Vec::new(),
+        });
+        report.emitted += 1;
+    }
+    Ok((inherited, report))
 }
 
 /// Mozc `id.def` row of the auxiliary a contracted form connects as on its

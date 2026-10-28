@@ -1,0 +1,16 @@
+# Issue #412: base lemma detail batch 32
+
+## Scope and acceptance
+
+Add reviewed meanings for 304 previously unexplained base forms. Extend native detail inheritance to the existing サ変 and サ変・スル forms `せ` and `せよ`, only when both native POS IDs equal the matching form ID, without creating conversion candidates. Preserve prior details, candidates, costs and ranking.
+
+- Verify: build both dictionary images twice. Expect: reproducible images and increased details. Result: passed; baseline SHA-256 `92A2AB6612707CA5013B42B9820CDB1D04ABBA11BF772848FD112A6546C2B23B` matches batch 31, and final SHA-256 `02ACC213F888B697B41AD586B6D921AA15D13492184ECE4CEAC95A969588F96F` matched across both final passes.
+- Verify: count compiled details. Expect: more descriptions without additional candidates. Result: 661,428 entries and 120,715 details, up from 114,791 (+5,924): 304 curated, 3,919 generated-inflection and 1,701 native-inflection details. Coverage is 18.25%; 30% requires 198,429 records, leaving 77,714. The overall objective remains 100%.
+- Verify: compare all binary sections and every previous detail and relation by ordinal, plus all 14 category files. Expect: only detail sections change, old details and categories remain identical. Result: passed; only DIDX, DREC, DREL, DTOF and DTXT changed, with all 114,791 previous details preserved.
+- Verify: test both サ変 classes and form classes, different POS, mismatched right ID, changed final row, existing detail, ambiguous parent and candidate generation. Expect: only matching uncombined native rows inherit. Result: focused and full dictionary package tests passed. Image test verifies that `愛せよ` newly inherits the explicitly labelled meaning of `愛する`.
+- Verify: run affected-package clippy, formatting and inflection report validation; run issue 94, 348, 390 and 392 ranking tests against both images. Expect: all pass and repository test processes exit. Result: passed; final process check clean.
+- Verify: measure 400 paired alternating conversions over four readings and compare candidate count and leader; separately measure image opening and detail lookup. Expect: report values and limitations. Result: paired baseline/final p50 1.053/1.053 ms and p99 1.938/1.785 ms; candidate-count and leader checks passed. Image open/validate p50 was 54.840/57.190 ms (31 samples), and exact detail lookup/preview p50 0.1/0.2 microseconds (101 samples). These samples do not establish a global latency bound; uncontrolled load affects timings.
+
+## Ownership, scope and residual risk
+
+Curated base-lemma data owns the meanings; compiler native inheritance owns matching and preservation. The new rule uses exact reading, surface, POS and conjugation class, checks both IDs, and reuses all-parent uniqueness and final-entry preservation. It does not change runtime state or the ranking contract. Scope covered curated data, compiler and tests, image benchmark, decision and this verification record. Investigation expanded to fused Mozc rows because matching the left POS alone cannot establish their intended meaning; mismatching right IDs are excluded. Future additions can reuse this boundary but must verify both POS IDs for combined rows and review individual meanings. The 30% milestone remains incomplete.
