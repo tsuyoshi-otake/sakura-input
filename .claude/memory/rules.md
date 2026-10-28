@@ -111,3 +111,15 @@ provenance; active work should load the smaller matching topic extracts above.
   needs a non-blocking lock and a size re-check by path under it, and a failed
   attempt must silence the writer with a back-off instead of costing I/O on
   every key.
+- A fall-back or circuit-breaker counter has two parts to test: the trip
+  threshold and what counts toward it. The threshold shows in behaviour
+  tests; the classification does not when one miss leaves the behaviour
+  unchanged. Counting a never-issued request or a broken link as a miss
+  escaped every behaviour test in #415 until a test-only reader of the count
+  and a direct call of `call_for_key` with a spent callback killed it. Mutate
+  each branch that decides what counts, not only the threshold.
+- `crates/sakura-tsf` sets `clippy::indexing_slicing = "warn"` and the CI
+  clippy job runs `--workspace --all-targets -- -D warnings`, so test code is
+  linted too: `waited[0]` in a new test failed the local run (#415).
+  Destructure (`let [a, b, c] = waited;`) or iterate, and run that clippy
+  command on a test change before pushing.
