@@ -370,6 +370,14 @@ impl Shared {
             },
         }
     }
+
+    /// Whether `request` may be dispatched now. A Clear with no history
+    /// service attached works on the store by path, so it waits until this
+    /// process's own history generation has finished opening or releasing the
+    /// store; every other request is unaffected (#417).
+    fn history_lifecycle_settled(&self, request: &Request, wait: Duration) -> bool {
+        !matches!(request, Request::ClearInputHistory) || self.history_runtime.wait_until_idle(wait)
+    }
 }
 
 /// The engine's pipe server.
@@ -644,6 +652,16 @@ impl Server {
 /// outstanding — the usual case, since the renderer is normally the only
 /// watcher and there is often none — the wait ends immediately.
 const SHUTDOWN_GRACE: Duration = Duration::from_millis(250);
+
+/// How long a Clear of the developer history waits for this process's own
+/// history generation to finish opening or releasing the store before it is
+/// answered `Busy` (#417).
+///
+/// Retirement usually ends within tens of milliseconds and now and then stalls
+/// for a few hundred in the writer's final flush. The ceiling stays well
+/// inside the settings client's two-second call budget, so the caller gets a
+/// reply with time left over for the clear itself instead of timing out.
+const HISTORY_LIFECYCLE_WAIT: Duration = Duration::from_millis(1_200);
 
 /// A client must identify the protocol endpoint within this bound. The
 /// timeout is enforced before any request is dispatched, so a connection that
@@ -1587,6 +1605,24 @@ fn serve(
             if let Err(fault) = send(
                 instance,
                 &Response::CandidateCommitPending { request: pending },
+                id,
+                &mut bufs.reply,
+            ) {
+                return end(fault);
+            }
+            continue;
+        }
+
+        // A Clear that finds no history service attached works on the store by
+        // path, and the previous generation's writer can still own the store
+        // lock after requests stopped seeing it. Like `WatchUi` this blocks on
+        // purpose, so it waits above the service-time span below, and it
+        // answers `Busy` inside the client's call budget rather than failing
+        // on a lock this process itself holds.
+        if !shared.history_lifecycle_settled(&request, HISTORY_LIFECYCLE_WAIT) {
+            if let Err(fault) = send(
+                instance,
+                &Response::Error(ErrorCode::Busy),
                 id,
                 &mut bufs.reply,
             ) {

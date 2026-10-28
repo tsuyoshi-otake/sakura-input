@@ -524,6 +524,41 @@ fn optional_input_history_follows_a_live_developer_mode_change() {
     let _ = fs::remove_dir_all(&root);
 }
 
+// A Clear that reaches the dispatcher with no history service attached works on
+// the real per-user store by path, so this checks the decision alone and never
+// sends one (#417).
+#[test]
+fn only_a_clear_waits_for_the_history_lifecycle() {
+    // `release` is declared after `shared` so a failing assertion drops it first
+    // and lets the stalled opener return; the other way round, dropping the
+    // runtime would wait for that worker forever.
+    let mut shared = test_shared(Arc::new(LearningService::memory()));
+    let (release, released) = mpsc::channel::<()>();
+    let released = Mutex::new(released);
+    shared.history_runtime = HistoryRuntime::with_opener(None, true, false, move || {
+        let _ = released.lock().expect("opener gate").recv();
+        Err("test opener released".to_owned())
+    })
+    .expect("start a history lifecycle with a stalled open");
+
+    let wait = Duration::from_millis(50);
+    assert!(
+        !shared.history_lifecycle_settled(&Request::ClearInputHistory, wait),
+        "a Clear must not run while the store is being opened"
+    );
+    assert!(
+        shared.history_lifecycle_settled(&Request::FlushInputHistory, wait),
+        "requests other than Clear never wait for the lifecycle"
+    );
+    assert!(shared.history_lifecycle_settled(&Request::Ping, wait));
+
+    release.send(()).expect("release the stalled open");
+    assert!(
+        shared.history_lifecycle_settled(&Request::ClearInputHistory, Duration::from_secs(5)),
+        "a Clear proceeds once the open has finished"
+    );
+}
+
 fn test_learning_path() -> std::path::PathBuf {
     let nonce = SystemTime::now()
         .duration_since(UNIX_EPOCH)
