@@ -30,6 +30,16 @@
   Anything that hard-codes the old path (installer sources, size checks) is
   silently looking at a stale or absent file.
 
+- **Wait for a release workflow with short `gh run view <id> --json
+  status,conclusion` queries, not `gh run watch`.** Here `gh run watch` dies
+  on the first dropped connection (`failed to get run: Get ...: read tcp`),
+  52 s into the 2.0.25 candidate build, and a loop of ten `gh run watch`
+  calls used all ten attempts in 12 minutes while the run was still
+  `in_progress`. The background task that wrapped it reported "completed
+  (exit code 0)" both times, so a finished watcher is not a finished run.
+  Poll `gh run view` every 30 s inside `timeout`, and read `conclusion`
+  before downloading or publishing anything.
+
 - **This repository's PowerShell scripts require pwsh 7, not Windows
   PowerShell 5.1.** `build-dictionary.ps1` uses `[IO.EnumerationOptions]`,
   a .NET Core-only type that 5.1 cannot resolve (`型 [IO.EnumerationOptions]
