@@ -445,7 +445,17 @@ impl Mailbox {
     }
 
     fn stop(&self) {
-        self.stopping.store(true, Ordering::Release);
+        // The worker checks `stopping` and then waits on `pending_changed`
+        // while holding `state`. Setting the flag under that lock means a stop
+        // cannot land between the check and the wait, where its notification
+        // would be lost and `PredictionRuntime::drop` would join a sleeper.
+        {
+            let _state = self
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            self.stopping.store(true, Ordering::Release);
+        }
         self.pending_changed.notify_all();
         self.result_changed.notify_all();
     }
