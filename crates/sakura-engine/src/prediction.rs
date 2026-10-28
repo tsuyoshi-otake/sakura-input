@@ -61,6 +61,11 @@ const MAX_REPAIR_COMPLETION_CHARS: usize = 6;
 /// single result reserves room for dictionary and user suggestions.
 const MAX_HISTORY_SUGGESTIONS_PER_RESULT: usize = 4;
 
+/// How long a dispatcher test waits for the worker once it has called
+/// [`PredictionService::test_wait_for_worker`].
+#[cfg(test)]
+const TEST_WORKER_PATIENCE: Duration = Duration::from_secs(5);
+
 /// Engine-internal provenance assigned before merged prediction results are
 /// deduplicated. It never crosses the protocol boundary: the renderer and TSF
 /// deliberately receive only surface/annotation data.
@@ -262,6 +267,8 @@ struct Mailbox {
     coalesced: AtomicU64,
     #[cfg(test)]
     scripted: Mutex<Option<TestPredictionScript>>,
+    #[cfg(test)]
+    waits_for_worker: AtomicBool,
 }
 
 #[cfg(test)]
@@ -283,6 +290,8 @@ impl Mailbox {
             coalesced: AtomicU64::new(0),
             #[cfg(test)]
             scripted: Mutex::new(None),
+            #[cfg(test)]
+            waits_for_worker: AtomicBool::new(false),
         }
     }
 
@@ -496,6 +505,12 @@ impl PredictionService {
         {
             return result;
         }
+        #[cfg(test)]
+        let timeout = if self.mailbox.waits_for_worker.load(Ordering::Relaxed) {
+            timeout.max(TEST_WORKER_PATIENCE)
+        } else {
+            timeout
+        };
         let Some(sequence) = self.mailbox.publish(
             session,
             generation,
@@ -519,6 +534,18 @@ impl PredictionService {
     #[cfg(test)]
     pub fn request_count(&self) -> u64 {
         self.mailbox.next_sequence.load(Ordering::Relaxed)
+    }
+
+    /// Makes `request_into` wait for the worker for [`TEST_WORKER_PATIENCE`]
+    /// instead of the caller's timeout, so a dispatcher test about what a
+    /// prediction does once it arrives is not decided by whether the worker
+    /// thread was scheduled inside the dispatcher's 10 ms window on a busy
+    /// machine. The worker still computes the real result; only the wait is
+    /// longer, and only for a service a test has asked about. The window
+    /// itself stays the production constant in `dispatch.rs`.
+    #[cfg(test)]
+    pub(crate) fn test_wait_for_worker(&self) {
+        self.mailbox.waits_for_worker.store(true, Ordering::Relaxed);
     }
 
     /// Installs a deterministic unit-test response source. The first mode is
