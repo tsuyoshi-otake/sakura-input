@@ -1,0 +1,15 @@
+# Issue #412: base lemma detail batch 14
+
+## Scope and acceptance
+
+Add individually reviewed meanings for 39 previously undescribed base forms and use the existing strict inflection inheritance contract. Preserve existing details and conversion data, and investigate ranking and speed against the preceding dictionary.
+
+- Verify: build twice and inspect the result. Expect: reproducible output and added details. Result: two-pass build passed; 661,428 entries and 79,435 details, up from 78,810 (+625). Coverage is 12.01%; 30% requires 198,429 records, leaving 118,994. The overall goal remains 100%.
+- Verify: compare all binary sections and every existing description and relation by entry ordinal, plus all 14 category files. Expect: only detail sections change and all old information remains. Result: passed, only DIDX, DREC, DREL, DTOF and DTXT changed, with no existing detail or relation lost or modified and identical category files. Added records comprise 39 curated, 470 generated inflection and 116 native inflection details.
+- Verify: check a newly inherited native inflection. Expect: `罵り` has no baseline detail and gains the meaning of `罵る`. Result: passed. An initial test chose `割り引き` but found no newly inherited native detail; this assumption was withdrawn and the test changed to a verified example. Baseline SHA-256 `B6232786A0B69763AED768E33904E1DAF8B5A15867937A361E64D9009F3788DD`; final `373317D41E0EE540EC8D4D07C7405BA91CB157DBB4351291797E3D2D37B46925`.
+- Verify: dictionary tests, formatting, inflection report validation, affected-package clippy and release ranking tests for issues 94, 348, 390 and 392 against both images. Expect: all pass and test processes exit. Result: passed; final process check clean.
+- Verify: full conversion with 5,000 samples per case and image candidate search/presentation with 31 samples; repeat material differences and run a same-image control. Expect: disclose any unexplained difference. Result: current-only full conversion p50/p99 was 0.867/1.618 ms baseline and 1.114/2.353 ms final; repeat was 0.846/1.550 and 1.187/1.910 ms, respectively. A third baseline-only control measured 0.869/1.590 ms. Candidate search/presentation p50/p99 was 1.128/1.712 ms baseline and 1.531/2.900 ms final; repeat was 1.158/1.805 and 1.497/3.067 ms. The final image measured slower in these separate runs; uncontrolled load, ordering and differing memory layout prevent attributing the difference. Performance equivalence is not established and needs further controlled investigation.
+
+## Ownership and residual risk
+
+Curated base-lemma data owns definitions; the existing compiler owns strict inheritance and explicit-detail preservation. Ranking inputs and runtime state contracts are unchanged. Full-image comparison is necessary because detail IDs are regenerated. Future batches can reuse the checks, but meaning and reading require individual review; row identity alone cannot establish correctness. The repeatable observed latency difference remains unresolved, and the 30% milestone remains incomplete.
