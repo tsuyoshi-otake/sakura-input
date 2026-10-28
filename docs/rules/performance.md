@@ -25,3 +25,21 @@
   estimator that converges. Measured with the mean, one unchanged loop
   reported 53 ns and then 100 ns on consecutive runs; best-of-7 is stable to
   within a few percent. See `crates/sakura-core/tests/width_bench.rs`.
+
+- **Compare grown data with the last released build, not only with the
+  previous batch.** The Issue #412 descriptions grew from 31,301 to 269,339
+  entries over dozens of batches, and every batch note compared only with its
+  predecessor (open and validate p50 46.5 → 46.4 ms, 55.0 → 51.8 ms,
+  71.4 → 69.3 ms: unchanged within noise). At release time the same bench on
+  the final image against the 2.0.24 one showed 27-45 ms more to open and
+  validate it, with the per-key conversion unchanged (1.82 and 1.81 ms). Bench
+  the final data against the last released build before tagging, and state the
+  difference in the release notes.
+
+- **`dictionary_image_bench` depends on which image is measured first.** One
+  pair gave 79.2 → 123.8 ms, a repeat 77.5 → 115.0 ms, and with the roles
+  swapped 87.6 (new) against 60.6 ms (old). Quote the range over both orders,
+  never one run. The machine state also moves absolute values by tens of
+  milliseconds (a 38.8 MB image opened in 46 ms in the batch notes and in
+  60-79 ms at release time), so only a difference measured in the same run
+  counts.
