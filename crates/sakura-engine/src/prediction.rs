@@ -61,7 +61,7 @@ const MAX_REPAIR_COMPLETION_CHARS: usize = 6;
 /// single result reserves room for dictionary and user suggestions.
 const MAX_HISTORY_SUGGESTIONS_PER_RESULT: usize = 4;
 
-/// How long a dispatcher test waits for the worker once it has called
+/// How long a test waits for the worker once it has called
 /// [`PredictionService::test_wait_for_worker`].
 #[cfg(test)]
 const TEST_WORKER_PATIENCE: Duration = Duration::from_secs(5);
@@ -411,6 +411,12 @@ impl Mailbox {
         timeout: Duration,
         destination: &mut PredictionResult,
     ) -> bool {
+        #[cfg(test)]
+        let timeout = if self.waits_for_worker.load(Ordering::Relaxed) {
+            timeout.max(TEST_WORKER_PATIENCE)
+        } else {
+            timeout
+        };
         let started = Instant::now();
         let mut state = self
             .state
@@ -515,12 +521,6 @@ impl PredictionService {
         {
             return result;
         }
-        #[cfg(test)]
-        let timeout = if self.mailbox.waits_for_worker.load(Ordering::Relaxed) {
-            timeout.max(TEST_WORKER_PATIENCE)
-        } else {
-            timeout
-        };
         let Some(sequence) = self.mailbox.publish(
             session,
             generation,
@@ -546,13 +546,13 @@ impl PredictionService {
         self.mailbox.next_sequence.load(Ordering::Relaxed)
     }
 
-    /// Makes `request_into` wait for the worker for [`TEST_WORKER_PATIENCE`]
-    /// instead of the caller's timeout, so a dispatcher test about what a
-    /// prediction does once it arrives is not decided by whether the worker
-    /// thread was scheduled inside the dispatcher's 10 ms window on a busy
-    /// machine. The worker still computes the real result; only the wait is
-    /// longer, and only for a service a test has asked about. The window
-    /// itself stays the production constant in `dispatch.rs`.
+    /// Makes `request` and `request_into` wait for the worker for at least
+    /// [`TEST_WORKER_PATIENCE`] instead of the caller's timeout, so a test
+    /// about what a prediction does once it arrives is not decided by whether
+    /// the worker thread was scheduled inside the caller's window (10 ms in the
+    /// dispatcher) on a busy machine. The worker still computes the real
+    /// result; only the wait is longer, and only for a service a test has asked
+    /// about. The windows themselves stay the production constants.
     #[cfg(test)]
     pub(crate) fn test_wait_for_worker(&self) {
         self.mailbox.waits_for_worker.store(true, Ordering::Relaxed);
