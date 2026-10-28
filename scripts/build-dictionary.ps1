@@ -26,6 +26,8 @@ $CuratedTerms = Join-Path $RepositoryRoot 'data\curated-terms.tsv'
 $CuratedPhrases = Join-Path $RepositoryRoot 'data\curated-phrases.tsv'
 $CuratedGeneralDetails = Join-Path $RepositoryRoot 'data\curated-general-details.tsv'
 $CuratedHomophoneDetails = Join-Path $RepositoryRoot 'data\curated-homophone-details.tsv'
+$CuratedSymbolDetails = Join-Path $RepositoryRoot 'data\curated-symbol-details.tsv'
+$CuratedBaseLemmaDetails = Join-Path $RepositoryRoot 'data\curated-base-lemma-details.tsv'
 $CuratedPhraseTargetEntries = Join-Path $RepositoryRoot 'data\curated-phrase-target-entries.tsv'
 $CuratedGeneralTargetEntries = Join-Path $RepositoryRoot 'data\curated-general-target-entries.tsv'
 $ConversionPriorities = Join-Path $RepositoryRoot 'data\conversion-priorities.tsv'
@@ -63,7 +65,7 @@ if (-not [IO.File]::Exists($VerbCollocationEdges)) {
 if (-not [IO.File]::Exists($NonInitialBoundaryPolicy)) {
     throw "non-initial boundary policy is missing: $NonInitialBoundaryPolicy"
 }
-foreach ($path in @($CuratedPhrases, $CuratedGeneralDetails, $CuratedHomophoneDetails, $CuratedPhraseTargetEntries, $CuratedGeneralTargetEntries)) {
+foreach ($path in @($CuratedPhrases, $CuratedGeneralDetails, $CuratedHomophoneDetails, $CuratedSymbolDetails, $CuratedBaseLemmaDetails, $CuratedPhraseTargetEntries, $CuratedGeneralTargetEntries)) {
     if (-not [IO.File]::Exists($path)) {
         throw "curated dictionary layer is missing: $path"
     }
@@ -254,6 +256,8 @@ function Invoke-BuildPass {
         [Parameter(Mandatory)][string]$CuratedPhrasesPath,
         [Parameter(Mandatory)][string]$CuratedGeneralDetailsPath,
         [Parameter(Mandatory)][string]$CuratedHomophoneDetailsPath,
+        [Parameter(Mandatory)][string]$CuratedSymbolDetailsPath,
+        [Parameter(Mandatory)][string]$CuratedBaseLemmaDetailsPath,
         [Parameter(Mandatory)][string]$CuratedPhraseTargetEntriesPath,
         [Parameter(Mandatory)][string]$CuratedGeneralTargetEntriesPath,
         [Parameter(Mandatory)][string]$ConversionPrioritiesPath,
@@ -287,6 +291,7 @@ function Invoke-BuildPass {
     $wordNetReport = Join-Path $OutputDirectory "wordnet$Suffix.report.json"
     $curatedDetailReport = Join-Path $OutputDirectory "curated-details$Suffix.report.json"
     $llmDetailReport = Join-Path $OutputDirectory "llm-details$Suffix.report.json"
+    $inflectionDetailReport = Join-Path $OutputDirectory "inflection-details$Suffix.report.json"
     $detailCoverage = Join-Path $OutputDirectory "detail-coverage$Suffix.tsv"
 
     $mozcArguments = @('cargo', 'run', '--locked', '-p', 'dictc', '--bin', 'mozc-trim', '--')
@@ -374,7 +379,9 @@ function Invoke-BuildPass {
         '--wordnet-report', $wordNetReport,
         '--curated-detail-source', $CuratedPhrasesPath,
         '--curated-detail-source', $CuratedGeneralDetailsPath,
-        '--detail-only-source', $CuratedHomophoneDetailsPath
+        '--detail-only-source', $CuratedHomophoneDetailsPath,
+        '--detail-only-source', $CuratedSymbolDetailsPath,
+        '--detail-only-source', $CuratedBaseLemmaDetailsPath
     )
     $dictionaryArguments += @(
         '--curated-detail-report', $curatedDetailReport,
@@ -382,6 +389,9 @@ function Invoke-BuildPass {
         '--llm-detail-target-dir', $LlmDetailTargetDirectory,
         '--llm-detail-release-dir', $LlmDetailReleaseDirectory,
         '--llm-detail-report', $llmDetailReport,
+        '--inflection-detail-system', $systemTsv,
+        '--inflection-detail-generated', $inflectionTsv,
+        '--inflection-detail-report', $inflectionDetailReport,
         '--output', $dictionary
     )
     Invoke-Rtk -Arguments $dictionaryArguments
@@ -399,6 +409,7 @@ function Invoke-BuildPass {
         wordnet_report = $wordNetReport
         curated_detail_report = $curatedDetailReport
         llm_detail_report = $llmDetailReport
+        inflection_detail_report = $inflectionDetailReport
         detail_coverage = $detailCoverage
     }
 }
@@ -486,6 +497,8 @@ try {
         -CuratedPhrasesPath $CuratedPhrases `
         -CuratedGeneralDetailsPath $CuratedGeneralDetails `
         -CuratedHomophoneDetailsPath $CuratedHomophoneDetails `
+        -CuratedSymbolDetailsPath $CuratedSymbolDetails `
+        -CuratedBaseLemmaDetailsPath $CuratedBaseLemmaDetails `
         -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
         -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
         -ConversionPrioritiesPath $ConversionPriorities `
@@ -493,7 +506,7 @@ try {
         -NonInitialBoundaryPolicyPath $NonInitialBoundaryPolicy `
         -WordNetLmfPath $WordNetLmfPath
 
-    $scalarArtifactNames = @('system_tsv', 'trim_report', 'overlay_tsv', 'overlay_report', 'inflection_tsv', 'inflection_report', 'dictionary', 'wordnet_report', 'curated_detail_report', 'llm_detail_report', 'detail_coverage')
+    $scalarArtifactNames = @('system_tsv', 'trim_report', 'overlay_tsv', 'overlay_report', 'inflection_tsv', 'inflection_report', 'dictionary', 'wordnet_report', 'curated_detail_report', 'llm_detail_report', 'inflection_detail_report', 'detail_coverage')
     if (-not $SkipDeterminismCheck) {
         $repeat = Invoke-BuildPass -Suffix '.repeat' -MozcDictionaryDirectory $mozcDictionaryDirectory `
             -GlossaryDirectory $glossaryDirectory -ConnectionPath $connectionPath `
@@ -503,6 +516,8 @@ try {
             -CuratedPhrasesPath $CuratedPhrases `
             -CuratedGeneralDetailsPath $CuratedGeneralDetails `
             -CuratedHomophoneDetailsPath $CuratedHomophoneDetails `
+            -CuratedSymbolDetailsPath $CuratedSymbolDetails `
+            -CuratedBaseLemmaDetailsPath $CuratedBaseLemmaDetails `
             -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
             -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
             -ConversionPrioritiesPath $ConversionPriorities `
@@ -532,10 +547,13 @@ try {
     $wordNetImport = Get-Content -Raw -LiteralPath $primary.wordnet_report | ConvertFrom-Json
     $curatedDetailImport = Get-Content -Raw -LiteralPath $primary.curated_detail_report | ConvertFrom-Json
     $llmDetailImport = Get-Content -Raw -LiteralPath $primary.llm_detail_report | ConvertFrom-Json
+    $inflectionDetailImport = Get-Content -Raw -LiteralPath $primary.inflection_detail_report | ConvertFrom-Json
     $curatedDetailInputs = @(
         Get-ArtifactRecord $CuratedPhrases
         Get-ArtifactRecord $CuratedGeneralDetails
         Get-ArtifactRecord $CuratedHomophoneDetails
+        Get-ArtifactRecord $CuratedSymbolDetails
+        Get-ArtifactRecord $CuratedBaseLemmaDetails
     )
     $report = [ordered]@{
         schema_version = 2
@@ -560,7 +578,9 @@ try {
             full_definition_max_bytes = $null
             count = [int64]$wordNetImport.details.merged_count +
                 [int64]$curatedDetailImport.emitted_details +
-                [int64]$llmDetailImport.report.emitted_details
+                [int64]$llmDetailImport.report.emitted_details +
+                [int64]$inflectionDetailImport.emitted +
+                [int64]$inflectionDetailImport.native.emitted
             sources = @($wordNetImport.details.sources) + @(
                 [ordered]@{
                     source = 'sakura-curated-entry-details'
@@ -575,18 +595,29 @@ try {
                     emitted_details = [int64]$llmDetailImport.report.emitted_details
                     target_manifest = Get-ArtifactRecord (Join-Path $LlmDetailTargetDirectory 'manifest.json')
                     release_manifest = Get-ArtifactRecord (Join-Path $LlmDetailReleaseDirectory 'manifest.json')
+                },
+                [ordered]@{
+                    source = 'sakura-inflection-inherited-details'
+                    emitted_details = [int64]$inflectionDetailImport.emitted
+                },
+                [ordered]@{
+                    source = 'sakura-native-inflection-inherited-details'
+                    emitted_details = [int64]$inflectionDetailImport.native.emitted
                 }
             )
         }
         wordnet_import = $wordNetImport
         curated_detail_import = $curatedDetailImport
         llm_detail_import = $llmDetailImport
+        inflection_detail_import = $inflectionDetailImport
         deterministic_repeat = -not $SkipDeterminismCheck
         inputs = [ordered]@{
             curated_terms = Get-ArtifactRecord $CuratedTerms
             curated_phrases = Get-ArtifactRecord $CuratedPhrases
             curated_general_details = Get-ArtifactRecord $CuratedGeneralDetails
             curated_homophone_details = Get-ArtifactRecord $CuratedHomophoneDetails
+            curated_symbol_details = Get-ArtifactRecord $CuratedSymbolDetails
+            curated_base_lemma_details = Get-ArtifactRecord $CuratedBaseLemmaDetails
             curated_phrase_target_entries = Get-ArtifactRecord $CuratedPhraseTargetEntries
             curated_general_target_entries = Get-ArtifactRecord $CuratedGeneralTargetEntries
             conversion_priorities = Get-ArtifactRecord $ConversionPriorities

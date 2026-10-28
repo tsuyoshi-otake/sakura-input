@@ -1,10 +1,16 @@
-use dictc_core::inflection::{expand_inflections, parse_inflection_pos_catalog};
-use dictc_core::{compile, merge_entries, parse_connection, parse_entries, SourceEntry};
+use dictc_core::inflection::{
+    expand_inflections, inherit_inflection_details, inherit_native_inflection_details,
+    parse_inflection_pos_catalog,
+};
+use dictc_core::{
+    compile, merge_entries, parse_connection, parse_entries, SourceDetail, SourceEntry,
+};
 use sakura_core::conversion::{ConversionOptions, Converter};
 use sakura_core::dictionary::{Dictionary, EntryFlags};
 use sakura_core::ConversionMethod;
 
 const POS: &str = "\
+45 助動詞,*,*,*,不変化型,基本形,ん
 610 動詞,自立,*,*,カ変・来ル,基本形,来る
 612 動詞,自立,*,*,カ変・来ル,未然ウ接続,来る
 614 動詞,自立,*,*,カ変・来ル,未然形,来る
@@ -16,7 +22,10 @@ const POS: &str = "\
 694 動詞,自立,*,*,一段,未然形,*
 701 動詞,自立,*,*,一段,連用形,*
 645 動詞,自立,*,*,一段,仮定形,*
+652 動詞,自立,*,*,一段,仮定縮約１,*
+659 動詞,自立,*,*,一段,体言接続特殊,*
 666 動詞,自立,*,*,一段,命令ｒｏ,*
+673 動詞,自立,*,*,一段,命令ｙｏ,*
 713 動詞,自立,*,*,一段・クレル,基本形,*
 715 動詞,自立,*,*,一段・クレル,未然形,*
 714 動詞,自立,*,*,一段・クレル,未然ウ接続,*
@@ -29,6 +38,7 @@ const POS: &str = "\
 726 動詞,自立,*,*,五段・カ行イ音便,連用タ接続,*
 727 動詞,自立,*,*,五段・カ行イ音便,連用形,*
 720 動詞,自立,*,*,五段・カ行イ音便,仮定形,*
+721 動詞,自立,*,*,五段・カ行イ音便,仮定縮約１,*
 722 動詞,自立,*,*,五段・カ行イ音便,命令ｅ,*
 731 動詞,自立,*,*,五段・カ行促音便,基本形,行く
 733 動詞,自立,*,*,五段・カ行促音便,未然形,行く
@@ -38,20 +48,41 @@ const POS: &str = "\
 728 動詞,自立,*,*,五段・カ行促音便,仮定形,行く
 730 動詞,自立,*,*,五段・カ行促音便,命令ｅ,行く
 833 動詞,自立,*,*,五段動詞,仮定形,*
+835 動詞,自立,*,*,五段動詞,体言接続特殊,*
 836 動詞,自立,*,*,五段動詞,命令ｅ,*
 837 動詞,自立,*,*,五段動詞,基本形,*
 838 動詞,自立,*,*,五段動詞,未然ウ接続,*
 839 動詞,自立,*,*,五段動詞,未然形,*
+840 動詞,自立,*,*,五段動詞,未然特殊,*
 841 動詞,自立,*,*,五段動詞,連用タ接続,*
 842 動詞,自立,*,*,五段動詞,連用形,*
+617 動詞,自立,*,*,サ変,仮定形,*
+618 動詞,自立,*,*,サ変,仮定縮約１,*
+620 動詞,自立,*,*,サ変,命令ｙｏ,*
+621 動詞,自立,*,*,サ変,基本形,*
+623 動詞,自立,*,*,サ変,未然ウ接続,*
+624 動詞,自立,*,*,サ変,未然レル接続,*
 633 動詞,自立,*,*,サ変・スル,基本形,*
 637 動詞,自立,*,*,サ変・スル,未然形,*
 634 動詞,自立,*,*,サ変・スル,未然ウ接続,*
 638 動詞,自立,*,*,サ変・スル,連用形,*
 627 動詞,自立,*,*,サ変・スル,仮定形,*
+628 動詞,自立,*,*,サ変・スル,仮定縮約１,*
 631 動詞,自立,*,*,サ変・スル,命令ｒｏ,*
+632 動詞,自立,*,*,サ変・スル,命令ｙｏ,*
+636 動詞,自立,*,*,サ変・スル,未然レル接続,*
 2425 形容詞,自立,*,*,形容詞・アウオ段,基本形,*
+2393 形容詞,自立,*,*,形容詞・アウオ段,ガル接続,*
+1851 名詞,一般,*,*,*,*,*
+2413 形容詞,自立,*,*,形容詞・アウオ段,体言接続,*
+2408 形容詞,自立,*,*,形容詞・アウオ段,仮定縮約２,*
+2419 形容詞,自立,*,*,形容詞・アウオ段,口語基本形-促音便,*
+2444 形容詞,自立,*,*,形容詞・アウオ段,連用ゴザイ接続,*
+2420 形容詞,自立,*,*,形容詞・アウオ段,命令ｅ,*
+2439 形容詞,自立,*,*,形容詞・アウオ段,未然ヌ接続,*
 2398 形容詞,自立,*,*,形容詞・アウオ段,仮定形,*
+2403 形容詞,自立,*,*,形容詞・アウオ段,仮定縮約１,*
+2434 形容詞,自立,*,*,形容詞・アウオ段,未然ウ接続,*
 2449 形容詞,自立,*,*,形容詞・アウオ段,連用タ接続,*
 2454 形容詞,自立,*,*,形容詞・アウオ段,連用テ接続,*
 ";
@@ -75,6 +106,614 @@ fn pair<'a>(entries: &'a [SourceEntry], reading: &str, surface: &str) -> &'a Sou
         .iter()
         .find(|entry| entry.reading == reading && entry.surface == surface)
         .unwrap_or_else(|| panic!("missing {reading} -> {surface}"))
+}
+
+fn source_detail(entry: &SourceEntry, description: &str) -> SourceDetail {
+    SourceDetail {
+        reading: entry.reading.clone(),
+        surface: entry.surface.clone(),
+        left_id: entry.left_id,
+        right_id: entry.right_id,
+        description: description.to_owned(),
+        relations: Vec::new(),
+    }
+}
+
+#[test]
+fn inflection_detail_names_its_lemma_for_negative_and_conditional_forms() {
+    let lemmas = vec![lemma("くる", "来る", 610, 7)];
+    let (generated, _) = expand_inflections(&lemmas, &catalog()).unwrap();
+    let final_entries = merge_entries(lemmas.clone(), generated.clone()).unwrap();
+    let existing = vec![source_detail(&lemmas[0], "こちらへ移動すること。")];
+    let (details, report) =
+        inherit_inflection_details(&lemmas, &generated, &final_entries, &existing, &catalog())
+            .unwrap();
+    assert!(report.emitted > 0);
+    for surface in ["来て", "来ない", "来たら"] {
+        let detail = details
+            .iter()
+            .find(|d| d.surface == surface)
+            .expect(surface);
+        assert_eq!(
+            detail.description,
+            "「来る」の活用形。基本形の意味：こちらへ移動すること。"
+        );
+        assert!(detail.relations.is_empty());
+    }
+}
+
+#[test]
+fn inflection_detail_never_overwrites_existing_or_uses_missing_lemma() {
+    let lemmas = vec![lemma("くる", "来る", 610, 7)];
+    let (generated, _) = expand_inflections(&lemmas, &catalog()).unwrap();
+    let final_entries = merge_entries(lemmas.clone(), generated.clone()).unwrap();
+    let target = pair(&generated, "きて", "来て");
+    let existing = vec![
+        source_detail(&lemmas[0], "基本形の説明。"),
+        source_detail(target, "既存の説明。"),
+    ];
+    let (details, _) =
+        inherit_inflection_details(&lemmas, &generated, &final_entries, &existing, &catalog())
+            .unwrap();
+    assert!(!details
+        .iter()
+        .any(|d| d.reading == "きて" && d.surface == "来て"));
+    let missing = final_entries
+        .iter()
+        .filter(|e| e.reading != "くる" || e.surface != "来る")
+        .cloned()
+        .collect::<Vec<_>>();
+    let (details, _) =
+        inherit_inflection_details(&lemmas, &generated, &missing, &existing, &catalog()).unwrap();
+    assert!(details.is_empty());
+}
+
+#[test]
+fn inflection_detail_rejects_ambiguous_lemma_even_when_only_one_has_detail() {
+    let catalog =
+        parse_inflection_pos_catalog("id.def", &format!("{POS}681 動詞,自立,*,*,一段,基本形,*\n"))
+            .unwrap();
+    let lemmas = vec![
+        lemma("たべる", "食べる", 680, 7),
+        lemma("たべる", "食べる", 681, 8),
+    ];
+    let (generated, _) = expand_inflections(&lemmas, &catalog).unwrap();
+    let final_entries = merge_entries(lemmas.clone(), generated.clone()).unwrap();
+    let (details, report) = inherit_inflection_details(
+        &lemmas,
+        &generated,
+        &final_entries,
+        &[source_detail(&lemmas[0], "食物を口にする。")],
+        &catalog,
+    )
+    .unwrap();
+    assert!(details.is_empty());
+    assert!(report.ambiguous > 0);
+}
+
+#[test]
+fn inflection_detail_rejects_a_stale_generated_overlay() {
+    let lemmas = vec![lemma("くる", "来る", 610, 7)];
+    let (mut generated, _) = expand_inflections(&lemmas, &catalog()).unwrap();
+    let final_entries = merge_entries(lemmas.clone(), generated.clone()).unwrap();
+    generated[0].word_cost += 1;
+    assert!(inherit_inflection_details(
+        &lemmas,
+        &generated,
+        &final_entries,
+        &[source_detail(&lemmas[0], "説明。")],
+        &catalog()
+    )
+    .is_err());
+}
+
+#[test]
+fn inflection_detail_ignores_a_final_entry_with_modified_cost() {
+    let lemmas = vec![lemma("くる", "来る", 610, 7)];
+    let (generated, _) = expand_inflections(&lemmas, &catalog()).unwrap();
+    let mut final_entries = merge_entries(lemmas.clone(), generated.clone()).unwrap();
+    let changed = final_entries
+        .iter_mut()
+        .find(|e| e.reading == "きて" && e.surface == "来て")
+        .unwrap();
+    changed.word_cost += 1;
+    let (details, report) = inherit_inflection_details(
+        &lemmas,
+        &generated,
+        &final_entries,
+        &[source_detail(&lemmas[0], "説明。")],
+        &catalog(),
+    )
+    .unwrap();
+    assert!(!details
+        .iter()
+        .any(|d| d.reading == "きて" && d.surface == "来て"));
+    assert_eq!(report.final_changed, 1);
+}
+
+#[test]
+fn native_inflection_detail_inheritance_requires_one_unchanged_basic_identity() {
+    let base = lemma("くる", "来る", 610, 7);
+    let native = lemma("きて", "来て", 616, 40);
+    let lemmas = vec![base.clone(), native.clone()];
+    let final_entries = merge_entries(lemmas.clone(), Vec::new()).unwrap();
+    let (details, report) = inherit_native_inflection_details(
+        &lemmas,
+        &final_entries,
+        &[source_detail(&base, "こちらへ移動すること。")],
+        &catalog(),
+    )
+    .unwrap();
+    let inherited = details
+        .iter()
+        .find(|d| d.surface == "来て")
+        .expect("native form meaning");
+    assert_eq!(
+        inherited.description,
+        "「来る」の活用形。基本形の意味：こちらへ移動すること。"
+    );
+    assert!(inherited.relations.is_empty());
+    assert_eq!(report.emitted, 1);
+}
+
+#[test]
+fn native_adjective_adverbial_inherits_only_from_one_unchanged_parent() {
+    let base = lemma("たかい", "高い", 2425, 7);
+    let native = lemma("たかく", "高く", 2454, 40);
+    let lemmas = vec![base.clone(), native.clone()];
+    let (generated, _) = expand_inflections(&lemmas, &catalog()).unwrap();
+    assert!(!generated.iter().any(|entry| entry.surface == "高く"));
+    let final_entries = merge_entries(lemmas.clone(), generated).unwrap();
+    let base_detail = source_detail(&base, "高さがある。");
+    let (details, _) = inherit_native_inflection_details(
+        &lemmas,
+        &final_entries,
+        std::slice::from_ref(&base_detail),
+        &catalog(),
+    )
+    .unwrap();
+    assert_eq!(
+        details
+            .iter()
+            .find(|d| d.surface == "高く")
+            .unwrap()
+            .description,
+        "「高い」の活用形。基本形の意味：高さがある。"
+    );
+
+    let mut changed = final_entries.clone();
+    changed
+        .iter_mut()
+        .find(|entry| entry.surface == "高く")
+        .unwrap()
+        .word_cost += 1;
+    let (details, _) = inherit_native_inflection_details(
+        &lemmas,
+        &changed,
+        std::slice::from_ref(&base_detail),
+        &catalog(),
+    )
+    .unwrap();
+    assert!(!details.iter().any(|d| d.surface == "高く"));
+
+    let existing = [base_detail.clone(), source_detail(&native, "既存の説明。")];
+    let (details, _) =
+        inherit_native_inflection_details(&lemmas, &final_entries, &existing, &catalog()).unwrap();
+    assert!(!details.iter().any(|d| d.surface == "高く"));
+
+    let duplicate_catalog = parse_inflection_pos_catalog(
+        "id.def",
+        &format!("{POS}2426 形容詞,自立,*,*,形容詞・アウオ段,基本形,*\n"),
+    )
+    .unwrap();
+    let ambiguous = vec![base, lemma("たかい", "高い", 2426, 8), native];
+    let final_ambiguous = merge_entries(ambiguous.clone(), Vec::new()).unwrap();
+    let (details, report) = inherit_native_inflection_details(
+        &ambiguous,
+        &final_ambiguous,
+        &[base_detail],
+        &duplicate_catalog,
+    )
+    .unwrap();
+    assert!(!details.iter().any(|d| d.surface == "高く"));
+    assert_eq!(report.ambiguous, 1);
+}
+
+#[test]
+fn native_godan_stems_keep_conjugation_classes_separate() {
+    let base = lemma("かく", "書く", 723, 7);
+    let targets = [
+        ("かい", "書い", 726),
+        ("かけ", "書け", 720),
+        ("かこ", "書こ", 724),
+    ];
+    let mut lemmas = vec![base.clone()];
+    lemmas.extend(
+        targets
+            .iter()
+            .map(|(reading, surface, id)| lemma(reading, surface, *id, 40)),
+    );
+    let (generated, _) = expand_inflections(&lemmas, &catalog()).unwrap();
+    assert!(targets.iter().all(|(reading, surface, _)| !generated
+        .iter()
+        .any(|e| e.reading == *reading && e.surface == *surface)));
+    let final_entries = merge_entries(lemmas.clone(), generated).unwrap();
+    let (details, _) = inherit_native_inflection_details(
+        &lemmas,
+        &final_entries,
+        &[source_detail(&base, "文字を記す。")],
+        &catalog(),
+    )
+    .unwrap();
+    for (_, surface, id) in targets {
+        let detail = details
+            .iter()
+            .find(|d| d.surface == surface && d.left_id == id)
+            .unwrap();
+        assert_eq!(
+            detail.description,
+            "「書く」の活用形。基本形の意味：文字を記す。"
+        );
+    }
+}
+
+#[test]
+fn native_voiced_godan_stem_and_wrong_form_are_distinguished() {
+    let pos_catalog = parse_inflection_pos_catalog(
+        "id.def",
+        &format!("{POS}900 動詞,自立,*,*,五段・ガ行,基本形,*\n901 動詞,自立,*,*,五段・ガ行,連用タ接続,*\n902 動詞,自立,*,*,五段・ガ行,仮定形,*\n"),
+    ).unwrap();
+    let base = lemma("およぐ", "泳ぐ", 900, 7);
+    let native = lemma("およい", "泳い", 901, 40);
+    let wrong_form = lemma("およい", "泳い", 902, 40);
+    let lemmas = vec![base.clone(), native, wrong_form];
+    let final_entries = merge_entries(lemmas.clone(), Vec::new()).unwrap();
+    let (details, _) = inherit_native_inflection_details(
+        &lemmas,
+        &final_entries,
+        &[source_detail(&base, "水中を進む。")],
+        &pos_catalog,
+    )
+    .unwrap();
+    assert!(details
+        .iter()
+        .any(|d| d.surface == "泳い" && d.left_id == 901));
+    assert!(!details
+        .iter()
+        .any(|d| d.surface == "泳い" && d.left_id == 902));
+}
+
+#[test]
+fn native_conditional_stems_keep_parent_and_form_identity() {
+    let ichidan = lemma("たべる", "食べる", 680, 7);
+    let godan = lemma("かく", "書く", 723, 7);
+    let targets = [
+        ("たべれ", "食べれ", 645),
+        ("たべよ", "食べよ", 687),
+        ("たべりゃ", "食べりゃ", 652),
+        ("たべん", "食べん", 659),
+        ("かきゃ", "書きゃ", 721),
+    ];
+    let mut lemmas = vec![
+        ichidan.clone(),
+        godan.clone(),
+        lemma("たべよ", "食べよ", 673, 30),
+        lemma("たべよ", "食べよ", 701, 30),
+    ];
+    let mut other_negative = lemma("たべん", "食べん", 694, 30);
+    other_negative.right_id = 45;
+    lemmas.push(other_negative);
+    lemmas.extend(targets.iter().map(|(r, s, id)| lemma(r, s, *id, 40)));
+    let (generated, _) = expand_inflections(&lemmas, &catalog()).unwrap();
+    assert!(targets
+        .iter()
+        .all(|(r, s, _)| !generated.iter().any(|e| e.reading == *r && e.surface == *s)));
+    let final_entries = merge_entries(lemmas.clone(), generated).unwrap();
+    let existing = [
+        source_detail(&ichidan, "食物を口に入れる。"),
+        source_detail(&godan, "文字を記す。"),
+    ];
+    let (details, _) =
+        inherit_native_inflection_details(&lemmas, &final_entries, &existing, &catalog()).unwrap();
+    for (_, surface, id) in targets {
+        assert!(details
+            .iter()
+            .any(|d| d.surface == surface && d.left_id == id));
+    }
+    assert!(details
+        .iter()
+        .any(|d| d.surface == "食べよ" && d.left_id == 673));
+    assert!(!details
+        .iter()
+        .any(|d| d.surface == "食べよ" && d.left_id == 701));
+    assert!(details
+        .iter()
+        .any(|d| d.surface == "食べん" && d.left_id == 694 && d.right_id == 45));
+}
+
+#[test]
+fn native_sahen_stems_inherit_only_the_matching_form() {
+    let base = lemma("あいする", "愛する", 621, 7);
+    let other_base = lemma("かんする", "関する", 633, 7);
+    let targets = [
+        ("あいすれ", "愛すれ", 617),
+        ("あいすりゃ", "愛すりゃ", 618),
+        ("あいしよ", "愛しよ", 623),
+        ("あいせ", "愛せ", 624),
+        ("あいせよ", "愛せよ", 620),
+        ("かんすれ", "関すれ", 627),
+        ("かんすりゃ", "関すりゃ", 628),
+        ("かんしよ", "関しよ", 634),
+        ("かんせ", "関せ", 636),
+        ("かんせよ", "関せよ", 632),
+    ];
+    let mut lemmas = vec![
+        base.clone(),
+        other_base.clone(),
+        lemma("あいすれ", "愛すれ", 1851, 40),
+        lemma("あいすれ", "愛すれ", 627, 40),
+    ];
+    let mut fused = lemma("あいせよ", "愛せよ", 620, 40);
+    fused.right_id = 1851;
+    lemmas.push(fused);
+    let mut other_fused = lemma("かんせ", "関せ", 636, 40);
+    other_fused.right_id = 1851;
+    lemmas.push(other_fused);
+    lemmas.extend(targets.iter().map(|(r, s, id)| lemma(r, s, *id, 40)));
+    let (generated, _) = expand_inflections(&lemmas, &catalog()).unwrap();
+    assert!(targets.iter().all(|(r, s, _)| !generated
+        .iter()
+        .any(|entry| entry.reading == *r && entry.surface == *s)));
+    let final_entries = merge_entries(lemmas.clone(), generated).unwrap();
+    let (details, _) = inherit_native_inflection_details(
+        &lemmas,
+        &final_entries,
+        &[
+            source_detail(&base, "大切に思う。"),
+            source_detail(&other_base, "関係がある。"),
+        ],
+        &catalog(),
+    )
+    .unwrap();
+    for (_, surface, id) in targets {
+        assert!(details
+            .iter()
+            .any(|d| d.surface == surface && d.left_id == id));
+    }
+    assert!(!details
+        .iter()
+        .any(|d| d.surface == "愛すれ" && d.left_id == 1851));
+    assert!(!details
+        .iter()
+        .any(|d| d.surface == "愛すれ" && d.left_id == 627));
+    assert!(!details
+        .iter()
+        .any(|d| d.surface == "愛せよ" && d.right_id == 1851));
+    assert!(!details
+        .iter()
+        .any(|d| d.surface == "関せ" && d.right_id == 1851));
+    let native = lemmas
+        .iter()
+        .find(|e| e.surface == "愛すれ" && e.left_id == 617)
+        .unwrap();
+    let mut changed = final_entries.clone();
+    changed
+        .iter_mut()
+        .find(|e| e.surface == "愛すれ" && e.left_id == 617)
+        .unwrap()
+        .word_cost += 1;
+    let (details, _) = inherit_native_inflection_details(
+        &lemmas,
+        &changed,
+        &[source_detail(&base, "大切に思う。")],
+        &catalog(),
+    )
+    .unwrap();
+    assert!(!details
+        .iter()
+        .any(|d| d.surface == "愛すれ" && d.left_id == 617));
+    let (details, _) = inherit_native_inflection_details(
+        &lemmas,
+        &final_entries,
+        &[
+            source_detail(&base, "大切に思う。"),
+            source_detail(native, "既存の説明。"),
+        ],
+        &catalog(),
+    )
+    .unwrap();
+    assert!(!details
+        .iter()
+        .any(|d| d.surface == "愛すれ" && d.left_id == 617));
+    let pos = format!("{POS}1900 動詞,自立,*,*,サ変,基本形,*\n");
+    let ambiguous_catalog = parse_inflection_pos_catalog("id.def", &pos).unwrap();
+    let mut ambiguous = lemmas.clone();
+    ambiguous.push(lemma("あいする", "愛する", 1900, 8));
+    let ambiguous_final = merge_entries(ambiguous.clone(), Vec::new()).unwrap();
+    let (details, _) = inherit_native_inflection_details(
+        &ambiguous,
+        &ambiguous_final,
+        &[source_detail(&base, "大切に思う。")],
+        &ambiguous_catalog,
+    )
+    .unwrap();
+    assert!(!details
+        .iter()
+        .any(|d| d.surface == "愛すれ" && d.left_id == 617));
+}
+
+#[test]
+fn native_negative_requires_the_exact_auxiliary_identity() {
+    let base = lemma("かく", "書く", 723, 7);
+    let mut native = lemma("かかん", "書かん", 725, 40);
+    native.right_id = 45;
+    let other = lemma("かかん", "書かん", 725, 41);
+    let lemmas = vec![base.clone(), native, other];
+    let entries = merge_entries(lemmas.clone(), Vec::new()).unwrap();
+    let (details, _) = inherit_native_inflection_details(
+        &lemmas,
+        &entries,
+        &[source_detail(&base, "文字を記す。")],
+        &catalog(),
+    )
+    .unwrap();
+    assert!(details
+        .iter()
+        .any(|d| d.surface == "書かん" && d.right_id == 45));
+    assert!(!details
+        .iter()
+        .any(|d| d.surface == "書かん" && d.right_id == 725));
+    let without_aux = parse_inflection_pos_catalog(
+        "id.def",
+        &POS.replace("45 助動詞,*,*,*,不変化型,基本形,ん\n", ""),
+    )
+    .unwrap();
+    let (details, _) = inherit_native_inflection_details(
+        &lemmas,
+        &entries,
+        &[source_detail(&base, "文字を記す。")],
+        &without_aux,
+    )
+    .unwrap();
+    assert!(!details.iter().any(|d| d.surface == "書かん"));
+}
+
+#[test]
+fn native_stems_require_their_own_pos_and_form_class() {
+    let adjective = lemma("たかい", "高い", 2425, 7);
+    let verb = lemma("あつまる", "集まる", 837, 7);
+    let targets = [
+        ("たか", "高", 2393),
+        ("あつまん", "集まん", 835),
+        ("あつまん", "集まん", 840),
+    ];
+    let mut lemmas = vec![
+        adjective.clone(),
+        verb.clone(),
+        lemma("たか", "高", 1851, 30),
+    ];
+    lemmas.extend(targets.iter().map(|(r, s, id)| lemma(r, s, *id, 40)));
+    let (generated, _) = expand_inflections(&lemmas, &catalog()).unwrap();
+    assert!(targets
+        .iter()
+        .all(|(r, s, _)| !generated.iter().any(|e| e.reading == *r && e.surface == *s)));
+    let final_entries = merge_entries(lemmas.clone(), generated).unwrap();
+    let existing = [
+        source_detail(&adjective, "高さがある。"),
+        source_detail(&verb, "人や物が一か所に寄る。"),
+    ];
+    let (details, _) =
+        inherit_native_inflection_details(&lemmas, &final_entries, &existing, &catalog()).unwrap();
+    for (_, surface, id) in targets {
+        assert!(details
+            .iter()
+            .any(|d| d.surface == surface && d.left_id == id));
+    }
+    assert!(!details
+        .iter()
+        .any(|d| d.surface == "高" && d.left_id == 1851));
+}
+
+#[test]
+fn native_adjective_stems_inherit_without_generating_candidates() {
+    let base = lemma("たかい", "高い", 2425, 7);
+    let targets = [
+        ("たかかっ", "高かっ", 2449),
+        ("たかかろ", "高かろ", 2434),
+        ("たかけれ", "高けれ", 2398),
+        ("たかけりゃ", "高けりゃ", 2403),
+        ("たかき", "高き", 2413),
+        ("たかから", "高から", 2439),
+        ("たかかれ", "高かれ", 2420),
+        ("たかきゃ", "高きゃ", 2408),
+        ("たかう", "高う", 2444),
+        ("たかぅ", "高ぅ", 2444),
+        ("たかっ", "高っ", 2419),
+    ];
+    let mut lemmas = vec![base.clone()];
+    lemmas.extend(
+        targets
+            .iter()
+            .map(|(reading, surface, id)| lemma(reading, surface, *id, 40)),
+    );
+    let (generated, _) = expand_inflections(&lemmas, &catalog()).unwrap();
+    assert!(targets
+        .iter()
+        .all(|(_, surface, _)| !generated.iter().any(|e| e.surface == *surface)));
+    let final_entries = merge_entries(lemmas.clone(), generated).unwrap();
+    let (details, _) = inherit_native_inflection_details(
+        &lemmas,
+        &final_entries,
+        &[source_detail(&base, "高さがある。")],
+        &catalog(),
+    )
+    .unwrap();
+    for (_, surface, _) in targets {
+        assert_eq!(
+            details
+                .iter()
+                .find(|d| d.surface == surface)
+                .unwrap()
+                .description,
+            "「高い」の活用形。基本形の意味：高さがある。"
+        );
+    }
+}
+
+#[test]
+fn native_inflection_detail_rejects_ambiguous_changed_and_preannotated_entries() {
+    let pos_catalog = parse_inflection_pos_catalog(
+        "id.def",
+        &format!("{POS}681 動詞,自立,*,*,カ変・来ル,基本形,来る\n"),
+    )
+    .unwrap();
+    let base = lemma("くる", "来る", 610, 7);
+    let other = lemma("くる", "来る", 681, 8);
+    let native = lemma("きて", "来て", 616, 40);
+    let lemmas = vec![base.clone(), other, native.clone()];
+    let mut final_entries = merge_entries(lemmas.clone(), Vec::new()).unwrap();
+    let key = final_entries
+        .iter_mut()
+        .find(|entry| entry.surface == "来て")
+        .unwrap();
+    key.word_cost += 1;
+    let existing = [
+        source_detail(&base, "基本形の説明。"),
+        source_detail(&native, "既存の説明。"),
+    ];
+    let (details, report) =
+        inherit_native_inflection_details(&lemmas, &final_entries, &existing, &pos_catalog)
+            .unwrap();
+    assert!(details.is_empty());
+    assert!(report.ambiguous > 0);
+    assert_eq!(report.final_changed, 0);
+
+    let single = vec![base.clone(), native.clone()];
+    let mut changed_final = merge_entries(single.clone(), Vec::new()).unwrap();
+    changed_final
+        .iter_mut()
+        .find(|entry| entry.surface == "来て")
+        .unwrap()
+        .word_cost += 1;
+    let (details, report) = inherit_native_inflection_details(
+        &single,
+        &changed_final,
+        &[source_detail(&base, "意味。")],
+        &catalog(),
+    )
+    .unwrap();
+    assert!(details.is_empty());
+    assert_eq!(report.final_changed, 1);
+
+    let (details, report) = inherit_native_inflection_details(
+        &single,
+        &merge_entries(single.clone(), Vec::new()).unwrap(),
+        &existing,
+        &catalog(),
+    )
+    .unwrap();
+    assert!(details.is_empty());
+    assert_eq!(report.existing, 1);
 }
 
 #[test]

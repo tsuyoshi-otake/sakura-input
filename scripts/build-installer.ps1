@@ -9,6 +9,7 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'inflection-detail-report.ps1')
 
 $repositoryRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $setupPath = Join-Path $repositoryRoot 'installer\setup.iss'
@@ -307,7 +308,11 @@ if ($dictionaryReport.schema_version -eq 2) {
     $llmImport = Get-RequiredJsonProperty $dictionaryReport 'llm_detail_import' 'LLM detail import accounting'
     $llmImportReport = Get-RequiredJsonProperty $llmImport 'report' 'LLM detail import report'
     $llmEmittedDetails = Get-RequiredJsonProperty $llmImportReport 'emitted_details' 'LLM detail emitted count'
-    $expectedDetailCount = [long]$mergedDetailCount + [long]$curatedEmittedDetails + [long]$llmEmittedDetails
+    $inflectionEmittedDetails = Get-InflectionDetailEmittedCount $dictionaryReport
+    $expectedDetailCount = Get-CheckedDetailCountSum @(
+        [long]$mergedDetailCount, [long]$curatedEmittedDetails,
+        [long]$llmEmittedDetails, $inflectionEmittedDetails
+    )
     if ($importSchemaVersion -ne 2 -or $null -eq $importDetailCount -or
         [long]$importDetailCount -ne [long]$wordNetSourceCount -or
         $null -eq $mergedDetailCount -or $curatedSchemaVersion -cne 'sakura.curated-detail-import.v1' -or
