@@ -123,3 +123,29 @@ provenance; active work should load the smaller matching topic extracts above.
   linted too: `waited[0]` in a new test failed the local run (#415).
   Destructure (`let [a, b, c] = waited;`) or iterate, and run that clippy
   command on a test change before pushing.
+- An operation that reaches a store by path (clear, repair, move) must wait for
+  the asynchronous lifecycle that retires the store's owner. `active` turns
+  false at the next request boundary, but the writer thread keeps
+  `<history>.writer.lock` until the `HistoryRuntime` worker has joined it (6-28
+  ms, sometimes over 270 ms), so a `ClearInputHistory` right after developer
+  mode went off hit `AlreadyExists` and answered `Internal` in about 30 % of
+  isolated runs (#417). `HistoryRuntime::hold_idle` is the barrier and the
+  lease; `serve()` takes it for a Clear only, keeps it until the dispatch, and
+  answers `Busy` when the lifecycle does not settle inside the client's 2 s
+  call budget. Waiting alone is not enough: a developer-mode toggle between
+  the wait and the dispatch retired the attached service (`BrokenPipe`) or
+  started a generation under a by-path Clear (`AlreadyExists`), both
+  `Internal` (found in review of PR #418). While a hold is outstanding the
+  worker neither retires nor opens, and `configure` still never waits for it,
+  because it runs under the configuration lock that every request reads
+  through.
+- A mutation sweep must leave cargo no mutant build output that still looks
+  fresh. Restoring the mutated source with a timestamp-preserving copy
+  (`Copy-Item`) makes it older than the last mutant's output, so the next
+  `cargo test -p <crate>` with the same feature set reuses that mutant's test
+  executables and engine binary (#417: the zero-ceiling mutant's executable
+  failed the very test written to kill it, and the independent verifier saw the
+  lib and engine gates red). After a sweep touch the restored files, or run
+  `cargo clean -p <crate>`, and rebuild before any gate. Also derive survivors
+  with `Where-Object { $_ }`: in PowerShell `@($null)` has one element, and four
+  survivors were reported as KILLED with no test name.
