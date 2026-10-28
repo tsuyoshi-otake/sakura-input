@@ -15,10 +15,11 @@
 //! on the thread delivering the keystroke. An engine that wedges would
 //! wedge Word.
 //!
-//! The budget is 50 ms per keystroke (DESIGN 4.3), which is a real
-//! deadline, so every call here is issued overlapped and waited on with a
-//! timeout. Missing it before send is [`Fault::DeadlineExpired`]. After a
-//! request is issued, no-response-byte expiry is [`Fault::Timeout`]; partial
+//! The budget is per keystroke (DESIGN 4.3: 200 ms while the engine keeps
+//! answering, 50 ms after two misses in a row), which is a real deadline, so
+//! every call here is issued overlapped and waited on with a timeout. Missing
+//! it before send is [`Fault::DeadlineExpired`]. After a request is issued,
+//! no-response-byte expiry is [`Fault::Timeout`]; partial
 //! frame/cancellation uncertainty is [`Fault::Desynchronized`].
 //!
 //! # Why a timeout does not close the connection

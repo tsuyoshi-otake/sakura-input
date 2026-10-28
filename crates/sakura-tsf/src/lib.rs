@@ -34,6 +34,7 @@ mod engine_recovery;
 mod engine_recovery_tests;
 mod exports;
 mod key_handler;
+mod key_wait;
 mod mode_item;
 mod reconversion;
 #[cfg(test)]

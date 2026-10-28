@@ -9,10 +9,12 @@
 //!
 //! # Everything here is a deadline
 //!
-//! The key callback owns one 50 ms IPC deadline. Reconnect, resync, scope,
-//! key and UI requests share its remaining allowance, with smaller local
-//! caps where appropriate. Nested COM callbacks inherit the earlier expiry.
-//! Outside a key callback each operation retains its own bounded allowance.
+//! The key callback owns one IPC deadline, [`key_wait::budget`] long: 200 ms
+//! while the engine keeps answering, 50 ms once it has missed two waits in a
+//! row (#415). Reconnect, resync, scope, key and UI requests share its
+//! remaining allowance, with smaller local caps where appropriate. Nested COM
+//! callbacks inherit the earlier expiry. Outside a key callback each operation
+//! retains its own bounded allowance of [`key_wait::DESIGN_BUDGET`].
 //! OS scheduling, synchronous host calls and cancellation completion are not
 //! hard real-time guarantees; the deadline prevents renewed serial IPC waits.
 //!
@@ -35,6 +37,7 @@
 //! [`Link::resync`].
 
 use crate::callback_deadline;
+use crate::key_wait;
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
@@ -45,10 +48,6 @@ use sakura_proto::{
     Response, ScreenRect, SessionId, UndoCommitOutcome, PROTOCOL_VERSION,
 };
 use windows::Win32::System::LibraryLoader::GetModuleFileNameW;
-
-/// DESIGN 4.3's per-keystroke budget. Exceeding it is a dropped keystroke;
-/// not having it at all is a frozen application.
-pub(crate) const KEY_BUDGET: Duration = Duration::from_millis(50);
 
 /// Placement is cosmetic and must never consume the whole keystroke budget.
 /// A missed update leaves the popup hidden or at its last valid rectangle;
@@ -272,10 +271,7 @@ impl Engine {
             attempts: record.attempts,
             test_only: record.test_only,
         };
-        match link
-            .client
-            .call_until(&request, callback_deadline::limit(KEY_BUDGET))
-        {
+        match call_for_key(&mut link.client, &request) {
             Ok(Response::Ok) => true,
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
@@ -302,13 +298,13 @@ impl Engine {
         if link.input_scope != Some(InputScope::Normal) {
             return Err(ErrorCode::Busy);
         }
-        match link.client.call_until(
+        match call_for_key(
+            &mut link.client,
             &Request::StartAiText {
                 session: link.session,
                 operation,
                 text,
             },
-            callback_deadline::limit(KEY_BUDGET),
         ) {
             Ok(Response::AiTextStarted { job }) => Ok(job),
             Ok(Response::Error(code)) => Err(code),
@@ -440,12 +436,12 @@ impl Engine {
         }
         let session = link.session;
         let prior = link.mode;
-        match link.client.call_until(
+        match call_for_key(
+            &mut link.client,
             &Request::SetMode {
                 session,
                 mode: requested,
             },
-            callback_deadline::limit(KEY_BUDGET),
         ) {
             Ok(Response::InputMode { mode }) => {
                 link.mode = mode;
@@ -532,10 +528,7 @@ impl Engine {
             session: link.session,
             scope,
         };
-        match link
-            .client
-            .call_until(&request, callback_deadline::limit(KEY_BUDGET))
-        {
+        match call_for_key(&mut link.client, &request) {
             Ok(Response::Ok) => {
                 update_mode_for_scope(link, scope);
                 link.input_scope = Some(scope);
@@ -568,10 +561,7 @@ impl Engine {
         let request = Request::ResetDocumentContext {
             session: link.session,
         };
-        match link
-            .client
-            .call_until(&request, callback_deadline::limit(KEY_BUDGET))
-        {
+        match call_for_key(&mut link.client, &request) {
             Ok(Response::Ok) => {
                 link.menu_mode_restore = None;
                 true
@@ -675,10 +665,7 @@ impl Engine {
             return false;
         };
         let session = link.session;
-        match link.client.call_until(
-            &Request::Revert { session },
-            callback_deadline::limit(KEY_BUDGET),
-        ) {
+        match call_for_key(&mut link.client, &Request::Revert { session }) {
             Ok(Response::Ok) => {
                 link.desynchronized = false;
                 true
@@ -717,10 +704,7 @@ impl Engine {
             session: link.session,
             outcome,
         };
-        match link
-            .client
-            .call_until(&request, callback_deadline::limit(KEY_BUDGET))
-        {
+        match call_for_key(&mut link.client, &request) {
             Ok(Response::Ok) => true,
             Err(Fault::DeadlineExpired) => false,
             Err(Fault::Timeout) => {
@@ -818,10 +802,7 @@ impl Engine {
             return Answer::Unavailable;
         };
 
-        match link
-            .client
-            .call_until(request, callback_deadline::limit(KEY_BUDGET))
-        {
+        match call_for_key(&mut link.client, request) {
             Ok(Response::Output(output)) => {
                 if matches!(
                     request,
@@ -894,7 +875,7 @@ impl Engine {
     /// preceding writes as it does for Unavailable.
     fn unissued_answer(&self) -> Answer {
         if self.link.as_ref().is_some_and(|link| !link.desynchronized)
-            && Instant::now() >= callback_deadline::limit(KEY_BUDGET)
+            && callback_deadline::expired()
         {
             Answer::Rejected
         } else {
@@ -906,7 +887,7 @@ impl Engine {
 
     /// Returns a usable link, building one if the retry interval allows.
     fn link(&mut self) -> Option<&mut Link> {
-        if Instant::now() >= callback_deadline::limit(KEY_BUDGET) {
+        if callback_deadline::expired() {
             return None;
         }
         if self.link.is_some() {
@@ -976,10 +957,7 @@ impl Link {
     /// one is lost.
     fn resync(&mut self) -> bool {
         let session = self.session;
-        match self.client.call_until(
-            &Request::Revert { session },
-            callback_deadline::limit(KEY_BUDGET),
-        ) {
+        match call_for_key(&mut self.client, &Request::Revert { session }) {
             Ok(Response::Ok) => {
                 self.desynchronized = false;
                 true
@@ -997,6 +975,30 @@ impl Link {
             _ => false,
         }
     }
+}
+
+/// Sends one request under the key allowance and tells [`key_wait`] how it
+/// went. The deadline is the active key callback's whole remaining allowance,
+/// or [`key_wait::DESIGN_BUDGET`] from now outside one.
+///
+/// Every request that waits on the keystroke thread because of a key goes
+/// through here, so the wait policy sees all of the engine's answers and all
+/// of its silences. Placement and polling requests keep their own small caps
+/// and stay out: a 10 ms cosmetic cap that expires says nothing about the key
+/// wait.
+fn call_for_key(client: &mut Client, request: &Request) -> Result<Response, Fault> {
+    let answer = client.call_until(
+        request,
+        callback_deadline::remaining_or(key_wait::DESIGN_BUDGET),
+    );
+    match &answer {
+        Ok(_) => key_wait::record_answer(),
+        Err(Fault::Timeout) => key_wait::record_miss(),
+        // Never issued, a broken link or a malformed frame: none of them
+        // measures how long the engine takes to reply.
+        Err(_) => {}
+    }
+    answer
 }
 
 /// Connects and completes the handshake, all inside [`RECONNECT_BUDGET`].
@@ -1208,7 +1210,7 @@ const fn scope_is_sensitive(scope: InputScope) -> bool {
 /// Records one expiry, with how long the caller actually waited for it.
 ///
 /// The wait is the whole point of the second argument: a `key` record on its
-/// own cannot say whether the engine answered 1 ms past a 50 ms budget or was
+/// own cannot say whether the engine answered 1 ms past its budget or was
 /// stalled for two seconds, and those are different failures with different
 /// fixes. It carries no request content, only the duration.
 #[cfg(not(test))]
@@ -1352,6 +1354,13 @@ mod tests {
             repeat: false,
             test_only: false,
         }
+    }
+
+    /// Runs `f` inside a key callback entered the way `OnKeyDown` enters one:
+    /// with whatever allowance the wait policy gives the next key.
+    fn in_key_callback<T>(f: impl FnOnce() -> T) -> T {
+        let _callback = key_wait::enter_key_callback();
+        f()
     }
 
     /// Names a request the way a journal needs it: enough to tell a resync
@@ -2348,7 +2357,8 @@ mod tests {
         engine.link.as_mut().expect("connected").desynchronized = true;
         let started = Instant::now();
         let answer = {
-            let _callback = crate::callback_deadline::CallbackDeadline::enter(KEY_BUDGET);
+            let _callback =
+                crate::callback_deadline::CallbackDeadline::enter(key_wait::DESIGN_BUDGET);
             if engine.set_input_scope(InputScope::Normal) {
                 engine.send_key(a_key('a'))
             } else {
@@ -2362,6 +2372,344 @@ mod tests {
         assert!(
             matches!(answer, Answer::Unavailable),
             "serial calls each renewed their allowance"
+        );
+    }
+
+    /// The shared allowance of #148 is still one allowance when it is the long
+    /// one: a resync, a scope change and a key that take 35 ms each (105 ms,
+    /// past the design budget) all fit in a patient callback.
+    #[test]
+    fn a_patient_callback_fits_a_resync_a_scope_change_and_a_key_that_are_each_slow() {
+        key_wait::record_answer();
+        let (name, server) = fake_engine("patient-serial", |pipe, buffer| {
+            for _ in 0..3 {
+                let Ok(payload) = pipe.read_frame_with_deadline(buffer, Duration::from_millis(500))
+                else {
+                    return;
+                };
+                let (id, request) = decode_request(payload).expect("request");
+                let response = match request {
+                    Request::Revert { .. } | Request::SetInputScope { .. } => Response::Ok,
+                    Request::SendKey { .. } => Response::Output(latin_preedit("a")),
+                    _ => panic!("unexpected request"),
+                };
+                std::thread::sleep(Duration::from_millis(35));
+                let mut reply = Vec::new();
+                encode_response(&response, id, &mut reply).expect("encode");
+                if pipe.write_all(&reply).is_err() {
+                    return;
+                }
+            }
+        });
+        let mut engine = Engine::attached_to(&name);
+        engine.link.as_mut().expect("connected").desynchronized = true;
+        let answer = in_key_callback(|| {
+            if engine.set_input_scope(InputScope::Normal) {
+                engine.send_key(a_key('a'))
+            } else {
+                Answer::Unavailable
+            }
+        });
+        let synchronized = engine.is_connected() && !engine.is_desynchronized();
+        drop(engine);
+        server.join().expect("bounded scripted server");
+        assert!(
+            matches!(answer, Answer::Ready(_)),
+            "three 35 ms requests did not fit the patient allowance: {answer:?}"
+        );
+        assert!(synchronized, "the resync inside the callback was answered");
+    }
+
+    /// #415 (1): a reply that arrives after the old 50 ms and inside the new
+    /// 200 ms is a reply, not a dropped key. The link neither resynchronizes
+    /// nor loses the session.
+    #[test]
+    fn a_reply_inside_the_patient_budget_is_kept_like_any_other() {
+        key_wait::record_answer();
+        let (name, server) = fake_engine("patient-reply", |pipe, buffer| {
+            let Ok(payload) = pipe.read_frame(buffer) else {
+                return;
+            };
+            let (id, _) = decode_request(payload).expect("a decodable request");
+            std::thread::sleep(Duration::from_millis(100));
+            let mut reply = Vec::new();
+            encode_response(&Response::Output(some_output()), id, &mut reply).expect("encode");
+            let _ = pipe.write_all(&reply);
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        let started = Instant::now();
+        let answer = in_key_callback(|| engine.send_key(a_key('k')));
+        let waited = started.elapsed();
+        let kept = engine.is_connected() && !engine.is_desynchronized();
+        drop(engine);
+        server.join().expect("the server thread");
+
+        assert!(
+            matches!(answer, Answer::Ready(_)),
+            "a 100 ms reply was dropped inside a 200 ms budget: {answer:?}"
+        );
+        assert!(waited >= Duration::from_millis(100), "{waited:?}");
+        assert!(
+            kept,
+            "an answered key must not cost the session or force a resync"
+        );
+        assert_eq!(key_wait::budget(), key_wait::PATIENT_BUDGET);
+    }
+
+    /// #415 (2): a reply later than the ceiling is recovered exactly as a late
+    /// reply was before the ceiling moved. The host loses the key, the link
+    /// is kept and marked uncertain, and the next key resynchronizes before it
+    /// is sent. The abandoned key is not sent again, so nothing is applied
+    /// twice, and the two keys stay in the order they were typed.
+    #[test]
+    fn a_reply_past_the_patient_budget_is_recovered_as_before() {
+        key_wait::record_answer();
+        let (sender, journal) = std::sync::mpsc::channel();
+        let (name, server) = fake_engine("patient-miss", move |pipe, buffer| {
+            let Ok(payload) = pipe.read_frame(buffer) else {
+                return;
+            };
+            let (id, request) = decode_request(payload).expect("a decodable request");
+            let _ = sender.send(describe(&request));
+            std::thread::sleep(Duration::from_millis(400));
+            let mut reply = Vec::new();
+            encode_response(&Response::Output(latin_preedit("k")), id, &mut reply).expect("encode");
+            if pipe.write_all(&reply).is_err() {
+                return;
+            }
+            for _ in 0..2 {
+                let Ok(payload) = pipe.read_frame_with_deadline(buffer, Duration::from_secs(2))
+                else {
+                    return;
+                };
+                let (id, request) = decode_request(payload).expect("a decodable request");
+                let _ = sender.send(describe(&request));
+                let response = match request {
+                    Request::Revert { .. } => Response::Ok,
+                    _ => Response::Output(latin_preedit("u")),
+                };
+                let mut reply = Vec::new();
+                encode_response(&response, id, &mut reply).expect("encode");
+                if pipe.write_all(&reply).is_err() {
+                    return;
+                }
+            }
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        let started = Instant::now();
+        let abandoned = in_key_callback(|| engine.send_key(a_key('k')));
+        let waited = started.elapsed();
+        let marked = engine.is_desynchronized();
+        let kept = engine.is_connected();
+        let one_miss = key_wait::budget();
+        let misses_after_timeout = key_wait::consecutive_misses();
+        // The slow reply lands (400 ms after the key), so the next key
+        // measures the resync and not a second timeout.
+        std::thread::sleep(Duration::from_millis(300));
+        let next = in_key_callback(|| engine.send_key(a_key('u')));
+        let recovered = engine.is_connected() && !engine.is_desynchronized();
+        drop(engine);
+        server.join().expect("the scripted peer");
+
+        let asked: Vec<String> = journal.try_iter().collect();
+        assert!(matches!(abandoned, Answer::Unavailable), "{abandoned:?}");
+        assert!(
+            waited >= Duration::from_millis(190) && waited < Duration::from_millis(350),
+            "the key waited {waited:?}, not about the 200 ms ceiling"
+        );
+        assert!(
+            kept && marked,
+            "a late mutating key keeps the link, uncertain"
+        );
+        assert_eq!(misses_after_timeout, 1, "the late key was one missed wait");
+        assert_eq!(
+            one_miss,
+            key_wait::PATIENT_BUDGET,
+            "one miss is not a fallback"
+        );
+        assert_eq!(
+            asked,
+            vec![
+                "SendKey(k)".to_owned(),
+                "Revert".to_owned(),
+                "SendKey(u)".to_owned()
+            ],
+            "the next key must resync first and must not resend the abandoned key"
+        );
+        assert!(matches!(next, Answer::Ready(_)), "{next:?}");
+        assert!(recovered, "an answered Revert clears the uncertainty");
+        assert_eq!(
+            key_wait::consecutive_misses(),
+            0,
+            "the answers restarted the count"
+        );
+    }
+
+    /// #415 (3): against an engine that stops answering, two callbacks wait
+    /// the ceiling, every later one waits only the design budget, and the
+    /// first answer restores the long wait. Probes keep the link and the
+    /// session untouched, so each callback measures the wait and nothing else.
+    #[test]
+    fn two_missed_waits_return_callbacks_to_the_design_budget_until_an_answer() {
+        key_wait::record_answer();
+        let (name, server) = fake_engine("fallback", |pipe, buffer| {
+            for _ in 0..3 {
+                if pipe
+                    .read_frame_with_deadline(buffer, Duration::from_secs(5))
+                    .is_err()
+                {
+                    return;
+                }
+            }
+            answer(pipe, buffer, &Response::Output(some_output()));
+        });
+        let probe = KeyInput {
+            code: KeyCode::Space,
+            ch: None,
+            modifiers: Modifiers::NONE,
+            repeat: false,
+            test_only: true,
+        };
+
+        let mut engine = Engine::attached_to(&name);
+        let mut waited = [Duration::ZERO; 3];
+        let mut budgets = [Duration::ZERO; 3];
+        for (wait, budget) in waited.iter_mut().zip(&mut budgets) {
+            let started = Instant::now();
+            let answer = in_key_callback(|| engine.probe_key(InputScope::Normal, probe));
+            *wait = started.elapsed();
+            *budget = key_wait::budget();
+            assert!(matches!(answer, Answer::Unavailable), "{answer:?}");
+        }
+        let restored = in_key_callback(|| engine.probe_key(InputScope::Normal, probe));
+        let budget_after_answer = key_wait::budget();
+        let kept = engine.is_connected() && !engine.is_desynchronized();
+        drop(engine);
+        server.join().expect("the scripted peer");
+
+        let [first, second, third] = waited;
+        let ceiling = Duration::from_millis(190)..Duration::from_millis(350);
+        assert!(ceiling.contains(&first), "first wait {first:?}");
+        assert!(ceiling.contains(&second), "second wait {second:?}");
+        assert!(
+            third >= Duration::from_millis(40) && third < Duration::from_millis(150),
+            "after two misses a callback waited {third:?}, not about 50 ms"
+        );
+        assert_eq!(
+            budgets,
+            [
+                key_wait::PATIENT_BUDGET,
+                key_wait::DESIGN_BUDGET,
+                key_wait::DESIGN_BUDGET
+            ]
+        );
+        assert!(matches!(restored, Answer::Ready(_)), "{restored:?}");
+        assert_eq!(budget_after_answer, key_wait::PATIENT_BUDGET);
+        assert!(
+            kept,
+            "a Probe that times out never touches the live session"
+        );
+    }
+
+    /// A request made outside any key callback has no entry that could grow
+    /// its allowance, so it keeps the design budget even while the policy is
+    /// patient.
+    #[test]
+    fn a_request_outside_a_key_callback_keeps_the_design_budget() {
+        key_wait::record_answer();
+        let (name, server) = fake_engine("standalone", |pipe, buffer| {
+            let _ = pipe.read_frame(buffer);
+            std::thread::sleep(Duration::from_millis(400));
+        });
+
+        let mut engine = Engine::attached_to(&name);
+        assert_eq!(key_wait::budget(), key_wait::PATIENT_BUDGET);
+        let started = Instant::now();
+        let answer = engine.send_key(a_key('k'));
+        let waited = started.elapsed();
+        drop(engine);
+        server.join().expect("the server thread");
+
+        assert!(matches!(answer, Answer::Unavailable), "{answer:?}");
+        assert!(
+            waited < Duration::from_millis(150),
+            "a request outside a key callback waited {waited:?}, past the design budget"
+        );
+    }
+
+    /// #415 (4): with the engine stopped, typing costs no wait per key, with
+    /// the policy patient or not, and the retry clock is left alone.
+    #[test]
+    fn with_no_engine_a_patient_callback_adds_no_wait_and_counts_no_miss() {
+        key_wait::record_answer();
+        let blocked_until = Instant::now() + RETRY_INTERVAL;
+        let mut engine = Engine {
+            link: None,
+            blocked_until: Some(blocked_until),
+        };
+
+        let started = Instant::now();
+        let answers: Vec<Answer> = (0..20)
+            .map(|_| in_key_callback(|| engine.send_key(a_key('a'))))
+            .collect();
+        let waited = started.elapsed();
+
+        assert!(
+            answers
+                .iter()
+                .all(|answer| matches!(answer, Answer::Unavailable)),
+            "{answers:?}"
+        );
+        assert!(
+            waited < Duration::from_millis(100),
+            "twenty keys with no engine took {waited:?}"
+        );
+        assert_eq!(engine.blocked_until, Some(blocked_until));
+        assert_eq!(key_wait::consecutive_misses(), 0);
+    }
+
+    /// A request that was never issued, and a link that broke, say nothing
+    /// about whether the engine replies in time. Neither is a missed wait.
+    #[test]
+    fn an_unissued_request_and_a_broken_link_are_not_missed_waits() {
+        key_wait::record_answer();
+        let (name, server) = fake_engine("unissued", |pipe, buffer| {
+            // Take the first key and hang up without answering.
+            let _ = pipe.read_frame(buffer);
+        });
+        let mut engine = Engine::attached_to(&name);
+        for _ in 0..3 {
+            let spent = crate::callback_deadline::CallbackDeadline::enter(Duration::ZERO);
+            let answer = engine.send_key(a_key('k'));
+            drop(spent);
+            assert!(matches!(answer, Answer::Rejected), "{answer:?}");
+        }
+        // `send_key` refuses before it reaches the wire, so the classification
+        // inside `call_for_key` needs its own spent callback to be exercised.
+        if let Some(link) = engine.link.as_mut() {
+            let spent = crate::callback_deadline::CallbackDeadline::enter(Duration::ZERO);
+            for _ in 0..3 {
+                let answer = call_for_key(&mut link.client, &Request::Ping);
+                assert!(matches!(answer, Err(Fault::DeadlineExpired)), "{answer:?}");
+            }
+            drop(spent);
+        }
+        assert_eq!(
+            key_wait::consecutive_misses(),
+            0,
+            "a request that was never issued is not a missed wait"
+        );
+
+        let hung_up = in_key_callback(|| engine.send_key(a_key('k')));
+        drop(engine);
+        server.join().expect("the server thread");
+        assert!(matches!(hung_up, Answer::Unavailable), "{hung_up:?}");
+        assert_eq!(
+            key_wait::consecutive_misses(),
+            0,
+            "a broken pipe is not a missed wait"
         );
     }
 

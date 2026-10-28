@@ -452,7 +452,7 @@ impl Dispatcher {
     /// A *live* peer claim suppresses every idle key, because that idle
     /// connection is a duplicate of a composing one. A *torn-down* claim
     /// cannot: the connection that replaces a link the DLL dropped after its
-    /// 50 ms key budget is the real input path, and eating its letters would
+    /// key budget is the real input path, and eating its letters would
     /// lose them. So this narrows to exactly the keystroke that produced the
     /// reported symptom -- an unbound Space on an idle session -- and spends
     /// the latch so a second one still inserts.
@@ -517,7 +517,7 @@ impl Dispatcher {
     /// not a committed or cancelled composition. Those end through
     /// `sync_composition_fence` with `want == false`, which releases the
     /// claim outright and never reaches here still claimed. Without the
-    /// latch the DLL reconnect after a 50 ms key timeout opens the fence and
+    /// latch the DLL reconnect after a key timeout opens the fence and
     /// the next Space becomes a document U+3000 (#102).
     fn release_composition_fence(&mut self, id: SessionId) {
         let Some((name, claimed)) = self.fence_claims.remove(&id) else {
@@ -1795,7 +1795,7 @@ impl ExecutionPolicy {
     }
 
     /// Probe answers whether the host may see the key. Dictionary conversion
-    /// belongs to Apply so OnTestKeyDown cannot spend the 50 ms budget.
+    /// belongs to Apply so OnTestKeyDown cannot spend the key budget.
     const fn allows_dictionary_conversion(self) -> bool {
         matches!(self, Self::Apply)
     }

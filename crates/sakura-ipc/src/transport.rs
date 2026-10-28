@@ -108,8 +108,9 @@ pub enum Fault {
     Encode(sakura_proto::Error),
     /// The reply did not arrive inside the caller's deadline. Only the
     /// client end can produce this: the DLL must never block a keystroke
-    /// for longer than 50 ms (DESIGN 4.3), and a slow engine is answered
-    /// by passing the key through, not by waiting.
+    /// for longer than its key budget (DESIGN 4.3: 200 ms, or 50 ms after two
+    /// misses in a row), and a slow engine is answered by passing the key
+    /// through, not by waiting.
     ///
     /// This variant preserves the frame boundary: the connection survives
     /// because the request may still be in

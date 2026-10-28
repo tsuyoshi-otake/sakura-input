@@ -99,7 +99,8 @@
   installed 2.0.14 engine, renderer and neural worker all ran `BelowNormal`,
   and with 32 busy threads a below-normal engine missed the 50 ms key budget in
   every measured run (worst 10.06 s) while above normal stayed at or under
-  338 µs. Check `Get-ScheduledTask` `Settings.Priority` and the live process
+  338 µs (the key budget was 50 ms then; #415 made it 200 ms while the engine
+  answers). Check `Get-ScheduledTask` `Settings.Priority` and the live process
   class before blaming conversion code for load-only failures. A process that
   raises its own class must pass an explicit class to the helpers it spawns,
   or they inherit the raised one.

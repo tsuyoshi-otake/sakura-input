@@ -457,7 +457,7 @@ fn idle_henkan_is_absorbed_while_a_peer_is_composing() {
 /// 16:03:05.161 were each followed within 200 ms by a new engine session,
 /// and the Space at 16:03:05.658 landed on the fresh idle one and committed
 /// U+3000 into the document. The DLL drops its pipe when a keystroke
-/// overruns its 50 ms budget, so the composing connection resets with the
+/// overruns its key budget, so the composing connection resets with the
 /// reading still live. The peer that takes the next Space must still see a
 /// fenced host.
 #[test]

@@ -16,7 +16,8 @@
 //! deliberate bound when two Notepad windows both run `notepad.exe`.
 //!
 //! A claim can also disappear *abnormally*. The DLL gives a keystroke a
-//! 50 ms round trip; when that budget expires it drops the pipe, and the
+//! bounded round trip (50 ms when #102 was measured, up to 200 ms since
+//! #415); when that budget expires it drops the pipe, and the
 //! composing session is torn down with its reading still live. The next
 //! Space then finds an idle host and commits U+3000 into the user's
 //! document — the measured #102 symptom.
