@@ -489,7 +489,7 @@ fn stop_service(shared: &Shared, service: &InputHistoryService) {
 #[cfg(test)]
 mod tests {
     use std::io;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{mpsc, Arc, Condvar, Mutex};
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -538,18 +538,61 @@ mod tests {
         }
     }
 
-    fn test_path(name: &str) -> PathBuf {
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("clock")
-            .as_nanos();
-        let directory = std::env::temp_dir().join(format!(
-            "sakura_history_runtime_{name}_{}_{}",
-            std::process::id(),
-            nonce
-        ));
-        std::fs::create_dir_all(&directory).expect("history runtime test directory");
-        directory.join("input.bin")
+    /// A scratch directory for one test, removed when the guard drops, also
+    /// when an assertion fails, which is when a cleanup written at the end of
+    /// the test never runs. Declare it before the runtime or service that has
+    /// the store open, so those drop first and release their files.
+    struct TestDir(PathBuf);
+
+    impl TestDir {
+        fn new(name: &str) -> Self {
+            let nonce = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos();
+            let directory = std::env::temp_dir().join(format!(
+                "sakura_history_runtime_{name}_{}_{}",
+                std::process::id(),
+                nonce
+            ));
+            std::fs::create_dir_all(&directory).expect("history runtime test directory");
+            Self(directory)
+        }
+
+        /// The history store inside the directory.
+        fn store(&self) -> PathBuf {
+            self.0.join("input.bin")
+        }
+    }
+
+    impl Drop for TestDir {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn a_test_directory_goes_with_its_contents_when_the_guard_drops() {
+        let path = {
+            let dir = TestDir::new("guard-drop");
+            std::fs::write(dir.store(), b"history").expect("store file");
+            dir.0.clone()
+        };
+        assert!(!path.exists(), "{path:?} outlived its guard");
+    }
+
+    #[test]
+    fn a_test_directory_goes_when_its_test_fails() {
+        let path = std::cell::RefCell::new(None);
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let dir = TestDir::new("guard-panic");
+            std::fs::write(dir.store(), b"history").expect("store file");
+            *path.borrow_mut() = Some(dir.0.clone());
+            panic!("a failing assertion");
+        }));
+        assert!(outcome.is_err());
+        let path = path.into_inner().expect("the directory was created");
+        assert!(!path.exists(), "{path:?} outlived a failing test");
     }
 
     fn controlled_runtime(
@@ -604,10 +647,6 @@ mod tests {
         );
     }
 
-    fn remove_test_dir(path: &Path) {
-        let _ = std::fs::remove_dir_all(path.parent().expect("history directory"));
-    }
-
     fn quiet_state(phase: Phase) -> State {
         State {
             desired_enabled: false,
@@ -642,7 +681,8 @@ mod tests {
     fn stalled_open_is_not_a_request_path_stall_and_publishes_when_current() {
         let control = Arc::new(OpenControl::default());
         let opens = Arc::new(AtomicUsize::new(0));
-        let runtime = controlled_runtime(test_path("stalled"), Arc::clone(&control), opens);
+        let dir = TestDir::new("stalled");
+        let runtime = controlled_runtime(dir.store(), Arc::clone(&control), opens);
         control.wait_for_calls(1);
 
         let started = Instant::now();
@@ -662,11 +702,8 @@ mod tests {
     fn disable_during_open_never_publishes_the_stale_generation() {
         let control = Arc::new(OpenControl::default());
         let opens = Arc::new(AtomicUsize::new(0));
-        let runtime = controlled_runtime(
-            test_path("disable-during-open"),
-            Arc::clone(&control),
-            opens,
-        );
+        let dir = TestDir::new("disable-during-open");
+        let runtime = controlled_runtime(dir.store(), Arc::clone(&control), opens);
         control.wait_for_calls(1);
         runtime.configure(false);
         assert!(runtime.service().is_none());
@@ -681,11 +718,8 @@ mod tests {
     fn repeated_toggles_open_once_per_enabled_generation() {
         let control = Arc::new(OpenControl::default());
         let opens = Arc::new(AtomicUsize::new(0));
-        let runtime = controlled_runtime(
-            test_path("toggles"),
-            Arc::clone(&control),
-            Arc::clone(&opens),
-        );
+        let dir = TestDir::new("toggles");
+        let runtime = controlled_runtime(dir.store(), Arc::clone(&control), Arc::clone(&opens));
         control.wait_for_calls(1);
         assert!(runtime.service().is_none());
         runtime.configure(false);
@@ -742,11 +776,8 @@ mod tests {
     fn shutdown_waits_for_the_owned_open_and_writer_join() {
         let control = Arc::new(OpenControl::default());
         let opens = Arc::new(AtomicUsize::new(0));
-        let runtime = Arc::new(controlled_runtime(
-            test_path("shutdown"),
-            Arc::clone(&control),
-            opens,
-        ));
+        let dir = TestDir::new("shutdown");
+        let runtime = Arc::new(controlled_runtime(dir.store(), Arc::clone(&control), opens));
         control.wait_for_calls(1);
         let (done_sender, done_receiver) = mpsc::channel();
         let stopping = Arc::clone(&runtime);
@@ -801,17 +832,16 @@ mod tests {
             "a stopping writer still owns the store lock"
         );
 
-        let path = test_path("retiring-state");
+        let dir = TestDir::new("retiring-state");
         let mut retiring = quiet_state(Phase::Disabled);
         retiring
             .retiring
-            .push(InputHistoryService::open(&path).expect("open history"));
+            .push(InputHistoryService::open(&dir.store()).expect("open history"));
         assert!(
             !retiring.is_idle(),
             "a service waiting to be stopped still owns the store lock"
         );
         drop(retiring);
-        remove_test_dir(&path);
 
         let mut exited = quiet_state(Phase::Starting(1));
         exited.opening = true;
@@ -825,7 +855,8 @@ mod tests {
 
     #[test]
     fn hold_idle_outlasts_a_retiring_writers_store_lock() {
-        let path = test_path("retiring-writer");
+        let dir = TestDir::new("retiring-writer");
+        let path = dir.store();
         let service = InputHistoryService::open(&path).expect("open history");
         let runtime = HistoryRuntime::with_opener(Some(service), true, false, || {
             Err("no replacement generation".to_owned())
@@ -852,12 +883,12 @@ mod tests {
         assert_settles_promptly(&runtime);
         clear_path(&path).expect("the store is free once the lifecycle is idle");
         runtime.stop();
-        remove_test_dir(&path);
     }
 
     #[test]
     fn hold_idle_covers_a_disabled_open_and_the_stop_of_its_stale_service() {
-        let path = test_path("stale-open");
+        let dir = TestDir::new("stale-open");
+        let path = dir.store();
         let control = Arc::new(OpenControl::default());
         let runtime = controlled_runtime(
             path.clone(),
@@ -890,15 +921,14 @@ mod tests {
         assert_settles_promptly(&runtime);
         clear_path(&path).expect("the store is free once the lifecycle is idle");
         runtime.stop();
-        remove_test_dir(&path);
     }
 
     #[test]
     fn hold_idle_returns_with_the_opened_service_already_published() {
-        let path = test_path("publish-before-idle");
+        let dir = TestDir::new("publish-before-idle");
         let control = Arc::new(OpenControl::default());
         let runtime = controlled_runtime(
-            path.clone(),
+            dir.store(),
             Arc::clone(&control),
             Arc::new(AtomicUsize::new(0)),
         );
@@ -916,7 +946,6 @@ mod tests {
             "the lifecycle must not be idle before the opened service is visible"
         );
         runtime.stop();
-        remove_test_dir(&path);
     }
 
     #[test]
@@ -1013,7 +1042,8 @@ mod tests {
 
     #[test]
     fn a_hold_keeps_a_disabled_service_running_until_it_is_released() {
-        let path = test_path("held-service");
+        let dir = TestDir::new("held-service");
+        let path = dir.store();
         let service = InputHistoryService::open(&path).expect("open history");
         let runtime = HistoryRuntime::with_opener(Some(Arc::clone(&service)), true, false, || {
             Err("no replacement generation".to_owned())
@@ -1050,7 +1080,6 @@ mod tests {
         assert_settles_promptly(&runtime);
         clear_path(&path).expect("the store is free once the hold is gone and the service retired");
         runtime.stop();
-        remove_test_dir(&path);
     }
 
     #[test]
