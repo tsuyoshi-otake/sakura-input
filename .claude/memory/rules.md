@@ -149,3 +149,38 @@ provenance; active work should load the smaller matching topic extracts above.
   `cargo clean -p <crate>`, and rebuild before any gate. Also derive survivors
   with `Where-Object { $_ }`: in PowerShell `@($null)` has one element, and four
   survivors were reported as KILLED with no test name.
+- A flag a condvar waiter tests under its mutex has to be set under that mutex.
+  `Mailbox::stop` stored `stopping` and notified without taking `state`, while
+  `worker()` checks `stopping` and then waits on `pending_changed` holding it,
+  so a stop that landed between the check and the wait was lost and
+  `PredictionRuntime::drop` joined a sleeping worker forever (#422). In the
+  suite it showed as one loaded run in 110 that never finished, not as a
+  failure; a loop of start, one request and drop hung in 4 of 4 idle-machine
+  runs and passed 3 of 3 (about 300,000 iterations each) once the flag was set
+  under the lock. Test it by holding the lock in the test and asserting the flag
+  stays unset (`stop_sets_the_flag_only_while_holding_the_state_lock`).
+- A cleanup that deletes scratch directories builds its manifest first and
+  refuses to run when the manifest is not the size expected. On 2026-10-28 the
+  cleanup of the 4 directories a baseline test run had left removed 761
+  `sakura_history_runtime_*` directories instead: it was a `pwsh -Command '...'
+  arg` one-liner, `$args[0]` was empty, the snapshot was never read, and every
+  directory counted as new. Write the cleanup as a `.ps1` with `param()`, print
+  the manifest, and compare its count with the expected one before the first
+  `Remove-Item`.
+- A test-only patience seam goes where the timeout is consumed, and its
+  coverage is checked with the whole library under load. The first seam of #422
+  sat in `PredictionService::request_into`; four `prediction::tests::*` call
+  `request`, which waits through the same `Mailbox::wait_into` but never passes
+  `request_into`, and a run of only the `dispatch::tests::` family could not
+  show it. The whole `sakura-engine` library next to 16 busy-loop threads failed
+  3 of 5 runs (8 failures in those four tests) before the seam moved into
+  `wait_into`, and 0 of 15 runs (10 next to 16 threads, 5 next to 32) after.
+- The `ci/*.ps1` gates start `cargo metadata` through .NET processes, which take
+  the process working directory, not PowerShell's `Set-Location`. A gate script
+  launched in the background from another directory checks that directory:
+  `check-dependency-rules.ps1` failed with `could not find Cargo.toml` in the
+  launching directory (#422), and the launch before it, made from the main
+  checkout, passed and most likely checked the main checkout's tree instead of
+  the worktree's. Start the gates with the repository root as the process
+  directory (`cd` before `pwsh`, or set `[Environment]::CurrentDirectory`) and
+  print both directories next to each result.
