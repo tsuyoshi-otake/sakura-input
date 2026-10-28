@@ -3,8 +3,9 @@ use dictc_core::{
     SourceDetailRelation,
 };
 use dictc_core::{glossary, wordnet};
-use sakura_core::dictionary::{DetailRelationKind, Dictionary};
+use sakura_core::dictionary::{image_format, DetailRelationKind, Dictionary, Error};
 use sakura_proto::FixedStr;
+use std::ops::Range;
 
 const ENTRIES: &str = "# license: MIT\n\
 reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
@@ -217,5 +218,170 @@ fn malformed_optional_detail_tables_are_rejected_without_panics() {
             }
         });
         assert!(outcome.is_ok(), "mutation at byte {index} panicked");
+    }
+}
+
+/// A detail image whose description and relation targets are short, so a test
+/// can corrupt every byte of its text tables.
+fn short_text_image() -> Vec<u8> {
+    let entries = parse_entries("details.tsv", ENTRIES).expect("entries");
+    let matrix = parse_connection("details-matrix.tsv", CONNECTION, false).expect("matrix");
+    compile_with_details(
+        &entries,
+        &matrix,
+        &[SourceDetail {
+            reading: "よみ".into(),
+            surface: "同形".into(),
+            left_id: 1,
+            right_id: 1,
+            description: "説明 A 😀 文".into(),
+            relations: vec![
+                SourceDetailRelation {
+                    kind: DetailRelationKind::Alias,
+                    target: "別名".into(),
+                },
+                SourceDetailRelation {
+                    kind: DetailRelationKind::Related,
+                    target: "関連語".into(),
+                },
+            ],
+        }],
+    )
+    .expect("short detail image")
+}
+
+fn u32_at(bytes: &[u8], at: usize) -> u32 {
+    u32::from_le_bytes(bytes[at..at + 4].try_into().expect("four bytes"))
+}
+
+fn table_range(image: &[u8], tag: [u8; 4]) -> Range<usize> {
+    let table_count = usize::from(u16::from_le_bytes([image[12], image[13]]));
+    let at = (0..table_count)
+        .map(|index| image_format::HEADER_LEN + index * image_format::DIRECTORY_ENTRY_LEN)
+        .find(|at| image[*at..*at + 4] == tag)
+        .expect("table in the directory");
+    let start = u32_at(image, at + 4) as usize;
+    start..start + u32_at(image, at + 8) as usize
+}
+
+fn parse_outcome(image: &[u8]) -> Result<(), Error> {
+    Dictionary::parse(image).map(|_| ())
+}
+
+#[test]
+fn an_invalid_detail_text_is_rejected_when_the_image_is_opened() {
+    let mut bytes = short_text_image();
+    let texts = table_range(&bytes, image_format::TAG_DETAIL_TEXT);
+    bytes[texts.start] = 0xff;
+    assert_eq!(parse_outcome(&bytes), Err(Error::BadUtf8));
+}
+
+#[test]
+fn a_detail_text_that_starts_inside_a_character_is_rejected_when_the_image_is_opened() {
+    let mut bytes = short_text_image();
+    let offsets = table_range(&bytes, image_format::TAG_DETAIL_TEXT_OFFSETS);
+    let second = offsets.start + 4;
+    let start = u32_at(&bytes, second);
+    bytes[second..second + 4].copy_from_slice(&(start + 1).to_le_bytes());
+    let texts = table_range(&bytes, image_format::TAG_DETAIL_TEXT);
+    assert!(
+        std::str::from_utf8(&bytes[texts]).is_ok(),
+        "only the split moved; the table is still valid UTF-8 as a whole"
+    );
+    assert_eq!(parse_outcome(&bytes), Err(Error::BadUtf8));
+}
+
+#[test]
+fn a_detail_text_nothing_refers_to_is_not_examined() {
+    // Opening follows the references, as it did before the table was checked
+    // in one pass, so an image that only damages an unused text keeps opening.
+    let mut bytes = short_text_image();
+    let relations = table_range(&bytes, image_format::TAG_DETAIL_RELATIONS);
+    let first_target = relations.start + 4;
+    let second_target = relations.start + image_format::DETAIL_RELATION_LEN + 4;
+    let orphan = u32_at(&bytes, second_target) as usize;
+    bytes.copy_within(first_target..first_target + 4, second_target);
+    let offsets = table_range(&bytes, image_format::TAG_DETAIL_TEXT_OFFSETS);
+    let texts = table_range(&bytes, image_format::TAG_DETAIL_TEXT);
+    let orphan_start = u32_at(&bytes, offsets.start + 4 * orphan) as usize;
+    bytes[texts.start + orphan_start] = 0xff;
+    assert_eq!(parse_outcome(&bytes), Ok(()));
+}
+
+/// The judgement opening must reach, written per text. Every text of
+/// `short_text_image` is referenced, so each one has to be valid on its own.
+fn per_text_outcome(image: &[u8]) -> Result<(), Error> {
+    let offsets = table_range(image, image_format::TAG_DETAIL_TEXT_OFFSETS);
+    let data = &image[table_range(image, image_format::TAG_DETAIL_TEXT)];
+    let starts: Vec<usize> = image[offsets]
+        .chunks_exact(4)
+        .map(|chunk| u32_at(chunk, 0) as usize)
+        .collect();
+    if starts.iter().any(|start| *start >= data.len()) || starts.windows(2).any(|w| w[0] >= w[1]) {
+        return Err(Error::BadTable(image_format::TAG_DETAIL_TEXT));
+    }
+    let ends = starts.iter().skip(1).copied().chain([data.len()]);
+    if starts
+        .iter()
+        .copied()
+        .zip(ends)
+        .all(|(start, end)| std::str::from_utf8(&data[start..end]).is_ok())
+    {
+        Ok(())
+    } else {
+        Err(Error::BadUtf8)
+    }
+}
+
+#[test]
+fn every_corruption_of_the_detail_text_tables_is_judged_per_text() {
+    let image = short_text_image();
+    assert_eq!(per_text_outcome(&image), Ok(()));
+    let mut seen = std::collections::BTreeSet::new();
+    for table in [
+        image_format::TAG_DETAIL_TEXT_OFFSETS,
+        image_format::TAG_DETAIL_TEXT,
+    ] {
+        for at in table_range(&image, table) {
+            for mask in 1..=u8::MAX {
+                let mut corrupt = image.clone();
+                corrupt[at] ^= mask;
+                let expected = per_text_outcome(&corrupt);
+                assert_eq!(
+                    parse_outcome(&corrupt),
+                    expected,
+                    "byte {at} xor {mask:#04x}"
+                );
+                seen.insert(format!("{expected:?}"));
+            }
+        }
+    }
+    assert_eq!(
+        seen.len(),
+        3,
+        "the sweep must reach accepted, bad UTF-8 and bad offsets: {seen:?}"
+    );
+}
+
+#[test]
+fn a_detail_text_id_past_the_text_table_is_rejected_even_when_every_text_is_valid() {
+    // Every text is valid, so opening takes the one-pass check; the id of each
+    // reference is still judged by itself.
+    let image = short_text_image();
+    let text_count = (table_range(&image, image_format::TAG_DETAIL_TEXT_OFFSETS).len() / 4) as u32;
+    let records = table_range(&image, image_format::TAG_DETAIL_RECORDS);
+    let relations = table_range(&image, image_format::TAG_DETAIL_RELATIONS);
+    for (at, tag) in [
+        (records.start, image_format::TAG_DETAIL_RECORDS),
+        (records.start + 4, image_format::TAG_DETAIL_RECORDS),
+        (relations.start + 4, image_format::TAG_DETAIL_RELATIONS),
+    ] {
+        let mut corrupt = image.clone();
+        corrupt[at..at + 4].copy_from_slice(&text_count.to_le_bytes());
+        assert_eq!(
+            parse_outcome(&corrupt),
+            Err(Error::BadTable(tag)),
+            "text id at byte {at}"
+        );
     }
 }
