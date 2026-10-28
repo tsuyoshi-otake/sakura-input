@@ -464,6 +464,16 @@ mod tests {
         directory.join("config.toml")
     }
 
+    /// Publishes `contents` the way every real writer does, as one rename of a
+    /// complete file. An in-place `fs::write` truncates first, and a watcher
+    /// poll that lands between the truncation and the write reads an empty
+    /// file, which is a valid configuration of defaults (#379).
+    fn replace_configuration(path: &Path, contents: &str) {
+        let temporary = path.with_extension("toml.tmp");
+        fs::write(&temporary, contents).expect("temporary configuration");
+        fs::rename(&temporary, path).expect("publish configuration");
+    }
+
     #[test]
     fn missing_file_uses_current_defaults_without_creating_state() {
         let path = temporary_config("missing");
@@ -528,11 +538,10 @@ mod tests {
         )
         .expect("watcher");
 
-        fs::write(
+        replace_configuration(
             &path,
             "[meta]\nformat-version = \"4\"\n\n[appearance]\ntheme = \"dark\"\n",
-        )
-        .expect("dark configuration");
+        );
         assert_eq!(
             received
                 .recv_timeout(Duration::from_secs(1))
@@ -542,15 +551,13 @@ mod tests {
 
         // A transient, malformed save must not reset the already-published
         // dark theme to Auto or wake the renderer with a guessed palette.
-        fs::write(&path, "[appearance]\ntheme = \"dark\"\ntheme = \"light\"\n")
-            .expect("malformed configuration");
+        replace_configuration(&path, "[appearance]\ntheme = \"dark\"\ntheme = \"light\"\n");
         assert!(received.recv_timeout(Duration::from_millis(80)).is_err());
 
-        fs::write(
+        replace_configuration(
             &path,
             "[meta]\nformat-version = \"4\"\n\n[appearance]\ntheme = \"light\"\n",
-        )
-        .expect("light configuration");
+        );
         assert_eq!(
             received
                 .recv_timeout(Duration::from_secs(1))
@@ -558,11 +565,10 @@ mod tests {
             AppearanceTheme::Light
         );
 
-        fs::write(
+        replace_configuration(
             &path,
             "[meta]\nformat-version = \"4\"\n\n[appearance]\ntheme = \"auto\"\n",
-        )
-        .expect("auto configuration");
+        );
         assert_eq!(
             received
                 .recv_timeout(Duration::from_secs(1))
@@ -589,11 +595,10 @@ mod tests {
         )
         .expect("watcher");
 
-        fs::write(
+        replace_configuration(
             &path,
             "[meta]\nformat-version = \"4\"\n\n[input]\nkeymap-preset = \"atok\"\nprediction-enabled = \"false\"\nassociation-enabled = \"false\"\n",
-        )
-        .expect("initial configuration");
+        );
         let (preferences, profiles) = received
             .recv_timeout(Duration::from_secs(1))
             .expect("initial publication");
@@ -603,18 +608,16 @@ mod tests {
         assert_eq!(profiles, default_app_profiles(preferences));
 
         // A transient malformed save must never replace a valid snapshot.
-        fs::write(
+        replace_configuration(
             &path,
             "[input]\nkeymap-preset = \"ms-ime\"\nkeymap-preset = \"atok\"\n",
-        )
-        .expect("malformed configuration");
+        );
         assert!(received.recv_timeout(Duration::from_millis(80)).is_err());
 
-        fs::write(
+        replace_configuration(
             &path,
             "[meta]\nformat-version = \"4\"\n\n[input]\nkeymap-preset = \"ms-ime\"\nprediction-enabled = \"true\"\nassociation-enabled = \"true\"\n\n[width]\nalnum = \"full\"\n\n[profile.code.exe]\ndefault-mode = \"hiragana\"\nprediction-enabled = \"true\"\nsuggest-accept = \"tab\"\n",
-        )
-        .expect("updated configuration");
+        );
         let (preferences, profiles) = received
             .recv_timeout(Duration::from_secs(1))
             .expect("updated publication");

@@ -79,7 +79,7 @@ fn restore_host_cursor() {
 
 /// Upper bound for a `WM_SETCURSOR` restore sent to a window owned by
 /// another thread. The wait happens on the host UI thread, so it must fit
-/// the 50 ms per-key budget (#148), which is also the AI poll period. On
+/// the 50 ms design budget (#148), which is also the AI poll period. On
 /// timeout the other thread keeps control of its own cursor: the cursor
 /// over that thread's window is already set by its own `WM_SETCURSOR`
 /// handling.

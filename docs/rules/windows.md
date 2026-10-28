@@ -99,7 +99,8 @@
   installed 2.0.14 engine, renderer and neural worker all ran `BelowNormal`,
   and with 32 busy threads a below-normal engine missed the 50 ms key budget in
   every measured run (worst 10.06 s) while above normal stayed at or under
-  338 µs. Check `Get-ScheduledTask` `Settings.Priority` and the live process
+  338 µs (the key budget was 50 ms then; #415 made it 200 ms while the engine
+  answers). Check `Get-ScheduledTask` `Settings.Priority` and the live process
   class before blaming conversion code for load-only failures. A process that
   raises its own class must pass an explicit class to the helpers it spawns,
   or they inherit the raised one.
@@ -163,3 +164,15 @@
   std opens files with all three share bits, so only an outside tool can do
   this. The writer treats it like any failed rotation: one error, then a
   back-off, no retry loop.
+
+- **A load loop over the `sakura-renderer` lib test binary runs one process at a
+  time, or skips the clipboard and z-order tests.** Observed 2026-10-28 (#419):
+  four processes of the binary at once failed
+  `pad_clipboard::tests::private_station_clipboard_round_trip` in 7 of 48 runs
+  and, in a second loop, 5 of 24, each time with `OpenClipboard` denied
+  (`0x80070005`) inside the test's private window station; once in the 48 the
+  `pad_hardware` topmost-parent test failed as well. One process at a time
+  passed 12 of 12, and four processes with `--skip pad_clipboard --skip
+  pad_hardware` passed 48 of 48. CI starts the binary once per job and the cause
+  was not investigated, so these failures say nothing about the test under
+  measurement; do not read them as a product defect.

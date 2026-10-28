@@ -2,10 +2,12 @@
 //! whoever started them.
 //!
 //! The text service waits for the engine synchronously, on the host
-//! application's UI thread, and gives each keystroke `KEY_BUDGET` (50 ms in
-//! `sakura-tsf`). A reply that misses that budget is a dropped keystroke and
-//! a finalized composition (#148). The engine is therefore the server half
-//! of a foreground interaction, not a background job.
+//! application's UI thread, and gives each keystroke the wait chosen by
+//! `sakura-tsf`'s `key_wait`: 200 ms while the engine keeps answering, 50 ms
+//! after two misses in a row (#415). A reply that misses that wait is a
+//! dropped keystroke and a finalized composition (#148). The engine is
+//! therefore the server half of a foreground interaction, not a background
+//! job.
 //!
 //! Nothing about how the engine is started says so. The logon task is
 //! registered with the Task Scheduler's default priority, 7, which is

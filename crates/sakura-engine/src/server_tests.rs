@@ -423,7 +423,7 @@ fn optional_prediction_worker_follows_a_live_configuration_change() {
         prediction_enabled: true,
         ..Preferences::default()
     };
-    let services = server.shared.runtime_services(&enabled, &[]);
+    let services = server.shared.runtime_services(&enabled, &[], None);
     assert!(
         services.prediction.is_some(),
         "enabling prediction must start the optional worker on demand"
@@ -433,7 +433,7 @@ fn optional_prediction_worker_follows_a_live_configuration_change() {
         prediction_enabled: false,
         ..Preferences::default()
     };
-    let services = server.shared.runtime_services(&disabled, &[]);
+    let services = server.shared.runtime_services(&disabled, &[], None);
     assert!(
         services.prediction.is_none(),
         "disabling prediction must detach the service before the next key"
@@ -481,7 +481,7 @@ fn optional_input_history_follows_a_live_developer_mode_change() {
     server.shared.publish_configuration(enabled, Vec::new());
     let activation_deadline = Instant::now() + Duration::from_secs(5);
     loop {
-        let services = server.shared.runtime_services(&enabled, &[]);
+        let services = server.shared.runtime_services(&enabled, &[], None);
         if services.input_history.is_some() {
             break;
         }
@@ -497,7 +497,7 @@ fn optional_input_history_follows_a_live_developer_mode_change() {
         ..Preferences::default()
     };
     server.shared.publish_configuration(disabled, Vec::new());
-    let services = server.shared.runtime_services(&disabled, &[]);
+    let services = server.shared.runtime_services(&disabled, &[], None);
     assert!(
         services.input_history.is_none(),
         "disabling developer-mode must detach history at the next boundary"
@@ -506,7 +506,7 @@ fn optional_input_history_follows_a_live_developer_mode_change() {
         server.shared.history_runtime.service().is_none(),
         "disabled history must stay detached"
     );
-    let stale_services = server.shared.runtime_services(&enabled, &[]);
+    let stale_services = server.shared.runtime_services(&enabled, &[], None);
     assert!(
         stale_services.input_history.is_none(),
         "an older request snapshot must not undo the published disabled state"
@@ -521,6 +521,183 @@ fn optional_input_history_follows_a_live_developer_mode_change() {
         Some(value) => std::env::set_var("LOCALAPPDATA", value),
         None => std::env::remove_var("LOCALAPPDATA"),
     }
+    let _ = fs::remove_dir_all(&root);
+}
+
+// A Clear that reaches the dispatcher with no history service attached works on
+// the real per-user store by path, so this checks the decision alone and never
+// sends one (#417).
+#[test]
+fn only_a_clear_holds_the_history_lifecycle() {
+    // `release` is declared after `shared` so a failing assertion drops it first
+    // and lets the stalled opener return; the other way round, dropping the
+    // runtime would wait for that worker forever.
+    let mut shared = test_shared(Arc::new(LearningService::memory()));
+    let (release, released) = mpsc::channel::<()>();
+    let released = Mutex::new(released);
+    shared.history_runtime = HistoryRuntime::with_opener(None, true, false, move || {
+        let _ = released.lock().expect("opener gate").recv();
+        Err("test opener released".to_owned())
+    })
+    .expect("start a history lifecycle with a stalled open");
+
+    let wait = Duration::from_millis(50);
+    assert!(
+        matches!(
+            shared.hold_history_lifecycle(&Request::ClearInputHistory, wait),
+            HistoryLifecycle::Busy
+        ),
+        "a Clear must not run while the store is being opened"
+    );
+    assert!(
+        matches!(
+            shared.hold_history_lifecycle(&Request::FlushInputHistory, wait),
+            HistoryLifecycle::NotNeeded
+        ),
+        "requests other than Clear never wait for the lifecycle"
+    );
+    assert!(matches!(
+        shared.hold_history_lifecycle(&Request::Ping, wait),
+        HistoryLifecycle::NotNeeded
+    ));
+
+    release.send(()).expect("release the stalled open");
+    assert!(
+        matches!(
+            shared.hold_history_lifecycle(&Request::ClearInputHistory, Duration::from_secs(5)),
+            HistoryLifecycle::Held(_)
+        ),
+        "a Clear proceeds once the open has finished"
+    );
+}
+
+// The ceiling is what turns a Clear that arrives while the previous generation
+// is still releasing the store into a delayed Clear instead of a `Busy` one: the
+// writer's final flush has been seen to take a few hundred milliseconds, so the
+// real ceiling has to outlast a lifecycle that settles a while after the Clear
+// arrived (#417).
+#[test]
+fn a_clear_waits_out_a_lifecycle_that_settles_within_its_ceiling() {
+    // The sender belongs to a thread of its own, so a failing assertion cannot
+    // leave the stalled opener blocked while the runtime's drop joins its worker.
+    let mut shared = test_shared(Arc::new(LearningService::memory()));
+    let (release, released) = mpsc::channel::<()>();
+    let released = Mutex::new(released);
+    shared.history_runtime = HistoryRuntime::with_opener(None, true, false, move || {
+        let _ = released.lock().expect("opener gate").recv();
+        Err("test opener released".to_owned())
+    })
+    .expect("start a history lifecycle with a stalled open");
+    let releaser = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(150));
+        let _ = release.send(());
+    });
+
+    assert!(
+        matches!(
+            shared.hold_history_lifecycle(&Request::ClearInputHistory, HISTORY_LIFECYCLE_WAIT),
+            HistoryLifecycle::Held(_)
+        ),
+        "a Clear must wait for a lifecycle that settles within the ceiling"
+    );
+    releaser.join().expect("opener release thread");
+}
+
+// What a held Clear is dispatched with: the history service that was published
+// when it took the hold, whatever the preferences it is read against say and
+// whatever developer mode has done since. Requests that hold nothing keep
+// following the published state, and once the hold is dropped the retirement
+// goes through and the store is unowned again (#417).
+#[test]
+fn a_held_clear_is_dispatched_with_the_service_it_was_held_with() {
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("clock")
+        .as_nanos();
+    let root = std::env::temp_dir().join(format!(
+        "sakura_input_history_held_{}_{}",
+        std::process::id(),
+        nonce
+    ));
+    fs::create_dir_all(&root).expect("history dir");
+    let store = root.join("input.bin");
+
+    let mut shared = test_shared(Arc::new(LearningService::memory()));
+    let opener_store = store.clone();
+    shared.history_runtime = HistoryRuntime::with_opener(None, true, false, move || {
+        InputHistoryService::open(&opener_store).map_err(|error| error.to_string())
+    })
+    .expect("start a history lifecycle");
+    let enabled = Preferences {
+        developer_mode: true,
+        ..Preferences::default()
+    };
+    let disabled = Preferences {
+        developer_mode: false,
+        ..Preferences::default()
+    };
+
+    let HistoryLifecycle::Held(hold) =
+        shared.hold_history_lifecycle(&Request::ClearInputHistory, Duration::from_secs(5))
+    else {
+        panic!("the lifecycle must settle once the store is open");
+    };
+    let found = hold
+        .service()
+        .expect("the opened generation is published when the lifecycle settles");
+
+    // A request that holds nothing follows its own preferences as well as the
+    // published state.
+    assert!(
+        shared
+            .runtime_services(&disabled, &[], None)
+            .input_history
+            .is_none(),
+        "preferences that say developer mode is off attach no history"
+    );
+    let followed = shared
+        .runtime_services(&enabled, &[], None)
+        .input_history
+        .expect("preferences that say developer mode is on follow the published service");
+    assert!(Arc::ptr_eq(&followed, &found));
+
+    // Developer mode goes off between the hold and the dispatch.
+    shared.history_runtime.configure(false);
+    assert!(
+        shared.history_runtime.service().is_none(),
+        "requests stop seeing the service at once"
+    );
+    for preferences in [&enabled, &disabled] {
+        let held = shared
+            .runtime_services(preferences, &[], Some(&hold))
+            .input_history
+            .expect("a held request keeps the service it found");
+        assert!(Arc::ptr_eq(&held, &found));
+    }
+    assert!(
+        shared
+            .runtime_services(&enabled, &[], None)
+            .input_history
+            .is_none(),
+        "a request that holds nothing follows the published state"
+    );
+    found
+        .clear()
+        .expect("the hold keeps the writer running until the Clear is done");
+
+    drop(hold);
+    let HistoryLifecycle::Held(hold) =
+        shared.hold_history_lifecycle(&Request::ClearInputHistory, Duration::from_secs(5))
+    else {
+        panic!("the lifecycle must settle once the hold is released");
+    };
+    assert!(
+        hold.service().is_none(),
+        "the retired generation is gone once the hold is released"
+    );
+    crate::input_history::clear_path(&store)
+        .expect("the store has no owner left to collide with a Clear by path");
+    drop(hold);
     let _ = fs::remove_dir_all(&root);
 }
 

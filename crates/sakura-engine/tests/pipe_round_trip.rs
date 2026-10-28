@@ -1264,3 +1264,176 @@ punctuation = "kuten-touten"
         cleanup.status
     );
 }
+
+/// How long the engine stalls the first request it dispatches (fault plan
+/// `before-dispatch`). The Clear below is that request, so the stall is the gap
+/// between the engine deciding how to run it and running it. The settings
+/// watcher polls every 500 ms, so a change published 100 ms into the stall is
+/// applied well inside it.
+const CLEAR_STALL: Duration = Duration::from_millis(3_000);
+/// The stall plus everything else a Clear does around it.
+const CLEAR_BUDGET: Duration = Duration::from_secs(10);
+
+fn developer_mode_configuration(enabled: bool) -> String {
+    format!(
+        r#"[meta]
+format-version = "4"
+
+[input]
+keymap-preset = "ms-ime"
+prediction-enabled = "false"
+suggest-accept = "tab"
+association-enabled = "true"
+neural-reranker-scope = "off"
+developer-mode = "{enabled}"
+
+[appearance]
+theme = "auto"
+
+[width]
+alnum = "half"
+number = "half"
+symbol = "half"
+punctuation = "kuten-touten"
+"#
+    )
+}
+
+fn history_store_lock(engine: &Engine) -> std::path::PathBuf {
+    engine
+        .local_app_data()
+        .join("SakuraInput")
+        .join("history")
+        .join("input.bin.writer.lock")
+}
+
+fn wait_for(what: &str, condition: impl Fn() -> bool) {
+    let deadline = Instant::now() + PATIENT;
+    while !condition() {
+        assert!(Instant::now() < deadline, "timed out waiting for {what}");
+        sleep(Duration::from_millis(20));
+    }
+}
+
+/// Turns developer mode on and off again and waits for the store to be
+/// released. The configuration watcher backs off for as long as the file does
+/// not exist, so a change published right after the engine starts can wait
+/// seconds for its first poll; once it has read the file it polls every 500 ms.
+fn cycle_developer_mode(engine: &Engine) {
+    let lock = history_store_lock(engine);
+    publish_test_configuration(engine, &developer_mode_configuration(true));
+    wait_for("the history store to open", || lock.exists());
+    publish_test_configuration(engine, &developer_mode_configuration(false));
+    wait_for("the disabled history to release its store", || {
+        !lock.exists()
+    });
+}
+
+/// Sends `ClearInputHistory` as the engine's first dispatched request and
+/// publishes `during` while the engine is stalled before dispatching it.
+fn clear_while_configuration_lands(
+    engine: &Engine,
+    client: &mut Client,
+    during: &str,
+) -> Result<Response, sakura_ipc::Fault> {
+    let started = Instant::now();
+    let answer = std::thread::scope(|scope| {
+        scope.spawn(|| {
+            sleep(Duration::from_millis(100));
+            publish_test_configuration(engine, during);
+        });
+        client.call(&Request::ClearInputHistory, CLEAR_BUDGET)
+    });
+    assert!(
+        started.elapsed() >= CLEAR_STALL - Duration::from_millis(100),
+        "the injected stall must have held the Clear itself; otherwise the \
+         configuration change did not land inside the gap this test is about"
+    );
+    answer
+}
+
+/// A Clear that found the history service attached is dispatched to it. The
+/// settings watcher turning developer mode off in the gap before dispatch must
+/// not retire that service first: its writer would be gone and the Clear would
+/// fail (review of #418).
+#[test]
+fn live_engine_clear_is_not_overtaken_by_developer_mode_off() {
+    let mut engine = Engine::spawn_isolated_with_faults(&format!(
+        "before-dispatch={}/1",
+        CLEAR_STALL.as_millis()
+    ));
+    publish_test_configuration(&engine, &developer_mode_configuration(true));
+    let lock = history_store_lock(&engine);
+    wait_for("the history store to open", || lock.exists());
+
+    let mut client = engine.client();
+    let answer =
+        clear_while_configuration_lands(&engine, &mut client, &developer_mode_configuration(false));
+    assert!(
+        matches!(answer, Ok(Response::Ok)),
+        "a Clear that found the service attached must reach it even when developer \
+         mode goes off before dispatch: {answer:?}"
+    );
+
+    // The change was deferred, not lost.
+    wait_for("the disabled history to release its store", || {
+        !lock.exists()
+    });
+    assert!(matches!(
+        client.call(&Request::InputHistoryStats, PATIENT),
+        Ok(Response::InputHistoryStats { active: false, .. })
+    ));
+
+    drop(client);
+    let cleanup = engine.cleanup().expect("owned engine cleanup");
+    assert!(
+        cleanup.status.success(),
+        "engine exited with {}",
+        cleanup.status
+    );
+}
+
+/// A Clear that found no service works on the store by path. Developer mode
+/// going on in the gap before dispatch must not start the next generation
+/// first: its writer would own the store lock, and the Clear would fail or
+/// make that generation's open fail for good (review of #418).
+#[test]
+fn live_engine_clear_by_path_is_not_overtaken_by_developer_mode_on() {
+    let mut engine = Engine::spawn_isolated_with_faults(&format!(
+        "before-dispatch={}/1",
+        CLEAR_STALL.as_millis()
+    ));
+    cycle_developer_mode(&engine);
+    let mut client = engine.client();
+    let answer =
+        clear_while_configuration_lands(&engine, &mut client, &developer_mode_configuration(true));
+    assert!(
+        matches!(answer, Ok(Response::Ok)),
+        "a Clear by path must not collide with a generation that developer mode \
+         starts before dispatch: {answer:?}"
+    );
+
+    // The change was deferred, not lost, and the generation it starts opens.
+    let deadline = Instant::now() + PATIENT;
+    loop {
+        match client.call(&Request::InputHistoryStats, PATIENT) {
+            Ok(Response::InputHistoryStats { active: true, .. }) => break,
+            Ok(Response::InputHistoryStats { active: false, .. }) => {
+                assert!(
+                    Instant::now() < deadline,
+                    "the generation started after the Clear never became active"
+                );
+                sleep(Duration::from_millis(50));
+            }
+            other => panic!("InputHistoryStats after the Clear: {other:?}"),
+        }
+    }
+
+    drop(client);
+    let cleanup = engine.cleanup().expect("owned engine cleanup");
+    assert!(
+        cleanup.status.success(),
+        "engine exited with {}",
+        cleanup.status
+    );
+}

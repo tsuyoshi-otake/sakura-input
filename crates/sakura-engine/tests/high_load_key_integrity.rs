@@ -34,11 +34,16 @@ use windows::Win32::System::Threading::{
 
 use common::{char_key, named_key, session_for, visible, Engine, PATIENT};
 
-/// What the TSF key path allows one key before it gives up
-/// (`sakura_tsf::engine::KEY_BUDGET`). Reproduced rather than imported: this
-/// crate must not depend on the DLL, and the number's role here is to be a
-/// client that abandons a key, not to track that constant.
+/// What the TSF key path allows one key once the engine has missed two waits
+/// in a row (`sakura_tsf::key_wait::DESIGN_BUDGET`). Reproduced rather than
+/// imported: this crate must not depend on the DLL, and the number's role here
+/// is to be a client that abandons a key, not to track that constant.
 const TSF_KEY_BUDGET: Duration = Duration::from_millis(50);
+
+/// What the TSF key path allows one key while the engine keeps answering
+/// (`sakura_tsf::key_wait::PATIENT_BUDGET`, #415), reproduced for the same
+/// reason as [`TSF_KEY_BUDGET`].
+const TSF_PATIENT_KEY_BUDGET: Duration = Duration::from_millis(200);
 
 fn handshake(client: &mut Client) {
     match client.call(
@@ -299,6 +304,53 @@ fn a_stall_during_conversion_keeps_the_session_and_its_candidates() {
     engine.cleanup().expect("clean shutdown");
 }
 
+/// #415: a reply held 100 ms is past the old 50 ms budget and inside the new
+/// 200 ms one. A client that waits the patient budget gets every reply, in
+/// order, and the reading grows by exactly the letters typed: a held key is
+/// slow, not lost, and nothing finalizes the composition.
+#[test]
+fn a_reply_held_inside_the_patient_budget_reaches_the_client_that_waits_for_it() {
+    let mut engine = Engine::spawn_isolated_with_faults("during-reply=100");
+    let mut client = engine.client();
+    handshake(&mut client);
+    let session = session_for(&mut client, "high-load.exe");
+
+    let mut seen = Vec::new();
+    let mut slowest = Duration::ZERO;
+    for character in "kana".chars() {
+        let started = Instant::now();
+        let reply = client
+            .call(
+                &Request::SendKey {
+                    session,
+                    key: char_key(character),
+                },
+                TSF_PATIENT_KEY_BUDGET,
+            )
+            .expect("a reply held 100 ms is inside the patient budget");
+        slowest = slowest.max(started.elapsed());
+        seen.push(preedit_of(&reply));
+    }
+
+    assert_eq!(seen, vec!["k", "か", "かn", "かな"]);
+    assert!(
+        slowest > TSF_KEY_BUDGET,
+        "the replies were not held past the old budget: slowest {slowest:?}"
+    );
+
+    // Four key replies were held. Without this the run could pass with the
+    // delay never armed.
+    let status = entry(&fault_status(&mut client), FaultPoint::DuringReply);
+    assert_eq!(status.fired, 4, "{status:?}");
+    assert!(status.slept_us >= 4 * 95_000, "{status:?}");
+
+    let commit = commit_of(&send_named(&mut client, session, KeyCode::Enter));
+    assert_eq!(commit.as_deref(), Some("かな"));
+
+    drop(client);
+    engine.cleanup().expect("clean shutdown");
+}
+
 /// The abandoned-key ordering. The engine has applied the key and produced
 /// the answer; only delivery is late, and the client gives up first.
 ///
@@ -308,6 +360,18 @@ fn a_stall_during_conversion_keeps_the_session_and_its_candidates() {
 /// one is a TSF-layer question and is not settled here.
 #[test]
 fn an_abandoned_reply_is_never_delivered_as_the_answer_to_the_next_key() {
+    an_abandoned_reply_is_not_replayed(TSF_KEY_BUDGET);
+}
+
+/// The same property for the client that waits the patient budget (#415): its
+/// first two misses are at 200 ms, and the engine must treat them no
+/// differently from a miss at 50 ms.
+#[test]
+fn an_abandoned_reply_is_never_delivered_to_a_patient_client_either() {
+    an_abandoned_reply_is_not_replayed(TSF_PATIENT_KEY_BUDGET);
+}
+
+fn an_abandoned_reply_is_not_replayed(client_budget: Duration) {
     let mut engine = Engine::spawn_isolated_with_faults("during-reply=400");
     let mut client = engine.client();
     handshake(&mut client);
@@ -318,11 +382,11 @@ fn an_abandoned_reply_is_never_delivered_as_the_answer_to_the_next_key() {
             session,
             key: char_key('k'),
         },
-        TSF_KEY_BUDGET,
+        client_budget,
     );
     assert!(
         matches!(abandoned, Err(Fault::Timeout | Fault::DeadlineExpired)),
-        "a 50 ms client should not have outlasted a 400 ms stall: {abandoned:?}"
+        "a {client_budget:?} client should not have outlasted a 400 ms stall: {abandoned:?}"
     );
 
     // The stale reply for the abandoned key is still in the pipe. The next

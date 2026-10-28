@@ -2664,6 +2664,8 @@ fn read_draft(path: &Path) -> Result<DurableDraft, StorageError> {
 /// Debug-only native fault injection. The notification is emitted after the
 /// durable encrypted draft and before any v3/v4 primary publication. A bounded
 /// wait leaves a terminal save error if the test does not kill or release us.
+/// The notification file is created first and given its content, `ready`, right
+/// after, so a consumer waits for the content and not for the file (#419).
 #[cfg(debug_assertions)]
 fn pause_after_draft_for_test(variable: &str) -> Result<(), StorageError> {
     let Some(target) = std::env::var_os(variable) else {
@@ -5220,6 +5222,59 @@ mod tests {
         let _ = fs::remove_dir_all(directory);
     }
 
+    /// Waits until `path` holds the whole `ready` signal. The pause helper
+    /// creates the file before it writes the content, so a file that exists is
+    /// not yet the signal; `DraftPauseSignal::wait_until_staged` in
+    /// `tests/pad_ui.rs` follows the same rule (#419).
+    #[cfg(debug_assertions)]
+    fn wait_for_ready_signal(path: &Path, budget: Duration) -> bool {
+        let deadline = Instant::now() + budget;
+        loop {
+            if fs::read(path).is_ok_and(|content| content == b"ready") {
+                return true;
+            }
+            if Instant::now() >= deadline {
+                return false;
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    #[cfg(debug_assertions)]
+    #[test]
+    fn ready_signal_wait_does_not_take_an_empty_file_for_the_signal() {
+        let directory = temp_dir();
+        fs::create_dir_all(&directory).unwrap();
+        // What the pause helper leaves between its create and its write.
+        let signal = directory.join("ready");
+        fs::write(&signal, b"").unwrap();
+        let started = Instant::now();
+        let late = {
+            let signal = signal.clone();
+            thread::spawn(move || {
+                thread::sleep(Duration::from_millis(150));
+                fs::write(&signal, b"ready").unwrap();
+            })
+        };
+        assert!(wait_for_ready_signal(&signal, Duration::from_secs(5)));
+        assert!(
+            started.elapsed() >= Duration::from_millis(100),
+            "an empty file was taken for the signal"
+        );
+        late.join().unwrap();
+        let never_written = directory.join("never-written");
+        fs::write(&never_written, b"").unwrap();
+        assert!(!wait_for_ready_signal(
+            &never_written,
+            Duration::from_millis(50)
+        ));
+        assert!(!wait_for_ready_signal(
+            &directory.join("absent"),
+            Duration::from_millis(50)
+        ));
+        let _ = fs::remove_dir_all(directory);
+    }
+
     #[cfg(debug_assertions)]
     #[test]
     fn v4_draft_pause_hook_validates_path_and_has_bounded_terminal_wait() {
@@ -5247,11 +5302,10 @@ mod tests {
         let resume = PathBuf::from(format!("{}.resume", resumed.display()));
         let watched = resumed.clone();
         let notifier = thread::spawn(move || {
-            let deadline = Instant::now() + Duration::from_secs(2);
-            while !watched.exists() && Instant::now() < deadline {
-                thread::sleep(Duration::from_millis(10));
-            }
-            assert_eq!(fs::read(&watched).unwrap(), b"ready");
+            assert!(
+                wait_for_ready_signal(&watched, Duration::from_secs(2)),
+                "the pause helper never published `ready`"
+            );
             fs::write(&resume, b"continue").unwrap();
         });
         pause_after_draft_for_test_at(&resumed, Duration::from_secs(2)).unwrap();
