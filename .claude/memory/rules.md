@@ -111,3 +111,12 @@ provenance; active work should load the smaller matching topic extracts above.
   needs a non-blocking lock and a size re-check by path under it, and a failed
   attempt must silence the writer with a back-off instead of costing I/O on
   every key.
+- An operation that reaches a store by path (clear, repair, move) must wait for
+  the asynchronous lifecycle that retires the store's owner. `active` turns
+  false at the next request boundary, but the writer thread keeps
+  `<history>.writer.lock` until the `HistoryRuntime` worker has joined it (6-28
+  ms, sometimes over 270 ms), so a `ClearInputHistory` right after developer
+  mode went off hit `AlreadyExists` and answered `Internal` in about 30 % of
+  isolated runs (#417). `HistoryRuntime::wait_until_idle` is the barrier;
+  `serve()` applies it to a Clear only and answers `Busy` when the lifecycle
+  does not settle inside the client's 2 s call budget.

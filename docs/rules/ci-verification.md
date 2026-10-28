@@ -218,3 +218,39 @@
   外した変異は、プロセステストが「世代は満杯のときだけ捨てられるので、前の世代が
   小さいことはない」という不変条件を検査するようにして、初めて検出できた。壊れる
   不変条件に名前を付けて検査し、変異を走らせてから、負荷テストの緑を信じる。
+
+- **間欠的に落ちるテストは、assert に触る前に、応答の裏にある本当のエラーを記録して、
+  テストの競合か製品の欠陥かを決める。** 2026-10-28（#417）に、
+  `live_engine_hot_enables_developer_history_and_records_a_normal_key` は、孤立した
+  実行の約 3 割（9/30、11/30）で `ClearInputHistory` が `Internal` を返して落ちた。
+  失敗した 11 回で本当のエラーを記録すると、毎回 `AlreadyExists`（os error 80）で、
+  退役中の writer がストアのロックをまだ握っていた。テストに待ちを足す直し方は、
+  退役が 6〜28 ms、ときどき 270 ms を超えるため確率を下げるだけで、開発者モードを
+  切った直後に `diagnostics clear` が失敗する製品の欠陥が残る。
+  `HistoryRuntime::wait_until_idle` で退役の完了を待つ直し方にした。
+
+- **ファイル監視のテストは、監視対象を `fs::write` で書き換えず、一時ファイルへ
+  書いてから rename で置き換える。** 2026-10-28（#379）に、`fs::write` は先に
+  ファイルを切り詰めるため、5 ms 間隔の読み取りが切り詰めと書き込みの間に当たると
+  空ファイルを読む。空の設定は有効な既定値として解釈されるので、本物より先に公開
+  されて、テストは別のスナップショットを受け取った（`normalizer.width.alnum` が
+  `Full`）。本番の書き手（settings の `atomic_write`、engine の `upgrade()`、
+  `publish_test_configuration`）はすべて原子的に置き換えるので、テストだけが現実に
+  ない中間状態を作っていた。`replace_configuration` を二つの監視テストで使い、
+  アサーションは変えていない。
+
+- **ゲートや channel でワーカーを止めるテストは、assert が失敗しても必ず開く guard を
+  付け、その guard を止められる側の所有者より後に宣言する。** 2026-10-28（#417）に、
+  opener を channel の `recv()` で止めるサーバーのテストが、Sender を
+  `HistoryRuntime` を持つ `Shared` より先に宣言していた。Rust は宣言と逆順に drop
+  するので、最初の assert が落ちると `Shared` の drop がワーカーの join で戻らず
+  （Sender はまだ生きている）、変異の検証でテスト実行ファイルが 3 分以上固まった。
+  Sender を後に宣言して直し、`history_runtime` のテストには drop で開く
+  `OpenOnDrop` を付けた。
+
+- **サービスが付いていないと実ユーザーの領域に作用する Request は、プロセス内の
+  テストでディスパッチしない。** 2026-10-28（#417）に、履歴サービスなしの
+  `ClearInputHistory` は `%LOCALAPPDATA%` の本物の `history\input.bin` をパスで
+  消すため、待つかどうかの判断だけを `Shared::history_lifecycle_settled` で検査し、
+  実際の Clear は、私有の `LOCALAPPDATA` を持つ engine の子プロセス
+  （`pipe_round_trip`）だけが送る。
