@@ -59,7 +59,7 @@ use crate::composition_fence::CompositionFence;
 use crate::dictionary::ConversionService;
 use crate::dispatch::{Dispatcher, Reply};
 use crate::fault_injection;
-use crate::history_runtime::HistoryRuntime;
+use crate::history_runtime::{HistoryRuntime, LifecycleHold};
 use crate::input_history::InputHistoryService;
 use crate::learning::{ForgetPredictionOutcome, LearningService};
 use crate::long_conversion::{LongConversionRuntime, LongConversionService};
@@ -264,10 +264,16 @@ impl Shared {
         );
     }
 
+    /// The optional services one request is dispatched with. A request that
+    /// holds the history lifecycle (`history_hold`) gets the history service
+    /// that was published when it took the hold, whatever the preferences or
+    /// the lifecycle say since: the hold keeps that service running, or the
+    /// store unowned, until the request is done (#417).
     fn runtime_services(
         &self,
         preferences: &Preferences,
         profiles: &[AppProfile],
+        history_hold: Option<&LifecycleHold<'_>>,
     ) -> RuntimeServiceSnapshot {
         let prediction_requested = preferences.prediction_enabled
             || profiles.iter().any(|profile| profile.prediction_enabled);
@@ -363,21 +369,39 @@ impl Shared {
             } else {
                 None
             },
-            input_history: if history_requested {
-                self.history_runtime.service()
-            } else {
-                None
+            input_history: match history_hold {
+                Some(hold) => hold.service(),
+                None if history_requested => self.history_runtime.service(),
+                None => None,
             },
         }
     }
 
-    /// Whether `request` may be dispatched now. A Clear with no history
-    /// service attached works on the store by path, so it waits until this
-    /// process's own history generation has finished opening or releasing the
-    /// store; every other request is unaffected (#417).
-    fn history_lifecycle_settled(&self, request: &Request, wait: Duration) -> bool {
-        !matches!(request, Request::ClearInputHistory) || self.history_runtime.wait_until_idle(wait)
+    /// Holds this process's history lifecycle idle for `request`, if it needs
+    /// that. A Clear with no history service attached works on the store by
+    /// path, so it waits until the current generation has finished opening or
+    /// releasing the store, and then keeps the next one from starting, or the
+    /// current one from stopping, until it has been dispatched. Every other
+    /// request is unaffected (#417).
+    fn hold_history_lifecycle(&self, request: &Request, wait: Duration) -> HistoryLifecycle<'_> {
+        if !matches!(request, Request::ClearInputHistory) {
+            return HistoryLifecycle::NotNeeded;
+        }
+        match self.history_runtime.hold_idle(wait) {
+            Some(hold) => HistoryLifecycle::Held(hold),
+            None => HistoryLifecycle::Busy,
+        }
     }
+}
+
+/// What a request needs from the history lifecycle before it is dispatched.
+enum HistoryLifecycle<'a> {
+    /// The request does not work on the history store.
+    NotNeeded,
+    /// The lifecycle is idle and stays so until the hold is dropped.
+    Held(LifecycleHold<'a>),
+    /// The lifecycle was still changing hands when the wait ran out.
+    Busy,
 }
 
 /// The engine's pipe server.
@@ -1083,7 +1107,7 @@ fn worker_with_gate(
     {
         let configuration = shared.configuration_snapshot();
         let runtime_services =
-            shared.runtime_services(&configuration.preferences, &configuration.profiles);
+            shared.runtime_services(&configuration.preferences, &configuration.profiles, None);
         dispatcher.set_input_history(runtime_services.input_history);
     }
     dispatcher.set_ai_text(Arc::clone(&shared.ai_text));
@@ -1618,18 +1642,25 @@ fn serve(
         // lock after requests stopped seeing it. Like `WatchUi` this blocks on
         // purpose, so it waits above the service-time span below, and it
         // answers `Busy` inside the client's call budget rather than failing
-        // on a lock this process itself holds.
-        if !shared.history_lifecycle_settled(&request, HISTORY_LIFECYCLE_WAIT) {
-            if let Err(fault) = send(
-                instance,
-                &Response::Error(ErrorCode::Busy),
-                id,
-                &mut bufs.reply,
-            ) {
-                return end(fault);
+        // on a lock this process itself holds. The hold it takes lasts until
+        // the dispatch below, so a developer-mode change landing in between
+        // can neither start a generation under the Clear nor stop the service
+        // it was handed (#417).
+        let history_hold = match shared.hold_history_lifecycle(&request, HISTORY_LIFECYCLE_WAIT) {
+            HistoryLifecycle::NotNeeded => None,
+            HistoryLifecycle::Held(hold) => Some(hold),
+            HistoryLifecycle::Busy => {
+                if let Err(fault) = send(
+                    instance,
+                    &Response::Error(ErrorCode::Busy),
+                    id,
+                    &mut bufs.reply,
+                ) {
+                    return end(fault);
+                }
+                continue;
             }
-            continue;
-        }
+        };
 
         // From here to the end of this iteration is the engine's service time
         // for one request, and it is what a client's expired budget has to be
@@ -1697,7 +1728,11 @@ fn serve(
         };
         let runtime_services = {
             let _span = timing::Span::start(EngineTimingSite::RuntimeServicesTotal);
-            shared.runtime_services(&configuration.preferences, &configuration.profiles)
+            shared.runtime_services(
+                &configuration.preferences,
+                &configuration.profiles,
+                history_hold.as_ref(),
+            )
         };
         dispatcher.set_prediction(runtime_services.prediction);
         dispatcher.set_long_conversion(runtime_services.long_conversion);
@@ -1727,6 +1762,9 @@ fn serve(
             let _span = timing::Span::start(EngineTimingSite::Dispatch);
             dispatcher.dispatch(&request, &mut bufs.out)
         };
+        // Nothing past the dispatch works on the store, and sending the reply
+        // can wait on a slow client for as long as that client likes.
+        drop(history_hold);
         match reply {
             Reply::Output => {
                 #[cfg(all(test, feature = "dev-fixtures"))]

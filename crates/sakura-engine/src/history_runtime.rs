@@ -10,7 +10,10 @@
 //! A generation's writer owns the store lock until its thread exits, and
 //! retirement runs here after requests have already stopped seeing the
 //! service. A caller that works on the store by path while no service is
-//! attached therefore calls [`HistoryRuntime::wait_until_idle`] first (#417).
+//! attached therefore calls [`HistoryRuntime::hold_idle`] first (#417). Waiting
+//! is not enough on its own: the next generation can start the moment the wait
+//! ends, so the hold it returns also keeps the lifecycle from moving until the
+//! caller is done.
 
 use std::fmt;
 use std::io;
@@ -48,6 +51,9 @@ struct State {
     /// The worker thread has ended, normally or by panic. Nothing is in flight
     /// and nothing will change, so waiting for idleness could only time out.
     worker_exited: bool,
+    /// Outstanding [`LifecycleHold`]s. While any exists the worker takes no
+    /// retiring service and starts no open, so the store keeps its owner.
+    holds: usize,
     shutdown: bool,
 }
 
@@ -146,6 +152,7 @@ impl HistoryRuntime {
                 stopping: 0,
                 opening: false,
                 worker_exited: false,
+                holds: 0,
                 shutdown: false,
             }),
             changed: Condvar::new(),
@@ -167,7 +174,9 @@ impl HistoryRuntime {
 
     /// Applies a newly published configuration generation. Requests must use
     /// [`Self::service`] so an older request snapshot cannot undo a newer
-    /// watcher publication.
+    /// watcher publication. What requests see changes at once; the opening and
+    /// stopping are the worker's, and a [`LifecycleHold`] defers them. This
+    /// never waits for a hold.
     pub(crate) fn configure(&self, enabled: bool) {
         let mut state = self
             .shared
@@ -206,26 +215,38 @@ impl HistoryRuntime {
     }
 
     /// Waits for at most `timeout` until no generation is opening or still
-    /// releasing the store, and reports whether the lifecycle was idle.
+    /// releasing the store, then holds the lifecycle idle. Until the returned
+    /// guard is dropped no generation starts opening and no retired service is
+    /// stopped, so the store keeps the owner it had when this returned. `None`
+    /// means the lifecycle was still changing hands after `timeout`.
     ///
     /// Requests stop seeing a service as soon as it is disabled, but its
     /// writer keeps the store lock until retirement here has joined it. A
     /// caller that works on the store by path while nothing is attached has to
-    /// wait first, or it finds the lock still held (#417). An idle result is
-    /// only the state at return: a later [`Self::configure`] can start the
-    /// next generation immediately.
-    pub(crate) fn wait_until_idle(&self, timeout: Duration) -> bool {
+    /// wait first, or it finds the lock still held (#417). Waiting alone would
+    /// leave a gap before the work starts, in which [`Self::configure`] could
+    /// start the next generation under it, so the work happens under the hold.
+    /// What it works through is [`LifecycleHold::service`], read at the same
+    /// instant as the idle check.
+    pub(crate) fn hold_idle(&self, timeout: Duration) -> Option<LifecycleHold<'_>> {
         let state = self
             .shared
             .state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let (state, _) = self
+        let (mut state, _) = self
             .shared
             .settled
             .wait_timeout_while(state, timeout, |state| !state.is_idle())
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        state.is_idle()
+        if !state.is_idle() {
+            return None;
+        }
+        state.holds += 1;
+        Some(LifecycleHold {
+            shared: &self.shared,
+            service: state.service.clone(),
+        })
     }
 
     /// Stops every published or in-progress generation and joins its owner.
@@ -294,9 +315,49 @@ impl Drop for HistoryRuntime {
     }
 }
 
+/// A lease on the history lifecycle being idle, from
+/// [`HistoryRuntime::hold_idle`]. It is meant to span one short store
+/// operation: while it lives the worker defers every generation change, so a
+/// holder that waits on something slow delays the next developer-mode switch
+/// by as long.
+///
+/// [`HistoryRuntime::configure`] never waits for a hold. It only updates what
+/// requests see, and it runs under the configuration lock that every request
+/// takes to read its snapshot, so waiting there would stall the holder itself.
+pub(crate) struct LifecycleHold<'a> {
+    shared: &'a Shared,
+    service: Option<Arc<InputHistoryService>>,
+}
+
+impl LifecycleHold<'_> {
+    /// The service that was published when the lifecycle was found idle, or
+    /// `None` when there was none. [`HistoryRuntime::service`] stops returning
+    /// it as soon as developer mode goes off, but it keeps running until the
+    /// hold is dropped, so work dispatched to it cannot meet a stopped writer.
+    pub(crate) fn service(&self) -> Option<Arc<InputHistoryService>> {
+        self.service.clone()
+    }
+}
+
+impl Drop for LifecycleHold<'_> {
+    fn drop(&mut self) {
+        let mut state = self
+            .shared
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        state.holds = state.holds.saturating_sub(1);
+        if state.holds == 0 {
+            // The worker sleeps while a hold is outstanding, however much work
+            // `configure` has left for it.
+            self.shared.changed.notify_one();
+        }
+    }
+}
+
 /// Marks the worker as gone however it ends. A panic would otherwise leave
 /// `State::opening` or `State::stopping` set with nobody left to clear them,
-/// and [`HistoryRuntime::wait_until_idle`] could only ever time out.
+/// and [`HistoryRuntime::hold_idle`] could only ever time out.
 struct WorkerExit<'a>(&'a Shared);
 
 impl Drop for WorkerExit<'_> {
@@ -319,12 +380,14 @@ fn worker_loop(shared: Arc<Shared>) {
                 .state
                 .lock()
                 .unwrap_or_else(|poisoned| poisoned.into_inner());
-            while state.retiring.is_empty()
-                && !state.shutdown
-                && !matches!(state.phase, Phase::Starting(_))
+            while state.holds > 0
+                || (state.retiring.is_empty()
+                    && !state.shutdown
+                    && !matches!(state.phase, Phase::Starting(_)))
             {
                 // Nothing is opening or stopping once the worker has nothing
-                // to take, so this is the moment waiters can be released.
+                // to take, so this is the moment waiters can be released. Work
+                // left waiting behind a hold keeps `State::is_idle` false.
                 shared.settled.notify_all();
                 state = shared
                     .changed
@@ -522,12 +585,18 @@ mod tests {
         OpenOnDrop(Arc::clone(gate))
     }
 
+    /// Whether the lifecycle settles within `timeout`. The hold it takes is
+    /// released at once, so asking never keeps the lifecycle from moving.
+    fn settles(runtime: &HistoryRuntime, timeout: Duration) -> bool {
+        runtime.hold_idle(timeout).is_some()
+    }
+
     /// Waits as the engine does, and also requires the wake-up to follow soon
     /// after the lifecycle settles: a missed notification only costs the whole
     /// timeout, which the boolean alone would not show.
     fn assert_settles_promptly(runtime: &HistoryRuntime) {
         let started = Instant::now();
-        assert!(runtime.wait_until_idle(Duration::from_secs(5)));
+        assert!(settles(runtime, Duration::from_secs(5)));
         assert!(
             started.elapsed() < Duration::from_secs(3),
             "the lifecycle settled but its waiter was not woken: {:?}",
@@ -549,6 +618,7 @@ mod tests {
             stopping: 0,
             opening: false,
             worker_exited: false,
+            holds: 0,
             shutdown: false,
         }
     }
@@ -754,7 +824,7 @@ mod tests {
     }
 
     #[test]
-    fn wait_until_idle_outlasts_a_retiring_writers_store_lock() {
+    fn hold_idle_outlasts_a_retiring_writers_store_lock() {
         let path = test_path("retiring-writer");
         let service = InputHistoryService::open(&path).expect("open history");
         let runtime = HistoryRuntime::with_opener(Some(service), true, false, || {
@@ -776,7 +846,7 @@ mod tests {
                 .kind(),
             io::ErrorKind::AlreadyExists
         );
-        assert!(!runtime.wait_until_idle(Duration::from_millis(50)));
+        assert!(!settles(&runtime, Duration::from_millis(50)));
 
         gate.release(usize::MAX);
         assert_settles_promptly(&runtime);
@@ -786,7 +856,7 @@ mod tests {
     }
 
     #[test]
-    fn wait_until_idle_covers_a_disabled_open_and_the_stop_of_its_stale_service() {
+    fn hold_idle_covers_a_disabled_open_and_the_stop_of_its_stale_service() {
         let path = test_path("stale-open");
         let control = Arc::new(OpenControl::default());
         let runtime = controlled_runtime(
@@ -802,7 +872,7 @@ mod tests {
         runtime.configure(false);
         assert!(runtime.service().is_none());
         assert!(
-            !runtime.wait_until_idle(Duration::from_millis(50)),
+            !settles(&runtime, Duration::from_millis(50)),
             "the disabled generation's opener still owns the store"
         );
 
@@ -814,7 +884,7 @@ mod tests {
                 .kind(),
             io::ErrorKind::AlreadyExists
         );
-        assert!(!runtime.wait_until_idle(Duration::from_millis(50)));
+        assert!(!settles(&runtime, Duration::from_millis(50)));
 
         gate.release(usize::MAX);
         assert_settles_promptly(&runtime);
@@ -824,7 +894,7 @@ mod tests {
     }
 
     #[test]
-    fn wait_until_idle_returns_with_the_opened_service_already_published() {
+    fn hold_idle_returns_with_the_opened_service_already_published() {
         let path = test_path("publish-before-idle");
         let control = Arc::new(OpenControl::default());
         let runtime = controlled_runtime(
@@ -835,7 +905,7 @@ mod tests {
         let _opener = OpenOnDrop(Arc::clone(&control));
         control.wait_for_calls(1);
         assert!(
-            !runtime.wait_until_idle(Duration::from_millis(50)),
+            !settles(&runtime, Duration::from_millis(50)),
             "a generation that is still opening is not idle"
         );
 
@@ -850,7 +920,7 @@ mod tests {
     }
 
     #[test]
-    fn wait_until_idle_settles_after_a_failed_open_and_after_shutdown() {
+    fn hold_idle_settles_after_a_failed_open_and_after_shutdown() {
         let runtime = HistoryRuntime::with_opener(None, true, false, || {
             Err("injected open failure".to_owned())
         })
@@ -862,7 +932,7 @@ mod tests {
         ));
 
         runtime.stop();
-        assert!(runtime.wait_until_idle(Duration::ZERO));
+        assert!(settles(&runtime, Duration::ZERO));
     }
 
     #[test]
@@ -883,7 +953,7 @@ mod tests {
         let (idle, waited) = std::thread::scope(|scope| {
             let waiter = scope.spawn(|| {
                 let started = Instant::now();
-                let idle = runtime.wait_until_idle(Duration::from_secs(5));
+                let idle = settles(&runtime, Duration::from_secs(5));
                 (idle, started.elapsed())
             });
             std::thread::sleep(Duration::from_millis(100));
@@ -896,5 +966,150 @@ mod tests {
             "the worker died but its waiter was not woken: {waited:?}"
         );
         runtime.stop();
+    }
+
+    #[test]
+    fn a_hold_defers_the_next_generation_until_every_hold_is_released() {
+        let opens = Arc::new(AtomicUsize::new(0));
+        let counted = Arc::clone(&opens);
+        let runtime = HistoryRuntime::with_opener(None, false, false, move || {
+            counted.fetch_add(1, Ordering::SeqCst);
+            Err("test opener".to_owned())
+        })
+        .expect("start test history lifecycle");
+
+        let first = runtime
+            .hold_idle(Duration::from_secs(5))
+            .expect("a disabled lifecycle with nothing in flight is idle");
+        let second = runtime
+            .hold_idle(Duration::from_secs(5))
+            .expect("holds are counted, not exclusive");
+        // Developer mode goes on after the holds were taken.
+        runtime.configure(true);
+        std::thread::sleep(Duration::from_millis(150));
+        assert_eq!(
+            opens.load(Ordering::SeqCst),
+            0,
+            "the next generation opened the store under a hold"
+        );
+        assert!(
+            !settles(&runtime, Duration::ZERO),
+            "an open that is waiting behind a hold is not idle"
+        );
+
+        drop(first);
+        std::thread::sleep(Duration::from_millis(150));
+        assert_eq!(
+            opens.load(Ordering::SeqCst),
+            0,
+            "releasing one hold must not free the other"
+        );
+
+        drop(second);
+        assert_settles_promptly(&runtime);
+        assert_eq!(opens.load(Ordering::SeqCst), 1);
+        runtime.stop();
+    }
+
+    #[test]
+    fn a_hold_keeps_a_disabled_service_running_until_it_is_released() {
+        let path = test_path("held-service");
+        let service = InputHistoryService::open(&path).expect("open history");
+        let runtime = HistoryRuntime::with_opener(Some(Arc::clone(&service)), true, false, || {
+            Err("no replacement generation".to_owned())
+        })
+        .expect("start test history lifecycle");
+
+        let hold = runtime
+            .hold_idle(Duration::from_secs(5))
+            .expect("a published service with nothing in flight is idle");
+        let held = hold.service().expect("the service published when idle");
+        assert!(Arc::ptr_eq(&held, &service));
+
+        // Developer mode goes off after the hold was taken.
+        runtime.configure(false);
+        assert!(
+            runtime.service().is_none(),
+            "requests stop seeing the service at once"
+        );
+        std::thread::sleep(Duration::from_millis(150));
+        held.clear()
+            .expect("the writer of a service retired under a hold is still running");
+        assert_eq!(
+            clear_path(&path)
+                .expect_err("the held service's writer still owns the store lock")
+                .kind(),
+            io::ErrorKind::AlreadyExists
+        );
+        assert!(
+            !settles(&runtime, Duration::ZERO),
+            "the retirement is waiting behind the hold"
+        );
+
+        drop(hold);
+        assert_settles_promptly(&runtime);
+        clear_path(&path).expect("the store is free once the hold is gone and the service retired");
+        runtime.stop();
+        remove_test_dir(&path);
+    }
+
+    #[test]
+    fn configure_and_service_never_wait_for_a_hold() {
+        let runtime =
+            HistoryRuntime::with_opener(None, false, false, || Err("test opener".to_owned()))
+                .expect("start test history lifecycle");
+        let (done, finished) = mpsc::channel();
+
+        // `configure` runs under the configuration lock that every request
+        // takes to read its snapshot, the holder's among them. The hold is
+        // taken inside the scope so a failure releases it before the scope
+        // joins the thread it spawned.
+        std::thread::scope(|scope| {
+            let hold = runtime
+                .hold_idle(Duration::from_secs(5))
+                .expect("a disabled lifecycle with nothing in flight is idle");
+            scope.spawn(|| {
+                runtime.configure(true);
+                let _ = runtime.service();
+                runtime.configure(false);
+                done.send(()).expect("report that configure returned");
+            });
+            finished
+                .recv_timeout(Duration::from_secs(5))
+                .expect("configure waited for a hold");
+            drop(hold);
+        });
+        assert_settles_promptly(&runtime);
+        runtime.stop();
+    }
+
+    #[test]
+    fn stop_waits_for_a_hold_and_then_completes() {
+        let runtime =
+            HistoryRuntime::with_opener(None, false, false, || Err("test opener".to_owned()))
+                .expect("start test history lifecycle");
+        let (done, stopped) = mpsc::channel();
+
+        std::thread::scope(|scope| {
+            let hold = runtime
+                .hold_idle(Duration::from_secs(5))
+                .expect("a disabled lifecycle with nothing in flight is idle");
+            scope.spawn(|| {
+                runtime.stop();
+                done.send(()).expect("report that stop returned");
+            });
+            assert!(
+                stopped.recv_timeout(Duration::from_millis(150)).is_err(),
+                "stop returned while a hold was outstanding"
+            );
+
+            drop(hold);
+            if stopped.recv_timeout(Duration::from_secs(5)).is_err() {
+                // Wake the worker so a failing run reports instead of hanging
+                // in the join that `stop` is stuck in.
+                runtime.shared.changed.notify_all();
+                panic!("stop did not finish after the hold was released");
+            }
+        });
     }
 }
