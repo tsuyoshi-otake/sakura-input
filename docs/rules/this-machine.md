@@ -88,3 +88,21 @@
   text with `send-keys -l`, then `Enter` as a separate call, and watch for a
   standalone marker line rather than a substring, because the agent's own
   todo list echoes the marker text.
+
+- **Run the workspace tests here with `--no-fail-fast`; two test families fail
+  under load.** Verified 2026-10-28 (integration of #416, #418 and #420):
+  `cargo test --workspace` stops at the first failing test binary, so the
+  binaries after it report nothing. Run 1 failed 24 `sakura-tsf` attach tests
+  (50 ms `RECONNECT_BUDGET`: "the handshake must have completed"), run 2
+  failed 4 `sakura-engine` prediction tests (10 ms `PREDICTION_TIMEOUT`: empty
+  `prediction_cache` right after `type_word`), each binary passed alone, and
+  run 3 with `RUST_TEST_THREADS=8` passed. A CPU sample between the runs
+  showed six `node` processes of other sessions at 0.7-0.9 core each on 16
+  logical processors. Rerun the failing binary alone before suspecting a
+  change that does not touch these paths.
+
+- **A union merge of two appended journal entries drops the blank line between
+  them.** Verified 2026-10-28: `git merge-file --union` left the second `## `
+  heading directly under the first entry's last line, and
+  `git commit --no-edit` kept git's `# Conflicts:` comment lines. Restore the
+  blank line and commit with `git commit -F`.
