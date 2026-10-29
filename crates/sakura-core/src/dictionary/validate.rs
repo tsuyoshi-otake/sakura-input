@@ -266,6 +266,13 @@ impl<'a> Dictionary<'a> {
             details.text,
             format::TAG_DETAIL_TEXT,
         )?;
+        // Records and relations name their texts by id and many records share
+        // one, so checking each reference reads the same bytes again and the
+        // work grows with the record count. When the whole text table is valid
+        // UTF-8 and every text starts on a character boundary, each text is
+        // valid and the per-reference check cannot fail, so it is skipped. Any
+        // other table takes the per-reference path, which decides as before.
+        let texts_are_utf8 = Self::detail_texts_are_utf8(details);
         let mut previous_entry = None;
         for index in 0..details.index_count {
             let at = index * format::DETAIL_INDEX_LEN;
@@ -308,8 +315,10 @@ impl<'a> Dictionary<'a> {
             {
                 return Err(Error::BadTable(format::TAG_DETAIL_RECORDS));
             }
-            self.detail_text(details, description)?;
-            self.detail_text(details, display)?;
+            if !texts_are_utf8 {
+                self.detail_text(details, description)?;
+                self.detail_text(details, display)?;
+            }
         }
         for index in 0..details.relation_count {
             let at = index * format::DETAIL_RELATION_LEN;
@@ -331,9 +340,23 @@ impl<'a> Dictionary<'a> {
             if text >= details.text_count {
                 return Err(Error::BadTable(format::TAG_DETAIL_RELATIONS));
             }
-            self.detail_text(details, text)?;
+            if !texts_are_utf8 {
+                self.detail_text(details, text)?;
+            }
         }
         Ok(())
+    }
+
+    /// One pass over the whole text table: every text is valid UTF-8 when the
+    /// table is and each text starts on a character boundary (a text ends
+    /// where the next one starts, the last one at the end of the table).
+    fn detail_texts_are_utf8(details: Details<'_>) -> bool {
+        let Ok(table) = core::str::from_utf8(details.text) else {
+            return false;
+        };
+        (0..details.text_count).all(|id| {
+            read_offset(details.text_offsets, id).is_some_and(|start| table.is_char_boundary(start))
+        })
     }
 
     fn detail_text(&self, details: Details<'a>, index: usize) -> Result<&'a str, Error> {

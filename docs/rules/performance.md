@@ -43,3 +43,20 @@
   milliseconds (a 38.8 MB image opened in 46 ms in the batch notes and in
   60-79 ms at release time), so only a difference measured in the same run
   counts.
+
+- **Check a shared item once, not once per reference.** `validate_details`
+  UTF-8-checked the description and display text of every detail record and
+  every relation text. Records share texts (inflected forms reuse their
+  lemma's description, and display equals description in all 269,339 records
+  of the 2.0.25 image), so 600,878 references re-read 58.9 MB to cover 4.95 MB
+  of distinct text (11.9×): 21.4 ms for that loop, against 1.4 ms for one pass
+  over the table (the whole parse is now 29.0 ms). The table is now checked
+  once (valid UTF-8, every text starting on a character boundary); a table
+  failing either test takes the per-reference check, which decides as before,
+  so a bad text is still rejected when the image is opened and one nothing
+  refers to is still not examined. `dictionary_image_bench`, four interleaved
+  rounds per image order: the 2.0.25 image's added open time went from +22.4
+  and +21.7 ms to +3.1 and +3.1 ms (65.3 → 42.4 ms). The cost now follows
+  records and distinct text bytes (about 1 ns per record and 0.29 ms per MB),
+  not references. When open time grows with the data, count references against
+  distinct items before blaming file size.
