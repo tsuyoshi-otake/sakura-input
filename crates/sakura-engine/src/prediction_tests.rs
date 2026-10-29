@@ -243,6 +243,7 @@ fn persistent_worker_merges_system_and_user_predictions_and_joins() {
     );
     let runtime = PredictionRuntime::start(Arc::clone(&conversion)).expect("runtime");
     let service = runtime.service();
+    service.test_wait_for_worker();
 
     let result = service
         .request(
@@ -402,6 +403,7 @@ fn learned_history_precedes_dictionary_results_and_deduplicates_surfaces() {
     let runtime =
         PredictionRuntime::start_with_learning(Arc::clone(&conversion), Arc::clone(&learning))
             .expect("runtime");
+    runtime.service().test_wait_for_worker();
 
     let result = runtime
         .service()
@@ -953,6 +955,7 @@ fn prediction_limits_displayed_history_candidates_without_trimming_retention() {
     let runtime =
         PredictionRuntime::start_with_learning(Arc::clone(&conversion), Arc::clone(&learning))
             .expect("runtime");
+    runtime.service().test_wait_for_worker();
     let result = runtime
         .service()
         .request(
@@ -1164,6 +1167,7 @@ fn the_single_pending_slot_coalesces_to_the_newest_query() {
 fn prediction_reads_do_not_consume_a_conversion_arena() {
     let conversion = conversion();
     let runtime = PredictionRuntime::start(Arc::clone(&conversion)).expect("runtime");
+    runtime.service().test_wait_for_worker();
     let _ = runtime
         .service()
         .request(
@@ -1185,4 +1189,36 @@ fn prediction_reads_do_not_consume_a_conversion_arena() {
         .expect("conversion slot");
     assert_eq!(converted.as_deref(), Some("仮名"));
     runtime.stop().expect("joined worker");
+}
+
+#[test]
+fn stop_sets_the_flag_only_while_holding_the_state_lock() {
+    // The worker checks `stopping` and waits on `pending_changed` while
+    // holding `state`. A stop that sets the flag and notifies without that
+    // lock can land between the check and the wait; the notification is lost
+    // and the worker sleeps forever, so `PredictionRuntime::drop` never joins.
+    // A start, one request and a drop in a loop hung within 30 seconds on an
+    // idle machine with that stop and ran 300,000 times with this one.
+    let mailbox = Arc::new(Mailbox::new());
+    let held = mailbox.state.lock().expect("mailbox");
+    let (started, running) = std::sync::mpsc::channel();
+    let stopper = {
+        let mailbox = Arc::clone(&mailbox);
+        std::thread::spawn(move || {
+            started.send(()).expect("announce the stop");
+            mailbox.stop();
+        })
+    };
+    running.recv().expect("the stopping thread started");
+    std::thread::sleep(Duration::from_millis(100));
+    // A busy machine can only keep the stopping thread from running, which
+    // keeps this true. A stop that does not wait for the lock fails it
+    // whenever that thread ran at all.
+    assert!(
+        !mailbox.stopping.load(Ordering::Acquire),
+        "stop() set the flag while the lock the worker waits under was held"
+    );
+    drop(held);
+    stopper.join().expect("the stopping thread finished");
+    assert!(mailbox.stopping.load(Ordering::Acquire));
 }
