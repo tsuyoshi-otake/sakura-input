@@ -28,6 +28,7 @@ $CuratedGeneralDetails = Join-Path $RepositoryRoot 'data\curated-general-details
 $CuratedHomophoneDetails = Join-Path $RepositoryRoot 'data\curated-homophone-details.tsv'
 $CuratedSymbolDetails = Join-Path $RepositoryRoot 'data\curated-symbol-details.tsv'
 $CuratedBaseLemmaDetails = Join-Path $RepositoryRoot 'data\curated-base-lemma-details.tsv'
+$CuratedGeneralMeaningDetails = Join-Path $RepositoryRoot 'data\curated-general-meaning-details.tsv'
 $CuratedPhraseTargetEntries = Join-Path $RepositoryRoot 'data\curated-phrase-target-entries.tsv'
 $CuratedGeneralTargetEntries = Join-Path $RepositoryRoot 'data\curated-general-target-entries.tsv'
 $ConversionPriorities = Join-Path $RepositoryRoot 'data\conversion-priorities.tsv'
@@ -65,7 +66,7 @@ if (-not [IO.File]::Exists($VerbCollocationEdges)) {
 if (-not [IO.File]::Exists($NonInitialBoundaryPolicy)) {
     throw "non-initial boundary policy is missing: $NonInitialBoundaryPolicy"
 }
-foreach ($path in @($CuratedPhrases, $CuratedGeneralDetails, $CuratedHomophoneDetails, $CuratedSymbolDetails, $CuratedBaseLemmaDetails, $CuratedPhraseTargetEntries, $CuratedGeneralTargetEntries)) {
+foreach ($path in @($CuratedPhrases, $CuratedGeneralDetails, $CuratedHomophoneDetails, $CuratedSymbolDetails, $CuratedBaseLemmaDetails, $CuratedGeneralMeaningDetails, $CuratedPhraseTargetEntries, $CuratedGeneralTargetEntries)) {
     if (-not [IO.File]::Exists($path)) {
         throw "curated dictionary layer is missing: $path"
     }
@@ -258,6 +259,7 @@ function Invoke-BuildPass {
         [Parameter(Mandatory)][string]$CuratedHomophoneDetailsPath,
         [Parameter(Mandatory)][string]$CuratedSymbolDetailsPath,
         [Parameter(Mandatory)][string]$CuratedBaseLemmaDetailsPath,
+        [Parameter(Mandatory)][string]$CuratedGeneralMeaningDetailsPath,
         [Parameter(Mandatory)][string]$CuratedPhraseTargetEntriesPath,
         [Parameter(Mandatory)][string]$CuratedGeneralTargetEntriesPath,
         [Parameter(Mandatory)][string]$ConversionPrioritiesPath,
@@ -381,7 +383,8 @@ function Invoke-BuildPass {
         '--curated-detail-source', $CuratedGeneralDetailsPath,
         '--detail-only-source', $CuratedHomophoneDetailsPath,
         '--detail-only-source', $CuratedSymbolDetailsPath,
-        '--detail-only-source', $CuratedBaseLemmaDetailsPath
+        '--detail-only-source', $CuratedBaseLemmaDetailsPath,
+        '--detail-only-source', $CuratedGeneralMeaningDetailsPath
     )
     $dictionaryArguments += @(
         '--curated-detail-report', $curatedDetailReport,
@@ -499,6 +502,7 @@ try {
         -CuratedHomophoneDetailsPath $CuratedHomophoneDetails `
         -CuratedSymbolDetailsPath $CuratedSymbolDetails `
         -CuratedBaseLemmaDetailsPath $CuratedBaseLemmaDetails `
+        -CuratedGeneralMeaningDetailsPath $CuratedGeneralMeaningDetails `
         -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
         -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
         -ConversionPrioritiesPath $ConversionPriorities `
@@ -518,6 +522,7 @@ try {
             -CuratedHomophoneDetailsPath $CuratedHomophoneDetails `
             -CuratedSymbolDetailsPath $CuratedSymbolDetails `
             -CuratedBaseLemmaDetailsPath $CuratedBaseLemmaDetails `
+            -CuratedGeneralMeaningDetailsPath $CuratedGeneralMeaningDetails `
             -CuratedPhraseTargetEntriesPath $CuratedPhraseTargetEntries `
             -CuratedGeneralTargetEntriesPath $CuratedGeneralTargetEntries `
             -ConversionPrioritiesPath $ConversionPriorities `
@@ -554,6 +559,7 @@ try {
         Get-ArtifactRecord $CuratedHomophoneDetails
         Get-ArtifactRecord $CuratedSymbolDetails
         Get-ArtifactRecord $CuratedBaseLemmaDetails
+        Get-ArtifactRecord $CuratedGeneralMeaningDetails
     )
     $report = [ordered]@{
         schema_version = 2
@@ -586,7 +592,7 @@ try {
                     source = 'sakura-curated-entry-details'
                     input_records = [int64]$curatedDetailImport.input_records
                     emitted_details = [int64]$curatedDetailImport.emitted_details
-                    suppressed_by_existing = [int64]$curatedDetailImport.suppressed_by_existing
+                    replaced_imported = [int64]$curatedDetailImport.replaced_imported
                     inputs = $curatedDetailInputs
                 },
                 [ordered]@{
@@ -618,6 +624,7 @@ try {
             curated_homophone_details = Get-ArtifactRecord $CuratedHomophoneDetails
             curated_symbol_details = Get-ArtifactRecord $CuratedSymbolDetails
             curated_base_lemma_details = Get-ArtifactRecord $CuratedBaseLemmaDetails
+            curated_general_meaning_details = Get-ArtifactRecord $CuratedGeneralMeaningDetails
             curated_phrase_target_entries = Get-ArtifactRecord $CuratedPhraseTargetEntries
             curated_general_target_entries = Get-ArtifactRecord $CuratedGeneralTargetEntries
             conversion_priorities = Get-ArtifactRecord $ConversionPriorities

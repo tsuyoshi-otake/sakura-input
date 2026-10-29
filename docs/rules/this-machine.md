@@ -99,17 +99,30 @@
   standalone marker line rather than a substring, because the agent's own
   todo list echoes the marker text.
 
-- **Run the workspace tests here with `--no-fail-fast`; two test families fail
-  under load.** Verified 2026-10-28 (integration of #416, #418 and #420):
-  `cargo test --workspace` stops at the first failing test binary, so the
-  binaries after it report nothing. Run 1 failed 24 `sakura-tsf` attach tests
-  (50 ms `RECONNECT_BUDGET`: "the handshake must have completed"), run 2
-  failed 4 `sakura-engine` prediction tests (10 ms `PREDICTION_TIMEOUT`: empty
-  `prediction_cache` right after `type_word`), each binary passed alone, and
-  run 3 with `RUST_TEST_THREADS=8` passed. A CPU sample between the runs
-  showed six `node` processes of other sessions at 0.7-0.9 core each on 16
-  logical processors. Rerun the failing binary alone before suspecting a
-  change that does not touch these paths.
+- **Run the workspace tests here with `--no-fail-fast`, and rule out a load
+  flake by running the test executable next to busy-loop threads.** Verified
+  2026-10-28 (#422). `cargo test --workspace` stops at the first failing test
+  binary, so the binaries after it report nothing. On these 16 logical
+  processors the `sakura-tsf` attach tests (a scripted peer inside the 50 ms
+  `RECONNECT_BUDGET`), `sakura-engine` `dispatch::tests::*` (candidates inside
+  the 10 ms `PREDICTION_TIMEOUT`) and four `prediction::tests::*` (a 100 ms
+  `PredictionService::request`, only in a whole-library run) failed next to 16
+  or 32 busy threads; no product window changed. A test that only needs a
+  connected engine or a prediction waits up to 5 s for it
+  (`Engine::attached_to`, `PredictionService::test_wait_for_worker`); a test
+  whose subject is a window reruns its scenario through
+  `crates/sakura-tsf/src/testing/busy_machine.rs`. The window tests that never
+  failed under load are named in the #422 journal entry; rerun a failing one
+  alone, then under load, before suspecting a change. Run the executable 10 or
+  more times, from `main` first for the "before":
+
+      Add-Type -TypeDefinition 'using System.Threading; public static class Burn { public static volatile bool Stop; public static void Start(int n) { for (int i = 0; i < n; i++) new Thread(() => { long x = 0; while (!Stop) x++; }) { IsBackground = true }.Start(); } }'
+      [Burn]::Start(16)   # then 32; run the executable N times, count failing runs
+      [Burn]::Stop = $true
+
+  A run that never finishes is not a slow test: dump its threads with
+  `cdb.exe -pv -p <pid> -y <target dir>\deps -c "~*kb 40;q"` (Windows SDK
+  Debuggers; #422 found the `Mailbox::stop` lost wake-up that way).
 
 - **A union merge of two appended journal entries drops the blank line between
   them.** Verified 2026-10-28: `git merge-file --union` left the second `## `

@@ -61,6 +61,11 @@ const MAX_REPAIR_COMPLETION_CHARS: usize = 6;
 /// single result reserves room for dictionary and user suggestions.
 const MAX_HISTORY_SUGGESTIONS_PER_RESULT: usize = 4;
 
+/// How long a test waits for the worker once it has called
+/// [`PredictionService::test_wait_for_worker`].
+#[cfg(test)]
+const TEST_WORKER_PATIENCE: Duration = Duration::from_secs(5);
+
 /// Engine-internal provenance assigned before merged prediction results are
 /// deduplicated. It never crosses the protocol boundary: the renderer and TSF
 /// deliberately receive only surface/annotation data.
@@ -262,6 +267,8 @@ struct Mailbox {
     coalesced: AtomicU64,
     #[cfg(test)]
     scripted: Mutex<Option<TestPredictionScript>>,
+    #[cfg(test)]
+    waits_for_worker: AtomicBool,
 }
 
 #[cfg(test)]
@@ -283,6 +290,8 @@ impl Mailbox {
             coalesced: AtomicU64::new(0),
             #[cfg(test)]
             scripted: Mutex::new(None),
+            #[cfg(test)]
+            waits_for_worker: AtomicBool::new(false),
         }
     }
 
@@ -402,6 +411,12 @@ impl Mailbox {
         timeout: Duration,
         destination: &mut PredictionResult,
     ) -> bool {
+        #[cfg(test)]
+        let timeout = if self.waits_for_worker.load(Ordering::Relaxed) {
+            timeout.max(TEST_WORKER_PATIENCE)
+        } else {
+            timeout
+        };
         let started = Instant::now();
         let mut state = self
             .state
@@ -436,7 +451,17 @@ impl Mailbox {
     }
 
     fn stop(&self) {
-        self.stopping.store(true, Ordering::Release);
+        // The worker checks `stopping` and then waits on `pending_changed`
+        // while holding `state`. Setting the flag under that lock means a stop
+        // cannot land between the check and the wait, where its notification
+        // would be lost and `PredictionRuntime::drop` would join a sleeper.
+        {
+            let _state = self
+                .state
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            self.stopping.store(true, Ordering::Release);
+        }
         self.pending_changed.notify_all();
         self.result_changed.notify_all();
     }
@@ -519,6 +544,18 @@ impl PredictionService {
     #[cfg(test)]
     pub fn request_count(&self) -> u64 {
         self.mailbox.next_sequence.load(Ordering::Relaxed)
+    }
+
+    /// Makes `request` and `request_into` wait for the worker for at least
+    /// [`TEST_WORKER_PATIENCE`] instead of the caller's timeout, so a test
+    /// about what a prediction does once it arrives is not decided by whether
+    /// the worker thread was scheduled inside the caller's window (10 ms in the
+    /// dispatcher) on a busy machine. The worker still computes the real
+    /// result; only the wait is longer, and only for a service a test has asked
+    /// about. The windows themselves stay the production constants.
+    #[cfg(test)]
+    pub(crate) fn test_wait_for_worker(&self) {
+        self.mailbox.waits_for_worker.store(true, Ordering::Relaxed);
     }
 
     /// Installs a deterministic unit-test response source. The first mode is

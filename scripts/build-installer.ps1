@@ -304,7 +304,7 @@ if ($dictionaryReport.schema_version -eq 2) {
     $curatedSchemaVersion = Get-RequiredJsonProperty $curatedImport 'schema_version' 'curated detail schema version'
     $curatedInputRecords = Get-RequiredJsonProperty $curatedImport 'input_records' 'curated detail input count'
     $curatedEmittedDetails = Get-RequiredJsonProperty $curatedImport 'emitted_details' 'curated detail emitted count'
-    $curatedSuppressed = Get-RequiredJsonProperty $curatedImport 'suppressed_by_existing' 'curated detail suppression count'
+    $curatedReplaced = Get-RequiredJsonProperty $curatedImport 'replaced_imported' 'curated detail replacement count'
     $llmImport = Get-RequiredJsonProperty $dictionaryReport 'llm_detail_import' 'LLM detail import accounting'
     $llmImportReport = Get-RequiredJsonProperty $llmImport 'report' 'LLM detail import report'
     $llmEmittedDetails = Get-RequiredJsonProperty $llmImportReport 'emitted_details' 'LLM detail emitted count'
@@ -315,8 +315,8 @@ if ($dictionaryReport.schema_version -eq 2) {
     )
     if ($importSchemaVersion -ne 2 -or $null -eq $importDetailCount -or
         [long]$importDetailCount -ne [long]$wordNetSourceCount -or
-        $null -eq $mergedDetailCount -or $curatedSchemaVersion -cne 'sakura.curated-detail-import.v1' -or
-        [long]$curatedInputRecords -ne ([long]$curatedEmittedDetails + [long]$curatedSuppressed) -or
+        $null -eq $mergedDetailCount -or $curatedSchemaVersion -cne 'sakura.curated-detail-import.v2' -or
+        [long]$curatedInputRecords -ne ([long]$curatedEmittedDetails + [long]$curatedReplaced) -or
         $expectedDetailCount -ne [long]$detailsCount -or
         $null -eq $smileChatSourceCount -or [long]$smileChatSourceCount -lt 0 -or
         $null -eq $surfaceAmbiguous -or [long]$surfaceAmbiguous -lt 0 -or

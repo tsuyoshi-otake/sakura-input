@@ -294,3 +294,17 @@
   消すため、待つかどうかの判断だけを `Shared::hold_history_lifecycle` で検査し、
   実際の Clear は、私有の `LOCALAPPDATA` を持つ engine の子プロセス
   （`pipe_round_trip`）だけが送る。
+
+- **壁時計の窓を持つ製品コードの test は、窓が主題かどうかで直し方を分ける。**
+  2026-10-28（#422）に、負荷の高いマシンで `sakura-tsf` の接続 test（50 ms の
+  `RECONNECT_BUDGET`）と `sakura-engine` の予測 test（10 ms の
+  `PREDICTION_TIMEOUT`、`prediction::tests::` は 100 ms の `request`）が落ちた。
+  接続済みのエンジンや予測結果が欲しいだけの test には、`cfg(test)` の継ぎ目で
+  5 秒待たせる（`Engine::attached_to`、`test_wait_for_worker`）。継ぎ目は timeout を
+  実際に使う一箇所（`Mailbox::wait_into`）に置く。`request_into` に置いた最初の版は
+  `request` 経由の 4 test を取り逃がし、ライブラリ全体を負荷の横で走らせて初めて
+  見えた。製品の窓の定数は変えない。返事が窓に収まること自体が主題の 4 test は、
+  `testing/busy_machine.rs` の `until_the_machine_keeps_up` でシナリオごと最大 5 回
+  繰り返す。`Err` を返してよいのは負荷で落ちうる検査（短い予算への返事、経過時間の
+  上限）だけで、下限・方針の予算・件数・届いた値は即 assert とする。間違った実装は
+  どの回でも落ち、忙しいマシンは一部の回だけ落とす。負荷の掛け方は `this-machine.md`。

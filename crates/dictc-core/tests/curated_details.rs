@@ -138,11 +138,13 @@ fn checked_in_curated_sources_have_the_reviewed_release_shape() {
     let homophones = data_entries("curated-homophone-details.tsv");
     let symbols = data_entries("curated-symbol-details.tsv");
     let base_lemmas = data_entries("curated-base-lemma-details.tsv");
+    let general_meanings = data_entries("curated-general-meaning-details.tsv");
     let phrase_targets = data_entries("curated-phrase-target-entries.tsv");
     let general_targets = data_entries("curated-general-target-entries.tsv");
     assert_eq!(phrases.len(), 481);
     assert_eq!(general.len(), 480);
-    assert_eq!(homophones.len(), 1_163);
+    assert_eq!(homophones.len(), 1_165);
+    assert_eq!(general_meanings.len(), 16);
     assert_eq!(phrase_targets.len(), 14);
     assert_eq!(general_targets.len(), 3);
 
@@ -175,6 +177,7 @@ fn checked_in_curated_sources_have_the_reviewed_release_shape() {
         .chain(&homophones)
         .chain(&symbols)
         .chain(&base_lemmas)
+        .chain(&general_meanings)
     {
         assert!(
             identities.insert((
@@ -267,6 +270,10 @@ fn checked_in_curated_sources_have_the_reviewed_release_shape() {
         ("せいさく", "政策", 1841, 1841),
         ("たいせい", "大勢", 1851, 1851),
         ("ほそく", "捕捉", 1841, 1841),
+        ("かてい", "過程", 1893, 1893),
+        ("たいしょう", "対象", 1851, 1851),
+        ("りぽじとり", "リポジトリ", 1851, 1851),
+        ("くらすた", "Cluster", 1851, 1851),
     ] {
         assert!(identities.contains(&required), "missing {required:?}");
     }

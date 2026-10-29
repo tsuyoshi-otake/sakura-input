@@ -1856,6 +1856,29 @@ fn shifted_ascii_english_conversion_dispatcher() -> Dispatcher {
     Dispatcher::new_with_conversion(conversion).expect("shipped defaults")
 }
 
+/// Starts the prediction worker for a dispatcher test. In production the
+/// dispatcher gives a prediction 10 ms and fails open past it; the tests that
+/// start their worker here are about what the dispatcher does with a
+/// prediction, so they wait for the worker instead of for the scheduler (a
+/// busy machine otherwise leaves `prediction_cache` empty right after
+/// `type_word`). The fail-open window is the production constant and is not
+/// exercised by these tests.
+fn waiting_prediction_runtime(
+    conversion: &Arc<ConversionService>,
+    learning: Option<&Arc<LearningService>>,
+) -> crate::prediction::PredictionRuntime {
+    let runtime = match learning {
+        Some(learning) => crate::prediction::PredictionRuntime::start_with_learning(
+            Arc::clone(conversion),
+            Arc::clone(learning),
+        ),
+        None => crate::prediction::PredictionRuntime::start(Arc::clone(conversion)),
+    }
+    .expect("prediction runtime");
+    runtime.service().test_wait_for_worker();
+    runtime
+}
+
 fn prediction_dispatcher() -> (Dispatcher, crate::prediction::PredictionRuntime) {
     let source = "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nかな\t仮名\t0\t1\t100\t100\tpredict\tcommon\nかなた\t彼方\t0\t2\t200\t200\tpredict\tdirection\nかながわ\t神奈川\t0\t3\t300\t300\tpredict\tprefecture\n";
     let entries = dictc_core::parse_entries("prediction.tsv", source).expect("entries");
@@ -1874,8 +1897,7 @@ fn prediction_dispatcher() -> (Dispatcher, crate::prediction::PredictionRuntime)
         ConversionService::from_static_bytes(image).expect("prediction conversion fixture"),
     );
     let learning = Arc::new(LearningService::memory());
-    let runtime = crate::prediction::PredictionRuntime::start(Arc::clone(&conversion))
-        .expect("prediction runtime");
+    let runtime = waiting_prediction_runtime(&conversion, None);
     let dispatcher = Dispatcher::new_with_runtime_configuration(
         conversion,
         learning,
@@ -1959,11 +1981,7 @@ fn phase_one_prediction_dispatcher(
     conversion: Arc<ConversionService>,
     learning: Arc<LearningService>,
 ) -> (Dispatcher, crate::prediction::PredictionRuntime) {
-    let runtime = crate::prediction::PredictionRuntime::start_with_learning(
-        Arc::clone(&conversion),
-        Arc::clone(&learning),
-    )
-    .expect("prediction runtime");
+    let runtime = waiting_prediction_runtime(&conversion, Some(&learning));
     let dispatcher = Dispatcher::new_with_runtime_configuration(
         conversion,
         learning,
@@ -7019,8 +7037,7 @@ fn atok_predicting_muhenkan_applies_a_temporary_katakana_transform_without_leaki
         ConversionService::from_static_bytes(image).expect("prediction conversion fixture"),
     );
     let learning = Arc::new(LearningService::memory());
-    let runtime = crate::prediction::PredictionRuntime::start(Arc::clone(&conversion))
-        .expect("prediction runtime");
+    let runtime = waiting_prediction_runtime(&conversion, None);
     let mut dispatcher = Dispatcher::new_with_runtime_configuration(
         conversion,
         learning,
@@ -9016,11 +9033,7 @@ fn a_maximal_suggestion_commit_fits_exactly_at_the_preedit_boundary() {
             ),
         );
     let learning = Arc::new(LearningService::memory());
-    let runtime = crate::prediction::PredictionRuntime::start_with_learning(
-        Arc::clone(&conversion),
-        Arc::clone(&learning),
-    )
-    .expect("prediction runtime");
+    let runtime = waiting_prediction_runtime(&conversion, Some(&learning));
     let profile = AppProfile {
         process_name: "notepad.exe".to_owned(),
         default_mode: Mode::Hiragana,

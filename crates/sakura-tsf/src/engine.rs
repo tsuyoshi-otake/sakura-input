@@ -66,6 +66,16 @@ const RECONNECT_BUDGET: Duration = Duration::from_millis(50);
 /// wondering whether they have to restart their editor.
 const RETRY_INTERVAL: Duration = Duration::from_secs(2);
 
+/// How long a test gives its scripted peer to finish the handshake.
+///
+/// The peer is a thread of the test process, so on a busy machine it can need
+/// longer than [`RECONNECT_BUDGET`] just to be scheduled for three round
+/// trips, and a test about what happens after the attach would fail for a
+/// reason that has nothing to do with it. Only the deadline `connect_to`
+/// hands the handshake differs; the production budget is untouched.
+#[cfg(test)]
+const TEST_ATTACH_PATIENCE: Duration = Duration::from_secs(5);
+
 /// What asking the engine produced.
 #[derive(Debug)]
 // Keeping `Output` inline avoids a heap allocation on every accepted
@@ -212,7 +222,8 @@ impl Engine {
     }
 
     /// An engine already connected to a named pipe, for tests that need a
-    /// scripted peer rather than the real one.
+    /// scripted peer rather than the real one. The handshake gets
+    /// [`TEST_ATTACH_PATIENCE`], not [`RECONNECT_BUDGET`].
     #[cfg(test)]
     pub(crate) fn attached_to(name: &str) -> Self {
         Self {
@@ -1007,20 +1018,24 @@ fn call_for_key(client: &mut Client, request: &Request) -> Result<Response, Faul
 /// three budgets, because what the keystroke thread can afford is a total,
 /// not a per-step allowance.
 fn connect() -> Option<Link> {
-    open(None)
+    open(None, callback_deadline::limit(RECONNECT_BUDGET))
 }
 
 /// [`connect`], but against a named pipe of the caller's choosing, so the
 /// tests can put a scripted engine on the other end. The well-known name
 /// belongs to the logon session and is already taken by the real engine on
 /// any machine where one is running.
+///
+/// The handshake runs the same code as [`connect`], under
+/// [`TEST_ATTACH_PATIENCE`]: the 50 ms [`RECONNECT_BUDGET`] belongs to the
+/// keystroke thread, not to the scripted peer, and a test that only wants a
+/// connected engine must not lose it to the scheduler.
 #[cfg(test)]
 fn connect_to(name: &str) -> Option<Link> {
-    open(Some(name))
+    open(Some(name), Instant::now() + TEST_ATTACH_PATIENCE)
 }
 
-fn open(name: Option<&str>) -> Option<Link> {
-    let deadline = callback_deadline::limit(RECONNECT_BUDGET);
+fn open(name: Option<&str>, deadline: Instant) -> Option<Link> {
     if Instant::now() >= deadline {
         return None;
     }
@@ -1337,6 +1352,7 @@ const UNKNOWN_HOST: &str = "unknown.exe";
 #[allow(clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
+    use crate::testing::busy_machine::until_the_machine_keeps_up;
     use sakura_ipc::{Descriptor, PipeInstance};
     use sakura_proto::{
         decode_request, encode_response, InputScope, KeyCode, Modifiers, Preedit, Segment,
@@ -2115,128 +2131,156 @@ mod tests {
         assert_eq!(after, before + 1);
     }
 
+    /// Withholding the second acknowledgement is the scenario, so that
+    /// placement is rejected and the link stays healthy whatever the load. The
+    /// other placements have to be acknowledged inside the 10 ms placement
+    /// budget, which a busy machine does not always allow, so the scenario may
+    /// run again; what reached the peer is asserted outright once they were.
     #[test]
     fn ui_placement_timeout_is_not_cached_and_late_ack_is_not_applied_to_new_geometry() {
-        let (release_tx, release_rx) = std::sync::mpsc::channel();
-        let (observed_tx, observed_rx) = std::sync::mpsc::channel();
-        let (name, server) = fake_engine("placement-late-ack", move |pipe, buffer| {
-            let mut anchors = Vec::new();
-            loop {
-                let payload = match pipe.read_frame_with_deadline(buffer, Duration::from_secs(2)) {
-                    Ok(payload) => payload,
-                    Err(Fault::Disconnected) => break,
-                    Err(fault) => panic!("bounded placement read: {fault:?}"),
-                };
-                let (id, request) = decode_request(payload).expect("decode");
-                let Request::SetUiPlacement { anchor, .. } = request else {
-                    panic!("placement only");
-                };
-                anchors.push(anchor);
-                if anchors.len() == 2 {
-                    release_rx
-                        .recv_timeout(Duration::from_secs(2))
-                        .expect("release late reply");
+        until_the_machine_keeps_up("placements around a withheld acknowledgement", || {
+            let (release_tx, release_rx) = std::sync::mpsc::channel();
+            let (observed_tx, observed_rx) = std::sync::mpsc::channel();
+            let (name, server) = fake_engine("placement-late-ack", move |pipe, buffer| {
+                let mut anchors = Vec::new();
+                loop {
+                    let payload =
+                        match pipe.read_frame_with_deadline(buffer, Duration::from_secs(2)) {
+                            Ok(payload) => payload,
+                            Err(Fault::Disconnected) => break,
+                            Err(fault) => panic!("bounded placement read: {fault:?}"),
+                        };
+                    let (id, request) = decode_request(payload).expect("decode");
+                    let Request::SetUiPlacement { anchor, .. } = request else {
+                        panic!("placement only");
+                    };
+                    anchors.push(anchor);
+                    if anchors.len() == 2 {
+                        release_rx
+                            .recv_timeout(Duration::from_secs(2))
+                            .expect("release late reply");
+                    }
+                    let mut reply = Vec::new();
+                    encode_response(&Response::Ok, id, &mut reply).expect("encode");
+                    // A client that gave up on a late reply is gone by now.
+                    if pipe.write_all(&reply).is_err() {
+                        break;
+                    }
                 }
-                let mut reply = Vec::new();
-                encode_response(&Response::Ok, id, &mut reply).expect("encode");
-                pipe.write_all(&reply).expect("reply");
+                observed_tx.send(anchors).expect("observer");
+            });
+            let mut engine = Engine::attached_to(&name);
+            let first = Some(ScreenRect {
+                left: 1,
+                top: 2,
+                right: 3,
+                bottom: 4,
+            });
+            let changed = Some(ScreenRect {
+                left: 10,
+                top: 20,
+                right: 30,
+                bottom: 40,
+            });
+            let newest = Some(ScreenRect {
+                left: 100,
+                top: 200,
+                right: 300,
+                bottom: 400,
+            });
+            let accepted_first = engine.set_ui_placement(first, None, true);
+            let rejected_late = !engine.set_ui_placement(changed, None, true);
+            let healthy = engine.is_connected() && !engine.is_desynchronized();
+            release_tx.send(()).expect("release server");
+            let accepted_retry = engine.set_ui_placement(changed, None, true);
+            let accepted_newest = engine.set_ui_placement(newest, None, true);
+            let duplicate = engine.set_ui_placement(newest, None, true);
+            drop(engine);
+            server.join().expect("peer ended");
+            let anchors = observed_rx
+                .recv_timeout(Duration::from_secs(2))
+                .expect("anchors");
+            assert!(
+                rejected_late && healthy,
+                "a withheld acknowledgement must time out and leave the link healthy"
+            );
+            if !(accepted_first && accepted_retry && accepted_newest && duplicate) {
+                return Err(format!(
+                    "an acknowledgement missed its budget: first={accepted_first}, \
+                     retry={accepted_retry}, newest={accepted_newest}, duplicate={duplicate}"
+                ));
             }
-            observed_tx.send(anchors).expect("observer");
+            assert_eq!(anchors, vec![first, changed, changed, newest]);
+            Ok(())
         });
-        let mut engine = Engine::attached_to(&name);
-        let first = Some(ScreenRect {
-            left: 1,
-            top: 2,
-            right: 3,
-            bottom: 4,
-        });
-        let changed = Some(ScreenRect {
-            left: 10,
-            top: 20,
-            right: 30,
-            bottom: 40,
-        });
-        let newest = Some(ScreenRect {
-            left: 100,
-            top: 200,
-            right: 300,
-            bottom: 400,
-        });
-        let accepted_first = engine.set_ui_placement(first, None, true);
-        let rejected_late = !engine.set_ui_placement(changed, None, true);
-        let healthy = engine.is_connected() && !engine.is_desynchronized();
-        release_tx.send(()).expect("release server");
-        let accepted_retry = engine.set_ui_placement(changed, None, true);
-        let accepted_newest = engine.set_ui_placement(newest, None, true);
-        let duplicate = engine.set_ui_placement(newest, None, true);
-        drop(engine);
-        server.join().expect("peer ended");
-        let anchors = observed_rx
-            .recv_timeout(Duration::from_secs(2))
-            .expect("anchors");
-        assert!(
-            accepted_first
-                && rejected_late
-                && healthy
-                && accepted_retry
-                && accepted_newest
-                && duplicate
-        );
-        assert_eq!(anchors, vec![first, changed, changed, newest]);
     }
 
+    /// Each placement that reaches the peer has to be acknowledged inside the
+    /// 10 ms placement budget, which a busy machine does not always allow, so
+    /// the scenario may run again; the count of what reached the peer is
+    /// asserted outright once every acknowledgement was in time.
     #[test]
     fn ui_placement_repeated_geometry_is_bounded_and_key_output_invalidates_it() {
-        let (observed_tx, observed_rx) = std::sync::mpsc::channel();
-        let (name, server) = fake_engine("placement-dedup", move |pipe, buffer| {
-            let mut placements = 0;
-            loop {
-                let payload = match pipe.read_frame_with_deadline(buffer, Duration::from_secs(2)) {
-                    Ok(payload) => payload,
-                    Err(Fault::Disconnected) => break,
-                    Err(fault) => panic!("bounded peer read: {fault:?}"),
-                };
-                let (id, request) = decode_request(payload).expect("request");
-                let response = match request {
-                    Request::SetUiPlacement { .. } => {
-                        placements += 1;
-                        Response::Ok
+        until_the_machine_keeps_up("four acknowledged placements and a key", || {
+            let (observed_tx, observed_rx) = std::sync::mpsc::channel();
+            let (name, server) = fake_engine("placement-dedup", move |pipe, buffer| {
+                let mut placements = 0;
+                loop {
+                    let payload =
+                        match pipe.read_frame_with_deadline(buffer, Duration::from_secs(2)) {
+                            Ok(payload) => payload,
+                            Err(Fault::Disconnected) => break,
+                            Err(fault) => panic!("bounded peer read: {fault:?}"),
+                        };
+                    let (id, request) = decode_request(payload).expect("request");
+                    let response = match request {
+                        Request::SetUiPlacement { .. } => {
+                            placements += 1;
+                            Response::Ok
+                        }
+                        Request::SendKey { .. } => Response::Output(some_output()),
+                        other => panic!("unexpected request: {other:?}"),
+                    };
+                    let mut reply = Vec::new();
+                    encode_response(&response, id, &mut reply).expect("encode");
+                    // A client that gave up on a late reply is gone by now.
+                    if pipe.write_all(&reply).is_err() {
+                        break;
                     }
-                    Request::SendKey { .. } => Response::Output(some_output()),
-                    other => panic!("unexpected request: {other:?}"),
-                };
-                let mut reply = Vec::new();
-                encode_response(&response, id, &mut reply).expect("encode");
-                pipe.write_all(&reply).expect("reply");
+                }
+                observed_tx.send(placements).expect("observer");
+            });
+            let mut engine = Engine::attached_to(&name);
+            let anchor = Some(ScreenRect {
+                left: 10,
+                top: 20,
+                right: 12,
+                bottom: 40,
+            });
+            let mut accepted = engine.set_ui_placement(anchor, None, true);
+            for _ in 0..100 {
+                accepted &= engine.set_ui_placement(anchor, None, true);
             }
-            observed_tx.send(placements).expect("observer");
-        });
-        let mut engine = Engine::attached_to(&name);
-        let anchor = Some(ScreenRect {
-            left: 10,
-            top: 20,
-            right: 12,
-            bottom: 40,
-        });
-        let mut accepted = engine.set_ui_placement(anchor, None, true);
-        for _ in 0..100 {
+            let key = engine.send_key(a_key('a'));
             accepted &= engine.set_ui_placement(anchor, None, true);
-        }
-        let key = engine.send_key(a_key('a'));
-        accepted &= engine.set_ui_placement(anchor, None, true);
-        accepted &= engine.set_ui_placement(anchor, None, false);
-        accepted &= engine.set_ui_placement(anchor, None, false);
-        drop(engine);
-        server.join().expect("peer ended");
-        let count = observed_rx
-            .recv_timeout(Duration::from_secs(2))
-            .expect("count");
-        assert!(accepted);
-        assert!(matches!(key, Answer::Ready(_)));
-        assert_eq!(
-            count, 4,
-            "duplicates collapse, but idle geometry must refresh across hosts"
-        );
+            accepted &= engine.set_ui_placement(anchor, None, false);
+            accepted &= engine.set_ui_placement(anchor, None, false);
+            drop(engine);
+            server.join().expect("peer ended");
+            let count = observed_rx
+                .recv_timeout(Duration::from_secs(2))
+                .expect("count");
+            if !accepted || !matches!(key, Answer::Ready(_)) {
+                return Err(format!(
+                    "an acknowledgement missed its budget: accepted={accepted}, key={key:?}"
+                ));
+            }
+            assert_eq!(
+                count, 4,
+                "duplicates collapse, but idle geometry must refresh across hosts"
+            );
+            Ok(())
+        });
     }
 
     #[test]
@@ -2378,46 +2422,56 @@ mod tests {
     /// The shared allowance of #148 is still one allowance when it is the long
     /// one: a resync, a scope change and a key that take 35 ms each (105 ms,
     /// past the design budget) all fit in a patient callback.
+    ///
+    /// The 95 ms left over has to pay for the scheduler waking the engine and
+    /// the peer nine times, which a busy machine does not always manage, so
+    /// the scenario may run again. A wrong allowance cannot pass any run,
+    /// because the scripted replies alone outlast the design budget.
     #[test]
     fn a_patient_callback_fits_a_resync_a_scope_change_and_a_key_that_are_each_slow() {
-        key_wait::record_answer();
-        let (name, server) = fake_engine("patient-serial", |pipe, buffer| {
-            for _ in 0..3 {
-                let Ok(payload) = pipe.read_frame_with_deadline(buffer, Duration::from_millis(500))
-                else {
-                    return;
-                };
-                let (id, request) = decode_request(payload).expect("request");
-                let response = match request {
-                    Request::Revert { .. } | Request::SetInputScope { .. } => Response::Ok,
-                    Request::SendKey { .. } => Response::Output(latin_preedit("a")),
-                    _ => panic!("unexpected request"),
-                };
-                std::thread::sleep(Duration::from_millis(35));
-                let mut reply = Vec::new();
-                encode_response(&response, id, &mut reply).expect("encode");
-                if pipe.write_all(&reply).is_err() {
-                    return;
+        until_the_machine_keeps_up("three 35 ms requests in a patient callback", || {
+            key_wait::record_answer();
+            let (name, server) = fake_engine("patient-serial", |pipe, buffer| {
+                for _ in 0..3 {
+                    let Ok(payload) =
+                        pipe.read_frame_with_deadline(buffer, Duration::from_millis(500))
+                    else {
+                        return;
+                    };
+                    let (id, request) = decode_request(payload).expect("request");
+                    let response = match request {
+                        Request::Revert { .. } | Request::SetInputScope { .. } => Response::Ok,
+                        Request::SendKey { .. } => Response::Output(latin_preedit("a")),
+                        _ => panic!("unexpected request"),
+                    };
+                    std::thread::sleep(Duration::from_millis(35));
+                    let mut reply = Vec::new();
+                    encode_response(&response, id, &mut reply).expect("encode");
+                    if pipe.write_all(&reply).is_err() {
+                        return;
+                    }
                 }
+            });
+            let mut engine = Engine::attached_to(&name);
+            engine.link.as_mut().expect("connected").desynchronized = true;
+            let answer = in_key_callback(|| {
+                if engine.set_input_scope(InputScope::Normal) {
+                    engine.send_key(a_key('a'))
+                } else {
+                    Answer::Unavailable
+                }
+            });
+            let synchronized = engine.is_connected() && !engine.is_desynchronized();
+            drop(engine);
+            server.join().expect("bounded scripted server");
+            if !matches!(answer, Answer::Ready(_)) {
+                return Err(format!(
+                    "three 35 ms requests did not fit the patient allowance: {answer:?}"
+                ));
             }
+            assert!(synchronized, "the resync inside the callback was answered");
+            Ok(())
         });
-        let mut engine = Engine::attached_to(&name);
-        engine.link.as_mut().expect("connected").desynchronized = true;
-        let answer = in_key_callback(|| {
-            if engine.set_input_scope(InputScope::Normal) {
-                engine.send_key(a_key('a'))
-            } else {
-                Answer::Unavailable
-            }
-        });
-        let synchronized = engine.is_connected() && !engine.is_desynchronized();
-        drop(engine);
-        server.join().expect("bounded scripted server");
-        assert!(
-            matches!(answer, Answer::Ready(_)),
-            "three 35 ms requests did not fit the patient allowance: {answer:?}"
-        );
-        assert!(synchronized, "the resync inside the callback was answered");
     }
 
     /// #415 (1): a reply that arrives after the old 50 ms and inside the new
@@ -2551,66 +2605,89 @@ mod tests {
     /// the ceiling, every later one waits only the design budget, and the
     /// first answer restores the long wait. Probes keep the link and the
     /// session untouched, so each callback measures the wait and nothing else.
+    ///
+    /// A wait cannot end before its budget, so the lower bounds and the
+    /// budgets the policy picked are asserted outright; only the upper bounds
+    /// (a busy machine can hold the thread long after its deadline) and the
+    /// reply that must land inside the restored wait may run again.
     #[test]
     fn two_missed_waits_return_callbacks_to_the_design_budget_until_an_answer() {
-        key_wait::record_answer();
-        let (name, server) = fake_engine("fallback", |pipe, buffer| {
-            for _ in 0..3 {
-                if pipe
-                    .read_frame_with_deadline(buffer, Duration::from_secs(5))
-                    .is_err()
-                {
-                    return;
+        until_the_machine_keeps_up("the wait after two missed waits", || {
+            key_wait::record_answer();
+            let (name, server) = fake_engine("fallback", |pipe, buffer| {
+                for _ in 0..3 {
+                    if pipe
+                        .read_frame_with_deadline(buffer, Duration::from_secs(5))
+                        .is_err()
+                    {
+                        return;
+                    }
                 }
+                answer(pipe, buffer, &Response::Output(some_output()));
+            });
+            let probe = KeyInput {
+                code: KeyCode::Space,
+                ch: None,
+                modifiers: Modifiers::NONE,
+                repeat: false,
+                test_only: true,
+            };
+
+            let mut engine = Engine::attached_to(&name);
+            let mut waited = [Duration::ZERO; 3];
+            let mut budgets = [Duration::ZERO; 3];
+            for (wait, budget) in waited.iter_mut().zip(&mut budgets) {
+                let started = Instant::now();
+                let answer = in_key_callback(|| engine.probe_key(InputScope::Normal, probe));
+                *wait = started.elapsed();
+                *budget = key_wait::budget();
+                assert!(matches!(answer, Answer::Unavailable), "{answer:?}");
             }
-            answer(pipe, buffer, &Response::Output(some_output()));
+            let restored = in_key_callback(|| engine.probe_key(InputScope::Normal, probe));
+            let budget_after_answer = key_wait::budget();
+            let kept = engine.is_connected() && !engine.is_desynchronized();
+            drop(engine);
+            server.join().expect("the scripted peer");
+
+            let [first, second, third] = waited;
+            assert!(first >= Duration::from_millis(190), "first wait {first:?}");
+            assert!(
+                second >= Duration::from_millis(190),
+                "second wait {second:?}"
+            );
+            assert!(
+                third >= Duration::from_millis(40),
+                "after two misses a callback waited only {third:?}"
+            );
+            assert_eq!(
+                budgets,
+                [
+                    key_wait::PATIENT_BUDGET,
+                    key_wait::DESIGN_BUDGET,
+                    key_wait::DESIGN_BUDGET
+                ]
+            );
+            assert!(
+                kept,
+                "a Probe that times out never touches the live session"
+            );
+            let ceiling = Duration::from_millis(350);
+            if first >= ceiling || second >= ceiling {
+                return Err(format!(
+                    "the first two waits ran to {first:?} and {second:?}, not about 200 ms"
+                ));
+            }
+            if third >= Duration::from_millis(150) {
+                return Err(format!(
+                    "after two misses a callback waited {third:?}, not about 50 ms"
+                ));
+            }
+            if !matches!(restored, Answer::Ready(_)) {
+                return Err(format!("the answer after the misses was {restored:?}"));
+            }
+            assert_eq!(budget_after_answer, key_wait::PATIENT_BUDGET);
+            Ok(())
         });
-        let probe = KeyInput {
-            code: KeyCode::Space,
-            ch: None,
-            modifiers: Modifiers::NONE,
-            repeat: false,
-            test_only: true,
-        };
-
-        let mut engine = Engine::attached_to(&name);
-        let mut waited = [Duration::ZERO; 3];
-        let mut budgets = [Duration::ZERO; 3];
-        for (wait, budget) in waited.iter_mut().zip(&mut budgets) {
-            let started = Instant::now();
-            let answer = in_key_callback(|| engine.probe_key(InputScope::Normal, probe));
-            *wait = started.elapsed();
-            *budget = key_wait::budget();
-            assert!(matches!(answer, Answer::Unavailable), "{answer:?}");
-        }
-        let restored = in_key_callback(|| engine.probe_key(InputScope::Normal, probe));
-        let budget_after_answer = key_wait::budget();
-        let kept = engine.is_connected() && !engine.is_desynchronized();
-        drop(engine);
-        server.join().expect("the scripted peer");
-
-        let [first, second, third] = waited;
-        let ceiling = Duration::from_millis(190)..Duration::from_millis(350);
-        assert!(ceiling.contains(&first), "first wait {first:?}");
-        assert!(ceiling.contains(&second), "second wait {second:?}");
-        assert!(
-            third >= Duration::from_millis(40) && third < Duration::from_millis(150),
-            "after two misses a callback waited {third:?}, not about 50 ms"
-        );
-        assert_eq!(
-            budgets,
-            [
-                key_wait::PATIENT_BUDGET,
-                key_wait::DESIGN_BUDGET,
-                key_wait::DESIGN_BUDGET
-            ]
-        );
-        assert!(matches!(restored, Answer::Ready(_)), "{restored:?}");
-        assert_eq!(budget_after_answer, key_wait::PATIENT_BUDGET);
-        assert!(
-            kept,
-            "a Probe that times out never touches the live session"
-        );
     }
 
     /// A request made outside any key callback has no entry that could grow
