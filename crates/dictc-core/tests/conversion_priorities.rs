@@ -370,6 +370,7 @@ fn reviewed_detail_rows() -> Vec<SourceEntry> {
         "curated-phrases.tsv",
         "curated-general-details.tsv",
         "curated-homophone-details.tsv",
+        "curated-general-meaning-details.tsv",
     ] {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../data")

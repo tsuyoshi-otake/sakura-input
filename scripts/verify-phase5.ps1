@@ -287,8 +287,8 @@ function Test-ReleaseBundle {
                     $source.license_id -cne 'LicenseRef-Japanese-WordNet-1.1' -or $source.license_file -cne $wordNetLicense -or
                     $null -eq $wordNetImport -or $wordNetImport.schema_version -ne 2 -or
                     [long]$wordNetImport.detail_count -ne [long]$wordNetImport.details.sources.'japanese-wordnet'.detail_count -or
-                    $null -eq $curatedImport -or $curatedImport.schema_version -cne 'sakura.curated-detail-import.v1' -or
-                    [long]$curatedImport.input_records -ne ([long]$curatedImport.emitted_details + [long]$curatedImport.suppressed_by_existing) -or
+                    $null -eq $curatedImport -or $curatedImport.schema_version -cne 'sakura.curated-detail-import.v2' -or
+                    [long]$curatedImport.input_records -ne ([long]$curatedImport.emitted_details + [long]$curatedImport.replaced_imported) -or
                     $null -eq $llmImport -or $expectedDetailCount -ne [long]$details.count -or
                     $null -eq $wordNetImport.details.sources.'smile-chat'.detail_count -or
                     [long]$wordNetImport.details.sources.'smile-chat'.detail_count -lt 0) {
