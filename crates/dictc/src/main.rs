@@ -359,12 +359,11 @@ fn run(args: impl Iterator<Item = OsString>) -> Result<(), String> {
     // Keep that provenance boundary stable even when a later, independently
     // reviewed LLM release adds more exact-entry details.
     let source_backed_detail_count = details.len();
-    let curated_suppressed_by_existing = merge_details(&mut details, curated_details);
+    let curated_replaced_imported = prefer_reviewed_details(&mut details, curated_details);
     if let Some(path) = curated_detail_report_path.as_deref() {
         atomic_write(
             path,
-            curated_detail_report_json(curated_input_count, curated_suppressed_by_existing)
-                .as_bytes(),
+            curated_detail_report_json(curated_input_count, curated_replaced_imported).as_bytes(),
         )?;
     }
     if let Some(path) = detail_coverage_output.as_deref() {
@@ -570,15 +569,18 @@ fn detail_only_entry_details(
     attach_entry_details(entries, &reviewed).map_err(|error| error.to_string())
 }
 
-fn curated_detail_report_json(input_records: usize, suppressed_by_existing: usize) -> String {
-    let emitted_details = input_records.saturating_sub(suppressed_by_existing);
+/// `emitted_details` counts the identities the reviewed sources add;
+/// `replaced_imported` counts the identities whose imported description they
+/// replace. Together they are every reviewed record.
+fn curated_detail_report_json(input_records: usize, replaced_imported: usize) -> String {
+    let emitted_details = input_records.saturating_sub(replaced_imported);
     format!(
         concat!(
-            "{{\n  \"schema_version\": \"sakura.curated-detail-import.v1\",\n",
+            "{{\n  \"schema_version\": \"sakura.curated-detail-import.v2\",\n",
             "  \"input_records\": {},\n  \"emitted_details\": {},\n",
-            "  \"suppressed_by_existing\": {}\n}}\n"
+            "  \"replaced_imported\": {}\n}}\n"
         ),
-        input_records, emitted_details, suppressed_by_existing
+        input_records, emitted_details, replaced_imported
     )
 }
 
@@ -612,6 +614,19 @@ fn glossary_details(
         );
     }
     Ok(dictc_core::glossary::detail_sources(&terms, entries))
+}
+
+/// Puts reviewed details over the imported glossary and WordNet details and
+/// returns how many imported details they replaced (#429). A glossary term
+/// carries one sense, which can be one product's meaning of a general word
+/// (リポジトリ as a DDD pattern, Cluster as a Node.js module), and a WordNet
+/// gloss can be too literal to tell homophones apart (対象). The reviewed
+/// record replaces the whole detail, relations included. Replacing keeps the
+/// identity count, so the merged glossary/WordNet count still accounts for
+/// every identity it described.
+fn prefer_reviewed_details(details: &mut Vec<SourceDetail>, reviewed: Vec<SourceDetail>) -> usize {
+    let imported = std::mem::replace(details, reviewed);
+    merge_details(details, imported)
 }
 
 fn merge_details(base: &mut Vec<SourceDetail>, overlay: Vec<SourceDetail>) -> usize {
@@ -733,4 +748,83 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), String> {
             path.display()
         )
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dictc_core::SourceDetailRelation;
+
+    fn detail(surface: &str, description: &str, relations: &[&str]) -> SourceDetail {
+        SourceDetail {
+            reading: "よみ".into(),
+            surface: surface.into(),
+            left_id: 1,
+            right_id: 1,
+            description: description.into(),
+            relations: relations
+                .iter()
+                .map(|target| SourceDetailRelation {
+                    kind: DetailRelationKind::Related,
+                    target: (*target).into(),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn a_reviewed_detail_replaces_the_imported_detail_of_the_same_identity() {
+        let mut details = vec![
+            detail("リポジトリ", "one product's meaning", &["DDD term"]),
+            detail("ほか", "imported and kept", &["kept relation"]),
+        ];
+        let reviewed = vec![
+            detail("リポジトリ", "general meaning", &[]),
+            detail("あたらしい", "reviewed and added", &[]),
+        ];
+
+        let replaced = prefer_reviewed_details(&mut details, reviewed);
+
+        assert_eq!(replaced, 1);
+        assert_eq!(details.len(), 3, "replacing keeps the identity count");
+        let by_surface = |surface: &str| {
+            details
+                .iter()
+                .find(|detail| detail.surface == surface)
+                .unwrap_or_else(|| panic!("{surface} has a detail"))
+        };
+        let repository = by_surface("リポジトリ");
+        assert_eq!(repository.description, "general meaning");
+        assert!(
+            repository.relations.is_empty(),
+            "the reviewed record replaces the relations too"
+        );
+        assert_eq!(by_surface("ほか").description, "imported and kept");
+        assert_eq!(by_surface("ほか").relations.len(), 1);
+        assert_eq!(by_surface("あたらしい").description, "reviewed and added");
+    }
+
+    #[test]
+    fn identities_that_differ_only_in_part_of_speech_are_not_replaced() {
+        let mut details = vec![detail("同形", "imported", &[])];
+        let mut other_class = detail("同形", "reviewed", &[]);
+        other_class.right_id = 2;
+
+        let replaced = prefer_reviewed_details(&mut details, vec![other_class]);
+
+        assert_eq!(replaced, 0);
+        assert_eq!(details.len(), 2);
+        assert!(details
+            .iter()
+            .any(|detail| detail.right_id == 1 && detail.description == "imported"));
+    }
+
+    #[test]
+    fn the_curated_report_accounts_for_every_reviewed_record() {
+        let report = curated_detail_report_json(18, 15);
+        assert!(report.contains("\"schema_version\": \"sakura.curated-detail-import.v2\""));
+        assert!(report.contains("\"input_records\": 18"));
+        assert!(report.contains("\"emitted_details\": 3"));
+        assert!(report.contains("\"replaced_imported\": 15"));
+    }
 }

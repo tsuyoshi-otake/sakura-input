@@ -139,6 +139,14 @@ provenance; active work should load the smaller matching topic extracts above.
   worker neither retires nor opens, and `configure` still never waits for it,
   because it runs under the configuration lock that every request reads
   through.
+- Reviewed detail sources (`data/curated-*.tsv`) replace an imported glossary
+  or WordNet description of the same exact identity, relations included
+  (#429). Before that the imported text won and the curated report only
+  counted the loss (`suppressed_by_existing`). The smile-chat glossary gives a
+  term's first sense to every entry of the same surface, so a general word can
+  carry one product's meaning; fix it with a reviewed row and prove it on the
+  built image with `real_dictionary_ships_every_reviewed_description_over_imported_ones`
+  (19 rows failed on the 2.0.25 image, all pass after the rebuild).
 - A mutation sweep must leave cargo no mutant build output that still looks
   fresh. Restoring the mutated source with a timestamp-preserving copy
   (`Copy-Item`) makes it older than the last mutant's output, so the next

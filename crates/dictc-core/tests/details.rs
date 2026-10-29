@@ -219,3 +219,79 @@ fn malformed_optional_detail_tables_are_rejected_without_panics() {
         assert!(outcome.is_ok(), "mutation at byte {index} panicked");
     }
 }
+
+/// Every reviewed detail source that dictc puts over the imported glossary and
+/// WordNet descriptions (`scripts/build-dictionary.ps1`).
+const REVIEWED_DETAIL_SOURCES: [&str; 6] = [
+    "curated-phrases.tsv",
+    "curated-general-details.tsv",
+    "curated-homophone-details.tsv",
+    "curated-symbol-details.tsv",
+    "curated-base-lemma-details.tsv",
+    "curated-general-meaning-details.tsv",
+];
+
+fn shipped_description(
+    dictionary: &Dictionary<'_>,
+    row: &dictc_core::SourceEntry,
+) -> Option<String> {
+    let mut description = None;
+    dictionary
+        .common_prefix_search(&row.reading, |matched| {
+            if matched.matched_bytes != row.reading.len()
+                || matched.entry.left_id != row.left_id
+                || matched.entry.right_id != row.right_id
+            {
+                return true;
+            }
+            let mut surface = String::new();
+            dictionary
+                .write_surface(matched.entry, &mut surface)
+                .expect("surface");
+            if surface != row.surface {
+                return true;
+            }
+            let mut text = String::new();
+            if let Some(detail) = dictionary.detail_at(matched.entry_index).expect("detail") {
+                detail.write_description(&mut text).expect("description");
+            }
+            description = Some(text);
+            false
+        })
+        .expect("lookup");
+    description
+}
+
+#[test]
+#[ignore = "real built dictionary; set SAKURA_PHASE2_DICTIONARY"]
+fn real_dictionary_ships_every_reviewed_description_over_imported_ones() {
+    // Issue #429: a reviewed description must win over the glossary sense of
+    // one product (リポジトリ as a DDD pattern) and over a WordNet gloss.
+    let path = std::env::var_os("SAKURA_PHASE2_DICTIONARY")
+        .expect("SAKURA_PHASE2_DICTIONARY must name a freshly built system.dic");
+    let bytes = std::fs::read(&path).expect("read real dictionary");
+    let dictionary = Dictionary::parse(&bytes).expect("parse real dictionary");
+    let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data");
+    let mut checked = 0usize;
+    let mut differing = Vec::new();
+    for name in REVIEWED_DETAIL_SOURCES {
+        let text = std::fs::read_to_string(data.join(name)).expect("reviewed source");
+        for row in parse_entries(name, &text).expect("reviewed rows") {
+            checked += 1;
+            match shipped_description(&dictionary, &row) {
+                Some(shipped) if shipped == row.annotation => {}
+                shipped => differing.push(format!(
+                    "{name}: {}\t{}\t{}\t{} ships {shipped:?}",
+                    row.reading, row.surface, row.left_id, row.right_id
+                )),
+            }
+        }
+    }
+    assert!(checked > 2_000, "only {checked} reviewed rows were read");
+    assert!(
+        differing.is_empty(),
+        "{} reviewed descriptions did not ship:\n{}",
+        differing.len(),
+        differing.join("\n")
+    );
+}

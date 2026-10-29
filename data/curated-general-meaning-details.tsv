@@ -1,0 +1,21 @@
+# license: LicenseRef-Sakura-InHouse
+# Reviewed general meanings for words whose imported glossary description
+# gave only one product's sense (Issue #429). Each row replaces that
+# imported description on the exact entry; costs and flags are unchanged.
+reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
+channel	Channel	1851	1851	7045	7345	it,predict	情報や商品を相手に届ける経路。プログラミングでは、並行して動く処理の間でデータを受け渡す仕組みを指す。
+ちゃねる	Channel	1851	1851	7045	7345	it,predict	情報や商品を相手に届ける経路。プログラミングでは、並行して動く処理の間でデータを受け渡す仕組みを指す。
+cluster	Cluster	1851	1851	7045	7345	it,predict	複数のコンピューターやサーバーを束ね、一つのシステムとして動かす構成。Node.js では、処理を複数のワーカープロセスに分けるモジュールを指す。
+くらすた	Cluster	1851	1851	7045	7345	it,predict	複数のコンピューターやサーバーを束ね、一つのシステムとして動かす構成。Node.js では、処理を複数のワーカープロセスに分けるモジュールを指す。
+room	Room	1851	1851	6940	7240	it,predict	部屋。Android では、SQLite を扱いやすくするデータベースライブラリを指す。
+scratch	scratch	1851	1851	7045	7345	it,predict	何もない状態から始めること。Docker では、中身が空のベースイメージを指す。
+すくらっち	scratch	1851	1851	7045	7345	it,predict	何もない状態から始めること。Docker では、中身が空のベースイメージを指す。
+あぷらい	アプライ	1851	1851	1940	2240	it,predict	適用すること。また、求人や制度などに応募・申請すること。
+でーたそーす	データソース	1851	1851	2705	3005	it,predict	データの取得元となるファイル、データベース、サービスなど。
+びゅー	ビュー	1851	1851	1587	1887	it,predict	見え方や眺め、また表示する画面。データベースでは、問い合わせの結果を仮想的な表として扱う仕組みを指す。
+ぷらん	プラン	1841	1841	177	477	it,predict	計画や案。また、料金やサービス内容の組み合わせ。
+ぷろふぁいる	プロファイル	1920	1920	0	300	it,predict	人物や物事の概要や経歴。IT では、利用者や環境ごとの設定をまとめたものを指す。
+ぽーたる	ポータル	1851	1851	1844	2144	it,predict	さまざまな情報やサービスへの入り口となるサイトや画面。
+らいふたいむ	ライフタイム	1851	1841	4228	4528	it,predict	存続する期間や有効期間。プログラミングでは、データや参照が有効な範囲を指す。
+りぽじとり	リポジトリ	1851	1851	1874	2174	it,predict	ソースコードなどを変更履歴とともに保存・管理する場所。設計では、データの保存と取得を受け持つ部品を指すこともある。
+わーくめもり	ワークメモリ	1851	1851	2010	2310	it,predict	作業中のデータを一時的に置く記憶領域。PostgreSQL では、並べ替えや結合に使う一時メモリ量の設定を指す。
