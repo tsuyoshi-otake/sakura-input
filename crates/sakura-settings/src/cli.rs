@@ -549,6 +549,20 @@ pub fn run(command: Command) -> Result<(), String> {
             );
             println!("history-package-version\t{package_version}");
             println!("history-release-label\t{release_label}");
+            println!("history-records\t{}", snapshot.records.len());
+            println!(
+                "history-newest-timestamp-ms\t{}",
+                snapshot
+                    .records
+                    .iter()
+                    .map(|record| record.timestamp_ms())
+                    .max()
+                    .unwrap_or(0)
+            );
+            println!(
+                "history-ignored-tail-bytes\t{}",
+                snapshot.ignored_tail_bytes
+            );
             println!("dropped-events\t{}", stats.dropped_events);
             println!("persistence-failures\t{}", stats.persistence_failures);
             println!(

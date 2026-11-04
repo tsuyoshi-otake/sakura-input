@@ -62,15 +62,34 @@ impl WidthScanStrategy {
 /// Terminal and lifecycle events safe to persist without user content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EngineEvent {
-    Startup { width_scan: WidthScanStrategy },
-    Ready { elapsed_ms: u64 },
+    Startup {
+        width_scan: WidthScanStrategy,
+    },
+    Ready {
+        elapsed_ms: u64,
+    },
     Stopped,
     AlreadyRunning,
     UnsupportedCpu,
-    StartupFailed { hresult: i32 },
-    DumpsPruned { removed: u64, failures: u64 },
-    DumpPruneFailed { os_error: i32 },
-    Priority { outcome: Applied },
+    StartupFailed {
+        hresult: i32,
+    },
+    DumpsPruned {
+        removed: u64,
+        failures: u64,
+    },
+    DumpPruneFailed {
+        os_error: i32,
+    },
+    Priority {
+        outcome: Applied,
+    },
+    DebugTraceUnavailable {
+        os_error: i32,
+    },
+    DebugTraceStopped {
+        stats: sakura_ipc::debug_trace::AsyncTraceStats,
+    },
 }
 
 /// A bounded two-generation event log.
@@ -184,6 +203,13 @@ fn render_record(timestamp_ms: u64, event: EngineEvent) -> String {
         EngineEvent::DumpPruneFailed { os_error } => {
             format!("unix_ms={timestamp_ms}\tevent=dump_prune_failed\tos_error={os_error}\n")
         }
+        EngineEvent::DebugTraceUnavailable { os_error } => format!(
+            "unix_ms={timestamp_ms}\tevent=debug_trace_unavailable\tos_error={os_error}\n"
+        ),
+        EngineEvent::DebugTraceStopped { stats } => format!(
+            "unix_ms={timestamp_ms}\tevent=debug_trace_stopped\tattempted={}\twritten={}\tfailed={}\tdropped={}\tworker_panicked={}\n",
+            stats.attempted, stats.written, stats.failures, stats.dropped, stats.worker_panicked
+        ),
         EngineEvent::Priority {
             outcome: Applied::Set { inherited, applied },
         } => format!(

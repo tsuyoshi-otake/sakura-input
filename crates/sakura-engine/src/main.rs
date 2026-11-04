@@ -169,6 +169,22 @@ fn run(
     // A loser cannot mutate history/learning; failures drop the reservation.
     let server = server.reserve()?;
 
+    // Own one bounded diagnostic writer before any request can enable tracing.
+    // Failure disables this process's trace path rather than doing file I/O
+    // synchronously on input. The TSF DLL never opts into this thread.
+    let trace_writer = match sakura_ipc::debug_trace::start_async_writer() {
+        Ok(writer) => Some(writer),
+        Err(error) => {
+            record(
+                event_log,
+                EngineEvent::DebugTraceUnavailable {
+                    os_error: error.raw_os_error().unwrap_or(0),
+                },
+            );
+            None
+        }
+    };
+
     let dictionary_path = sakura_engine::dictionary::default_path()
         .map_err(|error| windows::core::Error::new(E_FAIL, format!("dictionary path: {error}")))?;
     let conversion = sakura_engine::dictionary::open(&dictionary_path)
@@ -354,6 +370,14 @@ fn run(
     }
     if let Some(runtime) = prediction_runtime {
         let _ = runtime.stop();
+    }
+    if let Some(writer) = trace_writer {
+        record(
+            event_log,
+            EngineEvent::DebugTraceStopped {
+                stats: writer.stop(),
+            },
+        );
     }
     result
 }

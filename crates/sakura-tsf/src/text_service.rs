@@ -49,7 +49,7 @@ use windows::Win32::UI::TextServices::{
     ITfTextInputProcessor_Impl, ITfTextLayoutSink, ITfTextLayoutSink_Impl, ITfThreadMgr,
     InputScope as TfInputScope, TfLBIClick, TfLayoutCode, GUID_LBI_INPUTMODE, GUID_PROP_INPUTSCOPE,
     TF_ANCHOR_END, TF_LANGBARITEMINFO, TF_LBI_STYLE_BTN_BUTTON, TF_LBI_STYLE_BTN_MENU,
-    TF_LBI_STYLE_HIDDENSTATUSCONTROL, TF_LBI_STYLE_TEXTCOLORICON, TF_PRESERVEDKEY,
+    TF_LBI_STYLE_HIDDENSTATUSCONTROL, TF_LBI_STYLE_TEXTCOLORICON, TF_PRESERVEDKEY, TF_SD_READONLY,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, GetClassInfoW, GetWindowLongPtrW, KillTimer,
@@ -3102,6 +3102,50 @@ impl TextService {
         Ok(state.known && state.handle.is_none() && state.text.is_empty())
     }
 
+    /// Decline new text in an explicitly read-only idle document before Probe,
+    /// AI, or SendKey can allocate work that its edit session must reject.
+    /// Existing composition/undo/recovery work keeps its original terminal
+    /// owner. Unknown host status preserves the existing compatibility path.
+    fn idle_read_only_key_gate(
+        &self,
+        key: KeyInput,
+        read_status: impl FnOnce() -> Result<u32>,
+    ) -> Option<bool> {
+        if !matches!(key.code, KeyCode::Char | KeyCode::Space | KeyCode::Henkan)
+            || !self.composition_is_idle().unwrap_or(false)
+            || self.has_live_composition()
+            || self.undo_terminalization.get().is_some()
+            || self.engine_recovery_pending()
+            || self
+                .writes
+                .try_borrow()
+                .map_or(true, |writes| !writes.is_empty())
+        {
+            return None;
+        }
+        let claim = self.claim_token();
+        let focused = self.focus_foreground.get();
+        // No RefCell borrow survives this separately re-entrant host call.
+        let read_only = read_status().is_ok_and(|flags| flags & TF_SD_READONLY != 0);
+        if self.claim_token() != claim || self.focus_foreground.get() != focused {
+            // A lifecycle callback acquired finalization while GetStatus ran.
+            // Do not dispatch this stale physical key into the new context.
+            return Some(true);
+        }
+        if !self.composition_is_idle().unwrap_or(false)
+            || self.has_live_composition()
+            || self
+                .writes
+                .try_borrow()
+                .map_or(true, |writes| !writes.is_empty())
+            || self.undo_terminalization.get().is_some()
+            || self.engine_recovery_pending()
+        {
+            return Some(true);
+        }
+        read_only.then_some(false)
+    }
+
     /// Tells the engine to finalize its composition, discarding whatever it
     /// answers.
     ///
@@ -4438,6 +4482,14 @@ fn ai_wait_status_label(operation: AiTextOperation) -> &'static str {
 }
 
 fn ai_error_message(status: AiTextStatus, error_code: &str) -> String {
+    if status == AiTextStatus::ApiError {
+        match error_code {
+            "service_tier_rejected" => return "指定したTierをAPIが拒否しました。AI文章変換の設定で標準Tierを選ぶか、APIプロジェクトの利用権限を確認してください".to_owned(),
+            "reasoning_effort_rejected" => return "指定したEffortをAPIが拒否しました。AI文章変換の設定を確認してください".to_owned(),
+            "model_rejected" => return "指定モデルをAPIが拒否しました。APIプロジェクトのモデル利用権限を確認してください".to_owned(),
+            _ => {}
+        }
+    }
     let reason = match status {
         AiTextStatus::Timeout => "AIリクエストがタイムアウトしました",
         AiTextStatus::MissingKey => "APIキーが設定されていません",
@@ -5310,6 +5362,16 @@ impl TextService_Impl {
             }
             return Ok(service.host_eaten(owner, key, false));
         };
+
+        if owner == ConversionKeyDisposition::HostEligible {
+            if let Some(consumed) = service.idle_read_only_key_gate(key, || {
+                // SAFETY: context is a retained callback interface. GetStatus
+                // needs no edit cookie; the helper checks re-entry afterward.
+                unsafe { context.GetStatus() }.map(|status| status.dwDynamicFlags)
+            }) {
+                return Ok(consumed.into());
+            }
+        }
 
         // Live conversion TestKeyDown must eat before AI capture, fence, or
         // Probe. Henkan can also be the AI trigger; a fallible scope/target

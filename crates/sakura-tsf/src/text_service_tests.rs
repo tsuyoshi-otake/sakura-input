@@ -11,6 +11,94 @@ use windows::Win32::System::LibraryLoader::{
 use windows::Win32::UI::WindowsAndMessaging::GWLP_HINSTANCE;
 
 #[test]
+fn read_only_idle_repeats_are_declined_and_writable_status_is_not_cached() {
+    let service = TextService::new();
+    let mut key = KeyInput {
+        code: KeyCode::Char,
+        ch: Some('a'),
+        modifiers: Modifiers::NONE,
+        repeat: true,
+        test_only: true,
+    };
+    for _ in 0..256 {
+        for probe in [true, false] {
+            key.test_only = probe;
+            assert_eq!(
+                service.idle_read_only_key_gate(key, || Ok(TF_SD_READONLY)),
+                Some(false)
+            );
+        }
+    }
+    assert_eq!(service.idle_read_only_key_gate(key, || Ok(0)), None);
+    assert_eq!(
+        service.idle_read_only_key_gate(key, || Err(Error::from_hresult(E_FAIL))),
+        None
+    );
+    key.code = KeyCode::HankakuZenkaku;
+    assert_eq!(
+        service.idle_read_only_key_gate(key, || panic!("mode toggle is not a document write")),
+        None
+    );
+}
+
+#[test]
+fn read_only_gate_preserves_live_and_pending_work_and_fences_reentry() {
+    let service = TextService::new();
+    let key = KeyInput {
+        code: KeyCode::Space,
+        ch: None,
+        modifiers: Modifiers::NONE,
+        repeat: false,
+        test_only: false,
+    };
+    service.composition.borrow_mut().text = "かな".into();
+    assert_eq!(
+        service.idle_read_only_key_gate(key, || panic!("live composition owns terminalization")),
+        None
+    );
+    service.composition.borrow_mut().text.clear();
+    assert_eq!(
+        service.idle_read_only_key_gate(key, || {
+            service.composition.borrow_mut().known = false;
+            Ok(TF_SD_READONLY)
+        }),
+        Some(true)
+    );
+    service.composition.borrow_mut().known = true;
+    assert_eq!(
+        service.idle_read_only_key_gate(key, || {
+            service.retire_live_claim();
+            Ok(0)
+        }),
+        Some(true)
+    );
+    {
+        let mut writes = service.writes.borrow_mut();
+        writes.activate();
+        writes.observe_context(ContextId(834));
+        writes
+            .reserve(ContextId(834))
+            .expect("reserve pending write");
+    }
+    assert_eq!(
+        service.idle_read_only_key_gate(key, || panic!("pending write owns terminalization")),
+        None
+    );
+    assert_eq!(service.writes.borrow().pending_len(), 1);
+}
+
+#[test]
+fn ai_parameter_errors_name_the_action_without_provider_message_text() {
+    let message = ai_error_message(AiTextStatus::ApiError, "service_tier_rejected");
+    assert!(message.contains("Tier"));
+    assert!(message.contains("利用権限"));
+    assert!(
+        ai_error_message(AiTextStatus::ApiError, "reasoning_effort_rejected").contains("Effort")
+    );
+    assert!(ai_error_message(AiTextStatus::ApiError, "model_rejected").contains("モデル"));
+}
+
+#[test]
 fn wait_status_labels_name_the_in_flight_ai_operation() {
     assert_eq!(
         ai_wait_status_label(AiTextOperation::Transform),

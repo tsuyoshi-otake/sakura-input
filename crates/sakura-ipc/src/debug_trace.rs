@@ -4,6 +4,12 @@
 //! text, process names, or candidate surfaces. Emission is a no-op until
 //! explicitly enabled.
 //!
+//! The engine installs [`start_async_writer`] before serving requests. Its
+//! producers capture the original timestamp/thread and enqueue without file
+//! I/O into 1,024 slots; a full queue drops the row. The owning guard joins the
+//! writer at shutdown and reports counter snapshots to the engine lifecycle
+//! log. The TSF DLL keeps the thread-free synchronous backend described below.
+//!
 //! # Retention
 //!
 //! The trace keeps its newest rows. It is two files next to each other:
@@ -45,6 +51,9 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use windows::Win32::System::Threading::GetCurrentThreadId;
 
+mod async_writer;
+pub use async_writer::{start_async_writer, AsyncTraceStats, AsyncTraceWriter};
+
 /// Size at which a generation is rotated away. The whole trace, the current and
 /// the previous generation, therefore holds about twice this. Rows other
 /// processes had already started writing can land a few hundred bytes beyond it.
@@ -69,6 +78,28 @@ pub struct TraceEvent {
     pub k1: u64,
     pub k2: u64,
     pub k3: u64,
+}
+
+#[derive(Debug, Clone, Copy)]
+struct CapturedEvent {
+    record: TraceEvent,
+    timestamp: u64,
+    tid: u32,
+}
+
+impl TraceEvent {
+    fn capture(self) -> CapturedEvent {
+        CapturedEvent {
+            record: self,
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |value| {
+                    value.as_millis().min(u128::from(u64::MAX)) as u64
+                }),
+            // SAFETY: GetCurrentThreadId has no preconditions.
+            tid: unsafe { GetCurrentThreadId() },
+        }
+    }
 }
 
 pub fn default_path() -> io::Result<PathBuf> {
@@ -116,6 +147,10 @@ pub fn emit(record: TraceEvent) {
     if !is_enabled() {
         return;
     }
+    let captured = record.capture();
+    if async_writer::route(captured) {
+        return;
+    }
     let Ok(path) = default_path() else {
         return;
     };
@@ -124,7 +159,7 @@ pub fn emit(record: TraceEvent) {
         monotonic_ms(),
         jitter_seed(),
         &path,
-        record,
+        captured,
         MAX_GENERATION_BYTES,
     );
 }
@@ -143,7 +178,7 @@ fn emit_through(
     now_ms: u64,
     seed: u64,
     path: &Path,
-    record: TraceEvent,
+    record: CapturedEvent,
     limit: u64,
 ) -> io::Result<()> {
     if backoff.is_quiet(now_ms) {
@@ -152,7 +187,7 @@ fn emit_through(
             "debug trace is backing off after a failure",
         ));
     }
-    match write_record(path, record, limit) {
+    match append_row(path, &format_row(record), limit) {
         Ok(()) => {
             backoff.record_success();
             Ok(())
@@ -165,23 +200,21 @@ fn emit_through(
 }
 
 fn write_record(path: &Path, record: TraceEvent, limit: u64) -> io::Result<()> {
-    append_row(path, &format_row(record), limit)
+    append_row(path, &format_row(record.capture()), limit)
 }
 
-fn format_row(record: TraceEvent) -> String {
+fn format_row(captured: CapturedEvent) -> String {
+    let CapturedEvent {
+        record,
+        timestamp,
+        tid,
+    } = captured;
     debug_assert!(record.component.bytes().all(|b| b.is_ascii_graphic()));
     debug_assert!(record.event.bytes().all(|b| b.is_ascii_graphic()));
     debug_assert!(record
         .decision
         .bytes()
         .all(|b| b.is_ascii_graphic() || b == b'_'));
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |duration| {
-            u64::try_from(duration.as_millis()).unwrap_or(u64::MAX)
-        });
-    // SAFETY: GetCurrentThreadId has no preconditions.
-    let tid = unsafe { GetCurrentThreadId() };
     format!(
         "{timestamp}\t{}\t{tid}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
         std::process::id(),
@@ -659,7 +692,7 @@ mod tests {
         let backoff = Backoff::new();
         let holder = hold_rotation_lock(&path);
         assert!(
-            emit_through(&backoff, 1_000, 0, &path, record(20), full).is_err(),
+            emit_through(&backoff, 1_000, 0, &path, record(20).capture(), full).is_err(),
             "the first attempt is made, and fails"
         );
         holder.unlock().expect("release");
@@ -668,7 +701,14 @@ mod tests {
         // With the folder gone, any further access would bring it back.
         fs::remove_dir_all(dir.root().join("logs")).expect("remove the folder");
         for step in 0..1_000 {
-            let outcome = emit_through(&backoff, 1_001 + step % 90, 0, &path, record(21), full);
+            let outcome = emit_through(
+                &backoff,
+                1_001 + step % 90,
+                0,
+                &path,
+                record(21).capture(),
+                full,
+            );
             assert!(outcome.is_err(), "silent during the quiet period");
         }
         assert!(
@@ -676,7 +716,7 @@ mod tests {
             "a silent trace must not touch the disk"
         );
 
-        emit_through(&backoff, 5_000, 0, &path, record(22), full)
+        emit_through(&backoff, 5_000, 0, &path, record(22).capture(), full)
             .expect("writes again once the quiet period is over");
         assert_eq!(sequence(&read_text(&path).expect("read")), vec![22]);
     }

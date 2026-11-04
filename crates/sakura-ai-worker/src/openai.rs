@@ -87,7 +87,10 @@ pub fn execute(request: &Request) -> Execution {
         }
         if !(200..=299).contains(&response.status) {
             return Execution {
-                outcome: failure(Status::ApiError, http_error_code(response.status)),
+                outcome: failure(
+                    Status::ApiError,
+                    api_error_code(response.status, &response.body),
+                ),
                 attempts,
             };
         }
@@ -240,6 +243,26 @@ fn http_error_code(status: u32) -> &'static str {
         404 => "http_404",
         _ => "api_error",
     }
+}
+
+/// Preserve actionable, bounded parameter classifications, never provider text.
+/// Error messages can echo submitted text or account identifiers. An unknown
+/// shape therefore keeps the existing content-free HTTP status code.
+fn api_error_code(status: u32, body: &[u8]) -> &'static str {
+    if status == 400 {
+        if let Ok(value) = serde_json::from_slice::<Value>(body) {
+            let error = &value["error"];
+            if error["type"].as_str() == Some("invalid_request_error") {
+                match error["param"].as_str() {
+                    Some("service_tier") => return "service_tier_rejected",
+                    Some("reasoning.effort") => return "reasoning_effort_rejected",
+                    Some("model") => return "model_rejected",
+                    _ => {}
+                }
+            }
+        }
+    }
+    http_error_code(status)
 }
 
 struct Handle(*mut c_void);
@@ -616,6 +639,54 @@ mod tests {
         assert_eq!(http_error_code(403), "http_403");
         assert_eq!(http_error_code(404), "http_404");
         assert_eq!(http_error_code(418), "api_error");
+    }
+
+    #[test]
+    fn invalid_request_parameters_are_classified_without_echoing_provider_content() {
+        for (parameter, expected) in [
+            ("service_tier", "service_tier_rejected"),
+            ("reasoning.effort", "reasoning_effort_rejected"),
+            ("model", "model_rejected"),
+            ("private arbitrary value", "http_400"),
+        ] {
+            let body = serde_json::to_vec(&json!({"error": {
+                "type": "invalid_request_error", "param": parameter,
+                "message": "private source and account identifiers", "code": null
+            }}))
+            .unwrap();
+            assert_eq!(api_error_code(400, &body), expected);
+            assert_eq!(api_error_code(401, &body), "http_401");
+        }
+        for body in [
+            b"invalid JSON".as_slice(),
+            b"{}",
+            b"{\"error\":null}",
+            b"{\"error\":{\"type\":\"unknown\",\"param\":\"service_tier\"}}",
+        ] {
+            assert_eq!(api_error_code(400, body), "http_400");
+        }
+    }
+
+    #[test]
+    fn rejected_priority_is_terminal_and_does_not_retry_at_another_tier() {
+        let (endpoint, captured, server) = fake_api(vec![(
+            400,
+            "",
+            r#"{"error":{"type":"invalid_request_error","param":"service_tier","code":null,"message":"private provider detail"}}"#,
+        )]);
+        let mut input = request(Operation::Transform, "synthetic text");
+        input.endpoint = endpoint;
+        input.service_tier = ServiceTier::Priority;
+        let result = execute(&input);
+        server.join().expect("fake API");
+        assert_eq!(result.attempts, 1);
+        assert_eq!(
+            result.outcome,
+            failure(Status::ApiError, "service_tier_rejected")
+        );
+        let requests = captured.lock().expect("captured");
+        assert_eq!(requests.len(), 1);
+        assert!(requests[0].contains("\"service_tier\":\"priority\""));
     }
 
     #[test]

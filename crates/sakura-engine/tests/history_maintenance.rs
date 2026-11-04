@@ -162,16 +162,40 @@ fn disabling_developer_history_stops_engine_trace_until_reenabled() {
             ),
             Ok(Response::Output(_))
         ));
-        // Output precedes this key's UI publication and trace. A request on
-        // the same sequential connection fences those remaining side effects.
+        // A sequential request fences UI publication and trace admission.
+        // The asynchronous trace writer may persist those admitted rows later.
         assert!(matches!(
             host.call(&Request::InputHistoryStats, PATIENT),
             Ok(Response::InputHistoryStats { .. })
         ));
     };
+    let wait_trace = |expected_keys: usize| {
+        let deadline = Instant::now() + PATIENT;
+        let mut delay = Duration::from_millis(5);
+        loop {
+            let bytes = match fs::read(&trace) {
+                Ok(bytes) => bytes,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+                Err(error) => panic!("read owned trace: {error}"),
+            };
+            let text = std::str::from_utf8(&bytes).unwrap();
+            if text.ends_with('\n')
+                && text.matches("\tkey_result\t").count() >= expected_keys
+                && text.matches("\tui_publish\t").count() >= expected_keys
+            {
+                break bytes;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "trace writer did not persist admitted rows"
+            );
+            sleep(delay);
+            delay = (delay * 2).min(Duration::from_millis(100));
+        }
+    };
     wait_active(&mut settings, true);
     key(&mut host);
-    let before = fs::read(&trace).unwrap();
+    let before = wait_trace(1);
     let enabled_trace = std::str::from_utf8(&before).unwrap();
     assert!(enabled_trace.contains("\tkey_result\t"));
     assert!(enabled_trace.contains("\tui_publish\t"));
@@ -189,7 +213,7 @@ fn disabling_developer_history_stops_engine_trace_until_reenabled() {
     wait_active(&mut settings, true);
     key(&mut host);
     assert!(
-        fs::read(&trace).unwrap().len() > before.len(),
+        wait_trace(2).len() > before.len(),
         "reenabling restored trace"
     );
     drop(host);
