@@ -1768,6 +1768,105 @@ fn whole_reading_lexical_number_form_stays_ahead_of_generated_duplicates() {
 }
 
 #[test]
+fn temporal_number_variants_preserve_lexical_spelling_inside_sentences() {
+    let bytes = synthetic_dictionary(&[
+        fixture_entry("さんじかん", "三時間", 2_000, EntryFlags::NONE),
+        fixture_entry("ほど", "ほど", 100, EntryFlags::NONE),
+        fixture_entry("ねむった", "眠った", 100, EntryFlags::NONE),
+    ]);
+    let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+    let mut converter = Converter::new();
+    for (reading, expected, alternate) in [
+        ("さんじかん", "三時間", "3時間"),
+        (
+            "さんじかんほどねむった",
+            "三時間ほど眠った",
+            "3時間ほど眠った",
+        ),
+    ] {
+        let candidates = converter
+            .convert(&dictionary, reading, ConversionOptions::default())
+            .expect("temporal number conversion");
+        assert_eq!(candidates[0].text(), expected);
+        assert_eq!(candidates[0].path_evidence().generated_edges, 0);
+        let generated = candidates
+            .iter()
+            .find(|candidate| candidate.text() == alternate)
+            .expect("alternate numeric spelling remains available");
+        assert!(generated.cost > candidates[0].cost);
+        assert_eq!(generated.path_evidence().generated_edges, 1);
+    }
+}
+
+#[test]
+fn generated_temporal_numbers_follow_lexical_number_spelling() {
+    let bytes = synthetic_dictionary(&[
+        fixture_entry("じゅっ", "十", 2_000, EntryFlags::NONE),
+        fixture_entry("じゅうに", "12", 2_000, EntryFlags::NONE),
+        fixture_entry("じゅうに", "十二", 3_000, EntryFlags::NONE),
+        fixture_entry("しゅうかん", "週間", 2_000, EntryFlags::NONE),
+        fixture_entry("から", "から", 100, EntryFlags::NONE),
+    ]);
+    let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+    let mut converter = Converter::new();
+    for (reading, expected, alternate) in [
+        ("じゅっしゅうかん", "十週間", "10週間"),
+        ("じゅっしゅうかんから", "十週間から", "10週間から"),
+        ("じゅうにじ", "12時", "十二時"),
+    ] {
+        let candidates = converter
+            .convert(&dictionary, reading, ConversionOptions::default())
+            .expect("lexical number spelling");
+        assert_eq!(candidates[0].text(), expected);
+        assert!(candidates
+            .iter()
+            .any(|candidate| candidate.text() == alternate));
+    }
+}
+
+#[test]
+fn spoken_week_counter_preserves_relative_date_words_and_alternatives() {
+    let bytes = synthetic_dictionary(&[
+        fixture_entry("せんしゅう", "先週", 10_000, EntryFlags::NONE),
+        fixture_entry("の", "の", 100, EntryFlags::NONE),
+        fixture_entry("かいぎ", "会議", 100, EntryFlags::NONE),
+    ]);
+    let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+    let mut converter = Converter::new();
+    converter.set_civil_date(crate::calendar::CivilDate::from_ymd(2026, 8, 19));
+    let candidates = converter
+        .convert(&dictionary, "せんしゅう", ConversionOptions::default())
+        .expect("relative date conversion");
+    assert_eq!(candidates[0].text(), "先週");
+    assert!(candidates
+        .iter()
+        .any(|candidate| candidate.text() == "令和8年8月12日"));
+    let phrase = converter
+        .convert(
+            &dictionary,
+            "せんしゅうのかいぎ",
+            ConversionOptions::default(),
+        )
+        .expect("relative date inside sentence");
+    assert_eq!(phrase[0].text(), "先週の会議");
+}
+
+#[test]
+fn temporal_number_forms_work_without_counter_dictionary_entries() {
+    let bytes = synthetic_dictionary(&[fixture_entry("かな", "仮名", 100, EntryFlags::NONE)]);
+    let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+    let mut converter = Converter::new();
+    for (reading, expected) in [("じゅういちじ", "11時"), ("にしゅうかん", "2週間")]
+    {
+        let candidates = converter
+            .convert(&dictionary, reading, ConversionOptions::default())
+            .expect("numeric generation without lexical unit");
+        assert_eq!(candidates[0].text(), expected);
+        assert_eq!(candidates[0].path_evidence().generated_edges, 1);
+    }
+}
+
+#[test]
 fn generated_day_suffixes_stay_behind_lexical_verb_phrases() {
     let bytes = synthetic_dictionary(&[
         // The split lexical paths model the verb stem followed by the

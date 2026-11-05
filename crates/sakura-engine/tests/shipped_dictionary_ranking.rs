@@ -1864,9 +1864,10 @@ fn raw_key_phase1_repairs_stay_after_direct_candidates_in_shipped_dictionary() {
     assert_eq!(nazka_reading, "なzか");
     assert_eq!(
         nazka_candidates.first().map(String::as_str),
-        Some("なzか"),
-        "the exact direct reading must remain candidate #0"
+        Some("nazka"),
+        "the exact physical keys lead under the 2026-10-13 input contract"
     );
+    assert_eq!(nazka_candidates.get(1).map(String::as_str), Some("なzか"));
     assert!(
         nazka_candidates.iter().any(|surface| surface == "なぜか"),
         "Romaji nazka must expose the local completion なぜか: {nazka_candidates:?}"
@@ -1891,8 +1892,12 @@ fn raw_key_phase1_repairs_stay_after_direct_candidates_in_shipped_dictionary() {
     assert_eq!(naikniiku_reading, "ないkにいく");
     assert_eq!(
         naikniiku_candidates.first().map(String::as_str),
-        Some("ないkにいく"),
-        "the exact direct reading must remain candidate #0"
+        Some("naikniiku"),
+        "the exact physical keys lead under the 2026-10-13 input contract"
+    );
+    assert_eq!(
+        naikniiku_candidates.get(1).map(String::as_str),
+        Some("ないkにいく")
     );
     let semantic_candidate = naikniiku_candidates
         .iter()
@@ -2073,6 +2078,60 @@ fn counter_and_calendar_number_readings_keep_their_strong_forms() {
 
 #[test]
 #[ignore = "needs the built system dictionary in artifacts/release"]
+fn kana_hour_and_week_counters_select_and_commit_complete_numbers() {
+    let mut failures = Vec::new();
+    for (reading, spellings) in [
+        ("じゅういちじ", ["11時", "十一時"]),
+        ("じゅうにじ", ["12時", "十二時"]),
+        ("じゅうさんじかん", ["13時間", "十三時間"]),
+        ("にしゅうかん", ["2週間", "二週間"]),
+        ("さんしゅうかん", ["3週間", "三週間"]),
+        ("いっしゅうかん", ["1週間", "一週間"]),
+        ("じゅういちじはん", ["11時半", "十一時半"]),
+        ("にしゅうかんご", ["2週間後", "二週間後"]),
+    ] {
+        let candidates = candidates_for(reading);
+        if !spellings
+            .iter()
+            .all(|spelling| candidates.iter().any(|text| text == spelling))
+            || !candidates
+                .first()
+                .is_some_and(|text| spellings.contains(&text.as_str()))
+        {
+            failures.push(format!(
+                "{reading}: candidate order {:?}",
+                &candidates[..candidates.len().min(8)]
+            ));
+        }
+        let mut dispatcher = open_dispatcher_with_input_method(InputMethod::Kana);
+        let session = create_normal_session(&mut dispatcher, "kana-counter-regression.exe");
+        for ch in reading.chars() {
+            send_key(&mut dispatcher, session, char_key(ch));
+        }
+        let converted = send_key(&mut dispatcher, session, space_key()).to_output();
+        let selected: String = converted
+            .preedit
+            .as_ref()
+            .expect("converted preedit")
+            .segments
+            .iter()
+            .map(|segment| segment.text.as_str())
+            .collect();
+        let committed = send_key(&mut dispatcher, session, enter_key())
+            .to_output()
+            .commit
+            .unwrap_or_default();
+        if !spellings.contains(&selected.as_str()) || committed != selected {
+            failures.push(format!(
+                "{reading}: selected {selected:?}, committed {committed:?}"
+            ));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
 fn compound_number_words_keep_both_spellings() {
     // Compounds are their own lexicon entries, so the single-digit calibration
     // must not move them: both spellings stay reachable and the whole-reading
@@ -2127,6 +2186,11 @@ fn issue_331_digit_runs_lead_with_the_counter_word() {
         ("1じかん", "1時間"),
         ("3じかん", "3時間"),
         ("100えん", "100円"),
+        ("12じはんからかいぎ", "12時半から会議"),
+        ("8じごろにかえります", "8時ごろに帰ります"),
+        ("1じかんはんかかる", "1時間半かかる"),
+        ("2しゅうかんごにおくる", "2週間後に送る"),
+        ("さんじかんほどねむった", "三時間ほど眠った"),
     ] {
         let candidates = candidates_for(reading);
         assert_eq!(

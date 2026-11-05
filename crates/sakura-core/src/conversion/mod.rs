@@ -470,7 +470,7 @@ impl Converter {
                     self.apply_it_compound_coherence(reading, options);
                     self.add_date_candidates(reading, civil_date)?;
                     self.demote_generated_day_suffixes(reading.len());
-                    self.prefer_numeric_forms(reading)?;
+                    self.prefer_numeric_forms(dictionary, reading)?;
                     self.drop_jitsu_day_counts(reading);
                     self.apply_exact_lexical_quality_gate(reading);
                     self.drop_kana_fragment_prefix_splits();
@@ -1140,6 +1140,13 @@ impl Converter {
             return Ok(());
         }
         let end = start + span.bytes;
+        if span.counter.is_some_and(|counter| !counter.is_calendar())
+            && crate::calendar::date_offset_for_reading(&reading[start..end]).is_some()
+        {
+            // せんしゅう is the established relative-date trigger 先週.
+            // A new 千週 rewrite must not displace that lexical family.
+            return Ok(());
+        }
         if span.counter.is_none() && end < reading.len() {
             // A bare number prefix must not split ordinary words. せんじつ is
             // 先日, not 1000 followed by 日.
@@ -1154,7 +1161,56 @@ impl Converter {
             } else {
                 0
             });
-        for (index, style) in NUMERIC_STYLES.into_iter().enumerate() {
+        let mut left_id = synthetic_id;
+        let mut right_id = synthetic_id;
+        let mut form_cost = form_cost;
+        if let Some(counter) = span.counter.filter(|counter| !counter.is_calendar()) {
+            // Preserve a complete dictionary number's spelling and boundary
+            // classes even when more text follows it (三時間ほど眠った).
+            let mut lexical: Option<Entry> = None;
+            for style in NUMERIC_STYLES {
+                let mut text = FixedStr::<MAX_PREEDIT_BYTES>::new();
+                if style.write(span, &mut text).is_err() {
+                    continue;
+                }
+                if let Some(entry) = dictionary_exact_surface_entry(
+                    dictionary,
+                    &reading[start..end],
+                    text.as_str(),
+                    None,
+                )? {
+                    if lexical.is_none_or(|old| entry.word_cost < old.word_cost) {
+                        lexical = Some(entry);
+                    }
+                }
+            }
+            if let Some(entry) = lexical {
+                left_id = entry.left_id;
+                right_id = entry.right_id;
+                form_cost = i64::from(entry.word_cost).saturating_add(1);
+            } else {
+                // A composed temporal number must end in the dictionary's
+                // counter class, not a generic noun: otherwise 半 becomes 版
+                // and 後 becomes 語. Choose the unit edge as after typed digits.
+                let digit_id = if dictionary.class_count() > usize::from(DIGIT_NOUN_ID) {
+                    DIGIT_NOUN_ID
+                } else {
+                    0
+                };
+                if let Some(entry) = dictionary_exact_surface_entry(
+                    dictionary,
+                    counter.reading(),
+                    counter.surface(),
+                    Some(digit_id),
+                )? {
+                    right_id = entry.right_id;
+                }
+            }
+        }
+        for (index, style) in Self::numeric_styles(dictionary, &reading[start..end], span)?
+            .into_iter()
+            .enumerate()
+        {
             if self.generated.len() >= MAX_GENERATED_SURFACES {
                 break;
             }
@@ -1166,7 +1222,14 @@ impl Converter {
             if annotation.push_str(style.annotation()).is_err() {
                 continue;
             }
-            if dictionary_has_exact_surface(dictionary, &reading[start..end], text.as_str())? {
+            if dictionary_exact_surface_entry(
+                dictionary,
+                &reading[start..end],
+                text.as_str(),
+                None,
+            )?
+            .is_some()
+            {
                 // Preserve the dictionary edge and its cost/provenance. Adding
                 // an identical cheaper generated edge here would make N-best
                 // surface deduplication discard the lexical candidate.
@@ -1185,8 +1248,8 @@ impl Converter {
                 NodeSpec {
                     start,
                     end,
-                    left_id: synthetic_id,
-                    right_id: synthetic_id,
+                    left_id,
+                    right_id,
                     local_cost: form_cost.saturating_add(i64::try_from(index).unwrap_or(0)),
                     surface: Surface::Generated(generated_index),
                 },
@@ -1233,12 +1296,14 @@ fn is_exact_user_candidate(candidate: &ConversionCandidate, reading_len: usize) 
         && usize::from(candidate.segments()[0].reading_end) == reading_len
 }
 
-fn dictionary_has_exact_surface(
+fn dictionary_exact_surface_entry(
     dictionary: &Dictionary<'_>,
     reading: &str,
     expected_surface: &str,
-) -> Result<bool, ConversionError> {
-    let mut found = false;
+    previous_right_id: Option<u16>,
+) -> Result<Option<Entry>, ConversionError> {
+    let mut found = None;
+    let mut best_cost = i64::MAX;
     let mut write_error = None;
     dictionary
         .common_prefix_search(reading, |matched| {
@@ -1248,8 +1313,22 @@ fn dictionary_has_exact_surface(
             let mut surface = FixedStr::<MAX_PREEDIT_BYTES>::new();
             match dictionary.write_surface(matched.entry, &mut surface) {
                 Ok(()) => {
-                    found = surface.as_str() == expected_surface;
-                    !found
+                    if surface.as_str() == expected_surface {
+                        let cost = i64::from(matched.entry.word_cost).saturating_add(
+                            previous_right_id.map_or(0, |right| {
+                                i64::from(
+                                    dictionary
+                                        .connection_cost(right, matched.entry.left_id)
+                                        .unwrap_or(u16::MAX),
+                                )
+                            }),
+                        );
+                        if cost < best_cost {
+                            best_cost = cost;
+                            found = Some(matched.entry);
+                        }
+                    }
+                    true
                 }
                 Err(error) => {
                     write_error = Some(error);
