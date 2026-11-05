@@ -97,6 +97,40 @@ impl Drop for AsyncTraceWriter {
 /// Opt this process into asynchronous tracing exactly once. Startup failure
 /// leaves tracing unavailable, never synchronous on a later key path.
 pub fn start_async_writer() -> io::Result<AsyncTraceWriter> {
+    start_with_before_write(|| {})
+}
+
+/// Compile-time fixture availability, owned here even when a tool reuses the
+/// engine's main.rs under a different package's feature namespace.
+pub const WRITE_DELAY_FIXTURE_ENABLED: bool = cfg!(feature = "dev-fixtures");
+
+/// Real-process fixture: delay each write on the writer thread, before disk
+/// access. The engine accepts this only with an explicit private test pipe.
+/// Default/shipping builds reject it; the delay implementation is compiled out.
+pub fn start_async_writer_with_delay(delay: std::time::Duration) -> io::Result<AsyncTraceWriter> {
+    #[cfg(feature = "dev-fixtures")]
+    {
+        if delay.is_zero() || delay > std::time::Duration::from_secs(10) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "trace delay must be 1..10000 ms",
+            ));
+        }
+        start_with_before_write(move || thread::sleep(delay))
+    }
+    #[cfg(not(feature = "dev-fixtures"))]
+    {
+        let _ = delay;
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "trace delay requires dev-fixtures",
+        ))
+    }
+}
+
+fn start_with_before_write(
+    mut before_write: impl FnMut() + Send + 'static,
+) -> io::Result<AsyncTraceWriter> {
     if REQUESTED.swap(true, Ordering::AcqRel) {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
@@ -105,6 +139,7 @@ pub fn start_async_writer() -> io::Result<AsyncTraceWriter> {
     }
     let path = super::default_path()?;
     let (emitter, writer) = spawn(CAPACITY, move |event| {
+        before_write();
         super::emit_through(
             &BACKOFF,
             super::monotonic_ms(),

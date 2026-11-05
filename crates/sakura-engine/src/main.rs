@@ -114,6 +114,7 @@ fn main() {
             started,
             event_log.as_ref(),
             options.test_pipe.as_deref(),
+            options.trace_write_delay_ms,
         ) {
             Ok(()) => {
                 record(event_log.as_ref(), EngineEvent::Stopped);
@@ -147,6 +148,7 @@ fn run(
     started: Instant,
     event_log: Option<&EventLog>,
     test_pipe: Option<&str>,
+    trace_write_delay_ms: Option<u64>,
 ) -> windows::core::Result<()> {
     use std::sync::Arc;
 
@@ -172,7 +174,7 @@ fn run(
     // Own one bounded diagnostic writer before any request can enable tracing.
     // Failure disables this process's trace path rather than doing file I/O
     // synchronously on input. The TSF DLL never opts into this thread.
-    let trace_writer = match sakura_ipc::debug_trace::start_async_writer() {
+    let trace_writer = match start_trace_writer(trace_write_delay_ms) {
         Ok(writer) => Some(writer),
         Err(error) => {
             record(
@@ -389,6 +391,18 @@ struct StartupOptions {
     /// Present only for a harness that also asked for a private pipe. See
     /// `startup_options` for why the two arguments are tied together.
     fault_injection: Option<Plan>,
+    trace_write_delay_ms: Option<u64>,
+}
+
+fn start_trace_writer(
+    delay_ms: Option<u64>,
+) -> std::io::Result<sakura_ipc::debug_trace::AsyncTraceWriter> {
+    if let Some(delay_ms) = delay_ms {
+        return sakura_ipc::debug_trace::start_async_writer_with_delay(
+            std::time::Duration::from_millis(delay_ms),
+        );
+    }
+    sakura_ipc::debug_trace::start_async_writer()
 }
 
 fn startup_options(arguments: impl IntoIterator<Item = String>) -> Result<StartupOptions, String> {
@@ -421,6 +435,22 @@ fn startup_options(arguments: impl IntoIterator<Item = String>) -> Result<Startu
                     return Err("--fault-injection may be supplied only once".to_owned());
                 }
             }
+            "--trace-write-delay-ms" => {
+                if !sakura_ipc::debug_trace::WRITE_DELAY_FIXTURE_ENABLED {
+                    return Err("--trace-write-delay-ms requires a dev-fixtures build".to_owned());
+                }
+                let value = arguments
+                    .next()
+                    .ok_or_else(|| "--trace-write-delay-ms requires milliseconds".to_owned())?;
+                let delay: u64 = value
+                    .parse()
+                    .map_err(|_| "invalid trace delay".to_owned())?;
+                if !(1..=10_000).contains(&delay)
+                    || options.trace_write_delay_ms.replace(delay).is_some()
+                {
+                    return Err("trace delay must be supplied once in 1..10000 ms".to_owned());
+                }
+            }
             _ => {}
         }
     }
@@ -433,6 +463,9 @@ fn startup_options(arguments: impl IntoIterator<Item = String>) -> Result<Startu
     // argument is present, instead of starting and quietly stalling keys.
     if options.fault_injection.is_some() && options.test_pipe.is_none() {
         return Err("--fault-injection requires --test-pipe".to_owned());
+    }
+    if options.trace_write_delay_ms.is_some() && options.test_pipe.is_none() {
+        return Err("--trace-write-delay-ms requires --test-pipe".to_owned());
     }
     Ok(options)
 }
@@ -498,6 +531,31 @@ mod tests {
     use super::*;
 
     #[test]
+    fn trace_write_delay_is_bounded_and_requires_an_explicit_fixture_build_and_pipe() {
+        let args = |delay: &str| {
+            [
+                "--test-pipe".to_owned(),
+                format!("{TEST_PIPE_PREFIX}trace"),
+                "--trace-write-delay-ms".to_owned(),
+                delay.to_owned(),
+            ]
+        };
+        assert!(startup_options(["--trace-write-delay-ms".to_owned(), "200".to_owned()]).is_err());
+        for invalid in ["0", "10001", "-1", "invalid"] {
+            assert!(startup_options(args(invalid)).is_err());
+        }
+        let result = startup_options(args("200"));
+        if sakura_ipc::debug_trace::WRITE_DELAY_FIXTURE_ENABLED {
+            assert_eq!(result.unwrap().trace_write_delay_ms, Some(200));
+            let mut duplicate = args("200").to_vec();
+            duplicate.extend(["--trace-write-delay-ms".to_owned(), "200".to_owned()]);
+            assert!(startup_options(duplicate).is_err());
+        } else {
+            assert!(result.is_err(), "shipping binary cannot arm the fixture");
+        }
+    }
+
+    #[test]
     fn test_pipe_option_accepts_only_the_private_test_namespace() {
         let pipe = format!("{TEST_PIPE_PREFIX}worker-abc_123");
         assert_eq!(validate_test_pipe(pipe.clone()), Ok(pipe));
@@ -514,6 +572,7 @@ mod tests {
                 verbose: true,
                 test_pipe: None,
                 fault_injection: None,
+                trace_write_delay_ms: None,
             })
         );
         assert_eq!(
@@ -522,6 +581,7 @@ mod tests {
                 verbose: false,
                 test_pipe: Some(format!("{TEST_PIPE_PREFIX}one")),
                 fault_injection: None,
+                trace_write_delay_ms: None,
             })
         );
     }

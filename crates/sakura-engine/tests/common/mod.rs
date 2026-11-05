@@ -82,6 +82,21 @@ impl Engine {
             setup,
             None,
             0,
+            None,
+        )
+    }
+
+    pub fn spawn_isolated_with_trace_delay(setup: impl FnOnce(&Path), delay_ms: u64) -> Engine {
+        let test_lock = acquire_engine_test_lock();
+        let identity = TestIdentity::new("trace-delay");
+        Self::spawn(
+            identity,
+            PipeBinding::PrivateTest,
+            test_lock,
+            setup,
+            None,
+            0,
+            Some(delay_ms),
         )
     }
 
@@ -99,6 +114,7 @@ impl Engine {
             |_| {},
             None,
             BELOW_NORMAL_PRIORITY_CLASS.0,
+            None,
         )
     }
 
@@ -121,6 +137,7 @@ impl Engine {
             |_| {},
             Some(spec),
             0,
+            None,
         )
     }
 
@@ -142,6 +159,7 @@ impl Engine {
             |_| {},
             None,
             0,
+            None,
         )
     }
 
@@ -152,6 +170,7 @@ impl Engine {
         setup: impl FnOnce(&Path),
         faults: Option<&str>,
         creation_flags: u32,
+        trace_delay_ms: Option<u64>,
     ) -> Engine {
         let dictionary = test_dictionary(&identity.local_app_data);
         setup(&identity.local_app_data);
@@ -177,6 +196,15 @@ impl Engine {
                 "fault injection is confined to the private test pipe"
             );
             command.arg("--fault-injection").arg(spec);
+        }
+        if let Some(delay_ms) = trace_delay_ms {
+            assert!(
+                binding.uses_explicit_test_pipe(),
+                "trace delays require a private pipe"
+            );
+            command
+                .arg("--trace-write-delay-ms")
+                .arg(delay_ms.to_string());
         }
         command.creation_flags(creation_flags);
         let child = command

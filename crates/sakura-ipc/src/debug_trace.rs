@@ -52,7 +52,10 @@ use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use windows::Win32::System::Threading::GetCurrentThreadId;
 
 mod async_writer;
-pub use async_writer::{start_async_writer, AsyncTraceStats, AsyncTraceWriter};
+pub use async_writer::{
+    start_async_writer, start_async_writer_with_delay, AsyncTraceStats, AsyncTraceWriter,
+    WRITE_DELAY_FIXTURE_ENABLED,
+};
 
 /// Size at which a generation is rotated away. The whole trace, the current and
 /// the previous generation, therefore holds about twice this. Rows other
