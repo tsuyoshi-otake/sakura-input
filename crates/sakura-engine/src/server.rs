@@ -1776,12 +1776,8 @@ fn serve(
                 // The diagnostic helper has a non-trivial call frame. Keep it
                 // entirely off the ordinary 160 KiB worker-stack path.
                 if debug_trace::is_enabled() {
-                    // Timed because it is a file write on the reply path, and
-                    // it is enabled by exactly the developer mode used to
-                    // collect the reports #148 is working from. If this cost
-                    // is material then those reports measured the instrument
-                    // as well as the engine, and the two configurations have
-                    // to be compared rather than pooled.
+                    // The engine bootstrap installs a bounded async writer.
+                    // This measures enqueue/capture only, never disk latency.
                     let _span = timing::Span::start(EngineTimingSite::DebugTraceEmit);
                     trace_key_result(&request, &bufs.out);
                 }

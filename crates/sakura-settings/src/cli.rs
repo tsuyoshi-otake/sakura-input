@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use sakura_core::{
     AppProfile, AppearanceTheme, ConversionMethod, InputMethod, InputSupport, NeuralRerankerScope,
@@ -359,7 +359,7 @@ pub fn run(command: Command) -> Result<(), String> {
                 match await_developer_history_terminal(enabled) {
                     Ok(terminal) => println!("developer-history\t{terminal}"),
                     Err(error) => {
-                        println!("developer-history\tsettle-failed");
+                        println!("developer-history\tunconfirmed");
                         return Err(error);
                     }
                 }
@@ -549,6 +549,20 @@ pub fn run(command: Command) -> Result<(), String> {
             );
             println!("history-package-version\t{package_version}");
             println!("history-release-label\t{release_label}");
+            println!("history-records\t{}", snapshot.records.len());
+            println!(
+                "history-newest-timestamp-ms\t{}",
+                snapshot
+                    .records
+                    .iter()
+                    .map(|record| record.timestamp_ms())
+                    .max()
+                    .unwrap_or(0)
+            );
+            println!(
+                "history-ignored-tail-bytes\t{}",
+                snapshot.ignored_tail_bytes
+            );
             println!("dropped-events\t{}", stats.dropped_events);
             println!("persistence-failures\t{}", stats.persistence_failures);
             println!(
@@ -931,26 +945,54 @@ fn developer_history_settled(enabled: bool, stats: input_history::HistoryStats) 
 
 /// Waits across the configuration watcher interval so a live engine can
 /// publish `developer-mode` and attach/detach history at a request boundary.
-/// A live engine that remains mismatched after the budget is a hard failure;
-/// restart-required is not a successful terminal state.
+/// A full encrypted store can need tens of seconds to initialize. The engine
+/// owns that work; the CLI only observes it, never restarts it. A timeout is
+/// unconfirmed state, not proof that initialization failed. Keep the nonzero
+/// exit status so callers cannot mistake a saved preference for active capture.
 fn await_developer_history_terminal(enabled: bool) -> Result<&'static str, String> {
-    const ATTEMPTS: u32 = 30;
-    const DELAY: Duration = Duration::from_millis(100);
     let history_path = paths::input_history().map_err(display)?;
-    let mut last = "waiting-for-attach";
-    for _ in 0..ATTEMPTS {
-        let stats = input_history::stats(&history_path).map_err(display)?;
-        last = developer_history_terminal(enabled, stats);
+    let started = Instant::now();
+    if enabled {
+        eprintln!("Configuration saved; waiting up to 180 seconds for history initialization.");
+    }
+    wait_for_developer_history(
+        enabled,
+        || input_history::stats(&history_path).map_err(display),
+        || started.elapsed(),
+        thread::sleep,
+    )
+}
+
+fn wait_for_developer_history(
+    enabled: bool,
+    mut observe: impl FnMut() -> Result<input_history::HistoryStats, String>,
+    elapsed: impl Fn() -> Duration,
+    mut wait: impl FnMut(Duration),
+) -> Result<&'static str, String> {
+    let budget = Duration::from_secs(if enabled { 180 } else { 3 });
+    let mut delay = Duration::from_millis(100);
+    loop {
+        let stats = observe().map_err(|error| format!(
+            "configuration is saved, but history status could not be verified: {error}; run `history stats` before retrying the configuration change"
+        ))?;
+        let last = developer_history_terminal(enabled, stats);
         if developer_history_settled(enabled, stats) {
             return Ok(last);
         }
-        // Stats itself is a request boundary; sleep so the watcher can publish
-        // the saved preference before the next probe.
-        thread::sleep(DELAY);
+        let now = elapsed();
+        if now >= budget {
+            return Err(format!(
+                "configuration is saved, but history state is unconfirmed after {} seconds (last={last}); initialization may still be running or may have failed; run `history stats` before retrying the configuration change",
+                budget.as_secs()
+            ));
+        }
+        // Bounded backoff with jitter; only one IPC probe is in flight. The
+        // last wait is clipped to the deadline rather than adding attempts.
+        let jitter =
+            Duration::from_millis(((now.as_nanos() as u64) ^ u64::from(std::process::id())) % 101);
+        wait((delay + jitter).min(budget - now));
+        delay = (delay * 2).min(Duration::from_secs(1));
     }
-    Err(format!(
-        "developer history did not settle after configuration save (last={last})"
-    ))
 }
 
 fn display(error: impl std::fmt::Display) -> String {
@@ -960,6 +1002,96 @@ fn display(error: impl std::fmt::Display) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn history_stats(live: bool, active: bool) -> input_history::HistoryStats {
+        input_history::HistoryStats {
+            active,
+            live,
+            dropped_events: 0,
+            persistence_failures: 0,
+            excluded_unclassified_events: 0,
+            excluded_sensitive_events: 0,
+            excluded_test_only_events: 0,
+            ai_requests: 0,
+            ai_attempts: 0,
+            ai_input_tokens: 0,
+            ai_output_tokens: 0,
+            ai_cached_tokens: 0,
+        }
+    }
+
+    #[test]
+    fn developer_history_wait_allows_slow_initialization_without_restarting_it() {
+        let elapsed = std::cell::Cell::new(Duration::ZERO);
+        let mut probes = 0;
+        let result = wait_for_developer_history(
+            true,
+            || {
+                probes += 1;
+                Ok(history_stats(
+                    true,
+                    elapsed.get() >= Duration::from_secs(36),
+                ))
+            },
+            || elapsed.get(),
+            |delay| elapsed.set(elapsed.get() + delay),
+        );
+        assert_eq!(result, Ok("active"));
+        assert!(elapsed.get() >= Duration::from_secs(36));
+        assert!(elapsed.get() < Duration::from_secs(38));
+        assert!(
+            probes < 45,
+            "must back off instead of polling ten times a second"
+        );
+    }
+
+    #[test]
+    fn developer_history_wait_is_bounded_and_distinguishes_unconfirmed_from_failed() {
+        for enabled in [true, false] {
+            let elapsed = std::cell::Cell::new(Duration::ZERO);
+            let result = wait_for_developer_history(
+                enabled,
+                || Ok(history_stats(true, !enabled)),
+                || elapsed.get(),
+                |delay| elapsed.set(elapsed.get() + delay),
+            );
+            let message = result.unwrap_err();
+            assert!(message.contains("configuration is saved"));
+            assert!(message.contains("unconfirmed"));
+            assert!(message.contains("history stats"));
+            assert_eq!(
+                elapsed.get(),
+                Duration::from_secs(if enabled { 180 } else { 3 })
+            );
+        }
+        let mut probes = 0;
+        let result = wait_for_developer_history(
+            true,
+            || {
+                probes += 1;
+                Err("synthetic transport failure".to_owned())
+            },
+            || Duration::ZERO,
+            |_| panic!("transport failure is terminal"),
+        );
+        assert!(result.unwrap_err().contains("synthetic transport failure"));
+        assert_eq!(probes, 1);
+        for (enabled, live, active, expected) in [
+            (true, false, false, "will-enable-at-next-engine-start"),
+            (false, true, false, "inactive"),
+            (true, true, true, "active"),
+        ] {
+            assert_eq!(
+                wait_for_developer_history(
+                    enabled,
+                    || Ok(history_stats(live, active)),
+                    || Duration::ZERO,
+                    |_| panic!("settled state must not wait")
+                ),
+                Ok(expected)
+            );
+        }
+    }
 
     fn parse_words(words: &[&str]) -> Result<Command, String> {
         parse(words.iter().map(|word| (*word).to_owned()))
@@ -1169,22 +1301,7 @@ mod tests {
 
     #[test]
     fn developer_history_terminal_state_never_claims_a_saved_setting_is_already_active() {
-        use input_history::HistoryStats;
-
-        let stats = |live, active| HistoryStats {
-            active,
-            live,
-            dropped_events: 0,
-            persistence_failures: 0,
-            excluded_unclassified_events: 0,
-            excluded_sensitive_events: 0,
-            excluded_test_only_events: 0,
-            ai_requests: 0,
-            ai_attempts: 0,
-            ai_input_tokens: 0,
-            ai_output_tokens: 0,
-            ai_cached_tokens: 0,
-        };
+        let stats = history_stats;
 
         assert_eq!(
             developer_history_terminal(true, stats(true, true)),

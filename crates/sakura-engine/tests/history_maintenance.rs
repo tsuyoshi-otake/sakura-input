@@ -129,6 +129,95 @@ fn keys_during_history_open(enabled_at_start: bool) {
 }
 
 #[test]
+fn delayed_trace_writes_do_not_delay_real_key_replies() {
+    const WRITE_DELAY: Duration = Duration::from_millis(200);
+    const KEY_BUDGET: Duration = Duration::from_millis(50);
+    let mut engine = Engine::spawn_isolated_with_trace_delay(
+        |profile| configuration(profile, true),
+        WRITE_DELAY.as_millis() as u64,
+    );
+    let mut host = engine.client();
+    let session = session_for(&mut host, "delayed-trace-fixture.exe");
+    let trace = engine.local_app_data().join("SakuraInput/logs/debug.tsv");
+    let deadline = Instant::now() + PATIENT;
+    let mut pause = Duration::from_millis(10);
+    loop {
+        if matches!(
+            host.call(&Request::InputHistoryStats, PATIENT),
+            Ok(Response::InputHistoryStats { active: true, .. })
+        ) {
+            break;
+        }
+        assert!(Instant::now() < deadline, "history did not activate");
+        sleep(pause);
+        pause = (pause * 2).min(Duration::from_millis(100));
+    }
+    assert!(
+        !trace.exists(),
+        "no earlier key may prime the trace fixture"
+    );
+    let started = Instant::now();
+    let mut maximum_reply = Duration::ZERO;
+    for (character, expected) in [('k', "k"), ('a', "か")] {
+        let key_started = Instant::now();
+        let answer = host.call(
+            &Request::SendKey {
+                session,
+                key: common::char_key(character),
+            },
+            KEY_BUDGET,
+        );
+        maximum_reply = maximum_reply.max(key_started.elapsed());
+        let Ok(Response::Output(output)) = answer else {
+            panic!("trace write delayed key response: {answer:?}")
+        };
+        assert_eq!(common::visible(output.preedit), expected);
+    }
+    assert!(
+        maximum_reply < KEY_BUDGET,
+        "key reply took {maximum_reply:?}"
+    );
+    // No row may become visible while the deliberately stalled first write is
+    // still inside its delay. This also detects an accidentally unarmed hook.
+    let deadline = Instant::now() + PATIENT;
+    let mut pause = Duration::from_millis(5);
+    loop {
+        let text = match fs::read_to_string(&trace) {
+            Ok(text) => text,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(error) => panic!("owned trace read: {error}"),
+        };
+        if text.ends_with('\n') && text.contains("\tkey_result\t") {
+            assert!(started.elapsed() >= WRITE_DELAY, "trace delay never fired");
+            break;
+        }
+        assert!(Instant::now() < deadline, "delayed trace never persisted");
+        sleep(pause);
+        pause = (pause * 2).min(Duration::from_millis(25));
+    }
+    let answer = host
+        .call(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            KEY_BUDGET,
+        )
+        .unwrap();
+    let Response::Output(output) = answer else {
+        panic!("expected commit")
+    };
+    assert_eq!(output.commit.as_deref(), Some("か"));
+    assert!(output.preedit.is_none(), "commit finalizes the composition");
+    println!(
+        "trace-write-delay-ms=200 maximum-key-reply-us={}",
+        maximum_reply.as_micros()
+    );
+    drop(host);
+    assert!(engine.cleanup().unwrap().status.success());
+}
+
+#[test]
 fn disabling_developer_history_stops_engine_trace_until_reenabled() {
     let mut engine = Engine::spawn_isolated_with_setup(|profile| configuration(profile, true));
     let mut settings = engine.client();
@@ -162,16 +251,40 @@ fn disabling_developer_history_stops_engine_trace_until_reenabled() {
             ),
             Ok(Response::Output(_))
         ));
-        // Output precedes this key's UI publication and trace. A request on
-        // the same sequential connection fences those remaining side effects.
+        // A sequential request fences UI publication and trace admission.
+        // The asynchronous trace writer may persist those admitted rows later.
         assert!(matches!(
             host.call(&Request::InputHistoryStats, PATIENT),
             Ok(Response::InputHistoryStats { .. })
         ));
     };
+    let wait_trace = |expected_keys: usize| {
+        let deadline = Instant::now() + PATIENT;
+        let mut delay = Duration::from_millis(5);
+        loop {
+            let bytes = match fs::read(&trace) {
+                Ok(bytes) => bytes,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+                Err(error) => panic!("read owned trace: {error}"),
+            };
+            let text = std::str::from_utf8(&bytes).unwrap();
+            if text.ends_with('\n')
+                && text.matches("\tkey_result\t").count() >= expected_keys
+                && text.matches("\tui_publish\t").count() >= expected_keys
+            {
+                break bytes;
+            }
+            assert!(
+                Instant::now() < deadline,
+                "trace writer did not persist admitted rows"
+            );
+            sleep(delay);
+            delay = (delay * 2).min(Duration::from_millis(100));
+        }
+    };
     wait_active(&mut settings, true);
     key(&mut host);
-    let before = fs::read(&trace).unwrap();
+    let before = wait_trace(1);
     let enabled_trace = std::str::from_utf8(&before).unwrap();
     assert!(enabled_trace.contains("\tkey_result\t"));
     assert!(enabled_trace.contains("\tui_publish\t"));
@@ -189,7 +302,7 @@ fn disabling_developer_history_stops_engine_trace_until_reenabled() {
     wait_active(&mut settings, true);
     key(&mut host);
     assert!(
-        fs::read(&trace).unwrap().len() > before.len(),
+        wait_trace(2).len() > before.len(),
         "reenabling restored trace"
     );
     drop(host);

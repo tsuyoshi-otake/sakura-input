@@ -8,6 +8,10 @@ license.workspace = true
 repository.workspace = true
 authors.workspace = true
 
+[features]
+default = []
+dev-fixtures = []
+
 [dependencies]
 sakura-proto.workspace = true
 windows-core.workspace = true
