@@ -1,20 +1,70 @@
 use sakura_values::{FixedStr, FixedVec, MAX_PREEDIT_BYTES};
 
-use crate::dictionary::EntryFlags;
+use crate::dictionary::{Dictionary, EntryFlags};
 use crate::numerals::{
-    is_decorative_numeral_char, parse_numeric_prefix, should_emit_numeric_span, NUMERIC_STYLES,
+    is_decorative_numeral_char, parse_numeric_prefix, should_emit_numeric_span, NumericSpan,
+    NumericStyle, NUMERIC_STYLES,
 };
 
 use super::super::{
-    numeric_form_cost, sort_by_cost, CandidateOrigin, CommitBridgeTailStorage, ConversionCandidate,
-    ConversionError, ConversionSegment, Converter, PathEvidence, NO_SYSTEM_ENTRY_INDEX,
+    dictionary_exact_surface_entry, numeric_form_cost, sort_by_cost, CandidateOrigin,
+    CommitBridgeTailStorage, ConversionCandidate, ConversionError, ConversionSegment, Converter,
+    PathEvidence, NO_SYSTEM_ENTRY_INDEX,
 };
 
 impl Converter {
+    /// New temporal forms follow the dictionary's number spelling when it
+    /// exists (十 + 週間, 十三 + 時間). Rewriting the unit must not itself
+    /// impose a new Arabic-versus-kanji preference. Existing calendar forms
+    /// and numbers without lexical evidence keep their established order.
+    pub(in crate::conversion) fn numeric_styles(
+        dictionary: &Dictionary<'_>,
+        reading: &str,
+        span: NumericSpan,
+    ) -> Result<[NumericStyle; 3], ConversionError> {
+        let mut styles = NUMERIC_STYLES;
+        let Some(counter) = span.counter.filter(|counter| !counter.is_calendar()) else {
+            return Ok(styles);
+        };
+        let number_bytes = span.bytes - counter.reading().len();
+        let number_span = NumericSpan {
+            counter: None,
+            bytes: number_bytes,
+            ..span
+        };
+        let mut preferred = 0;
+        let mut cost = i32::MAX;
+        for (index, style) in styles.iter().enumerate() {
+            let mut text = FixedStr::<MAX_PREEDIT_BYTES>::new();
+            if style.write(number_span, &mut text).is_err() {
+                continue;
+            }
+            if let Some(entry) = dictionary_exact_surface_entry(
+                dictionary,
+                &reading[..number_bytes],
+                text.as_str(),
+                None,
+            )? {
+                if entry.word_cost < cost {
+                    cost = entry.word_cost;
+                    preferred = index;
+                }
+            }
+        }
+        styles[..=preferred].rotate_right(1);
+        Ok(styles)
+    }
+
     pub(in crate::conversion) fn prefer_numeric_forms(
         &mut self,
+        dictionary: &Dictionary<'_>,
         reading: &str,
     ) -> Result<(), ConversionError> {
+        if crate::calendar::date_offset_for_reading(reading).is_some() {
+            // Keep generated relative-date alternatives as well as the word
+            // itself; せんしゅう also parses as a numeric week reading.
+            return Ok(());
+        }
         let Some(span) = parse_numeric_prefix(reading) else {
             return Ok(());
         };
@@ -23,7 +73,7 @@ impl Converter {
         }
         let form_cost = numeric_form_cost(reading, span);
         let mut forms = Vec::new();
-        for style in NUMERIC_STYLES {
+        for style in Self::numeric_styles(dictionary, reading, span)? {
             let mut text = FixedStr::<MAX_PREEDIT_BYTES>::new();
             if style.write(span, &mut text).is_err() {
                 continue;

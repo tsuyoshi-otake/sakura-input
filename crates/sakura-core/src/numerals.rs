@@ -10,7 +10,7 @@ use crate::TextSink;
 
 const MAX_VALUE: u32 = 9_999;
 
-/// A number optionally followed by a calendar counter, covering a reading prefix.
+/// A number optionally followed by a supported counter, covering a reading prefix.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NumericSpan {
     pub value: u32,
@@ -23,6 +23,12 @@ pub enum NumericCounter {
     Day,
     Month,
     Year,
+    Hour,
+    HourDuration,
+    HourHalf,
+    HourDurationHalf,
+    Week,
+    WeekDuration,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -54,22 +60,47 @@ const TRADITIONAL_DAYS: [(&str, u32); 13] = [
     ("ようか", 8),
 ];
 
-const COUNTERS: [(&str, NumericCounter); 3] = [
+// Longest units come first so 時間/週間 are never split after 時/週.
+const COUNTERS: [(&str, NumericCounter); 9] = [
+    ("じかんはん", NumericCounter::HourDurationHalf),
+    ("じはん", NumericCounter::HourHalf),
+    ("じかん", NumericCounter::HourDuration),
+    ("しゅうかん", NumericCounter::WeekDuration),
+    ("しゅう", NumericCounter::Week),
     // 日 as a numeric counter is にち (二十四日, 24日). じつ is only a word
     // ending (先日, 本日, 全日), never "N days".
     ("にち", NumericCounter::Day),
     ("がつ", NumericCounter::Month),
     ("ねん", NumericCounter::Year),
+    ("じ", NumericCounter::Hour),
 ];
 
 const KANJI_DIGITS: [&str; 10] = ["零", "一", "二", "三", "四", "五", "六", "七", "八", "九"];
 
 impl NumericCounter {
+    pub(crate) const fn is_calendar(self) -> bool {
+        matches!(self, Self::Day | Self::Month | Self::Year)
+    }
+
+    pub(crate) fn reading(self) -> &'static str {
+        COUNTERS
+            .iter()
+            .find(|(_, counter)| *counter == self)
+            .unwrap()
+            .0
+    }
+
     pub const fn surface(self) -> &'static str {
         match self {
             Self::Day => "日",
             Self::Month => "月",
             Self::Year => "年",
+            Self::Hour => "時",
+            Self::HourDuration => "時間",
+            Self::HourHalf => "時半",
+            Self::HourDurationHalf => "時間半",
+            Self::Week => "週",
+            Self::WeekDuration => "週間",
         }
     }
 }
@@ -96,21 +127,25 @@ impl NumericStyle {
     }
 }
 
-/// Longest numeric prefix of `reading`, including an optional calendar counter.
+/// Longest numeric prefix of `reading`, including an optional supported counter.
 pub fn parse_numeric_prefix(reading: &str) -> Option<NumericSpan> {
     if let Some(span) = parse_traditional_day(reading) {
         return Some(span);
     }
-    let (value, number_bytes) = parse_ascii_number(reading)
-        .or_else(|| parse_fullwidth_number(reading))
-        .or_else(|| parse_japanese_number(reading))?;
+    let explicit = parse_ascii_number(reading).or_else(|| parse_fullwidth_number(reading));
+    let (value, number_bytes) = explicit.or_else(|| parse_japanese_number(reading))?;
     let rest = reading.get(number_bytes..)?;
     if let Some((counter, counter_bytes)) = parse_counter(rest) {
-        return Some(NumericSpan {
-            value,
-            counter: Some(counter),
-            bytes: number_bytes + counter_bytes,
-        });
+        // Typed digits already use the numeral-class passthrough followed by
+        // the dictionary's counter edge. Preserve that edge's connection IDs
+        // (12時半, 2週間後) rather than replacing it with a generic noun.
+        if explicit.is_none() || counter.is_calendar() {
+            return Some(NumericSpan {
+                value,
+                counter: Some(counter),
+                bytes: number_bytes + counter_bytes,
+            });
+        }
     }
     Some(NumericSpan {
         value,
@@ -187,11 +222,57 @@ fn parse_traditional_day(reading: &str) -> Option<NumericSpan> {
 
 fn parse_counter(reading: &str) -> Option<(NumericCounter, usize)> {
     for (token, counter) in COUNTERS {
-        if reading.starts_with(token) {
+        let Some(rest) = reading.strip_prefix(token) else {
+            continue;
+        };
+        if counter.is_calendar() || has_temporal_counter_boundary(rest) {
             return Some((counter, token.len()));
         }
     }
     None
+}
+
+/// New temporal units must end before a particle, a time qualifier or a
+/// non-kana boundary. Blind prefix matching would turn 先日 into 千時 + つ
+/// and に終了 into 二週 + りょう. Existing calendar recognition is unchanged.
+fn has_temporal_counter_boundary(rest: &str) -> bool {
+    rest.chars()
+        .next()
+        .is_none_or(|first| !('\u{3041}'..='\u{3096}').contains(&first))
+        || [
+            "から",
+            "まで",
+            "ころ",
+            "ごろ",
+            "はん",
+            "に",
+            "で",
+            "は",
+            "も",
+            "を",
+            "と",
+            "や",
+            "の",
+            "が",
+            "ご",
+            "まえ",
+            "あと",
+            "いない",
+            "いじょう",
+            "いか",
+            "みまん",
+            "おき",
+            "ほど",
+            "ぐらい",
+            "くらい",
+            "たつ",
+            "たった",
+            "まつ",
+            "じゅう",
+            "かく",
+        ]
+        .iter()
+        .any(|ending| rest.starts_with(ending))
 }
 
 fn parse_ascii_number(reading: &str) -> Option<(u32, usize)> {
@@ -274,7 +355,7 @@ fn parse_japanese_number(reading: &str) -> Option<(u32, usize)> {
         consumed += bytes;
         progressed = true;
     }
-    if let Some((value, bytes)) = take_place(rest, &["じゅう"], 10) {
+    if let Some((value, bytes)) = take_place(rest, &["じゅう", "じゅっ", "じっ"], 10) {
         total = total.saturating_add(value);
         rest = rest.get(bytes..)?;
         consumed += bytes;
@@ -296,6 +377,12 @@ fn take_place(reading: &str, markers: &[&str], place: u32) -> Option<(u32, usize
     let rest = reading.get(digit_bytes..)?;
     for marker in markers {
         if !rest.starts_with(marker) || !marker_allowed_after(marker, &reading[..digit_bytes]) {
+            continue;
+        }
+        // Contracted tens are licensed by the following weekly counter, not
+        // by arbitrary words such as 実験 or 十中八九.
+        if matches!(*marker, "じゅっ" | "じっ") && !followed_by_week_counter(&rest[marker.len()..])
+        {
             continue;
         }
         let value = digit.checked_mul(place)?;
@@ -346,7 +433,11 @@ fn take_ones(reading: &str, in_place: bool) -> Option<(u32, usize)> {
                 continue;
             }
         }
-        if (token == "いっ" || token == "はっ" || token == "ろっ") && !in_place {
+        if matches!(token, "いっ" | "はっ" | "ろっ")
+            && !in_place
+            && !(matches!(token, "いっ" | "はっ")
+                && followed_by_week_counter(&reading[token.len()..]))
+        {
             continue;
         }
         return Some((value, token.len()));
@@ -355,11 +446,24 @@ fn take_ones(reading: &str, in_place: bool) -> Option<(u32, usize)> {
 }
 
 fn followed_by_counter_or_place(rest: &str) -> bool {
-    COUNTERS.iter().any(|(token, _)| rest.starts_with(token))
-        || rest.starts_with("じゅう")
+    // Preserve the existing guarded し/く aliases. Extending this test to
+    // every new unit would manufacture clock readings for lexical 指示.
+    COUNTERS.iter().any(|(token, counter)| {
+        matches!(
+            counter,
+            NumericCounter::Day | NumericCounter::Month | NumericCounter::Year
+        ) && rest.starts_with(token)
+    }) || rest.starts_with("じゅう")
         || rest.starts_with("ひゃく")
         || rest.starts_with("せん")
         || rest.starts_with("まん")
+}
+
+fn followed_by_week_counter(rest: &str) -> bool {
+    matches!(
+        parse_counter(rest),
+        Some((NumericCounter::Week | NumericCounter::WeekDuration, _))
+    )
 }
 
 fn write_arabic(mut value: u32, sink: &mut impl TextSink) -> Result<(), Overflow> {
@@ -462,6 +566,83 @@ mod tests {
         assert_eq!(span("よんにち").value, 4);
         assert_eq!(span("しがつ").value, 4);
         assert_eq!(span("しがつ").counter, Some(NumericCounter::Month));
+    }
+
+    #[test]
+    fn kana_counter_hours_consume_the_complete_longest_unit() {
+        for (reading, arabic, kanji) in [
+            ("じゅういちじ", "11時", "十一時"),
+            ("じゅうにじ", "12時", "十二時"),
+            ("じゅうさんじかん", "13時間", "十三時間"),
+            ("じゅういちじはん", "11時半", "十一時半"),
+            ("にじかんはん", "2時間半", "二時間半"),
+        ] {
+            let parsed = span(reading);
+            assert_eq!(parsed.bytes, reading.len(), "{reading}");
+            assert_eq!(render(parsed, NumericStyle::Arabic), arabic, "{reading}");
+            assert_eq!(render(parsed, NumericStyle::Kanji), kanji, "{reading}");
+        }
+        let prefix = span("じゅういちじから");
+        assert_eq!(prefix.bytes, "じゅういちじ".len());
+        assert_eq!(render(prefix, NumericStyle::Arabic), "11時");
+    }
+
+    #[test]
+    fn kana_counter_weeks_consume_the_complete_longest_unit() {
+        for (reading, arabic, kanji) in [
+            ("にしゅう", "2週", "二週"),
+            ("にしゅうかん", "2週間", "二週間"),
+            ("さんしゅうかん", "3週間", "三週間"),
+            ("いっしゅうかん", "1週間", "一週間"),
+            ("はっしゅうかん", "8週間", "八週間"),
+            ("じゅっしゅうかん", "10週間", "十週間"),
+            ("にじっしゅうかん", "20週間", "二十週間"),
+        ] {
+            let parsed = span(reading);
+            assert_eq!(parsed.bytes, reading.len(), "{reading}");
+            assert_eq!(render(parsed, NumericStyle::Arabic), arabic, "{reading}");
+            assert_eq!(render(parsed, NumericStyle::Kanji), kanji, "{reading}");
+        }
+        let prefix = span("にしゅうかんまつ");
+        assert_eq!(prefix.bytes, "にしゅうかん".len());
+        assert_eq!(render(prefix, NumericStyle::Arabic), "2週間");
+    }
+
+    #[test]
+    fn kana_counter_extensions_do_not_license_unrelated_number_fragments() {
+        for reading in [
+            "しじ",
+            "いっしょ",
+            "はっしん",
+            "じっけん",
+            "じゅっちゅうはっく",
+        ] {
+            assert!(parse_numeric_prefix(reading).is_none(), "{reading}");
+        }
+        for reading in ["ろっしゅうかん", "しぜんに", "ごぜんに"] {
+            assert!(
+                parse_numeric_prefix(reading).is_none_or(|span| span.bytes < reading.len()),
+                "{reading}"
+            );
+        }
+        for reading in ["せんじつ", "さんじゅつ", "ごじょう", "にしゅうりょう"]
+        {
+            assert!(
+                parse_numeric_prefix(reading).is_some_and(|span| span.counter.is_none()),
+                "{reading}"
+            );
+        }
+    }
+
+    #[test]
+    fn typed_digits_retain_the_dictionary_temporal_counter_boundary() {
+        for reading in ["12じはん", "８じごろ", "1じかんはん", "２しゅうかんご"]
+        {
+            let parsed = span(reading);
+            assert_eq!(parsed.counter, None, "{reading}");
+            assert!(parsed.bytes < reading.len(), "{reading}");
+        }
+        assert_eq!(span("12がつ").counter, Some(NumericCounter::Month));
     }
 
     #[test]
