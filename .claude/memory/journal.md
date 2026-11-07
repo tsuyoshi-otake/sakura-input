@@ -3982,3 +3982,15 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Verification: release-workflow-policy and its -SelfTest, test-update-signing-v2, the `packaging_version` and `sakura-settings` update tests with `--locked`, and check-process-clean all exit 0. Pre-publication checks, run together: 0 personal-data-like strings in the 1,923 lines added since v2.0.27; commit identities are the owner's usual forms; the repository was already public; no v2.0.29 tag or release exists; LICENSE (MIT) is present.
 - Learning: (1) Tag only after checking for open fixes to the commits being shipped (the rule above). (2) For a hand-off in a shared checkout, wait for the other session's message, and confirm by reading `.git/HEAD` and the ref files. Even `git status` can rewrite the index while another session is merging.
 - Residual: no on-screen check of an installed 2.0.29 (no reinstall, owner's choice). The publication results will follow in a separate entry.
+
+## 2026-11-07 - 2.0.29 published (#443, main `cf6b9c8`)
+- Release: PR #444 merged as `cf6b9c8` (merge commit). CI: 9 passed, 2 skipped. Codex review: 0 findings. Before tagging, `gh pr list --state open` returned no PRs (the new rule in `docs/rules/ci-verification.md`). The annotated tag v2.0.29 on `cf6b9c8` ran `release.yml` run 42367777083, both jobs green: build 14 min 29 s, sign-and-package 39 s.
+- Candidate checks:
+  - Installer: 25,886,599 bytes, SHA-256 `ae30a994...`, equal to the manifest.
+  - Manifest: release_sequence 37, source_commit `cf6b9c8`, expires 2027-05-06.
+  - The bundle installer and manifest equal the candidate.
+  - The bundle notes equal the docs file in the working copy.
+  - The installer build report pins the model `a58ebea1...`, 7,467,219 bytes.
+- Publish: `publish-release.ps1 -Publish` with the active DPAPI key exited 0 in 24 s. The release was published 2026-11-07T11:37:38Z as Latest, not a draft, with 3 assets. GitHub's installer digest equals the manifest. 1 valid pinned signature locally and on read-back. v2.0.28 has no release; its tag stays on `1cf993f`.
+- Learning: the Windows runner checks out the notes with CRLF, so the bundle's `release-notes.md` differs from `git show HEAD:docs/...` at the first line ending. Compare it with the working-copy file, or strip CR first. Do not read the difference as a content mismatch.
+- Residual: no reinstall and no on-screen check of an installed 2.0.29 (owner's choice).
