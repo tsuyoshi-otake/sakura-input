@@ -117,8 +117,12 @@ struct NeuralScore {
     eligible: usize,
     attempted: usize,
     applied: usize,
-    /// Scored rows where the shipped rule keeps local order (no candidate in a
-    /// neural group, or a non-finite score inside the chosen group).
+    /// Scored rows where the margin gate keeps the local choice: the model
+    /// agreed with it, the margin stayed under `LOCAL_OVERRIDE_MARGIN`, or the
+    /// local choice sits outside the scored prefix.
+    kept: usize,
+    /// Rows with no defensible comparison: no candidate in a neural group, or
+    /// a non-finite score. The shipped gate is `Unavailable` here.
     local_fallback: usize,
     fallback: usize,
     correct: usize,
@@ -162,6 +166,8 @@ struct SliceScore {
     neural_correct: usize,
     eligible: usize,
     applied: usize,
+    /// Scored rows in this slice where the gate kept the local choice.
+    kept: usize,
     fallback: usize,
     candidate_recall_at_6: usize,
     candidate_mrr_milli_sum: u64,
@@ -326,13 +332,14 @@ fn run() -> Result<(), String> {
     let report = evaluate(&dictionary, &cases, &options)?;
     write_report(&options.report, &report)?;
     println!(
-        "neural-eval {:?}: baseline {}/{}, neural {}/{} (applied {}, local-fallback {}, worker-fallback {}), candidate recall@6 {}/{}, MRR@6 {:.3}, wins/losses/ties {}/{}/{}",
+        "neural-eval {:?}: baseline {}/{}, neural {}/{} (applied {}, kept {}, local-fallback {}, worker-fallback {}), candidate recall@6 {}/{}, MRR@6 {:.3}, wins/losses/ties {}/{}/{}",
         report.mode,
         report.baseline.correct,
         report.baseline.evaluated,
         report.neural.correct,
         report.neural.evaluated,
         report.neural.applied,
+        report.neural.kept,
         report.neural.local_fallback,
         report.neural.fallback,
         report.candidate_rank.recall_at_6,
@@ -510,8 +517,11 @@ fn evaluate(
             )
             .map_err(|error| format!("{}: conversion failed: {error}", case.id))?;
         let candidates = snapshot_candidates(snapshot);
+        // The baseline is what the engine shows without the reranker:
+        // `preferred_candidate_index` with an empty learning store picks the
+        // first candidate that is not the raw reading (index 0 otherwise).
         let baseline_top1 = candidates
-            .first()
+            .get(local_choice_index(&candidates, &case.reading))
             .ok_or_else(|| format!("{}: conversion returned no candidates", case.id))?
             .text
             .clone();
@@ -548,14 +558,18 @@ fn evaluate(
                 .ok_or_else(|| "worker did not start".to_owned())
                 .and_then(|worker| worker.score(request_id, &candidates, options.timeout));
             request_id = request_id.wrapping_add(1);
-            match scored.and_then(|scores| select_top1(&candidates, &scores)) {
-                Ok(Some(index)) => {
+            match scored.and_then(|scores| select_top1(&candidates, &scores, &case.reading)) {
+                Ok(NeuralGateOutcome::Override(index)) => {
                     neural.applied += 1;
                     ("applied", None, candidates[index].text.clone())
                 }
+                Ok(NeuralGateOutcome::KeepLocal) => {
+                    neural.kept += 1;
+                    ("kept", None, baseline_top1.clone())
+                }
                 // The engine keeps local order here (`RerankState::LocalFallback`);
                 // the worker answered correctly, so it is not restarted.
-                Ok(None) => {
+                Ok(NeuralGateOutcome::Unavailable) => {
                     neural.local_fallback += 1;
                     ("local-fallback", None, baseline_top1.clone())
                 }
@@ -575,6 +589,7 @@ fn evaluate(
         }
         match neural_status {
             "applied" => slice.applied += 1,
+            "kept" => slice.kept += 1,
             "worker-fallback" => slice.fallback += 1,
             _ => {}
         }
@@ -612,7 +627,7 @@ fn evaluate(
         });
     }
     Ok(Report {
-        schema_version: 3,
+        schema_version: 4,
         evaluator: "dictc/neural-eval",
         mode: options.mode,
         corpus_contract: "static, explicitly supplied Normal-scope corpus; no live input, history, or user dictionary",
@@ -674,16 +689,30 @@ fn eligibility(
     None
 }
 
+/// Mirrors `preferred_candidate_index` with an empty learning store, no exact
+/// cache and `requested == 0`: the first candidate that is not the raw
+/// reading, or index 0 when every candidate is the reading. This is both the
+/// tool's baseline Top-1 and the gate's local choice.
+fn local_choice_index(candidates: &[SnapshotCandidate], reading: &str) -> usize {
+    candidates
+        .iter()
+        .position(|candidate| candidate.text != reading)
+        .unwrap_or(0)
+}
+
 /// Mirrors `LongConversionService::selection`: every candidate must have a
 /// score from the worker (`Err` otherwise, which restarts the worker); any
-/// non-finite score keeps local order (`Ok(None)`); otherwise the shipped
-/// `neural_gated_choice` rule applies the evidence-group pick plus the logit
-/// margin gate against the dictionary Top-1 (index 0, the tool's baseline
-/// candidate), returning `Some` only for a gated override.
+/// non-finite score keeps local order (`Ok(Unavailable)`); otherwise the
+/// shipped `neural_gated_choice` rule applies the evidence-group pick plus the
+/// logit margin gate against `candidates[local_choice_index(..)]`, the same
+/// candidate the tool reports as its baseline Top-1. The full
+/// `NeuralGateOutcome` is returned so a scored keep is distinguishable from a
+/// fallback with nothing to compare.
 fn select_top1(
     candidates: &[SnapshotCandidate],
     scores: &[(u64, f32)],
-) -> Result<Option<usize>, String> {
+    reading: &str,
+) -> Result<NeuralGateOutcome, String> {
     if candidates.len() < 2 || scores.len() != candidates.len() {
         return Err("score count does not match candidates".to_owned());
     }
@@ -698,20 +727,15 @@ fn select_top1(
         log_probabilities.push(score);
     }
     if log_probabilities.iter().any(|score| !score.is_finite()) {
-        return Ok(None);
+        return Ok(NeuralGateOutcome::Unavailable);
     }
-    Ok(
-        match neural_gated_choice(
-            candidates.len(),
-            0,
-            Selection::LOCAL_OVERRIDE_MARGIN,
-            |index| log_probabilities[index],
-            |index| candidates[index].neural_group,
-        ) {
-            NeuralGateOutcome::Override(index) => Some(index),
-            NeuralGateOutcome::KeepLocal | NeuralGateOutcome::Unavailable => None,
-        },
-    )
+    Ok(neural_gated_choice(
+        candidates.len(),
+        local_choice_index(candidates, reading),
+        Selection::LOCAL_OVERRIDE_MARGIN,
+        |index| log_probabilities[index],
+        |index| candidates[index].neural_group,
+    ))
 }
 
 fn encode_request(request_id: u64, candidates: &[SnapshotCandidate]) -> Result<Vec<u8>, String> {
@@ -834,20 +858,22 @@ mod tests {
     fn selection_uses_the_shipped_margin_gated_rule() {
         // Issue #370: the engine ignores local cost inside the chosen group;
         // Issue #440: the model still needs the logit margin over the local
-        // dictionary Top-1 (index 0) to replace it.
+        // choice to replace it. The local choice mirrors
+        // `preferred_candidate_index` with an empty learning store.
         let candidates = vec![candidate(1, "local", 100), candidate(2, "model", 9_000)];
         assert_eq!(
-            select_top1(&candidates, &[(1, 0.0), (2, 2.0)]).unwrap(),
-            Some(1)
+            select_top1(&candidates, &[(1, 0.0), (2, 2.0)], "よみ").unwrap(),
+            NeuralGateOutcome::Override(1)
         );
-        // Inside the margin, or when the model agrees with local, it keeps.
+        // Inside the margin, or when the model agrees with local, it keeps —
+        // distinguishable from Unavailable.
         assert_eq!(
-            select_top1(&candidates, &[(1, 0.0), (2, 1.5)]).unwrap(),
-            None
+            select_top1(&candidates, &[(1, 0.0), (2, 1.5)], "よみ").unwrap(),
+            NeuralGateOutcome::KeepLocal
         );
         assert_eq!(
-            select_top1(&candidates, &[(1, 3.0), (2, 2.9)]).unwrap(),
-            None
+            select_top1(&candidates, &[(1, 3.0), (2, 2.9)], "よみ").unwrap(),
+            NeuralGateOutcome::KeepLocal
         );
         // An exact candidate outranks a composite top in the group rule, then
         // the margin against the composite local choice decides.
@@ -855,17 +881,45 @@ mod tests {
             grouped(1, "composite", 100, Some(1)),
             grouped(2, "exact", 9_000, Some(2)),
         ];
-        assert_eq!(select_top1(&mixed, &[(1, 0.0), (2, 2.0)]).unwrap(), Some(1));
-        assert_eq!(select_top1(&mixed, &[(1, 5.0), (2, -5.0)]).unwrap(), None);
+        assert_eq!(
+            select_top1(&mixed, &[(1, 0.0), (2, 2.0)], "よみ").unwrap(),
+            NeuralGateOutcome::Override(1)
+        );
+        assert_eq!(
+            select_top1(&mixed, &[(1, 5.0), (2, -5.0)], "よみ").unwrap(),
+            NeuralGateOutcome::KeepLocal
+        );
+        // A raw-reading first candidate is not the local choice: the margin is
+        // measured against the first candidate that differs from the reading,
+        // never against the echoed reading itself.
+        let echoed = vec![
+            candidate(1, "よみ", 100),
+            candidate(2, "local", 200),
+            candidate(3, "model", 9_000),
+        ];
+        assert_eq!(
+            select_top1(&echoed, &[(1, 0.0), (2, 0.5), (3, 3.0)], "よみ").unwrap(),
+            NeuralGateOutcome::Override(2)
+        );
+        // The margin over candidate 0 clears 1.7 (2.5 - 0.0), but the margin
+        // over the real local choice does not (2.5 - 1.0 = 1.5): the engine
+        // keeps, and the old index-0 baseline would have applied.
+        assert_eq!(
+            select_top1(&echoed, &[(1, 0.0), (2, 1.0), (3, 2.5)], "よみ").unwrap(),
+            NeuralGateOutcome::KeepLocal
+        );
         // No neural group or a non-finite score: local order, worker kept.
         let derived = vec![grouped(1, "a", 1, None), grouped(2, "b", 2, None)];
-        assert_eq!(select_top1(&derived, &[(1, 0.0), (2, 1.0)]).unwrap(), None);
         assert_eq!(
-            select_top1(&candidates, &[(1, f32::NAN), (2, 0.0)]).unwrap(),
-            None
+            select_top1(&derived, &[(1, 0.0), (2, 1.0)], "よみ").unwrap(),
+            NeuralGateOutcome::Unavailable
+        );
+        assert_eq!(
+            select_top1(&candidates, &[(1, f32::NAN), (2, 0.0)], "よみ").unwrap(),
+            NeuralGateOutcome::Unavailable
         );
         // A missing score is a worker error.
-        assert!(select_top1(&candidates, &[(1, 0.0), (3, 0.0)]).is_err());
+        assert!(select_top1(&candidates, &[(1, 0.0), (3, 0.0)], "よみ").is_err());
     }
 
     #[test]

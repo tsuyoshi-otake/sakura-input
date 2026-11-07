@@ -22,19 +22,25 @@ import numpy as np
 RESEARCH = Path(sys.argv[1]).resolve()
 MODEL = Path(sys.argv[2]).resolve()
 OUTPUT = Path(sys.argv[3])
-sys.path.insert(0, str(RESEARCH / "src"))
+PACKAGE = RESEARCH / "src" / "sakura_rerank"
 
-from sakura_rerank import research_tiny as v1  # noqa: E402
-from sakura_rerank import research_tiny_r2 as r2  # noqa: E402
-
+# Both research modules supply tensor dimensions, character ids and the
+# feature/gate code (sakura-rerank v0.1.0-research.3), so both are verified
+# before either is imported.
 PINS = {
-    RESEARCH / "src" / "sakura_rerank" / "research_tiny_r2.py":
+    PACKAGE / "research_tiny.py":
+        "a7ca1007ad2981f3008fa9363723f3d5c232213208ee0a4a9f89e572af3b2035",
+    PACKAGE / "research_tiny_r2.py":
         "c2ede3575722b0cda97e0da52a04f42c2402db9cf12aec077d63993f09a95f66",
     MODEL: "a58ebea1257cdc2507b02acb8b7e958181f05577fb629d7928eb1f02fe078686",
 }
 for path, expected in PINS.items():
     if hashlib.sha256(path.read_bytes()).hexdigest() != expected:
         raise SystemExit(f"pin mismatch: {path.name}")
+
+sys.path.insert(0, str(RESEARCH / "src"))
+from sakura_rerank import research_tiny as v1  # noqa: E402
+from sakura_rerank import research_tiny_r2 as r2  # noqa: E402
 
 TAU = 1.7
 I32_MIN, I32_MAX = -(2**31), 2**31 - 1
