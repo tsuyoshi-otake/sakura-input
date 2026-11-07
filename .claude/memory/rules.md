@@ -93,6 +93,13 @@ provenance; active work should load the smaller matching topic extracts above.
   sibling homograph, repair path) instead of only the rows the change was
   meant to fix. A probe whose expected surface is the cheapest lemma cannot
   see those classes (#348).
+- A filter or cost floor that protects "the dictionary already answers this
+  reading" must say whether the user dictionary counts. `system_entry_index()`
+  exists only for a one-edge system path and `is_system_only()` excludes user
+  edges, so a `retain` keyed on either removes the user's registered word
+  (#439: the numeric rewriter dropped `ExactUser` for whole-reading counter
+  readings). Keep `CandidateEvidence::ExactUser` wherever exact system entries
+  are kept, and test with a user entry for the same reading.
 - Run `scripts/build-dictionary.ps1` from Git Bash through a `.ps1` file
   (`pwsh -File build.ps1` with the paths inside it), not `pwsh -Command`:
   MSYS rewrites a `/c/...` path to `C:\c\...` and a `C:/...` argument as a

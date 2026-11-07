@@ -7,9 +7,9 @@ use crate::numerals::{
 };
 
 use super::super::{
-    dictionary_exact_surface_entry, numeric_form_cost, sort_by_cost, CandidateOrigin,
-    CommitBridgeTailStorage, ConversionCandidate, ConversionError, ConversionSegment, Converter,
-    PathEvidence, NO_SYSTEM_ENTRY_INDEX,
+    dictionary_exact_surface_entry, numeric_form_cost, sort_by_cost, CandidateEvidence,
+    CandidateOrigin, CommitBridgeTailStorage, ConversionCandidate, ConversionError,
+    ConversionSegment, Converter, PathEvidence, NO_SYSTEM_ENTRY_INDEX,
 };
 
 impl Converter {
@@ -114,6 +114,13 @@ impl Converter {
             }
         }
         self.candidates.retain(|candidate| {
+            // A word the user registered for exactly this reading is the
+            // user's explicit answer (#439). It is lexical evidence the
+            // rewriter neither generates nor replaces, so it stays with its
+            // own cost, whatever its spelling.
+            if candidate.evidence_class() == CandidateEvidence::ExactUser {
+                return true;
+            }
             let text = candidate.text();
             if text.chars().any(is_decorative_numeral_char) {
                 return false;

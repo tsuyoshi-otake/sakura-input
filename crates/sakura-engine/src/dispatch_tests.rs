@@ -9847,6 +9847,60 @@ fn an_existing_dispatcher_observes_an_atomically_reloaded_user_dictionary() {
 }
 
 #[test]
+fn a_user_word_for_a_numeric_reading_can_be_selected_and_committed() {
+    // Issue #439: にじ also parses as 2 + 時, and the numeric rewriter used to
+    // drop every other candidate except exact system entries. The user's
+    // registered word must reach the list and commit as registered.
+    let conversion = conversion_fixture();
+    let mut dispatcher =
+        Dispatcher::new_with_conversion(Arc::clone(&conversion)).expect("shipped defaults");
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "editor.exe");
+    conversion.replace_user_dictionary(
+        sakura_core::UserDictionary::parse_tsv(
+            "reading\tsurface\tpos\tcomment\nにじ\t利用者虹\tnoun\tfixture\n",
+        )
+        .expect("user dictionary"),
+    );
+
+    type_word(&mut dispatcher, session, "niji", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Space),
+        },
+        &mut out,
+    );
+    let items = out.to_output().candidates.expect("candidate list").items;
+    assert!(
+        items.iter().any(|item| item.text == "2時"),
+        "the generated hour form must remain: {items:?}"
+    );
+    let index = items
+        .iter()
+        .position(|item| item.text == "利用者虹")
+        .unwrap_or_else(|| panic!("the user word was dropped: {items:?}"));
+    for _ in 0..index {
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Down),
+            },
+            &mut out,
+        );
+    }
+    assert_eq!(out.preedit_text(), "利用者虹");
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Enter),
+        },
+        &mut out,
+    );
+    assert_eq!(out.commit_text(), Some("利用者虹"));
+}
+
+#[test]
 fn commit_cache_reselects_a_homophone_within_the_session() {
     let mut dispatcher = conversion_dispatcher();
     let mut out = OutputBuf::new();

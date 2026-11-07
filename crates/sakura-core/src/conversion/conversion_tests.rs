@@ -1867,6 +1867,118 @@ fn temporal_number_forms_work_without_counter_dictionary_entries() {
 }
 
 #[test]
+fn user_dictionary_words_survive_whole_reading_numeric_forms() {
+    // Issue #439: when the whole reading parses as numeral + counter, the
+    // numeric rewriter keeps only its forms, the reading and exact system
+    // entries. A word the user registered for the same reading is the
+    // user's explicit answer and must stay reachable; nothing else in the
+    // list may change because of it.
+    let bytes = synthetic_dictionary(&[fixture_entry("かな", "仮名", 100, EntryFlags::NONE)]);
+    let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+    let user_dictionary = UserDictionary::parse_tsv(
+        "# format-version: 1\nreading\tsurface\tpos\tcomment\n\
+         にじ\t利用者虹\tnoun\t\n\
+         じゅういちじ\t利用者時\tnoun\t\n\
+         にしゅうかん\t利用者週\tnoun\t\n\
+         にがつ\t利用者月\tnoun\t\n\
+         にねん\t利用者年\tnoun\t\n\
+         いちじ\t①時\tnoun\t\n\
+         に\t利用者荷\tnoun\t\n\
+         じ\t利用者字\tnoun\t\n\
+         さくら\t利用者桜\tnoun\t\n",
+    )
+    .expect("user dictionary");
+    let mut converter = Converter::new();
+    // The cost a user noun gets on a reading the numeric rewriter does not
+    // touch; the kept word must carry exactly this cost.
+    let user_noun_cost = converter
+        .convert_with_user_dictionary(
+            &dictionary,
+            Some(&user_dictionary),
+            "さくら",
+            ConversionOptions::default(),
+        )
+        .expect("control conversion")
+        .iter()
+        .find(|candidate| candidate.text() == "利用者桜")
+        .map(|candidate| candidate.cost)
+        .expect("control user word");
+    for (reading, user_surface, generated) in [
+        // Hour and week counters (PR #438).
+        ("にじ", "利用者虹", "2時"),
+        ("じゅういちじ", "利用者時", "11時"),
+        ("にしゅうかん", "利用者週", "2週間"),
+        // Calendar counters, affected before PR #438.
+        ("にがつ", "利用者月", "2月"),
+        ("にねん", "利用者年", "2年"),
+        // A decorative numeral the rewriter drops from its own forms is
+        // still the user's registered spelling.
+        ("いちじ", "①時", "1時"),
+    ] {
+        let without_user: Vec<(String, i64)> = converter
+            .convert(&dictionary, reading, ConversionOptions::default())
+            .expect("conversion without user dictionary")
+            .iter()
+            .map(|candidate| (candidate.text().to_owned(), candidate.cost))
+            .collect();
+        let with_user = converter
+            .convert_with_user_dictionary(
+                &dictionary,
+                Some(&user_dictionary),
+                reading,
+                ConversionOptions::default(),
+            )
+            .expect("conversion with user dictionary")
+            .to_vec();
+        let user = with_user
+            .iter()
+            .find(|candidate| candidate.text() == user_surface)
+            .unwrap_or_else(|| {
+                panic!("user word {user_surface} for {reading} was dropped: {with_user:?}")
+            });
+        assert_eq!(user.evidence_class(), CandidateEvidence::ExactUser);
+        assert_eq!(
+            user.cost, user_noun_cost,
+            "the user word for {reading} keeps its own cost"
+        );
+        // The rewriter still owns the rest of the list: apart from the exact
+        // user word only its generated forms and the reading remain, and a
+        // composite path through the user entries for に and じ is dropped
+        // like any other composite.
+        assert!(
+            with_user.iter().all(|candidate| candidate.text() == user_surface
+                || candidate.path_evidence().generated_edges == 1
+                || candidate.text() == reading),
+            "only generated forms and the reading may stay next to the user word for {reading}: {with_user:?}"
+        );
+        assert_eq!(
+            with_user
+                .iter()
+                .filter(|candidate| candidate.path_evidence().user_edges != 0)
+                .count(),
+            1,
+            "only the exact user word may carry a user edge for {reading}: {with_user:?}"
+        );
+        assert!(
+            with_user
+                .iter()
+                .any(|candidate| candidate.text() == generated
+                    && candidate.path_evidence().generated_edges == 1),
+            "generated {generated} for {reading} must remain: {with_user:?}"
+        );
+        let others: Vec<(String, i64)> = with_user
+            .iter()
+            .filter(|candidate| candidate.text() != user_surface)
+            .map(|candidate| (candidate.text().to_owned(), candidate.cost))
+            .collect();
+        assert_eq!(
+            others, without_user,
+            "the user word must not change the other candidates of {reading}"
+        );
+    }
+}
+
+#[test]
 fn generated_day_suffixes_stay_behind_lexical_verb_phrases() {
     let bytes = synthetic_dictionary(&[
         // The split lexical paths model the verb stem followed by the
