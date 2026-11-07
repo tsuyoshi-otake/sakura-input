@@ -64,7 +64,7 @@ version 4) counts scored rows where the gate keeps that local choice.
 `neural.local_fallback` counts rows with no defensible comparison: no
 candidate in a neural group, or a non-finite score. Version 3 reports used the
 ungated listwise choice and an index-0 baseline, so their wins and losses do
-not describe the 2.0.28 product. This keeps long-only and all-normal Top-1
+not describe the 2.0.29 product. This keeps long-only and all-normal Top-1
 denominators comparable even when a row falls back before the worker call.
 `candidate_rank.recall_at_6` and
 `candidate_rank.mrr_milli_sum / candidate_rank.evaluated` describe the shared
