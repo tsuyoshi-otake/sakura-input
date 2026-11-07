@@ -148,6 +148,62 @@ pub fn neural_listwise_choice(
     selected
 }
 
+/// The outcome of the margin-gated model selection (Sakura Input Issue #440,
+/// distilled from the sakura-rerank Issue #29 research gate).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NeuralGateOutcome {
+    /// The model-selected candidate clears the margin over the local choice.
+    Override(usize),
+    /// Scores are valid but the local choice stays (agreement, insufficient
+    /// margin, or the local choice is outside the scored prefix).
+    KeepLocal,
+    /// `neural_listwise_choice` yields nothing or a needed score is
+    /// non-finite.
+    Unavailable,
+}
+
+/// Applies [`neural_listwise_choice`] and then the shipped margin gate.
+///
+/// The protected evidence-group rule still applies first: the gated candidate
+/// is always the `neural_listwise_choice` winner, never a cross-group pick.
+/// The local choice is replaced only when the winner's score minus the local
+/// choice's score, computed in `f64`, is strictly greater than `margin` (the
+/// shipped value is `sakura_rerank_proto::Selection::LOCAL_OVERRIDE_MARGIN`).
+///
+/// The result is [`NeuralGateOutcome::Unavailable`] when there is nothing
+/// defensible to compare: no listwise choice, a non-finite score for the
+/// local choice, or a non-finite `margin`. An identical or out-of-prefix
+/// local index is [`NeuralGateOutcome::KeepLocal`]: an unscored local choice
+/// is never overridden.
+pub fn neural_gated_choice(
+    candidate_count: usize,
+    local_index: usize,
+    margin: f64,
+    mut log_probability_at: impl FnMut(usize) -> f32,
+    neural_group_at: impl FnMut(usize) -> Option<u8>,
+) -> NeuralGateOutcome {
+    if !margin.is_finite() {
+        return NeuralGateOutcome::Unavailable;
+    }
+    let Some(selected) =
+        neural_listwise_choice(candidate_count, &mut log_probability_at, neural_group_at)
+    else {
+        return NeuralGateOutcome::Unavailable;
+    };
+    if selected == local_index || local_index >= candidate_count {
+        return NeuralGateOutcome::KeepLocal;
+    }
+    let local_score = log_probability_at(local_index);
+    if !local_score.is_finite() {
+        return NeuralGateOutcome::Unavailable;
+    }
+    if f64::from(log_probability_at(selected)) - f64::from(local_score) > margin {
+        NeuralGateOutcome::Override(selected)
+    } else {
+        NeuralGateOutcome::KeepLocal
+    }
+}
+
 /// The repair tier attached to a raw-repair plan and its accepted candidates.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RepairTier {
@@ -275,5 +331,120 @@ const fn repair_kind_bit(kind: RepairKind) -> u8 {
         RepairKind::Advanced => 1 << 1,
         RepairKind::EnglishSpelling => 1 << 2,
         RepairKind::CommitHistory => 1 << 3,
+    }
+}
+
+#[cfg(test)]
+mod gate_tests {
+    use super::*;
+
+    #[test]
+    fn neural_gated_choice_overrides_only_past_the_f64_margin() {
+        let group = |_| CandidateEvidence::ExactSystem.neural_group();
+        // The shipped margin in f64: a difference strictly above it overrides.
+        let scores = [0.0f32, 1.7, -1.0];
+        assert_eq!(
+            neural_gated_choice(3, 0, 1.7, |index| scores[index], group),
+            NeuralGateOutcome::Override(1),
+            "1.7f32 is 1.7000000476837158 in f64, strictly above 1.7"
+        );
+        // A difference exactly equal to the margin is kept (strict `>`).
+        let scores = [0.0f32, 1.5, -1.0];
+        assert_eq!(
+            neural_gated_choice(3, 0, 1.5, |index| scores[index], group),
+            NeuralGateOutcome::KeepLocal
+        );
+        // Just under the shipped margin is kept.
+        assert_eq!(
+            neural_gated_choice(3, 0, 1.7, |index| scores[index], group),
+            NeuralGateOutcome::KeepLocal
+        );
+    }
+
+    #[test]
+    fn neural_gated_choice_keeps_agreement_and_unscored_local_choices() {
+        let group = |_| CandidateEvidence::ExactSystem.neural_group();
+        // The model agrees with the local choice: kept.
+        let scores = [3.0f32, 2.9, -1.0];
+        assert_eq!(
+            neural_gated_choice(3, 0, 1.7, |index| scores[index], group),
+            NeuralGateOutcome::KeepLocal
+        );
+        // A local index outside the scored prefix is never overridden, even
+        // when the model's choice would clear the margin against any listed
+        // score.
+        assert_eq!(
+            neural_gated_choice(3, 3, 1.7, |index| scores[index], group),
+            NeuralGateOutcome::KeepLocal
+        );
+        assert_eq!(
+            neural_gated_choice(3, usize::MAX, 1.7, |index| scores[index], group),
+            NeuralGateOutcome::KeepLocal
+        );
+    }
+
+    #[test]
+    fn neural_gated_choice_is_unavailable_without_a_choice_or_finite_scores() {
+        // No neural group at all: nothing to compare.
+        let no_group = |_| CandidateEvidence::Fallback.neural_group();
+        assert_eq!(
+            neural_gated_choice(2, 0, 1.7, |_| 0.0, no_group),
+            NeuralGateOutcome::Unavailable
+        );
+        // A non-finite score inside the chosen group leaves no selection.
+        let group = |_| CandidateEvidence::ExactSystem.neural_group();
+        let scores = [0.0f32, f32::NAN];
+        assert_eq!(
+            neural_gated_choice(2, 0, 1.7, |index| scores[index], group),
+            NeuralGateOutcome::Unavailable
+        );
+        // A non-finite local score outside every neural group is still
+        // unavailable: the margin cannot be computed.
+        let local = [CandidateEvidence::Fallback, CandidateEvidence::ExactSystem];
+        let scores = [f32::NAN, 4.0f32];
+        assert_eq!(
+            neural_gated_choice(
+                2,
+                0,
+                1.7,
+                |index| scores[index],
+                |index| local[index].neural_group()
+            ),
+            NeuralGateOutcome::Unavailable
+        );
+        // A non-finite margin is a contract violation, not a keep.
+        let scores = [0.0f32, 4.0];
+        for margin in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert_eq!(
+                neural_gated_choice(2, 0, margin, |index| scores[index], group),
+                NeuralGateOutcome::Unavailable
+            );
+        }
+    }
+
+    #[test]
+    fn neural_gated_choice_keeps_group_protection_then_compares_with_local() {
+        // The composite local choice outscores every exact candidate, yet the
+        // strongest group still owns the selection; the gate then compares
+        // the chosen exact candidate against the local choice's score.
+        let groups = [
+            CandidateEvidence::CompositeLexical,
+            CandidateEvidence::ExactSystem,
+            CandidateEvidence::ExactSystem,
+        ];
+        let group = |index: usize| groups[index].neural_group();
+        let scores = [200.0f32, -1.0, 202.0];
+        assert_eq!(
+            neural_gated_choice(3, 0, 1.7, |index| scores[index], group),
+            NeuralGateOutcome::Override(2),
+            "group protection selects the exact 202.0, and 202-200 clears 1.7"
+        );
+        // Same protection, but the chosen exact score stays within the margin
+        // of the local composite choice: kept.
+        let scores = [200.0f32, -1.0, 200.5];
+        assert_eq!(
+            neural_gated_choice(3, 0, 1.7, |index| scores[index], group),
+            NeuralGateOutcome::KeepLocal
+        );
     }
 }

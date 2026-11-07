@@ -6,7 +6,7 @@
 //! dictionary.  The corpus format deliberately reuses the frozen Phase 2
 //! `id<TAB>slice<TAB>reading<TAB>expected` contract.
 
-use sakura_rerank_proto::{Candidate as WireCandidate, Frame, Limits};
+use sakura_rerank_proto::{Candidate as WireCandidate, Frame, Limits, Selection};
 use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, Read, Write};
@@ -16,7 +16,7 @@ use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-use sakura_core::conversion::neural_listwise_choice;
+use sakura_core::conversion::{neural_gated_choice, NeuralGateOutcome};
 use sakura_core::{ConversionCandidate, ConversionOptions, Converter, Dictionary};
 use serde::Serialize;
 
@@ -677,7 +677,9 @@ fn eligibility(
 /// Mirrors `LongConversionService::selection`: every candidate must have a
 /// score from the worker (`Err` otherwise, which restarts the worker); any
 /// non-finite score keeps local order (`Ok(None)`); otherwise the shipped
-/// `neural_listwise_choice` rule picks the candidate.
+/// `neural_gated_choice` rule applies the evidence-group pick plus the logit
+/// margin gate against the dictionary Top-1 (index 0, the tool's baseline
+/// candidate), returning `Some` only for a gated override.
 fn select_top1(
     candidates: &[SnapshotCandidate],
     scores: &[(u64, f32)],
@@ -698,11 +700,18 @@ fn select_top1(
     if log_probabilities.iter().any(|score| !score.is_finite()) {
         return Ok(None);
     }
-    Ok(neural_listwise_choice(
-        candidates.len(),
-        |index| log_probabilities[index],
-        |index| candidates[index].neural_group,
-    ))
+    Ok(
+        match neural_gated_choice(
+            candidates.len(),
+            0,
+            Selection::LOCAL_OVERRIDE_MARGIN,
+            |index| log_probabilities[index],
+            |index| candidates[index].neural_group,
+        ) {
+            NeuralGateOutcome::Override(index) => Some(index),
+            NeuralGateOutcome::KeepLocal | NeuralGateOutcome::Unavailable => None,
+        },
+    )
 }
 
 fn encode_request(request_id: u64, candidates: &[SnapshotCandidate]) -> Result<Vec<u8>, String> {
@@ -822,23 +831,32 @@ mod tests {
     }
 
     #[test]
-    fn selection_uses_the_shipped_listwise_rule() {
-        // Issue #370: the engine ignores local cost inside the chosen group,
-        // so a far costlier exact candidate with a slightly higher score wins.
+    fn selection_uses_the_shipped_margin_gated_rule() {
+        // Issue #370: the engine ignores local cost inside the chosen group;
+        // Issue #440: the model still needs the logit margin over the local
+        // dictionary Top-1 (index 0) to replace it.
         let candidates = vec![candidate(1, "local", 100), candidate(2, "model", 9_000)];
         assert_eq!(
-            select_top1(&candidates, &[(1, -0.2), (2, 0.0)]).unwrap(),
+            select_top1(&candidates, &[(1, 0.0), (2, 2.0)]).unwrap(),
             Some(1)
         );
-        // An exact candidate outranks a composite top whatever their scores.
+        // Inside the margin, or when the model agrees with local, it keeps.
+        assert_eq!(
+            select_top1(&candidates, &[(1, 0.0), (2, 1.5)]).unwrap(),
+            None
+        );
+        assert_eq!(
+            select_top1(&candidates, &[(1, 3.0), (2, 2.9)]).unwrap(),
+            None
+        );
+        // An exact candidate outranks a composite top in the group rule, then
+        // the margin against the composite local choice decides.
         let mixed = vec![
             grouped(1, "composite", 100, Some(1)),
             grouped(2, "exact", 9_000, Some(2)),
         ];
-        assert_eq!(
-            select_top1(&mixed, &[(1, 5.0), (2, -5.0)]).unwrap(),
-            Some(1)
-        );
+        assert_eq!(select_top1(&mixed, &[(1, 0.0), (2, 2.0)]).unwrap(), Some(1));
+        assert_eq!(select_top1(&mixed, &[(1, 5.0), (2, -5.0)]).unwrap(), None);
         // No neural group or a non-finite score: local order, worker kept.
         let derived = vec![grouped(1, "a", 1, None), grouped(2, "b", 2, None)];
         assert_eq!(select_top1(&derived, &[(1, 0.0), (2, 1.0)]).unwrap(), None);

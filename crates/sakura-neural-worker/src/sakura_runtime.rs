@@ -16,7 +16,7 @@ pub const CONTEXT_LENGTH: usize = 64;
 pub const READING_LENGTH: usize = 32;
 pub const TOP_K: usize = 6;
 pub const SURFACE_LENGTH: usize = 32;
-pub const FEATURE_DIM: usize = 6;
+pub const FEATURE_DIM: usize = 7;
 
 static ORT_INITIALIZED: OnceLock<Result<(), ()>> = OnceLock::new();
 
@@ -227,7 +227,7 @@ fn validate_model_contract(
         ("reading_lengths", ElementType::I64, &[-1][..]),
         ("candidate_ids", ElementType::I64, &[-1, 6, 32][..]),
         ("candidate_lengths", ElementType::I64, &[-1, 6][..]),
-        ("features", ElementType::F32, &[-1, 6, 6][..]),
+        ("features", ElementType::F32, &[-1, 6, 7][..]),
         ("candidate_mask", ElementType::Bool, &[-1, 6][..]),
     ];
     if inputs.len() != expected.len() {
@@ -365,7 +365,7 @@ mod tests {
             TensorMetadata {
                 name: "features",
                 element: ElementType::F32,
-                shape: &[-1, 6, 6],
+                shape: &[-1, 6, 7],
             },
             TensorMetadata {
                 name: "candidate_mask",
