@@ -7,7 +7,7 @@
 - 同梱モデルを `Sakura-Rerank-Tiny-v1-issue29-distilled`（sakura-rerank Issue #29 の最終student、FP32 SHA-256 `a58ebea1…`、model contract v2）へ替える。研究manifestは #29 report（`reports/issue-29-distill-gate.json`、v0.1.0-research.3、SHA-256 `42fbc5af…`）のバイト複製である。配置directory名 `neural/sakura-rerank-tiny-v1/` は変えない。
 - 判断の根拠は sakura-rerank の dev 参照（1,788行、Gate A未通過のAI教師ラベル、独立Testではない）。製品と同じ入力に揃えると、出荷中v1は正解1,630・誤置換14、#29＋ゲートは正解1,611・誤置換3だった（片方だけ正解36対17、exact McNemar p=0.013）。精度向上ではなく、誤置換を減らす安全側への交換として扱う。v1の保護選択はdevで再現できないため、v1の実際の誤置換はこれより少ない可能性がある。
 - 選択規則: 保護evidence groupの規則でモデル候補を選んだ後、ローカル選択（`preferred`）とのlogit差がf64で1.7を超えるときだけ置き換える。閾値は `sakura_rerank_proto::Selection::LOCAL_OVERRIDE_MARGIN` が唯一の定義で、runtime manifestの `selection` が一致しなければworkerはfail closedする。
-- MIT配布・installer同梱・既定 `LongTextOnly` での有効化は、このモデルについて改めてownerの承認を要する（v1の承認を流用しない）。承認日: APPROVAL-DATE-PENDING。
+- MIT配布・installer同梱・既定 `LongTextOnly` での有効化は、このモデルについて、v1の承認を流用せず、ownerが2026-11-07に改めて承認した。
 
 ### 現在の実装境界
 

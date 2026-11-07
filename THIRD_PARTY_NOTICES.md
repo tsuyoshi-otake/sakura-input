@@ -41,7 +41,7 @@ The bundled Sakura reranker model (`neural/sakura-rerank-tiny-v1/model.onnx`)
 is the repository's own model and is distributed under the MIT License. The
 repository owner approved MIT distribution of the first bundled model on
 2026-08-14 and of the current distilled model (Issue #440) on
-APPROVAL-DATE-PENDING. It was trained in the
+2026-11-07. It was trained in the
 separate `sakura-rerank` research repository on text spans selected from the
 Japanese Wikipedia database dump of 2026-08-01
 (`jawiki-20260801-pages-articles-multistream`,
