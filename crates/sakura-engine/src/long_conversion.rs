@@ -5,7 +5,7 @@
 //! waits for it: only an exact owner/session/generation/reading/candidate-set
 //! result can be consumed, otherwise the existing local ranking remains final.
 
-use sakura_rerank_proto::{Candidate as WireCandidate, Frame, Limits};
+use sakura_rerank_proto::{Candidate as WireCandidate, Frame, Limits, Selection};
 use std::borrow::Cow;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -15,7 +15,9 @@ use std::sync::{mpsc, Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+#[cfg(test)]
 use sakura_core::conversion::neural_listwise_choice;
+use sakura_core::conversion::{neural_gated_choice, NeuralGateOutcome};
 #[cfg(test)]
 use sakura_core::CandidateEvidence;
 use sakura_core::{ConversionCandidate, ConversionOptions};
@@ -34,6 +36,8 @@ pub enum RerankState {
     Queued,
     Ready,
     Applied,
+    /// Scored, but the margin gate retained the local choice.
+    Kept,
     LocalFallback,
     TimedOut,
     Stale,
@@ -136,13 +140,16 @@ impl LongConversionService {
     }
 
     /// Returns a model-selected candidate only for the exact snapshot. The
-    /// caller owns the authoritative learning/cache precedence check.
+    /// caller owns the authoritative learning/cache precedence check and
+    /// passes its local choice as `local_index`; the shipped margin gate may
+    /// only replace that choice, never reach for a different one.
     pub(crate) fn selection(
         &self,
         owner: u64,
         session: SessionId,
         generation: u64,
         reading: &str,
+        local_index: usize,
         candidates: &[ConversionCandidate],
     ) -> Option<usize> {
         let expected_key = RequestKey {
@@ -173,13 +180,27 @@ impl LongConversionService {
                 return None;
             }
         }
-        let Some(selected) = protected_listwise_index(&candidates[..model_count], &result.scores)
-        else {
-            result.state = RerankState::LocalFallback;
-            return None;
-        };
-        result.state = RerankState::Applied;
-        Some(selected)
+        let scores = &result.scores;
+        match neural_gated_choice(
+            model_count,
+            local_index,
+            Selection::LOCAL_OVERRIDE_MARGIN,
+            |index| scores[index].log_probability,
+            |index| candidates[index].evidence_class().neural_group(),
+        ) {
+            NeuralGateOutcome::Override(selected) => {
+                result.state = RerankState::Applied;
+                Some(selected)
+            }
+            NeuralGateOutcome::KeepLocal => {
+                result.state = RerankState::Kept;
+                None
+            }
+            NeuralGateOutcome::Unavailable => {
+                result.state = RerankState::LocalFallback;
+                None
+            }
+        }
     }
 }
 
@@ -197,22 +218,6 @@ fn direct_listwise_index(scores: &[CandidateScore]) -> Option<usize> {
         }
     }
     selected
-}
-
-/// Applies the shipped selection rule (`neural_listwise_choice`) to the exact
-/// snapshot the worker scored.
-fn protected_listwise_index(
-    candidates: &[ConversionCandidate],
-    scores: &[CandidateScore],
-) -> Option<usize> {
-    if candidates.len() != scores.len() {
-        return None;
-    }
-    neural_listwise_choice(
-        candidates.len(),
-        |index| scores[index].log_probability,
-        |index| candidates[index].evidence_class().neural_group(),
-    )
 }
 
 /// Owns the bounded worker thread and its exact child-process cleanup.
@@ -804,5 +809,144 @@ mod tests {
         assert!(!reading_is_eligible("かな", false));
         assert!(reading_is_eligible("かな", true));
         assert!(reading_is_eligible("かな文", false));
+    }
+}
+
+/// `selection` consumes a stored `Ready` result, so the three gate outcomes
+/// are exercised through the real service here rather than through the core
+/// function alone. Building that snapshot needs a compiled fixture
+/// dictionary, which only exists under `dev-fixtures`.
+#[cfg(all(test, feature = "dev-fixtures"))]
+mod gate_tests {
+    use super::*;
+
+    /// Three whole-reading exact candidates in cost order, all in the
+    /// strongest neural group.
+    fn image() -> &'static [u8] {
+        let entries = dictc_core::parse_entries(
+            "fixture.tsv",
+            "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nかいしゃ\t会社\t0\t0\t100\t100\t\t\nかいしゃ\t開社\t0\t0\t200\t200\t\t\nかいしゃ\t階下\t0\t0\t300\t300\t\t\n",
+        )
+        .expect("entries");
+        let matrix = dictc_core::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        Box::leak(
+            dictc_core::compile(&entries, &matrix)
+                .expect("compile")
+                .into_boxed_slice(),
+        )
+    }
+
+    fn service(conversion: Arc<ConversionService>) -> LongConversionService {
+        LongConversionService {
+            shared: Arc::new(Shared {
+                conversion,
+                worker_path: PathBuf::new(),
+                model_directory: PathBuf::new(),
+                pending: Mutex::new(None),
+                ready: Condvar::new(),
+                result: Mutex::new(None),
+                shutdown: AtomicBool::new(false),
+                next_owner: AtomicU64::new(1),
+                next_request: AtomicU64::new(1),
+            }),
+        }
+    }
+
+    /// Stores one `Ready` result keyed and fingerprinted against the exact
+    /// conversion snapshot `selection` sees, then consumes it once. The
+    /// candidate window is capped at three so `log_probabilities` maps
+    /// positionally to the three exact candidates.
+    fn select(
+        service: &LongConversionService,
+        conversion: &ConversionService,
+        reading: &str,
+        local_index: usize,
+        log_probabilities: &[f32],
+    ) -> (Option<usize>, RerankState) {
+        let options = ConversionOptions {
+            max_candidates: 3,
+            ..ConversionOptions::default()
+        };
+        conversion
+            .with_candidates(reading, options, |candidates| {
+                let model_count = candidates.len().min(Limits::MAX_CANDIDATES);
+                assert!(model_count >= 2, "fixture must produce >= 2 candidates");
+                assert!(log_probabilities.len() >= model_count);
+                *lock(&service.shared.result) = Some(WorkResult {
+                    key: RequestKey {
+                        owner: 1,
+                        session: 7,
+                        generation: 3,
+                        reading_hash: fingerprint_bytes(reading.as_bytes()),
+                        reading_bytes: reading.len() as u16,
+                    },
+                    candidate_set: candidate_set_fingerprint(&candidates[..model_count]),
+                    scores: candidates[..model_count]
+                        .iter()
+                        .zip(log_probabilities)
+                        .map(|(candidate, log_probability)| CandidateScore {
+                            fingerprint: candidate_fingerprint(candidate),
+                            log_probability: *log_probability,
+                        })
+                        .collect(),
+                    state: RerankState::Ready,
+                });
+                let selection =
+                    service.selection(1, 7, 3, reading, local_index, &candidates[..model_count]);
+                (
+                    selection,
+                    lock(&service.shared.result).as_ref().unwrap().state,
+                )
+            })
+            .expect("fixture conversion")
+    }
+
+    #[test]
+    fn selection_applies_only_when_the_model_clears_the_margin() {
+        let conversion = Arc::new(ConversionService::from_static_bytes(image()).expect("service"));
+        let service = service(Arc::clone(&conversion));
+        // 3.0 - 0.0 > 1.7: the model's exact-group winner replaces local.
+        assert_eq!(
+            select(&service, &conversion, "かいしゃ", 0, &[0.0, 3.0, -1.0]),
+            (Some(1), RerankState::Applied)
+        );
+        // 1.5 - 0.0 < 1.7: same selection signal, different terminal state.
+        assert_eq!(
+            select(&service, &conversion, "かいしゃ", 0, &[0.0, 1.5, -1.0]),
+            (None, RerankState::Kept)
+        );
+    }
+
+    #[test]
+    fn selection_keeps_agreement_and_out_of_prefix_local_choices() {
+        let conversion = Arc::new(ConversionService::from_static_bytes(image()).expect("service"));
+        let service = service(Arc::clone(&conversion));
+        // The model's argmax is the local choice itself: kept, not applied.
+        assert_eq!(
+            select(&service, &conversion, "かいしゃ", 0, &[3.0, 0.5, -1.0]),
+            (None, RerankState::Kept)
+        );
+        // A local index outside the scored prefix is never overridden.
+        assert_eq!(
+            select(&service, &conversion, "かいしゃ", 3, &[0.0, 3.0, -1.0]),
+            (None, RerankState::Kept)
+        );
+    }
+
+    #[test]
+    fn selection_falls_back_when_nothing_is_scorable() {
+        let conversion = Arc::new(ConversionService::from_static_bytes(image()).expect("service"));
+        let service = service(Arc::clone(&conversion));
+        // A reading the fixture dictionary does not cover produces only
+        // fallback candidates, none of which have a neural group.
+        assert_eq!(
+            select(&service, &conversion, "ぬぬぬ", 0, &[0.0, 0.0, 0.0]),
+            (None, RerankState::LocalFallback)
+        );
     }
 }

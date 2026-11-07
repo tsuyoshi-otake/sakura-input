@@ -16,6 +16,20 @@ impl Limits {
     pub const MAX_CONTEXT_BYTES: usize = 1024;
 }
 
+/// The shipped model's selection contract (sakura-rerank Issue #29 gate,
+/// score L, tau 1.7).
+///
+/// Model scores are logits. The engine keeps its local choice unless the
+/// model-selected candidate's score minus the local choice's score, computed
+/// in `f64`, is strictly greater than [`Selection::LOCAL_OVERRIDE_MARGIN`].
+/// The worker refuses a model manifest that declares another rule or margin.
+#[derive(Debug)]
+pub struct Selection;
+impl Selection {
+    pub const LOCAL_OVERRIDE_MARGIN: f64 = 1.7;
+    pub const RULE: &str = "logit_margin_over_local_choice";
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Candidate<'a> {
     pub fingerprint: Fingerprint,

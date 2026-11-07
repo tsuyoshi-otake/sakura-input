@@ -50,16 +50,21 @@ holdout required to choose a production model or default. Use its report to
 find regressions and worker failures, then freeze a separately reviewed corpus
 before claiming a quality result.
 
-Reports use schema version 3. `baseline.evaluated` and `neural.evaluated` both
+Reports use schema version 4. `baseline.evaluated` and `neural.evaluated` both
 cover every parsed row; `neural.eligible` is a separate count for rows that
 passed the selected Tiny gate. The model's choice is made by
-`sakura_core::conversion::neural_listwise_choice`, the same function the engine
-calls (Issue #370): the highest score inside the strongest evidence group, with
-no local-cost term. `neural.local_fallback` (new in version 3) counts scored rows
-where that rule keeps local order: no candidate in a neural group, or a
-non-finite score. Version 2 reports used a local cost + score penalty formula
-the engine no longer ships, so their wins and losses do not describe the
-product. This keeps long-only and all-normal Top-1
+`sakura_core::conversion::neural_gated_choice`, the same function the engine
+calls since Issue #440: the highest score inside the strongest evidence group
+replaces the local choice only when it exceeds the local choice's score by
+more than `sakura_rerank_proto::Selection::LOCAL_OVERRIDE_MARGIN` (1.7, a
+strict `>` comparison computed in `f64`). The local choice, and therefore the
+baseline Top-1, is the first candidate that is not the raw reading — the
+engine's `preferred` index with an empty learning store. `neural.kept` (new in
+version 4) counts scored rows where the gate keeps that local choice.
+`neural.local_fallback` counts rows with no defensible comparison: no
+candidate in a neural group, or a non-finite score. Version 3 reports used the
+ungated listwise choice and an index-0 baseline, so their wins and losses do
+not describe the 2.0.28 product. This keeps long-only and all-normal Top-1
 denominators comparable even when a row falls back before the worker call.
 `candidate_rank.recall_at_6` and
 `candidate_rank.mrr_milli_sum / candidate_rank.evaluated` describe the shared

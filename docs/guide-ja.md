@@ -172,7 +172,7 @@ WER minidump はローカルにだけ保存され、自動送信されません�
 
 ### 任意のローカル長文再順位付けとプライバシー
 
-Issue #32 の実験的 neural reranker は、自作の `Sakura-Rerank-Tiny-v1` をRust workerでローカル実行します。旧DeBERTa Tinyのruntimeとinstaller経路は除去済みです。Sakuraモデル、worker、ONNX Runtimeは通常installerに同梱され、既定では長い読みを `Space` で通常変換するときだけ、既存の辞書N-best候補を最大6件までlistwiseに再順位付けします。これは候補生成や `Tab` の推測候補ではありません。engineは `sakura_neural_worker.exe` を必要なときだけローカル子プロセスとして起動し、`neural/sakura-rerank-tiny-v1/` の `model.onnx` と `manifest.json` を使用します。workerは同じディレクトリのONNX Runtime DLLを動的に読み込みます。TSF DLLやengine本体へONNX Runtimeやモデルを読み込みません。
+Issue #32 の実験的 neural reranker は、自作の `Sakura-Rerank-Tiny-v1` をRust workerでローカル実行します。旧DeBERTa Tinyのruntimeとinstaller経路は除去済みです。Sakuraモデル、worker、ONNX Runtimeは通常installerに同梱され、既定では長い読みを `Space` で通常変換するときだけ、既存の辞書N-best候補を最大6件までlistwiseに再順位付けします。モデルが十分な確信を持つとき（ローカル選択とのscore差が1.7を超えるとき）だけ先頭候補を置き換え、それ以外は従来の順位を保ちます。これは候補生成や `Tab` の推測候補ではありません。engineは `sakura_neural_worker.exe` を必要なときだけローカル子プロセスとして起動し、`neural/sakura-rerank-tiny-v1/` の `model.onnx` と `manifest.json` を使用します。workerは同じディレクトリのONNX Runtime DLLを動的に読み込みます。TSF DLLやengine本体へONNX Runtimeやモデルを読み込みません。
 
 この worker はネットワークへ送信しません。engine が分類済み `Normal` scope の通常変換の読みからローカルで作った候補 snapshot だけを、同一マシン内の IPC で渡します。Password、URL、Email、Digits、未知または未分類 scope、直接入力、`test_only` 入力、短い読み、候補が 1 件だけの場合は worker を起動せず、入力内容も送信しません。通常の診断ログへ入力文字列を記録せず、自動アップロードもしません。
 

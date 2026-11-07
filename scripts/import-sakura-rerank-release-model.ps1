@@ -7,10 +7,10 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$expectedModelSha256 = 'b3fe1e0aa7229edfd0760162d648f10328b0d75224a9cd49f2ba986b7db2ccbd'
-$expectedModelBytes = 7466707L
-$expectedResearchManifestSha256 = '07f1c54cbe361e117b547f47511de960977f1d0f754f051f44b9447a591d96b9'
-$expectedResearchManifestBytes = 2866L
+$expectedModelSha256 = 'a58ebea1257cdc2507b02acb8b7e958181f05577fb629d7928eb1f02fe078686'
+$expectedModelBytes = 7467219L
+$expectedResearchManifestSha256 = '42fbc5af761194b01375dd71e6e34a71ea028a9d9f5337e4c861ee25cbaebed3'
+$expectedResearchManifestBytes = 32864L
 
 function Get-Sha256 {
     param([Parameter(Mandatory)][string]$Path)

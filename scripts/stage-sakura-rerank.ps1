@@ -13,9 +13,9 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$expectedResearchManifestSha256 = '07f1c54cbe361e117b547f47511de960977f1d0f754f051f44b9447a591d96b9'
-$expectedModelSha256 = 'b3fe1e0aa7229edfd0760162d648f10328b0d75224a9cd49f2ba986b7db2ccbd'
-$expectedModelBytes = 7466707L
+$expectedResearchManifestSha256 = '42fbc5af761194b01375dd71e6e34a71ea028a9d9f5337e4c861ee25cbaebed3'
+$expectedModelSha256 = 'a58ebea1257cdc2507b02acb8b7e958181f05577fb629d7928eb1f02fe078686'
+$expectedModelBytes = 7467219L
 
 function Resolve-RequiredFile {
     param([Parameter(Mandatory)][string]$Path, [Parameter(Mandatory)][string]$Name)
@@ -51,21 +51,36 @@ $modelLicense = Resolve-RequiredFile $ModelLicense 'Sakura model license'
 $output = [IO.Path]::GetFullPath($OutputDirectory)
 
 if ((Get-Sha256 $researchManifestPath) -ne $expectedResearchManifestSha256) {
-    throw 'Sakura research manifest hash does not match the reviewed prototype'
+    throw 'Sakura research manifest hash does not match the reviewed Issue #29 report'
 }
+# The research manifest is the byte-identical sakura-rerank Issue #29 report
+# (reports/issue-29-distill-gate.json, release v0.1.0-research.3). It records
+# the research-time state, which this script must not rewrite: Gate A failed,
+# final holdout unused, distribution and production change not authorized
+# there. Product distribution is authorized separately in the runtime manifest.
 $research = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($researchManifestPath)) | ConvertFrom-Json
 if ($research.schema_version -ne 1 -or
-    $research.manifest_kind -ne 'sakura_rerank_tiny_model' -or
-    $research.model_contract_version -ne 1 -or
-    $research.model_name -ne 'Sakura-Rerank-Tiny-v1-research-prototype' -or
+    $research.report_kind -ne 'sakura_rerank_issue29_distill_gate' -or
+    $research.issue -ne 29 -or
     $research.status -ne 'research_only_gate_a_failed' -or
-    $research.data.gate_a_status -ne 'gate_a_failed' -or
-    $research.data.final_holdout_used -ne $false -or
-    $research.distribution_authorized -ne $false -or
-    $research.license_status -ne 'not_selected_no_distribution_authorized' -or
-    $research.exports.fp32.sha256 -ne $expectedModelSha256 -or
-    $research.exports.fp32.bytes -ne $expectedModelBytes) {
+    $research.final_holdout_used -ne $false -or
+    $research.artifact_distribution_authorized -ne $false -or
+    $research.production_change_authorized -ne $false -or
+    $research.raw_text_in_report -ne $false -or
+    $research.raw_stable_ids_in_report -ne $false -or
+    $research.decision.adopted -ne $true -or
+    $research.export.criterion_5_pass -ne $true -or
+    $research.export.final_gate.score -ne 'L' -or
+    $research.export.onnx.fp32.sha256 -ne $expectedModelSha256 -or
+    $research.export.onnx.fp32.bytes -ne $expectedModelBytes) {
     throw 'Sakura research manifest does not match the admitted research-only contract'
+}
+# The engine applies the gate with a compiled margin
+# (sakura_rerank_proto::Selection::LOCAL_OVERRIDE_MARGIN); the worker refuses a
+# runtime manifest whose selection differs from it.
+$selectionMargin = [double]$research.export.final_gate.tau
+if ($selectionMargin -ne 1.7) {
+    throw 'Sakura research gate margin does not match the compiled selection contract'
 }
 if ([IO.FileInfo]::new($model).Length -ne $expectedModelBytes -or (Get-Sha256 $model) -ne $expectedModelSha256) {
     throw 'Sakura model bytes do not match the admitted FP32 export'
@@ -90,10 +105,14 @@ $runtimeManifest = [ordered]@{
     manifest_kind = 'sakura_rerank_runtime_model'
     status = 'release_experimental_gate_a_failed'
     model = [ordered]@{
-        id = 'Sakura-Rerank-Tiny-v1-research-prototype'
-        contract_version = 1
+        id = 'Sakura-Rerank-Tiny-v1-issue29-distilled'
+        contract_version = 2
         format = 'onnx-fp32'
         opset = 18
+    }
+    selection = [ordered]@{
+        rule = 'logit_margin_over_local_choice'
+        margin = $selectionMargin
     }
     runtime = [ordered]@{
         name = 'onnxruntime'
