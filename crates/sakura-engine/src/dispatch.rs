@@ -5297,6 +5297,7 @@ fn begin_conversion(
                                 session_id,
                                 session.prediction_generation,
                                 session.preedit.as_str(),
+                                preferred,
                                 &candidates[..direct_limit],
                             )
                         })

@@ -668,17 +668,23 @@ may reorder it. Explicit user learning, exact cache, and user-dictionary
 precedence are applied outside this worker and remain authoritative. Worker
 restarts are bounded with exponential backoff and deterministic jitter.
 
-The admitted research artifact is `Sakura-Rerank-Tiny-v1-research-prototype`,
-contract version 1, FP32 SHA-256
-`b3fe1e0aa7229edfd0760162d648f10328b0d75224a9cd49f2ba986b7db2ccbd`.
-The runtime manifest also binds the reviewed research manifest, Gate A failure,
-final-holdout non-use, MIT licensing, and explicit distribution authorization.
-Protocol v1 supplies only
-the existing candidate surfaces, local costs, and fingerprints. Context and
-reading tensors are zeroed; available features are normalized local cost,
-candidate order, and surface length. The listwise model score is the complete
-selection signal, not a residual penalty added to local cost. The installed IME
-does not import Python, PyTorch, or training dependencies.
+The admitted research artifact is `Sakura-Rerank-Tiny-v1-issue29-distilled`
+(Issue #440), the distilled single student of sakura-rerank Issue #29, model
+contract version 2, FP32 SHA-256
+`a58ebea1257cdc2507b02acb8b7e958181f05577fb629d7928eb1f02fe078686`.
+Its research manifest is the byte-identical Issue #29 report. The runtime
+manifest also binds that report, Gate A failure, final-holdout non-use, MIT
+licensing, explicit distribution authorization, and the selection rule.
+Protocol v1 supplies only the existing candidate surfaces, local costs, and
+fingerprints. Context and reading tensors are zeroed; the seven-wide feature
+vector carries normalized local cost, candidate order, surface length, and the
+absolute cost gap `-ln(1 + (cost - min) / 1000)`, with the segment, reading and
+system-origin columns zero. The model score is not added to local cost.
+Instead the protected evidence-group rule picks the model's candidate, and a
+confidence gate keeps the engine's local choice unless that candidate's score
+exceeds the local choice's score by more than 1.7 (f64,
+`sakura_rerank_proto::Selection::LOCAL_OVERRIDE_MARGIN`, the Issue #29 gate).
+The installed IME does not import Python, PyTorch, or training dependencies.
 
 ### 5.3 Prediction
 

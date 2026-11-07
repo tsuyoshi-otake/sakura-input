@@ -7,17 +7,17 @@ use std::{
     path::Path,
 };
 
-pub const MODEL_ID: &str = "Sakura-Rerank-Tiny-v1-research-prototype";
+pub const MODEL_ID: &str = "Sakura-Rerank-Tiny-v1-issue29-distilled";
 pub const SOURCE_MANIFEST_SHA256: &str =
-    "07f1c54cbe361e117b547f47511de960977f1d0f754f051f44b9447a591d96b9";
+    "42fbc5af761194b01375dd71e6e34a71ea028a9d9f5337e4c861ee25cbaebed3";
 pub const RUNTIME_STATUS: &str = "release_experimental_gate_a_failed";
 pub const MODEL_LICENSE: &str = "MIT";
 // Reviewed model pins. These must stay equal to the values in
 // scripts/stage-sakura-rerank.ps1 and
 // scripts/import-sakura-rerank-release-model.ps1 and to the tracked
 // artifact models/sakura-rerank-tiny-v1/model.onnx.
-pub const MODEL_SHA256: &str = "b3fe1e0aa7229edfd0760162d648f10328b0d75224a9cd49f2ba986b7db2ccbd";
-pub const MODEL_BYTES: u64 = 7_466_707;
+pub const MODEL_SHA256: &str = "a58ebea1257cdc2507b02acb8b7e958181f05577fb629d7928eb1f02fe078686";
+pub const MODEL_BYTES: u64 = 7_467_219;
 
 pub struct ValidatedManifest {
     pub model_hash: String,
@@ -41,6 +41,7 @@ struct Manifest {
     manifest_kind: String,
     status: String,
     model: Model,
+    selection: Selection,
     runtime: Runtime,
     research: Research,
     files: Vec<Artifact>,
@@ -55,6 +56,17 @@ struct Model {
     contract_version: u32,
     format: String,
     opset: u32,
+}
+
+/// The selection contract the manifest declares for the gated model choice.
+/// Anything but the shipped `sakura_rerank_proto::Selection` rule and margin
+/// is refused outright: a runtime built for one gate must not load a model
+/// exported for another.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Selection {
+    rule: String,
+    margin: f64,
 }
 
 #[derive(Deserialize)]
@@ -90,7 +102,7 @@ pub fn validate(dir: &Path) -> Result<ValidatedManifest, String> {
         || manifest.manifest_kind != "sakura_rerank_runtime_model"
         || manifest.status != RUNTIME_STATUS
         || manifest.model.id != MODEL_ID
-        || manifest.model.contract_version != 1
+        || manifest.model.contract_version != 2
         || manifest.model.format != "onnx-fp32"
         || manifest.model.opset != 18
         || manifest.runtime.name != "onnxruntime"
@@ -104,6 +116,11 @@ pub fn validate(dir: &Path) -> Result<ValidatedManifest, String> {
         || manifest.raw_stable_ids_in_manifest
     {
         return Err("manifest identity mismatch".into());
+    }
+    if manifest.selection.rule != sakura_rerank_proto::Selection::RULE
+        || manifest.selection.margin != sakura_rerank_proto::Selection::LOCAL_OVERRIDE_MARGIN
+    {
+        return Err("manifest selection mismatch".into());
     }
     if manifest.files.len() != 1 || manifest.files[0].path != "model.onnx" {
         return Err("manifest file set mismatch".into());
@@ -180,12 +197,13 @@ mod tests {
         fs::create_dir_all(&path).unwrap();
         fs::write(path.join("model.onnx"), model).unwrap();
         let manifest = format!(
-            "{{\"files\":[{{\"bytes\":{},\"path\":\"model.onnx\",\"sha256\":\"{}\"}}],\"manifest_kind\":\"sakura_rerank_runtime_model\",\"model\":{{\"contract_version\":1,\"format\":\"onnx-fp32\",\"id\":\"{}\",\"opset\":18}},\"raw_stable_ids_in_manifest\":false,\"raw_text_in_manifest\":false,\"research\":{{\"artifact_distribution_authorized\":true,\"final_holdout_used\":false,\"gate_a_status\":\"gate_a_failed\",\"license\":\"{}\",\"source_manifest_sha256\":\"{}\"}},\"runtime\":{{\"name\":\"onnxruntime\",\"version\":\"1.28.0\"}},\"schema_version\":1,\"status\":\"{}\"}}",
+            "{{\"files\":[{{\"bytes\":{},\"path\":\"model.onnx\",\"sha256\":\"{}\"}}],\"manifest_kind\":\"sakura_rerank_runtime_model\",\"model\":{{\"contract_version\":2,\"format\":\"onnx-fp32\",\"id\":\"{}\",\"opset\":18}},\"raw_stable_ids_in_manifest\":false,\"raw_text_in_manifest\":false,\"research\":{{\"artifact_distribution_authorized\":true,\"final_holdout_used\":false,\"gate_a_status\":\"gate_a_failed\",\"license\":\"{}\",\"source_manifest_sha256\":\"{}\"}},\"runtime\":{{\"name\":\"onnxruntime\",\"version\":\"1.28.0\"}},\"schema_version\":1,\"selection\":{{\"margin\":1.7,\"rule\":\"{}\"}},\"status\":\"{}\"}}",
             model.len(),
             hex(&path.join("model.onnx")).unwrap(),
             MODEL_ID,
             MODEL_LICENSE,
             SOURCE_MANIFEST_SHA256,
+            sakura_rerank_proto::Selection::RULE,
             RUNTIME_STATUS,
         );
         fs::write(path.join("manifest.json"), manifest).unwrap();
@@ -301,7 +319,7 @@ mod tests {
         assert_eq!(validated.model_bytes, tracked_model());
         assert_eq!(
             format!("{:x}", Sha256::digest(&validated.model_bytes)),
-            "b3fe1e0aa7229edfd0760162d648f10328b0d75224a9cd49f2ba986b7db2ccbd"
+            MODEL_SHA256
         );
         fs::remove_dir_all(path).unwrap();
     }
@@ -361,6 +379,67 @@ mod tests {
         .unwrap();
         let validated = validate(&path).unwrap();
         assert_eq!(validated.model_hash, MODEL_SHA256);
+        fs::remove_dir_all(path).unwrap();
+    }
+
+    /// #440: a manifest that declares a different gate margin is refused.
+    #[test]
+    fn rejects_manifest_with_different_selection_margin() {
+        let path = directory();
+        let manifest = fs::read_to_string(path.join("manifest.json")).unwrap();
+        fs::write(
+            path.join("manifest.json"),
+            manifest.replacen("\"margin\":1.7", "\"margin\":1.6", 1),
+        )
+        .unwrap();
+        assert_eq!(validate(&path).unwrap_err(), "manifest selection mismatch");
+        fs::remove_dir_all(path).unwrap();
+    }
+
+    /// #440: a manifest that declares an unknown selection rule is refused.
+    #[test]
+    fn rejects_manifest_with_unknown_selection_rule() {
+        let path = directory();
+        let manifest = fs::read_to_string(path.join("manifest.json")).unwrap();
+        fs::write(
+            path.join("manifest.json"),
+            manifest.replacen(
+                "\"rule\":\"logit_margin_over_local_choice\"",
+                "\"rule\":\"max_score\"",
+                1,
+            ),
+        )
+        .unwrap();
+        assert_eq!(validate(&path).unwrap_err(), "manifest selection mismatch");
+        fs::remove_dir_all(path).unwrap();
+    }
+
+    /// #440: the six-feature contract is refused; contract version 2 is the
+    /// only accepted model contract.
+    #[test]
+    fn rejects_contract_version_1() {
+        let path = directory();
+        let manifest = fs::read_to_string(path.join("manifest.json")).unwrap();
+        fs::write(
+            path.join("manifest.json"),
+            manifest.replacen("\"contract_version\":2", "\"contract_version\":1", 1),
+        )
+        .unwrap();
+        assert_eq!(validate(&path).unwrap_err(), "manifest identity mismatch");
+        fs::remove_dir_all(path).unwrap();
+    }
+
+    /// #440: the previously shipped research-prototype id is refused.
+    #[test]
+    fn rejects_previous_research_prototype_identity() {
+        let path = directory();
+        let manifest = fs::read_to_string(path.join("manifest.json")).unwrap();
+        fs::write(
+            path.join("manifest.json"),
+            manifest.replacen(MODEL_ID, "Sakura-Rerank-Tiny-v1-research-prototype", 1),
+        )
+        .unwrap();
+        assert_eq!(validate(&path).unwrap_err(), "manifest identity mismatch");
         fs::remove_dir_all(path).unwrap();
     }
 

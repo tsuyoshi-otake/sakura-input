@@ -20,7 +20,7 @@ fn initialize(model: &Path) -> (String, sakura_runtime::ModelRuntime) {
 
 fn probe_json(model_hash: &str) -> String {
     format!(
-        "{{\"runtime\":\"onnxruntime\",\"model\":\"{}\",\"model_sha256\":\"{}\",\"status\":\"{}\"}}",
+        "{{\"runtime\":\"onnxruntime\",\"model\":\"{}\",\"model_sha256\":\"{}\",\"contract_version\":2,\"status\":\"{}\"}}",
         manifest::MODEL_ID,
         model_hash,
         manifest::RUNTIME_STATUS,
@@ -80,6 +80,7 @@ mod tests {
                 "runtime": "onnxruntime",
                 "model": super::manifest::MODEL_ID,
                 "model_sha256": "abc",
+                "contract_version": 2,
                 "status": super::manifest::RUNTIME_STATUS,
             })
         );
