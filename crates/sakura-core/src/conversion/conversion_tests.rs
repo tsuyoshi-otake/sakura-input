@@ -1882,10 +1882,27 @@ fn user_dictionary_words_survive_whole_reading_numeric_forms() {
          にしゅうかん\t利用者週\tnoun\t\n\
          にがつ\t利用者月\tnoun\t\n\
          にねん\t利用者年\tnoun\t\n\
-         いちじ\t①時\tnoun\t\n",
+         いちじ\t①時\tnoun\t\n\
+         に\t利用者荷\tnoun\t\n\
+         じ\t利用者字\tnoun\t\n\
+         さくら\t利用者桜\tnoun\t\n",
     )
     .expect("user dictionary");
     let mut converter = Converter::new();
+    // The cost a user noun gets on a reading the numeric rewriter does not
+    // touch; the kept word must carry exactly this cost.
+    let user_noun_cost = converter
+        .convert_with_user_dictionary(
+            &dictionary,
+            Some(&user_dictionary),
+            "さくら",
+            ConversionOptions::default(),
+        )
+        .expect("control conversion")
+        .iter()
+        .find(|candidate| candidate.text() == "利用者桜")
+        .map(|candidate| candidate.cost)
+        .expect("control user word");
     for (reading, user_surface, generated) in [
         // Hour and week counters (PR #438).
         ("にじ", "利用者虹", "2時"),
@@ -1920,9 +1937,33 @@ fn user_dictionary_words_survive_whole_reading_numeric_forms() {
                 panic!("user word {user_surface} for {reading} was dropped: {with_user:?}")
             });
         assert_eq!(user.evidence_class(), CandidateEvidence::ExactUser);
+        assert_eq!(
+            user.cost, user_noun_cost,
+            "the user word for {reading} keeps its own cost"
+        );
+        // The rewriter still owns the rest of the list: apart from the exact
+        // user word only its generated forms and the reading remain, and a
+        // composite path through the user entries for に and じ is dropped
+        // like any other composite.
         assert!(
-            with_user.iter().any(|candidate| candidate.text() == generated
-                && candidate.path_evidence().generated_edges == 1),
+            with_user.iter().all(|candidate| candidate.text() == user_surface
+                || candidate.path_evidence().generated_edges == 1
+                || candidate.text() == reading),
+            "only generated forms and the reading may stay next to the user word for {reading}: {with_user:?}"
+        );
+        assert_eq!(
+            with_user
+                .iter()
+                .filter(|candidate| candidate.path_evidence().user_edges != 0)
+                .count(),
+            1,
+            "only the exact user word may carry a user edge for {reading}: {with_user:?}"
+        );
+        assert!(
+            with_user
+                .iter()
+                .any(|candidate| candidate.text() == generated
+                    && candidate.path_evidence().generated_edges == 1),
             "generated {generated} for {reading} must remain: {with_user:?}"
         );
         let others: Vec<(String, i64)> = with_user

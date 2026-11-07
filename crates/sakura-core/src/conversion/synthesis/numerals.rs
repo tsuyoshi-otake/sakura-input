@@ -8,8 +8,8 @@ use crate::numerals::{
 
 use super::super::{
     dictionary_exact_surface_entry, numeric_form_cost, sort_by_cost, CandidateEvidence,
-    CandidateOrigin, CommitBridgeTailStorage, ConversionCandidate, ConversionError, ConversionSegment, Converter,
-    PathEvidence, NO_SYSTEM_ENTRY_INDEX,
+    CandidateOrigin, CommitBridgeTailStorage, ConversionCandidate, ConversionError,
+    ConversionSegment, Converter, PathEvidence, NO_SYSTEM_ENTRY_INDEX,
 };
 
 impl Converter {
