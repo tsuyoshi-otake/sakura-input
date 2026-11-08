@@ -5,9 +5,9 @@ use crate::dictionary::EntryFlags;
 use crate::numerals::is_numeric_day_surface;
 
 use super::super::{
-    CandidateOrigin, CommitBridgeTailStorage, ConversionCandidate, ConversionError,
-    ConversionSegment, Converter, PathEvidence, GENERATED_VARIANT_SLACK, MAX_CONVERSION_CANDIDATES,
-    NO_SYSTEM_ENTRY_INDEX,
+    CandidateEvidence, CandidateOrigin, CommitBridgeTailStorage, ConversionCandidate,
+    ConversionError, ConversionSegment, Converter, PathEvidence, GENERATED_VARIANT_SLACK,
+    MAX_CONVERSION_CANDIDATES, NO_SYSTEM_ENTRY_INDEX,
 };
 
 impl Converter {
@@ -22,15 +22,20 @@ impl Converter {
             .retain(|candidate| !is_numeric_day_surface(candidate.text()));
     }
 
-    /// A fully covered, system-only path is stronger evidence than a
-    /// generated calendar suffix. This pass only moves the generated edge
-    /// behind that evidence; it does not remove it, so legitimate numeric
-    /// compounds remain available when no lexical interpretation exists.
+    /// A fully covered, system-only path or a user word for the whole
+    /// reading is stronger evidence than a generated calendar suffix: either
+    /// means the dictionary already answers the query (Issue #446). This pass
+    /// only moves the generated edge behind that evidence; it does not remove
+    /// it, so legitimate numeric compounds remain available when no lexical
+    /// interpretation exists.
     pub(in crate::conversion) fn demote_generated_day_suffixes(&mut self, reading_len: usize) {
         let Some(best_lexical_cost) = self
             .candidates
             .iter()
-            .filter(|candidate| candidate.has_full_system_coverage(reading_len))
+            .filter(|candidate| {
+                candidate.has_full_system_coverage(reading_len)
+                    || candidate.evidence_class() == CandidateEvidence::ExactUser
+            })
             .map(|candidate| candidate.cost)
             .min()
         else {

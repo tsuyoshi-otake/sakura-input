@@ -1,5 +1,5 @@
 use dictc_core::{compile, parse_connection, parse_entries};
-use sakura_core::conversion::{ConversionOptions, Converter};
+use sakura_core::conversion::{CandidateEvidence, ConversionOptions, Converter};
 use sakura_core::dictionary::{Dictionary, EntryFlags};
 use sakura_core::user_dictionary::UserDictionary;
 use sakura_core::ConversionMethod;
@@ -1417,4 +1417,56 @@ fn real_dictionary_balances_non_initial_fragments_and_productive_bound_forms() {
                 .collect::<Vec<_>>()
         );
     }
+}
+
+/// Issue #446 F2: a word the user registered for the whole reading answers
+/// it the way a fully covered system path does. A generated calendar-day
+/// splice that undercuts the user word through connection costs moves
+/// behind it, and stays on the page.
+#[test]
+fn generated_day_suffix_stays_behind_a_user_word_for_the_whole_reading() {
+    let entries = parse_entries(
+        "day-suffix.tsv",
+        "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\nつづけ\t続け\t1\t1\t1000\t-\t\t\n",
+    )
+    .expect("entries");
+    // A user noun's class is outside this three-class matrix, so it falls
+    // back to class 0 on both sides: the 0 -> 0 cost prices the user word at
+    // both sentence boundaries, the splice only after its generated edge.
+    let matrix = parse_connection(
+        "day-suffix-matrix.tsv",
+        "# license: MIT\nclasses\t3\ndefault\t0\ncost\t0\t0\t3000\n",
+        false,
+    )
+    .expect("matrix");
+    let image = compile(&entries, &matrix).expect("image");
+    let dictionary = Dictionary::parse(&image).expect("dictionary");
+    let user_dictionary = UserDictionary::parse_tsv(
+        "# format-version: 1\nreading\tsurface\tpos\tcomment\nつづけようか\t利用者続けようか\tnoun\t\n",
+    )
+    .expect("user dictionary");
+    let mut converter = Converter::new();
+    let candidates = converter
+        .convert_with_user_dictionary(
+            &dictionary,
+            Some(&user_dictionary),
+            "つづけようか",
+            ConversionOptions::default(),
+        )
+        .expect("conversion")
+        .to_vec();
+    let ranking = candidates
+        .iter()
+        .map(|candidate| (candidate.text().to_owned(), candidate.cost))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        candidates[0].text(),
+        "利用者続けようか",
+        "a generated day splice must not lead the user word: {ranking:?}"
+    );
+    assert_eq!(candidates[0].evidence_class(), CandidateEvidence::ExactUser);
+    assert!(
+        ranking.iter().any(|(text, _)| text == "続け八日"),
+        "the generated day splice stays on the page: {ranking:?}"
+    );
 }
