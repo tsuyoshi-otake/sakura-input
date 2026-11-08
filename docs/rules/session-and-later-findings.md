@@ -303,6 +303,17 @@
   own (`炙ろう` from `あぶろう`, not from `あぶろ`); where it is not, drop the
   row rather than re-price it, and leave the term to its ASCII reading.
 
+- **The core test image has no connection costs; reproduce a cost-order bug
+  with a matrix.** `synthetic_dictionary` in
+  `crates/sakura-core/src/conversion/conversion_tests.rs` writes one class with
+  zero connection costs, so some orders cannot happen there: a user noun
+  (2,500) never loses to a generated day splice (3,500 or more). A first #446
+  F2 test built on it passed on the unfixed code. Build such a case in
+  `crates/dictc-core/tests/conversion.rs` with `parse_connection` (a user
+  word's class outside a small matrix falls back to class 0, so a
+  `cost 0 0 N` row prices it at both sentence boundaries), and run every new
+  ranking test against the old code before trusting it.
+
 - **Give a kana reading prediction only when it cannot crowd a prefix.** A
   Shift+ASCII reading competes only with other Latin runs, so it stays
   predictive; a kana reading shares its prefixes with ordinary words, and 470

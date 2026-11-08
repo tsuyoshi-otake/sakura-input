@@ -2534,6 +2534,174 @@ fn spelling_correction_row_is_not_exact_span_evidence_for_a_repair() {
     );
 }
 
+/// Builds a user dictionary of nouns from `(reading, surface)` rows.
+fn user_nouns(rows: &[(&str, &str)]) -> UserDictionary {
+    let mut source = String::from("# format-version: 1\nreading\tsurface\tpos\tcomment\n");
+    for (reading, surface) in rows {
+        source.push_str(&format!("{reading}\t{surface}\tnoun\t\n"));
+    }
+    UserDictionary::parse_tsv(&source).expect("user dictionary")
+}
+
+/// Issue #446 F3: a user word for the whole reading is the same "the
+/// dictionary already answers" evidence as an exact system word. It
+/// suppresses unconfirmed repairs of the reading and costly all-system
+/// mosaics; the repair still appears when the user word is absent.
+#[test]
+fn user_word_for_the_whole_reading_suppresses_unconfirmed_repairs_and_costly_mosaics() {
+    let bytes = synthetic_dictionary(&[
+        fixture_entry("ずがい", "頭蓋", 100, EntryFlags::NONE),
+        fixture_entry("ず", "図", 3_000, EntryFlags::NONE),
+        fixture_entry("か", "書", 3_000, EntryFlags::NONE),
+        fixture_entry("い", "い", 3_000, EntryFlags::NONE),
+    ]);
+    let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+    let mut converter = Converter::new();
+    let without_user: Vec<String> = converter
+        .convert(&dictionary, "ずかい", ConversionOptions::default())
+        .expect("conversion without user dictionary")
+        .iter()
+        .map(|candidate| candidate.text().to_owned())
+        .collect();
+    assert!(
+        without_user.iter().any(|text| text == "頭蓋"),
+        "without a user word the repair is the answer: {without_user:?}"
+    );
+    assert!(
+        without_user.iter().any(|text| text == "図書い"),
+        "without a user word the mosaic is kept: {without_user:?}"
+    );
+
+    let user_dictionary = user_nouns(&[("ずかい", "利用者図解")]);
+    let candidates = converter
+        .convert_with_user_dictionary(
+            &dictionary,
+            Some(&user_dictionary),
+            "ずかい",
+            ConversionOptions::default(),
+        )
+        .expect("conversion with user dictionary")
+        .to_vec();
+    let ranking = candidates
+        .iter()
+        .map(|candidate| (candidate.text(), candidate.cost, candidate.path_evidence()))
+        .collect::<Vec<_>>();
+    assert!(
+        candidates
+            .iter()
+            .any(|candidate| candidate.text() == "利用者図解"
+                && candidate.evidence_class() == CandidateEvidence::ExactUser),
+        "the user word must stay: {ranking:?}"
+    );
+    assert!(
+        candidates
+            .iter()
+            .all(|candidate| candidate.text() != "頭蓋"),
+        "a dakuten repair must not compete with the user word: {ranking:?}"
+    );
+    assert!(
+        candidates
+            .iter()
+            .all(|candidate| candidate.text() != "図書い"),
+        "a costly split mosaic must not survive the user word: {ranking:?}"
+    );
+}
+
+/// Issue #446 F4: a user word for a typed span shows the user typed a real
+/// word, exactly like a system word for that span, so a repair of the span
+/// pays the same exact-span penalty whichever dictionary defines it.
+#[test]
+fn user_word_for_a_typed_span_is_exact_span_evidence_for_a_repair() {
+    let repair_cost = |rows: &[FixtureEntry], user_rows: &[(&str, &str)]| {
+        let bytes = synthetic_dictionary(rows);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let user_dictionary = user_nouns(user_rows);
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert_with_user_dictionary(
+                &dictionary,
+                Some(&user_dictionary),
+                "たいせつなひと",
+                ConversionOptions::default(),
+            )
+            .expect("conversion");
+        candidates
+            .iter()
+            .find(|candidate| {
+                candidate.text() == "大切なヒント"
+                    && candidate.path_evidence().has_unconfirmed_repair()
+            })
+            .map(|candidate| candidate.cost)
+            .unwrap_or_else(|| panic!("the rule repair stays on the page: {candidates:?}"))
+    };
+    let base = [
+        fixture_entry("たいせつな", "大切な", 1_000, EntryFlags::NONE),
+        fixture_entry("ひんと", "ヒント", 500, EntryFlags::NONE),
+    ];
+    let mut with_system_word = base.to_vec();
+    with_system_word.push(fixture_entry("ひと", "人", 3_000, EntryFlags::NONE));
+
+    let without_word = repair_cost(&base, &[("さくら", "利用者桜")]);
+    let system_word = repair_cost(&with_system_word, &[("さくら", "利用者桜")]);
+    let user_word = repair_cost(&base, &[("ひと", "利用者人")]);
+    assert!(
+        system_word > without_word,
+        "precondition: a system word for the span penalizes its repair"
+    );
+    assert_eq!(
+        user_word, system_word,
+        "a user word for the span must add the same exact-span repair penalty"
+    );
+}
+
+/// Issue #446 F4 on the single-segment lattice, whose user edges only span
+/// the whole reading. Both words are the one-character 人, which is too short
+/// to suppress the repair outright, so only the penalty differs.
+#[test]
+fn single_segment_user_word_is_exact_span_evidence_for_a_repair() {
+    let repair_cost = |rows: &[FixtureEntry], user_rows: &[(&str, &str)]| {
+        let bytes = synthetic_dictionary(rows);
+        let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+        let user_dictionary = user_nouns(user_rows);
+        let mut converter = Converter::new();
+        let candidates = converter
+            .convert_with_user_dictionary(
+                &dictionary,
+                Some(&user_dictionary),
+                "ひと",
+                ConversionOptions {
+                    method: ConversionMethod::SingleSegment,
+                    ..ConversionOptions::default()
+                },
+            )
+            .expect("single-segment conversion");
+        candidates
+            .iter()
+            .find(|candidate| {
+                candidate.text() == "ヒント" && candidate.path_evidence().has_unconfirmed_repair()
+            })
+            .map(|candidate| candidate.cost)
+            .unwrap_or_else(|| panic!("the rule repair stays on the page: {candidates:?}"))
+    };
+    let base = [fixture_entry("ひんと", "ヒント", 500, EntryFlags::NONE)];
+    let with_system_word = [
+        fixture_entry("ひと", "人", 3_000, EntryFlags::NONE),
+        fixture_entry("ひんと", "ヒント", 500, EntryFlags::NONE),
+    ];
+
+    let without_word = repair_cost(&base, &[("さくら", "利用者桜")]);
+    let system_word = repair_cost(&with_system_word, &[("さくら", "利用者桜")]);
+    let user_word = repair_cost(&base, &[("ひと", "人")]);
+    assert!(
+        system_word > without_word,
+        "precondition: a system word for the reading penalizes its repair"
+    );
+    assert_eq!(
+        user_word, system_word,
+        "a user word for the reading must add the same exact-span repair penalty"
+    );
+}
+
 #[test]
 fn english_spelling_repair_is_not_promoted_to_exact_evidence() {
     let bytes =

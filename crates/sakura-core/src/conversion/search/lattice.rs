@@ -164,6 +164,16 @@ fn char_run(reading: &str, start: usize) -> CharRun {
     CharRun { end, chars: count }
 }
 
+/// Whether `user_dictionary` holds a word whose complete reading is `span`.
+fn user_defines_reading(user_dictionary: &UserDictionary, span: &str) -> bool {
+    let mut defined = false;
+    user_dictionary.common_prefix_search(span, |matched_bytes, _| {
+        defined = matched_bytes == span.len();
+        !defined
+    });
+    defined
+}
+
 impl Converter {
     pub(in crate::conversion) fn reset(&mut self, reading_len: usize) {
         self.nodes.clear();
@@ -295,6 +305,9 @@ impl Converter {
 
             // Repair edges are best-effort: a full lattice must not fail the
             // conversion when only a typo-correction path ran out of room.
+            // The user edges of this start are added below, so a user word
+            // for a repaired span is looked up here under the same admission
+            // rule those edges use.
             let _ = self.add_local_repair_edges(
                 dictionary,
                 &reading[start..],
@@ -302,6 +315,11 @@ impl Converter {
                 candidates_for_length,
                 options,
                 has_exact_system_reading,
+                |end| {
+                    !(atomic_token && (!at_token_start || end < run.end))
+                        && user_dictionary
+                            .is_some_and(|user| user_defines_reading(user, &reading[start..end]))
+                },
             );
 
             if let Some(user_dictionary) = user_dictionary {
@@ -447,6 +465,11 @@ impl Converter {
     /// always carries an explicit penalty. Lattice exhaustion drops repair edges
     /// without failing the conversion. Commit-history hints are handled by
     /// [`Self::add_commit_repair_edges_for_whole_query`].
+    ///
+    /// `user_word_ends_at(end)` answers whether the caller will add a user
+    /// dictionary edge over `start..end`. Such a word is the same evidence as
+    /// an exact system edge that the user typed a real word (Issue #446), so
+    /// a repair of that span pays the same exact-span penalty.
     #[allow(clippy::too_many_arguments)]
     pub(in crate::conversion) fn add_local_repair_edges(
         &mut self,
@@ -456,6 +479,7 @@ impl Converter {
         exact_edges_for_length: usize,
         options: ConversionOptions,
         has_exact_system_reading: bool,
+        user_word_ends_at: impl Fn(usize) -> bool,
     ) -> Result<(), ConversionError> {
         let mut support = options.input_support;
         if !support.is_active() || options.skip_input_repair || typed_suffix.is_empty() {
@@ -478,11 +502,12 @@ impl Converter {
                 break;
             }
             let typed_end = start + usize::from(variant.typed_end).min(typed_suffix.len());
-            let penalty = if self.has_exact_system_edge(start, typed_end) {
-                variant.penalty.saturating_add(EXACT_SPAN_REPAIR_PENALTY)
-            } else {
-                variant.penalty
-            };
+            let penalty =
+                if self.has_exact_system_edge(start, typed_end) || user_word_ends_at(typed_end) {
+                    variant.penalty.saturating_add(EXACT_SPAN_REPAIR_PENALTY)
+                } else {
+                    variant.penalty
+                };
             let added = self.add_repaired_dictionary_edges(
                 dictionary,
                 variant.repaired.as_str(),
@@ -518,7 +543,8 @@ impl Converter {
     /// Whether an unrepaired system dictionary edge already spans
     /// `start..end`, i.e. the typed span is itself a dictionary reading. The
     /// exact edges of a start are added before its repair edges, and user
-    /// dictionary edges after them, so only system readings count. A
+    /// dictionary edges after them, so only system readings are in the
+    /// lattice yet; the caller answers for user words separately. A
     /// SPELLING_CORRECTION row is itself a correction of a misspelled reading,
     /// not evidence that the user typed a real word, so it does not count.
     fn has_exact_system_edge(&self, start: usize, end: usize) -> bool {
@@ -731,8 +757,20 @@ impl Converter {
         if let Some(error) = failure {
             return Err(error);
         }
-        let _ =
-            self.add_local_repair_edges(dictionary, reading, 0, exact_edges_added, options, false);
+        // The single-segment lattice admits a user edge only over the whole
+        // reading; it is added below, after the repair edges.
+        let _ = self.add_local_repair_edges(
+            dictionary,
+            reading,
+            0,
+            exact_edges_added,
+            options,
+            false,
+            |end| {
+                end == reading_len
+                    && user_dictionary.is_some_and(|user| user_defines_reading(user, reading))
+            },
+        );
         let _ = self.add_commit_repair_edges_for_whole_query(
             dictionary,
             reading,

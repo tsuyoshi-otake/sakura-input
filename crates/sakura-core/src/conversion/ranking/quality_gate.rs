@@ -1,4 +1,4 @@
-use super::super::Converter;
+use super::super::{CandidateEvidence, ConversionCandidate, Converter};
 
 /// Once a trustworthy whole-reading entry exists, a much more expensive
 /// all-system segmentation is usually a mosaic of individually valid short
@@ -12,19 +12,23 @@ impl Converter {
     /// repair paths and the low-information tail of a fully lexical N-best
     /// search. A repair remains available when no direct exact entry exists;
     /// it is only suppressed when the dictionary already answers the query.
+    /// An exact system entry and a user word for the whole reading are the
+    /// same answer here (Issue #446).
     pub(in crate::conversion) fn apply_exact_lexical_quality_gate(&mut self, reading: &str) {
         let is_word_sized = reading.chars().count() <= MAX_EXACT_WORD_READING_CHARS;
-        let suppress_unconfirmed_repairs = self.candidates.iter().any(|candidate| {
-            candidate.system_entry_index().is_some()
+        let answers_the_reading = |candidate: &ConversionCandidate| {
+            (candidate.system_entry_index().is_some()
+                || candidate.evidence_class() == CandidateEvidence::ExactUser)
                 && !candidate.path_evidence().has_unconfirmed_repair()
-                && is_trustworthy_exact_surface(candidate.text())
+        };
+        let suppress_unconfirmed_repairs = self.candidates.iter().any(|candidate| {
+            answers_the_reading(candidate) && is_trustworthy_exact_surface(candidate.text())
         });
         let Some(best_exact_cost) = self
             .candidates
             .iter()
             .filter(|candidate| {
-                candidate.system_entry_index().is_some()
-                    && !candidate.path_evidence().has_unconfirmed_repair()
+                answers_the_reading(candidate)
                     && (is_word_sized || is_atomic_whole_reading_surface(candidate.text()))
             })
             .map(|candidate| candidate.cost)
