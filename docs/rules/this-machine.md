@@ -4,10 +4,26 @@
   `CARGO_HTTP_CHECK_REVOKE=false`**, or the fetch fails with
   `CRYPT_E_NO_REVOKE_CHECK (0x80092012)`.
 
+- **Some sessions refuse to follow user-created reparse points**
+  (`ERROR_UNTRUSTED_MOUNT_POINT`, 0x800701C0, "信頼されていないマウントポイント").
+  Verified 2026-11-08, also with the Bash sandbox disabled: `~/.cargo/bin/cargo.exe`
+  (a link to rustup) would not start, so call
+  `~/.rustup/toolchains/1.96.0-x86_64-pc-windows-msvc/bin/cargo.exe` with that
+  directory first on `PATH`. Three junction tests then fail on `main` as well:
+  `sakura-ai-worker` `sweep_removes_only_stale_matching_real_directories`,
+  `sakura-install-maintenance` `a_junction_in_the_chain_is_rejected` and
+  `sakura-engine` `unknown_and_reparse_participants_preserve_the_transaction`.
+  Show they fail at the same lines on the base commit, judge them by CI, and
+  run local workspace tests with `--no-fail-fast` so the first failing crate
+  does not hide the rest. The same tests passed locally on 2026-11-07.
+
 - **Heredocs through the Bash tool fail here** (`unexpected EOF`, and
   `$TMPDIR` is unset so `/msg.txt` is a permission error). Write commit
   messages with the file-writing tool into the session scratchpad and use
   `git commit -F <path>`.
+  Not every session: on 2026-11-08 `git commit -F - <<'EOF'` and
+  `cat > <file> <<'EOF'` worked through the Bash tool; fall back to the
+  scratchpad file when a heredoc fails.
 
 - **`perl -0pi -e 's|...|...|'` multi-line in-place substitution is unreliable
   here.** Verified 2026-09-09 (#148): one run prepended the replacement to the
