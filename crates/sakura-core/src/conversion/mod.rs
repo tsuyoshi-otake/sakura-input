@@ -989,7 +989,10 @@ impl Converter {
 
     /// Builds only exact full-query lexical edges for an opaque identifier.
     /// Every admitted edge starts at zero and ends at the full reading, and
-    /// spelling-correction entries are excluded.
+    /// spelling-correction entries are excluded. User and system words share
+    /// one edge limit, and user words are admitted first: a reading with
+    /// more system words than the limit must not crowd out the word the user
+    /// registered for it (Issue #446 F6).
     fn build_exact_top1_lattice(
         &mut self,
         dictionary: &Dictionary<'_>,
@@ -999,8 +1002,53 @@ impl Converter {
     ) -> Result<(), ConversionError> {
         let reading_len = reading.len();
         let exact_edge_limit = options.max_candidates.saturating_sub(1);
-        let mut failure = None;
         let mut exact_edges_added = 0usize;
+        if let Some(user_dictionary) = user_dictionary {
+            let mut user_failure = None;
+            user_dictionary.common_prefix_search(reading, |matched_bytes, entry_index| {
+                if matched_bytes != reading_len || exact_edges_added >= exact_edge_limit {
+                    return true;
+                }
+                let Some(entry) = user_dictionary.entry(entry_index) else {
+                    return true;
+                };
+                let left_id = if usize::from(entry.left_id()) < dictionary.class_count() {
+                    entry.left_id()
+                } else {
+                    0
+                };
+                let right_id = if usize::from(entry.right_id()) < dictionary.class_count() {
+                    entry.right_id()
+                } else {
+                    0
+                };
+                match self.add_node(
+                    dictionary,
+                    NodeSpec {
+                        start: 0,
+                        end: reading_len,
+                        left_id,
+                        right_id,
+                        local_cost: i64::from(entry.word_cost()),
+                        surface: Surface::User(entry_index),
+                    },
+                ) {
+                    Ok(()) => {
+                        exact_edges_added = exact_edges_added.saturating_add(1);
+                        true
+                    }
+                    Err(error) => {
+                        user_failure = Some(error);
+                        false
+                    }
+                }
+            });
+            if let Some(error) = user_failure {
+                return Err(error);
+            }
+        }
+
+        let mut failure = None;
         dictionary
             .common_prefix_search(reading, |matched| {
                 if matched.matched_bytes != reading_len
@@ -1050,51 +1098,6 @@ impl Converter {
             .map_err(ConversionError::Dictionary)?;
         if let Some(error) = failure {
             return Err(error);
-        }
-
-        if let Some(user_dictionary) = user_dictionary {
-            let mut user_failure = None;
-            user_dictionary.common_prefix_search(reading, |matched_bytes, entry_index| {
-                if matched_bytes != reading_len || exact_edges_added >= exact_edge_limit {
-                    return true;
-                }
-                let Some(entry) = user_dictionary.entry(entry_index) else {
-                    return true;
-                };
-                let left_id = if usize::from(entry.left_id()) < dictionary.class_count() {
-                    entry.left_id()
-                } else {
-                    0
-                };
-                let right_id = if usize::from(entry.right_id()) < dictionary.class_count() {
-                    entry.right_id()
-                } else {
-                    0
-                };
-                match self.add_node(
-                    dictionary,
-                    NodeSpec {
-                        start: 0,
-                        end: reading_len,
-                        left_id,
-                        right_id,
-                        local_cost: i64::from(entry.word_cost()),
-                        surface: Surface::User(entry_index),
-                    },
-                ) {
-                    Ok(()) => {
-                        exact_edges_added = exact_edges_added.saturating_add(1);
-                        true
-                    }
-                    Err(error) => {
-                        user_failure = Some(error);
-                        false
-                    }
-                }
-            });
-            if let Some(error) = user_failure {
-                return Err(error);
-            }
         }
         Ok(())
     }

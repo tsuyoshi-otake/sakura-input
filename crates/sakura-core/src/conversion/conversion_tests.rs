@@ -2781,6 +2781,57 @@ fn exact_top1_is_fixed_zero_and_admits_only_full_span_non_spelling_edges() {
     }));
 }
 
+/// Issue #446 F6: system and user words share the exact-edge limit of an
+/// opaque identifier. When system words alone could fill it, the user's
+/// word for the same reading is still offered, as it is when the system
+/// leaves room.
+#[test]
+fn exact_top1_keeps_the_user_word_when_system_words_fill_the_edge_limit() {
+    let bytes = synthetic_dictionary(&[
+        fixture_entry("esp32", "SystemA", 1, EntryFlags::NONE),
+        fixture_entry("esp32", "SystemB", 2, EntryFlags::NONE),
+        fixture_entry("esp32", "SystemC", 3, EntryFlags::NONE),
+    ]);
+    let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+    let user_dictionary =
+        UserDictionary::parse_tsv("reading\tsurface\tpos\tcomment\nesp32\tUserExact\talphabet\t\n")
+            .expect("alphabet user dictionary");
+    let input = ConversionInput::new(
+        "esp32",
+        "ESP32",
+        ConversionInputClass::OpaqueAsciiIdentifier,
+        LiteralPolicy::ExactTop1,
+    );
+    let mut converter = Converter::new();
+    let result = converter
+        .convert_with_user_dictionary_input_detailed(
+            &dictionary,
+            Some(&user_dictionary),
+            input,
+            ConversionOptions {
+                // The literal plus three alternatives: the system alone has
+                // three exact words.
+                max_candidates: 4,
+                ..ConversionOptions::default()
+            },
+        )
+        .expect("exact-top1 conversion");
+    let texts = result
+        .candidates()
+        .iter()
+        .map(|candidate| candidate.text())
+        .collect::<Vec<_>>();
+    assert_eq!(texts.len(), 4, "{texts:?}");
+    assert_eq!(texts[0], "ESP32");
+    let user = result
+        .candidates()
+        .iter()
+        .find(|candidate| candidate.text() == "UserExact")
+        .unwrap_or_else(|| panic!("user word crowded out: {texts:?}"));
+    assert_eq!(user.evidence_class(), CandidateEvidence::ExactUser);
+    assert!(texts.contains(&"SystemA") && texts.contains(&"SystemB"));
+}
+
 #[test]
 fn raw_multi_pass_preserves_direct_order_and_admits_only_system_paths() {
     let bytes = synthetic_dictionary(&[

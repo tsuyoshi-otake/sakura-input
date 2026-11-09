@@ -99,7 +99,10 @@ provenance; active work should load the smaller matching topic extracts above.
   edges, so a `retain` keyed on either removes the user's registered word
   (#439: the numeric rewriter dropped `ExactUser` for whole-reading counter
   readings). Keep `CandidateEvidence::ExactUser` wherever exact system entries
-  are kept, and test with a user entry for the same reading.
+  are kept, and test with a user entry for the same reading. A limit shared by
+  system and user edges admits the user edges first: filled with system rows
+  first, it dropped the user's word once the system alone reached it (#446 F6,
+  the ExactTop1 exact-edge limit; its test fails before the fix).
 - Run `scripts/build-dictionary.ps1` from Git Bash through a `.ps1` file
   (`pwsh -File build.ps1` with the paths inside it), not `pwsh -Command`:
   MSYS rewrites a `/c/...` path to `C:\c\...` and a `C:/...` argument as a
