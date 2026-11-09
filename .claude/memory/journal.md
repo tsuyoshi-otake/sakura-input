@@ -4046,3 +4046,14 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Gates: the release.yml version gate emulated with `RELEASE_TAG=v2.0.30` (sequence 38 LF, notes present), release-workflow-policy and its -SelfTest, test-update-signing-v2 (`-NonInteractive`, stdin /dev/null), `cargo metadata --locked --offline`, the `packaging_version` and `sakura-settings` update tests with `--locked`, and check-process-clean all exit 0.
 - Pre-publication checks, run together: 0 personal-data-like strings in the 516 lines added since v2.0.29; commit identities are the owner's usual forms; the repository is already public; no v2.0.30 tag or release exists; LICENSE is present; `gh pr list --state open` is empty.
 - Residual: no on-screen check of an installed 2.0.30. The publication results will follow in a separate entry.
+
+## 2026-11-09 - 2.0.30 published (#451, main `44e3127`)
+- Release: PR #452 merged as `44e3127` (merge commit). CI: 9 passed, 2 skipped. Before tagging, `gh pr list --state open` returned no PRs. The annotated tag v2.0.30 on `44e3127` ran `release.yml` run 42574061587, both jobs green: build 15 min 3 s, sign-and-package 46 s.
+- Candidate checks:
+  - Installer: 25,881,859 bytes, SHA-256 `35a94c00...`, equal to the manifest.
+  - Manifest: release_sequence 38, source_commit `44e3127`, `authenticode=unsigned`, expires 2027-05-08. `signing-status.txt` is `unsigned-owner-approved`.
+  - The bundle installer and manifest equal the candidate; the bundle notes equal `docs/release-notes-v2.0.30.md` with CR stripped.
+  - `gh attestation verify` (release.yml signer, source digest `44e3127`) exit 0 for the installer and the manifest.
+  - The installer build report pins the same reranker model as 2.0.29 (`a58ebea1...`, 7,467,219 bytes).
+- Publish: `publish-release.ps1 -Publish` with the active DPAPI key (`key.0.id`), `-NonInteractive`, stdin /dev/null, exited 0 in 24 s. Published 2026-11-09T06:53:47Z as Latest, not a draft, 3 assets; GitHub's installer digest equals the manifest; 1 valid pinned signature locally and on read-back. The script removed its read-back folder; the downloaded candidate was deleted after publishing.
+- Residual: no reinstall and no on-screen check of an installed 2.0.30 (not requested).
