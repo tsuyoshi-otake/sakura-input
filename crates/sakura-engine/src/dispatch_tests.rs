@@ -1556,6 +1556,304 @@ fn opaque_shift_ascii_exact_top1_keeps_literal_zero_and_never_learns() {
     assert_eq!(learning.generation(), generation_before);
 }
 
+/// #456 step 0 (measurement): the same `LearningService` that ranking consults
+/// also feeds `visit_prediction_history`, so a learned record whose reading is
+/// a bare kana answers prediction for that kana. This test pins the channel the
+/// truncated shifted-ASCII readings used; it is a measurement of shipped
+/// behaviour, not a ranking contract.
+#[test]
+fn a_one_kana_learning_record_answers_prediction_for_that_kana() {
+    let conversion = prediction_conversion_from_source(
+        "shifted-ascii-step0.tsv",
+        concat!(
+            "# license: MIT\n",
+            "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+            "お\t尾\t0\t0\t100\t100\tpredict\ttail\n",
+            "おく\t奥\t0\t0\t200\t200\tpredict\tinside\n",
+        ),
+    );
+    let learning = Arc::new(LearningService::memory());
+    let (mut dispatcher, runtime) =
+        phase_one_prediction_dispatcher(conversion, Arc::clone(&learning));
+    let mut out = OutputBuf::new();
+
+    let session = create_session(&mut dispatcher, &mut out, "step0-measure.exe");
+    type_word(&mut dispatcher, session, "o", &mut out);
+    let generation = dispatcher
+        .sessions
+        .get(session)
+        .expect("session")
+        .prediction_generation;
+    let without: Vec<String> = dispatcher
+        .prediction_cache
+        .candidates(session, generation)
+        .expect("prediction candidates")
+        .iter()
+        .map(|candidate| candidate.surface().to_string())
+        .collect();
+
+    learning.learn("お", "OK", 0, 0);
+    let session = create_session(&mut dispatcher, &mut out, "step0-after.exe");
+    type_word(&mut dispatcher, session, "o", &mut out);
+    let generation = dispatcher
+        .sessions
+        .get(session)
+        .expect("session")
+        .prediction_generation;
+    let with: Vec<String> = dispatcher
+        .prediction_cache
+        .candidates(session, generation)
+        .expect("prediction candidates")
+        .iter()
+        .map(|candidate| candidate.surface().to_string())
+        .collect();
+    runtime.stop().expect("prediction worker joins");
+
+    assert_eq!(without, vec!["尾".to_string(), "奥".to_string()]);
+    assert_eq!(
+        with.first().map(String::as_str),
+        Some("OK"),
+        "one-kana learned record must answer the bare-kana prediction: {with:?}"
+    );
+}
+
+/// #456 step 1: the reading a shifted-ASCII commit hands to learning and input
+/// history must include the romaji still pending at commit time, matching the
+/// unshifted path that `flush_pending`s before recording.
+#[test]
+fn shifted_ascii_commit_records_the_flushed_reading() {
+    let learning = Arc::new(LearningService::memory());
+    let history_root = phase_one_learning_path("shifted-ascii-reading-history");
+    let history_path = history_root.with_file_name("input-history.bin");
+    let history = InputHistoryService::open(&history_path).expect("history");
+    let mut dispatcher = Dispatcher::new_with_services(conversion_fixture(), Arc::clone(&learning))
+        .expect("dispatcher");
+    dispatcher.set_input_history(Some(Arc::clone(&history)));
+    let mut out = OutputBuf::new();
+
+    let mut words = Vec::new();
+    for (name, word) in [
+        ("chatapp.exe", "ChatGPT"),
+        ("secure-shell.exe", "SSH"),
+        ("okay.exe", "OK"),
+        ("mytool.exe", "Codex"),
+        ("editor-tool.exe", "Code"),
+        ("hub-client.exe", "GitHub"),
+    ] {
+        let session = create_session(&mut dispatcher, &mut out, name);
+        dispatcher.dispatch(
+            &Request::SetInputScope {
+                session,
+                scope: InputScope::Normal,
+            },
+            &mut out,
+        );
+        for character in word.chars() {
+            let key = if character.is_ascii_uppercase() {
+                shifted_char_key(character)
+            } else {
+                char_key(character)
+            };
+            dispatcher.dispatch(&Request::SendKey { session, key }, &mut out);
+        }
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(out.commit_text(), Some(word));
+        words.push(word);
+        // The next user action confirms the staged commit into the learned
+        // index (#275); ResetDocumentContext plays that role here.
+        dispatcher.dispatch(&Request::ResetDocumentContext { session }, &mut out);
+    }
+
+    history.flush().expect("flush shifted-ascii commits");
+    let records = crate::input_history::read_snapshot(&history_path)
+        .expect("shifted-ascii history")
+        .records;
+    let recorded: Vec<(String, String)> = words
+        .iter()
+        .map(|word| {
+            let record = records
+                .iter()
+                .find_map(|record| match record {
+                    InputHistoryRecord::Commit(record) if record.surface == *word => Some(record),
+                    _ => None,
+                })
+                .unwrap_or_else(|| panic!("no commit record for {word}"));
+            (record.reading.clone(), record.surface.clone())
+        })
+        .collect();
+    assert_eq!(
+        recorded,
+        vec![
+            ("ちゃtgpt".to_string(), "ChatGPT".to_string()),
+            ("っsh".to_string(), "SSH".to_string()),
+            ("おk".to_string(), "OK".to_string()),
+            ("こでx".to_string(), "Codex".to_string()),
+            ("こで".to_string(), "Code".to_string()),
+            ("ぎてゅb".to_string(), "GitHub".to_string()),
+        ]
+    );
+    for (reading, surface) in &recorded {
+        assert_eq!(
+            learning
+                .preference(reading.as_str(), 0, [(surface.as_str(), 0)])
+                .exact,
+            Some(0),
+            "learning must hold {reading} -> {surface}"
+        );
+    }
+
+    history.stop().expect("stop history");
+    std::fs::remove_dir_all(history_root.parent().expect("history root"))
+        .expect("remove history test directory");
+}
+
+/// #456 step 3 (symmetry): for any lowercase ASCII word, the reading a
+/// shifted commit records equals the reading the unshifted path records for
+/// the same keys.
+#[test]
+fn shifted_and_unshifted_commits_record_the_same_reading() {
+    struct Random {
+        state: u64,
+    }
+
+    impl Random {
+        fn next(&mut self) -> u64 {
+            self.state ^= self.state << 13;
+            self.state ^= self.state >> 7;
+            self.state ^= self.state << 17;
+            self.state.wrapping_mul(0x2545_f491_4f6c_dd1d)
+        }
+
+        fn usize(&mut self, exclusive_end: usize) -> usize {
+            usize::try_from(self.next() % exclusive_end as u64).unwrap_or(0)
+        }
+    }
+
+    let mut random = Random {
+        state: 0x5A4B_5552_0000_0456 ^ 0x9E37_79B9_7F4A_7C15,
+    };
+    let learning = Arc::new(LearningService::memory());
+    let history_root = phase_one_learning_path("shifted-ascii-symmetry-history");
+    let history_path = history_root.with_file_name("input-history.bin");
+    let history = InputHistoryService::open(&history_path).expect("history");
+    let mut dispatcher = Dispatcher::new_with_services(conversion_fixture(), Arc::clone(&learning))
+        .expect("dispatcher");
+    dispatcher.set_input_history(Some(Arc::clone(&history)));
+    let mut out = OutputBuf::new();
+
+    let mut words = Vec::new();
+    for _ in 0..64 {
+        let length = 1 + random.usize(10);
+        let word: String = (0..length)
+            .map(|_| (b'a' + u8::try_from(random.usize(26)).unwrap_or(0)) as char)
+            .collect();
+        words.push(word);
+    }
+
+    // Two long-lived sessions, one per path; each Enter resets the session
+    // back to idle so the next word can be typed on the same session.
+    let plain = create_session(&mut dispatcher, &mut out, "symmetry-plain.exe");
+    dispatcher.dispatch(
+        &Request::SetInputScope {
+            session: plain,
+            scope: InputScope::Normal,
+        },
+        &mut out,
+    );
+    let shifted = create_session(&mut dispatcher, &mut out, "symmetry-shifted.exe");
+    dispatcher.dispatch(
+        &Request::SetInputScope {
+            session: shifted,
+            scope: InputScope::Normal,
+        },
+        &mut out,
+    );
+
+    let mut plain_surfaces = Vec::new();
+    for (index, word) in words.iter().enumerate() {
+        // Unshifted: kana composition commits the normalized reading+surface.
+        type_word(&mut dispatcher, plain, word, &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session: plain,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        plain_surfaces.push(
+            out.commit_text()
+                .unwrap_or_else(|| panic!("unshifted commit for {word} must commit"))
+                .to_string(),
+        );
+
+        // Shifted: the same keys, first key held with Shift, commit the raw
+        // ASCII surface.
+        for (offset, character) in word.chars().enumerate() {
+            let key = if offset == 0 {
+                shifted_char_key(character)
+            } else {
+                char_key(character)
+            };
+            dispatcher.dispatch(
+                &Request::SendKey {
+                    session: shifted,
+                    key,
+                },
+                &mut out,
+            );
+        }
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session: shifted,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        assert_eq!(
+            out.commit_text().map(str::to_string),
+            Some(word.clone()),
+            "shifted commit must surface the raw keys for {word} (word {index})"
+        );
+    }
+
+    history.flush().expect("flush symmetry commits");
+    let records = crate::input_history::read_snapshot(&history_path)
+        .expect("symmetry history")
+        .records;
+
+    // Each shifted commit's record is keyed by its raw ASCII surface; the
+    // unshifted twin is keyed by the kana surface captured at commit time.
+    let reading_of = |records: &[InputHistoryRecord], surface: &str| -> String {
+        records
+            .iter()
+            .find_map(|record| match record {
+                InputHistoryRecord::Commit(record) if record.surface == surface => {
+                    Some(record.reading.clone())
+                }
+                _ => None,
+            })
+            .unwrap_or_else(|| panic!("no commit record for {surface}"))
+    };
+    for (index, word) in words.iter().enumerate() {
+        let shifted_reading = reading_of(&records, word);
+        let plain_reading = reading_of(&records, &plain_surfaces[index]);
+        assert_eq!(
+            shifted_reading, plain_reading,
+            "shifted/unshifted readings diverged for keys {word}"
+        );
+    }
+
+    history.stop().expect("stop history");
+    std::fs::remove_dir_all(history_root.parent().expect("history root"))
+        .expect("remove history test directory");
+}
+
 #[test]
 fn local_raw_completion_rejects_normal_or_edited_inputs() {
     let mut dispatcher = raw_repair_conversion_dispatcher();

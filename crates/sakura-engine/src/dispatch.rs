@@ -2651,6 +2651,7 @@ fn session_cross_commit_bridge(
 /// nothing (`learnable` false or a sensitive scope) still stands between the
 /// caret and the previous commit, so it learns that one instead of leaving it
 /// for the next key to misread as erased (#277).
+#[allow(clippy::too_many_arguments)]
 fn record_learning(
     session: &mut Session,
     learning: Option<&LearningService>,
@@ -5886,17 +5887,32 @@ fn commit_pending(
     if !session.converting && session.shifted_ascii && !session.raw_input.is_empty() {
         let surface = session.raw_input.clone();
         out.set_commit(surface.as_str())?;
-        let reading = session.preedit.clone();
-        record_learning(
-            session,
-            learning,
-            true,
-            input_history,
-            policy,
-            surface.as_str(),
-            0,
-            reading.as_str(),
-        );
+        // The recorded reading must match the unshifted path, which flushes
+        // pending romaji before recording. `table.flush` mutates the input it
+        // is given, so run it on a local clone; flushed romaji that maps to
+        // nothing passes through unchanged, so a trailing half-typed `t`
+        // still lands in the reading. If the flush or the append overflows,
+        // the commit already stands -- the record is skipped, the same
+        // priority the rest of this function gives the commit text.
+        let mut romaji = session.romaji.clone();
+        scratch.clear();
+        let mut reading = session.preedit.clone();
+        if table
+            .flush(&mut romaji, scratch)
+            .and_then(|()| reading.push_str(scratch.as_str()))
+            .is_ok()
+        {
+            record_learning(
+                session,
+                learning,
+                true,
+                input_history,
+                policy,
+                surface.as_str(),
+                0,
+                reading.as_str(),
+            );
+        }
         session.record_current_commit(surface.as_str(), 0, 0, 0);
         session.reset();
         return Ok(());
