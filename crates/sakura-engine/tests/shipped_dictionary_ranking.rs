@@ -3983,12 +3983,22 @@ fn issue_454_reported_readings_lead_with_the_expected_spelling() {
         ("ひんじゃくそうだ", "貧弱そうだ"),
         ("ぜいじゃくそう", "脆弱そう"),
         ("ぜいじゃくそうに", "脆弱そうに"),
-        // Real 層 compounds keep their top-1.
+        // Real 層 compounds keep their top-1, including compounds where a
+        // non-IT suffix (者) sits between the technical head and 層.
         ("ねっとわーくそう", "ネットワーク層"),
         ("ゆーざーそう", "ユーザー層"),
         ("じゃくねんそう", "若年層"),
         ("ふゆうそう", "富裕層"),
         ("ちゅうかんそう", "中間層"),
+        ("かいはつしゃそう", "開発者層"),
+        ("かいはつしゃそうにうける", "開発者層に受ける"),
+        ("りようしゃそうをひろげる", "利用者層を広げる"),
+        ("たんとうしゃそう", "担当者層"),
+        ("しょゆうしゃそう", "所有者層"),
+        ("どくしんしゃそう", "独身者層"),
+        // An IT word elsewhere in the sentence must not rescue 層.
+        ("さーばーがひんじゃくそう", "サーバーが貧弱そう"),
+        ("あぷりのせっけいがぜいじゃくそう", "アプリの設計が脆弱そう"),
         // Reported-correct controls must keep their top-1.
         ("しょうきですか", "正気ですか"),
         ("ひんじゃくそうなんじゃない", "貧弱そうなんじゃない"),

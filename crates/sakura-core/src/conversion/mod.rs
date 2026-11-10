@@ -44,6 +44,10 @@ pub use evidence::{
 };
 pub use input::{ConversionInput, ConversionInputClass, LiteralPolicy};
 pub use options::{candidate_budget, ConversionOptions};
+/// The noun-band class sets of the pinned Mozc `id.def` that the
+/// dictionary build feeds to this engine, shared so the dictc-core pin
+/// test can guard them without `sakura-core` reading `id.def` itself.
+pub use ranking::it_terms::{IT_SUFFIX_CLASS_RANGE, PLAIN_NOUN_STEM_RANGES, SOU_STEM_CLAIM_RANGES};
 pub(in crate::conversion) use ranking::{
     connection_cost, numeric_form_cost, sort_by_cost, synthetic_run_cost,
 };
@@ -467,7 +471,7 @@ impl Converter {
                         search.terminal = ConversionSearchTerminal::CandidateLimitReached;
                     }
                     self.apply_it_completion_coherence(dictionary, reading, options)?;
-                    self.apply_it_compound_coherence(reading, options);
+                    self.apply_it_compound_coherence(dictionary, reading, options)?;
                     self.add_date_candidates(reading, civil_date)?;
                     self.demote_generated_day_suffixes(reading.len());
                     self.prefer_numeric_forms(dictionary, reading)?;

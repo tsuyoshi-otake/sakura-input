@@ -217,20 +217,35 @@ reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotati
 #[test]
 fn an_it_suffix_is_compound_evidence_only_inside_an_it_cluster() {
     // 名詞-接尾 classes occupy 1936..=2039 in the pinned Mozc id.def, so the
-    // fixture matrix must span them. A lone suffix-class IT word after a
-    // plain stem is the stem's own suffix slot, not compound evidence
-    // (Issue #454: 貧弱層 lost to 貧弱そう); the same suffix keeps counting
-    // next to a technical head (ネットワーク層); and a non-suffix IT word
-    // still counts alone inside a word-sized path (東京支店に異動する).
+    // fixture matrix must span them and the heads carry realistic ids. A
+    // lone suffix-class IT word counts only when a suffix-led run links it
+    // to an IT word (ネットワーク層, 開発+者+層) or to a plain noun head
+    // whose reading the lexicon does not also claim as a そう-inflecting
+    // stem (担当者+層); a stem-led head (貧弱 at 1931) refuses it outright,
+    // and a plain head claimed by a 形容動詞語幹 homophone (脆弱) refuses
+    // it through the covering-edge lookup (Issue #454). An IT word
+    // elsewhere in the sentence must not rescue a dangling suffix
+    // (サーバーが貧弱そう), and a non-suffix IT word still counts alone
+    // inside a word-sized path (空港異動する).
     let entries = parse_entries(
         "quality-gate.tsv",
         "# license: MIT\n\
 reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
 ひんじゃくそう\t貧弱そう\t1\t1\t1500\t-\t\t\n\
-ひんじゃく\t貧弱\t1\t1\t1000\t-\t\t\n\
+ひんじゃく\t貧弱\t1931\t1931\t1000\t-\t\t\n\
+ぜいじゃく\t脆弱\t1931\t1931\t600\t-\t\t\n\
+ぜいじゃく\t脆弱\t1851\t1851\t1000\t-\t\t\n\
+そう\tそう\t2010\t2010\t500\t-\t\t\n\
 そう\t層\t1949\t1949\t800\t-\tit\t\n\
 ねっとわーくそう\tネットワークそう\t1\t1\t2100\t-\t\t\n\
 ねっとわーく\tネットワーク\t1\t1\t3000\t-\tit\t\n\
+かいはつしゃそう\t開発車窓\t1\t1\t2800\t-\t\t\n\
+かいはつ\t開発\t1\t1\t3000\t-\tit\t\n\
+しゃ\t者\t1949\t1949\t700\t-\t\t\n\
+たんとうしゃそう\t担当車窓\t1\t1\t2800\t-\t\t\n\
+たんとうしゃ\t担当者\t1851\t1851\t3000\t-\t\t\n\
+さーばー\tサーバー\t1\t1\t1500\t-\tit\t\n\
+が\tが\t1\t1\t300\t-\t\t\n\
 くうこう\t空港\t1\t1\t1000\t-\t\t\n\
 いどうする\t移動する\t1\t1\t1000\t-\t\t\n\
 いどうする\t異動する\t1\t1\t2000\t-\tit\t\n",
@@ -246,6 +261,8 @@ reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotati
     let dictionary = Dictionary::parse(&bytes).expect("dictionary");
     let mut converter = Converter::new();
 
+    // 貧弱(1000, 形容動詞語幹 head) + 層(800, IT suffix) = 1800 with no
+    // bonus, losing to the fused 貧弱そう at 1500.
     let stem_suffix = converter
         .convert(&dictionary, "ひんじゃくそう", ConversionOptions::default())
         .expect("stem plus suffix");
@@ -253,6 +270,15 @@ reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotati
     assert!(stem_suffix
         .iter()
         .any(|candidate| candidate.text() == "貧弱層"));
+
+    // 脆弱 picks the plain-noun edge (1851) as head, but the covering-edge
+    // lookup sees the 形容動詞語幹 (1931) edge for the same reading and
+    // refuses the suffix: 脆弱(600/1000) + そう(500) keeps the そう while
+    // 脆弱+層 at 600+800 = 1400 would win if the bonus counted.
+    let claimed_head = converter
+        .convert(&dictionary, "ぜいじゃくそう", ConversionOptions::default())
+        .expect("stem-claimed head");
+    assert_eq!(claimed_head[0].text(), "脆弱そう");
 
     let compound = converter
         .convert(
@@ -262,6 +288,43 @@ reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotati
         )
         .expect("technical compound");
     assert_eq!(compound[0].text(), "ネットワーク層");
+
+    // 開発(3000, IT) + 者(700, suffix) + 層(800, IT suffix) = 4500 - 2400 =
+    // 2100, beating the fused 開発車窓 at 2800 only when the suffix run
+    // links 層 back to the technical head.
+    let suffix_run = converter
+        .convert(
+            &dictionary,
+            "かいはつしゃそう",
+            ConversionOptions::default(),
+        )
+        .expect("suffix-run compound");
+    assert_eq!(suffix_run[0].text(), "開発者層");
+
+    // 担当者(3000, plain noun, non-IT) + 層(800, IT suffix) = 3800 - 1200 =
+    // 2600, beating the fused 担当車窓 at 2800 only when the plain head
+    // accepts the suffix.
+    let plain_head = converter
+        .convert(
+            &dictionary,
+            "たんとうしゃそう",
+            ConversionOptions::default(),
+        )
+        .expect("plain-noun compound");
+    assert_eq!(plain_head[0].text(), "担当者層");
+
+    // サーバー(1500, IT) + が(300) + 貧弱(1000) + 層(800, IT suffix) = 3600
+    // - 1200 (only サーバー counts) = 2400, so サーバーが貧弱そう at
+    // 1500+300+1500 - 1200 = 2100 keeps its そう: the IT word must not
+    // rescue the dangling suffix across the plain stem.
+    let distant_it = converter
+        .convert(
+            &dictionary,
+            "さーばーがひんじゃくそう",
+            ConversionOptions::default(),
+        )
+        .expect("IT word elsewhere");
+    assert_eq!(distant_it[0].text(), "サーバーが貧弱そう");
 
     let lone_word = converter
         .convert(
