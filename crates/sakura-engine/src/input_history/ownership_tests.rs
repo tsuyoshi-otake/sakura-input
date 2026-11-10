@@ -180,12 +180,56 @@ fn a_second_open_on_a_held_lock_fails() {
 fn a_reparse_point_lock_is_rejected_untouched() {
     let history = temporary_history("reparse");
     let lock = lock_path_for(&history);
+
+    // A file symlink is the narrowest reparse object; it needs
+    // SeCreateSymbolicLinkPrivilege. A directory junction is a privilege-free
+    // reparse point at the same lock name and is the form this test most
+    // often reaches. Try the junction first so the row actually executes on
+    // unprivileged hosts, then the symlink, and only skip -- loudly -- when
+    // the host can produce neither.
+    let junction_target = temporary_history("reparse-junction-target");
+    fs::create_dir(&junction_target).expect("junction target directory");
+    let junction = std::process::Command::new("cmd")
+        .args(["/c", "mklink", "/J"])
+        .arg(&lock)
+        .arg(&junction_target)
+        .status();
+    // `is_dir()` follows the reparse point, which a host can refuse under a
+    // mount-point policy; `symlink_metadata` reads the junction itself.
+    let made_junction = matches!(junction, Ok(status) if status.success())
+        && fs::symlink_metadata(&lock)
+            .map(|meta| meta.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0)
+            .unwrap_or(false);
+
+    if made_junction {
+        // The junction is a reparse point and not a regular empty file, so
+        // the store must refuse it and must not modify or remove it.
+        assert!(InputHistoryService::open(&history).is_err());
+        assert!(
+            fs::symlink_metadata(&lock)
+                .expect("junction still present")
+                .file_attributes()
+                & FILE_ATTRIBUTE_REPARSE_POINT.0
+                != 0,
+            "the rejected junction must be left as a reparse point"
+        );
+        let _ = fs::remove_dir(&lock);
+        let _ = fs::remove_dir(&junction_target);
+        return;
+    }
+    let _ = fs::remove_dir(&junction_target);
+
     let target = temporary_history("reparse-target");
     fs::write(&target, b"evidence").expect("target payload");
     let linked = std::os::windows::fs::symlink_file(&target, &lock);
     if linked.is_err() {
-        // No symlink privilege on this host: the state row is covered by the
-        // directory and non-empty variants; report the skip honestly.
+        // No symlink privilege and no junction: neither reparse object is
+        // available. Report the skip honestly instead of passing vacuously.
+        eprintln!(
+            "a_reparse_point_lock_is_rejected_untouched: SKIPPED -- host \
+             cannot create a reparse object (mklink /J failed, no symlink \
+             privilege); the directory and non-empty rows cover rejection"
+        );
         let _ = fs::remove_file(&target);
         return;
     }
