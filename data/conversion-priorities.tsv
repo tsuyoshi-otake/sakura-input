@@ -278,24 +278,41 @@ reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
 # - しょうき: the name-class edge 将暉 (1922, 4113) totalled 6903 and beat
 #   正気 (1931, 4878 -> 6999). Re-price the 正気 edge to 4722 so its lattice
 #   total lands 60 below the incumbent; the reviewed detail row in
-#   curated-homophone-details.tsv carries the same price.
+#   curated-homophone-details.tsv carries the same price. The upstream edge
+#   was predictive (4878 + 1200 = 6078), so the repriced row keeps `predict`
+#   at the new offset.
 # - だいぜん / たいぜん: Mozc knows 大全 only under たいぜん (1851, 5820);
 #   だいぜん had no whole-reading edge at all, so 第(2628, 0) + 全(2609, 15)
 #   spliced it at 6922, and under たいぜん the existing edge lost to a
 #   splice at 6792. Admit the missing だいぜん edge at 5796 and re-price the
 #   たいぜん edge to 5666; each total lands 60 below its incumbent.
-# - ひんじゃくそう: the IT suffix edge そう/層 (1949, 2407) let 貧弱層 reach
-#   9817 while the fused 貧弱+そう様態 path paid 10109. Admit the
-#   whole-reading edge at 7636 so its total lands 60 below.
+#   だいぜん is a nonstandard reading of 大全 (the standard reading is
+#   たいぜん): the row is an admitted typing alias for conversion only, so
+#   it stays non-predictive like upstream's dearer edges. The たいぜん edge
+#   was predictive upstream (5820 + 1200 = 7020) and keeps `predict` at the
+#   new offset.
 # - とらんすくりぷと: the whole-loanword edge (1851, 6751 -> 7817) lost to
 #   a と + ランスクリプト splice at 5874. Re-price to 4748, 60 below;
-#   とらんすくりぷとかくにんして follows the same edge.
-# - いじれる: no potential-form edge exists for 弄る (Mozc carries none), so
-#   維持 + れるように won at 13367. Admit 弄れる on the potential-verb
-#   class 680, like upstream's 怒れる / 書ける.
+#   とらんすくりぷとかくにんして follows the same edge. Upstream carried no
+#   prediction entry on either トランスクリプト edge (1851 and 1920), so the
+#   repriced row keeps `-`: a non-prediction edge must not become one.
+# - いじれる: no potential-form edge exists for 弄る (Mozc carries none, and
+#   the inflection expander covers the タ/テ/ナイ forms rather than the
+#   可能形 lemma), so 維持 + れる splices led -- unlike いじれない /
+#   いじれます / いじれた, whose compositional kana paths already win. The
+#   product's potential paradigm prefers the kana spelling, so admit
+#   いじれる itself on the potential-verb class 680 (as upstream does for
+#   かける->かける at 2470, ahead of its kanji forms) and 弄れる below it as
+#   the kanji spelling (upstream peers 怒れる / 書ける carry `predict`).
+# - ひんじゃくそう / ぜいじゃくそう need no row: the cause was not a missing
+#   edge but the IT compound coherence bonus reaching a lone trailing IT
+#   suffix (層) behind a non-IT stem. That is fixed in the engine's
+#   it-terms coherence pass, which now requires IT evidence to lead or to
+#   span two words, so the fused 貧弱+そう / 脆弱+そう paths win by their own
+#   prices while ネットワーク層 and friends keep theirs.
+いじれる	いじれる	680	680	4100	5300	predict	
 いじれる	弄れる	680	680	5000	6200	predict	
-だいぜん	大全	1851	1851	5796	6996	predict	
+だいぜん	大全	1851	1851	5796	-		
 しょうき	正気	1931	1931	4722	5922	predict	
 たいぜん	大全	1851	1851	5666	6866	predict	
-とらんすくりぷと	トランスクリプト	1851	1851	4748	5948	predict	
-ひんじゃくそう	貧弱そう	1931	2010	7636	-		
+とらんすくりぷと	トランスクリプト	1851	1851	4748	-		

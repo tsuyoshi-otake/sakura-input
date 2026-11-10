@@ -15,6 +15,13 @@ const COMPLETION_ENTRY_BUDGET: usize = 64;
 const MIN_IT_COMPOUND_READING_CHARS: usize = 7;
 const IT_COMPOUND_WORD_BONUS: i64 = 1_200;
 const MAX_IT_COMPOUND_BOOST: i64 = 2_400;
+/// 名詞-接尾 classes in the pinned Mozc `id.def` (1936..=2039): サ変接続,
+/// 一般, 人名, 副詞可能, 助動詞語幹, 助数詞, 地域, 形容動詞語幹 and 特殊,
+/// ending just before 名詞-接尾可能 at 2040. The IT glossary carries a few
+/// edges in these classes (そう→層, そう→レイヤー, ち→値 and counter
+/// units). A suffix is not a standalone technical word: it is compound
+/// evidence only when it sits next to another IT word.
+const IT_SUFFIX_CLASS_RANGE: std::ops::RangeInclusive<u16> = 1936..=2039;
 
 impl Converter {
     /// A longer technical dictionary term is bounded evidence for the spelling
@@ -75,9 +82,12 @@ impl Converter {
     /// Rewards IT evidence across a complete word-sized reading rather than
     /// globally repricing an ambiguous standalone word. A reviewed IT phrase
     /// receives one unit of support, while a compositional candidate with two
-    /// technical words receives two. Short ordinary phrases are left to the
-    /// dictionary and connection matrix. This is a candidate-shape rule, not
-    /// a list of registered compounds.
+    /// technical words receives two. An IT-flagged noun suffix counts only
+    /// when it touches another IT word, so an ordinary stem chased by a
+    /// suffix such as 層 (貧弱層, 脆弱層, なくなり層 -- Issue #454) does not
+    /// pose as an IT compound. Short ordinary phrases are left to the
+    /// dictionary and connection matrix. This is a candidate-shape rule,
+    /// not a list of registered compounds.
     pub(in crate::conversion) fn apply_it_compound_coherence(
         &mut self,
         reading: &str,
@@ -99,9 +109,32 @@ impl Converter {
             {
                 continue;
             }
-            let it_words = candidate.segments().iter().fold(0u16, |count, segment| {
-                count.saturating_add(u16::from(segment.it_word_count))
-            });
+            let segments = candidate.segments();
+            let it_words = segments
+                .iter()
+                .enumerate()
+                .fold(0u16, |count, (index, segment)| {
+                    if segment.it_word_count == 0 {
+                        return count;
+                    }
+                    // A lone IT word led by a suffix class is evidence only
+                    // inside a cluster of IT words; attached to a plain stem
+                    // it is the stem's own suffix slot, not a technical
+                    // compound. The fused 層に/層な/層だ entries lead with the
+                    // same class, so they follow the same rule. A fused entry
+                    // carrying more than one IT word counts fully, since the
+                    // lexicon already priced the phrase (若年層).
+                    let bare_suffix = segment.it_word_count == 1
+                        && IT_SUFFIX_CLASS_RANGE.contains(&segment.left_id);
+                    let touches_it = (index > 0 && segments[index - 1].it_word_count != 0)
+                        || segments
+                            .get(index + 1)
+                            .is_some_and(|next| next.it_word_count != 0);
+                    if bare_suffix && !touches_it {
+                        return count;
+                    }
+                    count.saturating_add(u16::from(segment.it_word_count))
+                });
             if it_words == 0 {
                 continue;
             }

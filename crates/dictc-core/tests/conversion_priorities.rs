@@ -82,6 +82,31 @@ fn every_row_keeps_the_prediction_status_its_own_cost_earns() {
             entry.surface.as_str(),
             entry.left_id,
             entry.right_id,
+        ) == ("だいぜん", "大全", 1851, 1851)
+        {
+            // だいぜん is a nonstandard typing alias for 大全 (whose standard
+            // reading is たいぜん), admitted for conversion only (Issue #454).
+            // A typing alias must not become a prediction entry, so the row
+            // stays non-predictive below the cost limit.
+            assert_eq!(entry.flags, EntryFlags::NONE);
+            assert_eq!(entry.prediction_cost, i32::MAX);
+        } else if (
+            entry.reading.as_str(),
+            entry.surface.as_str(),
+            entry.left_id,
+            entry.right_id,
+        ) == ("とらんすくりぷと", "トランスクリプト", 1851, 1851)
+        {
+            // Upstream's トランスクリプト edges (1851 and 1920) were priced
+            // out of prediction; the re-price keeps that status because a
+            // non-prediction edge must not become one (Issue #454).
+            assert_eq!(entry.flags, EntryFlags::NONE);
+            assert_eq!(entry.prediction_cost, i32::MAX);
+        } else if (
+            entry.reading.as_str(),
+            entry.surface.as_str(),
+            entry.left_id,
+            entry.right_id,
         ) == ("いと", "意図", 1841, 1841)
         {
             // Issue #334 drops the IT flag of the glossary edge but keeps its
@@ -518,20 +543,21 @@ fn issue_371_phrase_edges_and_reprices_keep_their_calibrated_prices() {
 }
 
 /// Issue #454: five reported readings led with a wrong context-free top-1.
-/// The overlay admits two missing edges (大全 under だいぜん, 弄れる under
-/// いじれる), one whole-reading edge (貧弱そう), and re-prices three losing
-/// edges (正気, たいぜん/大全, トランスクリプト). Prices are the measured
+/// The overlay admits three missing edges (the kana and kanji potential
+/// forms of いじれる, 大全 under だいぜん) and re-prices three losing edges
+/// (正気, たいぜん/大全, トランスクリプト). 貧弱そう / 脆弱そう are owned by
+/// the engine's IT coherence pass, not this file. Prices are the measured
 /// lattice calibrations on the tree-built dictionary; the ignored engine
 /// test holds the ranking claim.
 #[test]
 fn issue_454_rows_keep_their_calibrated_prices() {
     let wanted = [
+        ("いじれる", "いじれる", 680, 680, 4100),
         ("いじれる", "弄れる", 680, 680, 5000),
         ("だいぜん", "大全", 1851, 1851, 5796),
         ("しょうき", "正気", 1931, 1931, 4722),
         ("たいぜん", "大全", 1851, 1851, 5666),
         ("とらんすくりぷと", "トランスクリプト", 1851, 1851, 4748),
-        ("ひんじゃくそう", "貧弱そう", 1931, 2010, 7636),
     ];
     let overlay = overlay();
     for (reading, surface, left_id, right_id, word_cost) in wanted {
@@ -546,12 +572,32 @@ fn issue_454_rows_keep_their_calibrated_prices() {
             .unwrap_or_else(|| panic!("missing {reading} -> {surface}"));
         assert_eq!(entry.word_cost, word_cost, "{reading} -> {surface}");
     }
-    // The shared prefixes keep their own edges: only the listed rows were
-    // touched, so だい, ひんじゃく and いじ stay untouched by the overlay.
-    for reading in ["だい", "ひんじゃく", "いじ"] {
+    // The kana edge leads and 弄れる stays a lower candidate, matching the
+    // potential paradigm where いじれない / いじれます / いじれた lead kana.
+    let kana = overlay
+        .iter()
+        .find(|entry| entry.reading == "いじれる" && entry.surface == "いじれる")
+        .expect("kana row");
+    let kanji = overlay
+        .iter()
+        .find(|entry| entry.reading == "いじれる" && entry.surface == "弄れる")
+        .expect("kanji row");
+    assert!(
+        kana.word_cost < kanji.word_cost,
+        "the kana potential form must lead its kanji spelling"
+    );
+    // The shared prefixes and the そう-inflected readings keep their own
+    // edges: だい, いじ, ひんじゃくそう and ぜいじゃくそう stay untouched.
+    for reading in ["だい", "いじ", "ひんじゃく", "ぜいじゃく"] {
         assert!(
             !overlay.iter().any(|entry| entry.reading == reading),
             "{reading} must not be re-priced by the overlay"
+        );
+    }
+    for reading in ["ひんじゃくそう", "ぜいじゃくそう"] {
+        assert!(
+            !overlay.iter().any(|entry| entry.reading == reading),
+            "{reading} belongs to the engine fix, not a phrase row"
         );
     }
 }

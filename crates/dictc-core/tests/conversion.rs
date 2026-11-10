@@ -215,6 +215,65 @@ reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotati
 }
 
 #[test]
+fn an_it_suffix_is_compound_evidence_only_inside_an_it_cluster() {
+    // 名詞-接尾 classes occupy 1936..=2039 in the pinned Mozc id.def, so the
+    // fixture matrix must span them. A lone suffix-class IT word after a
+    // plain stem is the stem's own suffix slot, not compound evidence
+    // (Issue #454: 貧弱層 lost to 貧弱そう); the same suffix keeps counting
+    // next to a technical head (ネットワーク層); and a non-suffix IT word
+    // still counts alone inside a word-sized path (東京支店に異動する).
+    let entries = parse_entries(
+        "quality-gate.tsv",
+        "# license: MIT\n\
+reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+ひんじゃくそう\t貧弱そう\t1\t1\t1500\t-\t\t\n\
+ひんじゃく\t貧弱\t1\t1\t1000\t-\t\t\n\
+そう\t層\t1949\t1949\t800\t-\tit\t\n\
+ねっとわーくそう\tネットワークそう\t1\t1\t2100\t-\t\t\n\
+ねっとわーく\tネットワーク\t1\t1\t3000\t-\tit\t\n\
+くうこう\t空港\t1\t1\t1000\t-\t\t\n\
+いどうする\t移動する\t1\t1\t1000\t-\t\t\n\
+いどうする\t異動する\t1\t1\t2000\t-\tit\t\n",
+    )
+    .expect("entries");
+    let matrix = parse_connection(
+        "matrix.tsv",
+        "# license: MIT\nclasses\t2050\ndefault\t0\n",
+        false,
+    )
+    .expect("matrix");
+    let bytes = compile(&entries, &matrix).expect("image");
+    let dictionary = Dictionary::parse(&bytes).expect("dictionary");
+    let mut converter = Converter::new();
+
+    let stem_suffix = converter
+        .convert(&dictionary, "ひんじゃくそう", ConversionOptions::default())
+        .expect("stem plus suffix");
+    assert_eq!(stem_suffix[0].text(), "貧弱そう");
+    assert!(stem_suffix
+        .iter()
+        .any(|candidate| candidate.text() == "貧弱層"));
+
+    let compound = converter
+        .convert(
+            &dictionary,
+            "ねっとわーくそう",
+            ConversionOptions::default(),
+        )
+        .expect("technical compound");
+    assert_eq!(compound[0].text(), "ネットワーク層");
+
+    let lone_word = converter
+        .convert(
+            &dictionary,
+            "くうこういどうする",
+            ConversionOptions::default(),
+        )
+        .expect("lone technical word");
+    assert_eq!(lone_word[0].text(), "空港異動する");
+}
+
+#[test]
 fn exact_reading_gate_keeps_close_splits_and_removes_only_the_far_mosaic_tail() {
     let bytes = compile_fixture(
         "# license: MIT\n\

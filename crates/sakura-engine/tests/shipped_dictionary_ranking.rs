@@ -3953,9 +3953,10 @@ fn issue_372_a_segment_before_more_preedit_keeps_its_stem() {
 /// Issue #454: five reported readings led with a wrong context-free top-1
 /// (将暉 over 正気, the 第+全 splice over 大全, 貧弱層 over 貧弱そう, a
 /// と+カタカナ splice over トランスクリプト, and 維持+れるように over the
-/// missing 弄れる edge). The overlay admits or re-prices each owning edge;
-/// these readings must now lead with the expected spelling, and the
-/// reported-as-correct controls must keep theirs.
+/// missing potential form). The overlay admits or re-prices each owning
+/// edge and the IT coherence pass no longer rewards a lone trailing IT
+/// suffix; these readings must now lead with the expected spelling, and
+/// the reported-as-correct controls must keep theirs.
 #[test]
 #[ignore = "needs the built system dictionary in artifacts/release"]
 fn issue_454_reported_readings_lead_with_the_expected_spelling() {
@@ -3967,11 +3968,27 @@ fn issue_454_reported_readings_lead_with_the_expected_spelling() {
         ("ひんじゃくそう", "貧弱そう"),
         ("とらんすくりぷと", "トランスクリプト"),
         ("とらんすくりぷとかくにんして", "トランスクリプト確認して"),
-        ("いじれるように", "弄れるように"),
-        ("みぎくりっくでいじれるように", "右クリックで弄れるように"),
+        ("いじれるように", "いじれるように"),
+        ("みぎくりっくでいじれるように", "右クリックでいじれるように"),
         // The same word's other reading lost to a splice for the same reason.
         ("たいぜん", "大全"),
-        ("いじれる", "弄れる"),
+        // The potential paradigm leads kana like いじれない / いじれます do;
+        // 弄れる stays a lower candidate (checked below).
+        ("いじれる", "いじれる"),
+        ("じゆうにいじれる", "自由にいじれる"),
+        ("せっていをいじれる", "設定をいじれる"),
+        // The そう inflections of 貧弱 and 脆弱 lead そう, not the IT 層 edge.
+        ("ひんじゃくそうに", "貧弱そうに"),
+        ("ひんじゃくそうな", "貧弱そうな"),
+        ("ひんじゃくそうだ", "貧弱そうだ"),
+        ("ぜいじゃくそう", "脆弱そう"),
+        ("ぜいじゃくそうに", "脆弱そうに"),
+        // Real 層 compounds keep their top-1.
+        ("ねっとわーくそう", "ネットワーク層"),
+        ("ゆーざーそう", "ユーザー層"),
+        ("じゃくねんそう", "若年層"),
+        ("ふゆうそう", "富裕層"),
+        ("ちゅうかんそう", "中間層"),
         // Reported-correct controls must keep their top-1.
         ("しょうきですか", "正気ですか"),
         ("ひんじゃくそうなんじゃない", "貧弱そうなんじゃない"),
@@ -3984,4 +4001,13 @@ fn issue_454_reported_readings_lead_with_the_expected_spelling() {
         }
     }
     assert!(wrong.is_empty(), "{wrong:#?}");
+
+    // 弄れる remains on the いじれる page below the kana spelling.
+    let candidates = candidates_for("いじれる");
+    let kana = candidates.iter().position(|text| text == "いじれる");
+    let kanji = candidates.iter().position(|text| text == "弄れる");
+    assert!(
+        matches!((kana, kanji), (Some(kana), Some(kanji)) if kana < kanji),
+        "いじれる: kana must lead 弄れる: {candidates:?}"
+    );
 }
