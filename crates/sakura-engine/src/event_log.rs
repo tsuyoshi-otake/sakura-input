@@ -90,6 +90,43 @@ pub enum EngineEvent {
     DebugTraceStopped {
         stats: sakura_ipc::debug_trace::AsyncTraceStats,
     },
+    HistoryUnavailable {
+        reason: HistoryUnavailableReason,
+    },
+}
+
+/// Why one developer-history generation reached its terminal failure state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HistoryUnavailableReason {
+    /// Another owner still holds the store lock.
+    OwnershipDenied,
+    /// The lock object was not the regular empty file this store owns.
+    InvalidLock,
+    /// Any other open/validation failure.
+    Io,
+}
+
+impl HistoryUnavailableReason {
+    /// Classifies an `InputHistoryService::open` failure into the three
+    /// terminal reasons the lock-ownership contract can reach.
+    pub fn from_io_error(error: &std::io::Error) -> Self {
+        const ERROR_SHARING_VIOLATION: i32 = 32;
+        match (error.kind(), error.raw_os_error()) {
+            (std::io::ErrorKind::InvalidFilename, _) => Self::InvalidLock,
+            (std::io::ErrorKind::PermissionDenied, _) | (_, Some(ERROR_SHARING_VIOLATION)) => {
+                Self::OwnershipDenied
+            }
+            _ => Self::Io,
+        }
+    }
+
+    fn name(self) -> &'static str {
+        match self {
+            Self::OwnershipDenied => "ownership-denied",
+            Self::InvalidLock => "invalid-lock",
+            Self::Io => "io",
+        }
+    }
 }
 
 /// A bounded two-generation event log.
@@ -210,6 +247,9 @@ fn render_record(timestamp_ms: u64, event: EngineEvent) -> String {
             "unix_ms={timestamp_ms}\tevent=debug_trace_stopped\tattempted={}\twritten={}\tfailed={}\tdropped={}\tworker_panicked={}\n",
             stats.attempted, stats.written, stats.failures, stats.dropped, stats.worker_panicked
         ),
+        EngineEvent::HistoryUnavailable { reason } => {
+            format!("unix_ms={timestamp_ms}\tevent=history_unavailable\treason={}\n", reason.name())
+        }
         EngineEvent::Priority {
             outcome: Applied::Set { inherited, applied },
         } => format!(
@@ -436,6 +476,13 @@ mod tests {
             },
         )
         .expect("priority failure");
+        log.record_at(
+            128,
+            EngineEvent::HistoryUnavailable {
+                reason: HistoryUnavailableReason::InvalidLock,
+            },
+        )
+        .expect("history unavailable");
 
         assert_eq!(
             fs::read_to_string(&path).expect("log"),
@@ -443,9 +490,32 @@ mod tests {
              unix_ms=124\tevent=ready\telapsed_ms=17\n\
              unix_ms=125\tevent=startup_failed\thresult=0x80004005\n\
              unix_ms=126\tevent=priority\tinherited=below_normal\tapplied=above_normal\n\
-             unix_ms=127\tevent=priority_failed\tinherited=unknown\thresult=0x80070005\n"
+             unix_ms=127\tevent=priority_failed\tinherited=unknown\thresult=0x80070005\n\
+             unix_ms=128\tevent=history_unavailable\treason=invalid-lock\n"
         );
         let _ = fs::remove_dir_all(path.parent().expect("parent"));
+    }
+
+    #[test]
+    fn history_unavailable_reason_classifies_the_lock_contracts_terminals() {
+        use std::io::{Error, ErrorKind};
+
+        assert_eq!(
+            HistoryUnavailableReason::from_io_error(&Error::from(ErrorKind::InvalidFilename)),
+            HistoryUnavailableReason::InvalidLock
+        );
+        assert_eq!(
+            HistoryUnavailableReason::from_io_error(&Error::from(ErrorKind::PermissionDenied)),
+            HistoryUnavailableReason::OwnershipDenied
+        );
+        assert_eq!(
+            HistoryUnavailableReason::from_io_error(&Error::from_raw_os_error(32)),
+            HistoryUnavailableReason::OwnershipDenied
+        );
+        assert_eq!(
+            HistoryUnavailableReason::from_io_error(&Error::from(ErrorKind::NotFound)),
+            HistoryUnavailableReason::Io
+        );
     }
 
     #[test]
