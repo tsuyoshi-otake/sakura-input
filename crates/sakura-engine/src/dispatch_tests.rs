@@ -1713,6 +1713,141 @@ fn shifted_ascii_commit_records_the_flushed_reading() {
         .expect("remove history test directory");
 }
 
+/// #456 review: when the flushed reading cannot be built (preedit at the
+/// byte cap, pending romaji still waiting), the commit text stands but the
+/// record is skipped. The commit must still settle the previously staged
+/// record like a non-learnable commit (#275/#277), record itself in the
+/// correction trail (#305), and write nothing truncated to learning or
+/// input history.
+#[test]
+fn a_shifted_commit_whose_reading_overflows_still_settles_learning() {
+    let learning = Arc::new(LearningService::memory());
+    let history_root = phase_one_learning_path("shifted-ascii-overflow-history");
+    let history_path = history_root.with_file_name("input-history.bin");
+    let history = InputHistoryService::open(&history_path).expect("history");
+    let mut dispatcher = Dispatcher::new_with_services(conversion_fixture(), Arc::clone(&learning))
+        .expect("dispatcher");
+    dispatcher.set_input_history(Some(Arc::clone(&history)));
+    let mut out = OutputBuf::new();
+
+    let session = create_session(&mut dispatcher, &mut out, "shift-overflow.exe");
+    dispatcher.dispatch(
+        &Request::SetInputScope {
+            session,
+            scope: InputScope::Normal,
+        },
+        &mut out,
+    );
+
+    // Stage one shifted commit and deliberately leave it unconfirmed: the
+    // overflowed commit itself must perform the settle.
+    for character in "ChatGPT".chars() {
+        let key = if character.is_ascii_uppercase() {
+            shifted_char_key(character)
+        } else {
+            char_key(character)
+        };
+        dispatcher.dispatch(&Request::SendKey { session, key }, &mut out);
+    }
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Enter),
+        },
+        &mut out,
+    );
+    assert_eq!(out.commit_text(), Some("ChatGPT"));
+    let trail_before = dispatcher
+        .sessions
+        .get_mut(session)
+        .expect("session")
+        .correction_trail_mut()
+        .clone();
+
+    // Fill the preedit to the byte cap -- 3-byte kana x 512 = 1536 -- while
+    // the 1-byte ASCII surface stays far under the same cap, then leave a
+    // pending consonant whose flush cannot fit.
+    let pairs = MAX_PREEDIT_BYTES / "か".len();
+    for _ in 0..pairs {
+        for key in [shifted_char_key('K'), shifted_char_key('A')] {
+            dispatcher.dispatch(&Request::SendKey { session, key }, &mut out);
+        }
+    }
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: shifted_char_key('T'),
+        },
+        &mut out,
+    );
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Enter),
+        },
+        &mut out,
+    );
+
+    let surface: String = "KA".repeat(pairs) + "T";
+    assert_eq!(
+        out.commit_text(),
+        Some(surface.as_str()),
+        "the commit text stands even when the reading cannot be built"
+    );
+
+    // The previously staged commit settled exactly like a non-learnable
+    // commit settles it.
+    assert_eq!(
+        learning.preference("ちゃtgpt", 0, [("ChatGPT", 0)]).exact,
+        Some(0),
+        "the overflowed commit must still settle the previously staged record"
+    );
+
+    // The correction trail recorded this commit like any recorded commit.
+    let trail_after = dispatcher
+        .sessions
+        .get_mut(session)
+        .expect("session")
+        .correction_trail_mut()
+        .clone();
+    assert_ne!(
+        trail_before, trail_after,
+        "the overflow commit must still record itself in the correction trail"
+    );
+
+    // Nothing truncated reached history or learning.
+    history.flush().expect("flush overflow commit");
+    let records = crate::input_history::read_snapshot(&history_path)
+        .expect("overflow history")
+        .records;
+    assert!(
+        records.iter().any(|record| matches!(
+            record,
+            InputHistoryRecord::Commit(commit) if commit.surface == "ChatGPT"
+        )),
+        "the staged commit's own history record still exists"
+    );
+    assert!(
+        !records.iter().any(|record| matches!(
+            record,
+            InputHistoryRecord::Commit(commit) if commit.surface == surface
+        )),
+        "a truncated reading must never be written to history"
+    );
+    let truncated: String = "か".repeat(pairs);
+    assert_eq!(
+        learning
+            .preference(truncated.as_str(), 0, [(surface.as_str(), 0)])
+            .exact,
+        None,
+        "a truncated reading must never be learned"
+    );
+
+    history.stop().expect("stop history");
+    std::fs::remove_dir_all(history_root.parent().expect("history root"))
+        .expect("remove history test directory");
+}
+
 /// #456 step 3 (symmetry): for any lowercase ASCII word, the reading a
 /// shifted commit records equals the reading the unshifted path records for
 /// the same keys.

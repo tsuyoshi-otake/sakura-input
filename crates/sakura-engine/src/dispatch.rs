@@ -2728,6 +2728,36 @@ fn record_learning(
     }
 }
 
+/// A commit whose text already stands but whose reading could not be built
+/// writes nothing: a truncated reading must never reach learning or history.
+/// What the commit still owns is the lifecycle side effect `record_learning`
+/// performs — the previously staged record settles exactly the way a
+/// non-learnable commit settles it (#275/#277), and the correction trail
+/// records this commit for the next one (#305).
+fn settle_unrecorded_commit(
+    session: &mut Session,
+    learning: Option<&LearningService>,
+    policy: ExecutionPolicy,
+    surface: &str,
+    chosen_right_id: u16,
+) {
+    if !policy.allows_persistence() {
+        return;
+    }
+    if !session.host_policy().allows_persistence() {
+        session.correction_trail_mut().clear();
+        return;
+    }
+    if !scope_is_sensitive(session.scope) && session.scope_classified() {
+        let _ = session.track_commit_correction(surface, chosen_right_id);
+    } else {
+        session.correction_trail_mut().clear();
+    }
+    if let Some(service) = learning {
+        service.confirm_staged(session.process_unique_id());
+    }
+}
+
 fn staged_correction(correction: &Correction) -> StagedCorrection {
     StagedCorrection::new(
         correction.origin_left(),
@@ -5893,7 +5923,9 @@ fn commit_pending(
         // nothing passes through unchanged, so a trailing half-typed `t`
         // still lands in the reading. If the flush or the append overflows,
         // the commit already stands -- the record is skipped, the same
-        // priority the rest of this function gives the commit text.
+        // priority the rest of this function gives the commit text, while the
+        // staged record and correction trail are settled like a non-learnable
+        // commit would settle them.
         let mut romaji = session.romaji.clone();
         scratch.clear();
         let mut reading = session.preedit.clone();
@@ -5912,6 +5944,8 @@ fn commit_pending(
                 0,
                 reading.as_str(),
             );
+        } else {
+            settle_unrecorded_commit(session, learning, policy, surface.as_str(), 0);
         }
         session.record_current_commit(surface.as_str(), 0, 0, 0);
         session.reset();
