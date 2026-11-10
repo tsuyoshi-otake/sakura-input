@@ -426,6 +426,7 @@ fn issue_305_a_sensitive_commit_never_enters_the_trail() {
             ExecutionPolicy::Apply,
             surface,
             right_context,
+            READING,
         );
     };
     commit(&mut session, FIRST, 1);

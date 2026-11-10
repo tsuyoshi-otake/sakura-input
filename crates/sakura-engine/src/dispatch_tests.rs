@@ -10713,6 +10713,7 @@ fn password_scope_cannot_reach_persistent_learning() {
         ExecutionPolicy::Apply,
         "加奈",
         0,
+        "かな",
     );
     learning.confirm_all_staged();
 
@@ -10743,6 +10744,7 @@ fn unclassified_scope_cannot_reach_persistent_learning() {
         ExecutionPolicy::Apply,
         "加奈",
         0,
+        "かな",
     );
     learning.confirm_all_staged();
 
@@ -10773,6 +10775,7 @@ fn normal_scope_learning_baseline_for_unclassified_guard() {
         ExecutionPolicy::Apply,
         "加奈",
         0,
+        "かな",
     );
     learning.confirm_all_staged();
 
@@ -10802,6 +10805,7 @@ fn unclassified_commit_confirms_previous_staged_but_is_not_learned() {
         ExecutionPolicy::Apply,
         "仮名",
         0,
+        "かな",
     );
     // Staged only: still invisible to ranking.
     assert_eq!(
@@ -10822,6 +10826,7 @@ fn unclassified_commit_confirms_previous_staged_but_is_not_learned() {
         ExecutionPolicy::Apply,
         "何",
         0,
+        "なに",
     );
 
     assert_eq!(
@@ -10867,6 +10872,7 @@ fn unclassified_commit_clears_the_correction_trail() {
         ExecutionPolicy::Apply,
         "加奈",
         0,
+        "かな",
     );
 
     assert_eq!(

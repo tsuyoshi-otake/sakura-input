@@ -2659,6 +2659,7 @@ fn record_learning(
     policy: ExecutionPolicy,
     surface: &str,
     chosen_right_id: u16,
+    reading: &str,
 ) {
     if !policy.allows_persistence() {
         return;
@@ -2693,7 +2694,7 @@ fn record_learning(
             history.record_commit(
                 session.history_session_id(),
                 scope,
-                session.preedit.as_str(),
+                reading,
                 surface,
                 session.carry_right_id(),
                 chosen_right_id,
@@ -2706,7 +2707,7 @@ fn record_learning(
     if learnable && teaches {
         service.stage(
             session.process_unique_id(),
-            session.preedit.as_str(),
+            reading,
             surface,
             session.carry_right_id(),
             chosen_right_id,
@@ -4687,6 +4688,7 @@ fn commit_candidate_surface(
         normalizer.normalize_into(text, session.mode, scratch)?;
     }
     out.set_commit(scratch.as_str())?;
+    let reading = session.preedit.clone();
     record_learning(
         session,
         learning,
@@ -4695,6 +4697,7 @@ fn commit_candidate_surface(
         policy,
         scratch.as_str(),
         meta.right_id,
+        reading.as_str(),
     );
     if meta.raw_repair || meta.synthetic_exact {
         session.record_current_commit_without_cache(
@@ -5067,6 +5070,7 @@ fn commit_converted_segments(
     // real store on this machine had `と` biased towards `ﾄ` after three such
     // commits. The commit still reaches the developer input history, which is a
     // faithful record of what happened, but never the learning store.
+    let reading = session.preedit.clone();
     record_learning(
         session,
         learning,
@@ -5075,6 +5079,7 @@ fn commit_converted_segments(
         policy,
         scratch.as_str(),
         context_right_id,
+        reading.as_str(),
     );
     if raw_repair_committed
         || synthetic_exact_committed
@@ -5881,6 +5886,7 @@ fn commit_pending(
     if !session.converting && session.shifted_ascii && !session.raw_input.is_empty() {
         let surface = session.raw_input.clone();
         out.set_commit(surface.as_str())?;
+        let reading = session.preedit.clone();
         record_learning(
             session,
             learning,
@@ -5889,6 +5895,7 @@ fn commit_pending(
             policy,
             surface.as_str(),
             0,
+            reading.as_str(),
         );
         session.record_current_commit(surface.as_str(), 0, 0, 0);
         session.reset();
@@ -5928,6 +5935,7 @@ fn commit_pending(
     }
     if !scratch.is_empty() {
         out.set_commit(scratch.as_str())?;
+        let reading = session.preedit.clone();
         record_learning(
             session,
             learning,
@@ -5936,6 +5944,7 @@ fn commit_pending(
             policy,
             scratch.as_str(),
             0,
+            reading.as_str(),
         );
         if preserve_exact {
             session.record_current_commit_without_cache(scratch.as_str(), 0, 0, 0);
@@ -6207,6 +6216,7 @@ fn commit_suggestion_at(
     session.raw_input.clear();
     session.preedit = preedit;
     session.cursor = u16::try_from(candidate.reading().chars().count()).unwrap_or(u16::MAX);
+    let reading = session.preedit.clone();
     record_learning(
         session,
         learning,
@@ -6215,6 +6225,7 @@ fn commit_suggestion_at(
         policy,
         scratch.as_str(),
         candidate.right_id(),
+        reading.as_str(),
     );
     session.record_current_commit(
         scratch.as_str(),
