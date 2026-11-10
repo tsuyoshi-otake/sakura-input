@@ -4091,3 +4091,14 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Gates: the release.yml version gate emulated with `RELEASE_TAG=v2.0.31` (sequence 39 LF, notes present), release-workflow-policy and its -SelfTest, test-update-signing-v2 (stdin /dev/null), `cargo metadata --locked --offline`, the `packaging_version` and `sakura-settings` update tests with `--locked` through run-test-quiet, and check-process-clean all exit 0.
 - Pre-publication checks, run together: 0 personal-data-like strings in the 688 lines added since v2.0.30; commit identities are the owner's usual forms; the repository is already public; no v2.0.31 tag or release exists; LICENSE is present; `gh pr list --state open` is empty.
 - Residual: no on-screen check of an installed 2.0.31. The publication results will follow in a separate entry.
+
+## 2026-11-10 - 2.0.31 published (#454, main `ea8b32d`)
+- Release: PR #458 (the #454 conversion fixes) merged as `7b7a3f0` (squash); PR #459 (version bump) merged as `ea8b32d` (squash). CI on #459: 9 passed, 2 skipped. Before tagging, `gh pr list --state open` returned no PRs. The annotated tag v2.0.31 on `ea8b32d` ran `release.yml` run 42809502032, both jobs green: build 17 min 52 s, sign-and-package 1 min 0 s.
+- Candidate checks:
+  - Installer: 25,871,214 bytes, SHA-256 `8979fe8a...`, equal to the manifest.
+  - Manifest: release_sequence 39, source_commit `ea8b32d`, `authenticode=unsigned`, expires 2027-05-09. `signing-status.txt` is `unsigned-owner-approved`.
+  - The bundle installer and manifest equal the candidate; the bundle notes equal `docs/release-notes-v2.0.31.md` verbatim.
+  - `gh attestation verify` (release.yml signer, source digest `ea8b32d`) exit 0 for the installer and the manifest.
+  - The installer build report pins the same reranker model as 2.0.30 (`a58ebea1...`, 7,467,219 bytes).
+- Publish: `publish-release.ps1 -Publish` with the active DPAPI key (`key.0.id`), stdin /dev/null, exited 0. Published 2026-11-10T12:03:27Z as Latest, not a draft, 3 assets; 1 valid pinned signature locally and on read-back. The script removed its read-back folder; the downloaded candidate was deleted after verification.
+- Residual: no reinstall and no on-screen check of an installed 2.0.31 (not requested).
