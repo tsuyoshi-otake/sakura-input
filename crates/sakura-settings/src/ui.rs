@@ -50,7 +50,7 @@ use sakura_proto::Mode;
 use sakura_settings::configuration::ConfigurationDocument;
 use sakura_settings::formats::DictionaryFormat;
 use sakura_settings::user_dictionary::{self, ImportMode};
-use sakura_settings::{diagnostics, learning, paths, updater};
+use sakura_settings::{diagnostics, input_history, learning, paths, updater};
 use sakura_user_prefs::{
     self as user_preferences, AiAuth, AiEffort, AiProvider, AiServiceTier, AiStyle, AiTextKey,
     AiTextPreferences,
@@ -2652,11 +2652,22 @@ impl App {
         // Both reports go in the same box, but as two separate tables. A reset
         // is usually the correct response to a host lifecycle event, so summing
         // them with the timeouts would read as a fault count and be wrong.
-        let report = format!(
+        let mut report = format!(
             "{}\n{}",
             diagnostics::render_text(&timeouts),
             diagnostics::render_disconnects_text(&resets)
         );
+        if self.configuration.preferences.developer_mode {
+            // One bounded status probe; a stopped store (a rejected lock
+            // among the terminal reasons) must be visible here just as in
+            // `config show` and engine.log (#455).
+            report.push_str(&format!(
+                "\n{}",
+                developer_history_line(
+                    paths::input_history().and_then(|path| input_history::stats(&path))
+                )
+            ));
+        }
         set_text(
             self.diagnostics_controls.text,
             &report.replace('\n', "\r\n"),
@@ -4445,6 +4456,27 @@ fn message_box(
 
 fn display(error: impl std::fmt::Display) -> String {
     error.to_string()
+}
+
+/// The developer-history terminal shown on the diagnostics page, mirroring
+/// the `developer-history` line of `config show` (#455). A live engine with
+/// no service attached is either mid-start or a stopped store; the typed
+/// reason itself is in engine.log as `history_unavailable`.
+fn developer_history_line(stats: std::io::Result<input_history::HistoryStats>) -> String {
+    match stats {
+        Ok(input_history::HistoryStats {
+            live: true,
+            active: true,
+            ..
+        }) => "開発者入力履歴: 記録中".to_owned(),
+        Ok(input_history::HistoryStats { live: true, .. }) => concat!(
+            "開発者入力履歴: engine 稼働中・履歴サービス未接続",
+            "（開始中、またはロック拒否などで停止。engine.log の history_unavailable を確認）"
+        )
+        .to_owned(),
+        Ok(_) => "開発者入力履歴: engine 停止中（次回 engine 起動時に有効化されます）".to_owned(),
+        Err(error) => format!("開発者入力履歴: 状態を確認できません（{error}）"),
+    }
 }
 
 fn pump(window: HWND) {

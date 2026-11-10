@@ -292,6 +292,15 @@ pub fn run(command: Command) -> Result<(), String> {
             let document = ConfigurationDocument::load(&paths::configuration().map_err(display)?)
                 .map_err(display)?;
             print_configuration(&document);
+            if document.preferences.developer_mode {
+                // One bounded status probe; a failure stays honest instead of
+                // hiding the terminal the diagnostics would have shown (#455).
+                let status = paths::input_history()
+                    .and_then(|path| input_history::stats(&path))
+                    .map(|stats| developer_history_terminal(true, stats))
+                    .unwrap_or("unconfirmed");
+                println!("developer-history\t{status}");
+            }
         }
         Command::ConfigSet { setting, value } => {
             let path = paths::configuration().map_err(display)?;
