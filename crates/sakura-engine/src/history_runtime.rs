@@ -21,9 +21,10 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+use crate::event_log::{EngineEvent, EventLog, HistoryUnavailableReason};
 use crate::input_history::InputHistoryService;
 
-type OpenHistory = dyn Fn() -> Result<Arc<InputHistoryService>, String> + Send + Sync;
+type OpenHistory = dyn Fn() -> Result<Arc<InputHistoryService>, io::Error> + Send + Sync;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 enum Phase {
@@ -77,6 +78,9 @@ struct Shared {
     /// moments `State::is_idle` can become true.
     settled: Condvar,
     opener: Arc<OpenHistory>,
+    /// The engine diagnostic log; `None` under test openers that inject no
+    /// sink. Recording is best-effort and never gates lifecycle progress.
+    event_log: Option<EventLog>,
     verbose: bool,
     /// Test seam: runs on the worker before each service is stopped, so a test
     /// can hold a retiring writer's store lock for as long as it needs.
@@ -113,17 +117,24 @@ impl HistoryRuntime {
         enabled: bool,
         verbose: bool,
     ) -> io::Result<Self> {
-        Self::with_opener(initial_service, enabled, verbose, || {
-            let path = crate::input_history::default_path().map_err(|error| error.to_string())?;
-            InputHistoryService::open(&path).map_err(|error| error.to_string())
-        })
+        Self::with_opener(
+            initial_service,
+            enabled,
+            verbose,
+            || {
+                let path = crate::input_history::default_path()?;
+                InputHistoryService::open(&path)
+            },
+            EventLog::open_default().ok(),
+        )
     }
 
     pub(crate) fn with_opener(
         initial_service: Option<Arc<InputHistoryService>>,
         enabled: bool,
         verbose: bool,
-        opener: impl Fn() -> Result<Arc<InputHistoryService>, String> + Send + Sync + 'static,
+        opener: impl Fn() -> Result<Arc<InputHistoryService>, io::Error> + Send + Sync + 'static,
+        event_log: Option<EventLog>,
     ) -> io::Result<Self> {
         let active = enabled && initial_service.is_some();
         let phase = if active {
@@ -158,6 +169,7 @@ impl HistoryRuntime {
             changed: Condvar::new(),
             settled: Condvar::new(),
             opener: Arc::new(opener),
+            event_log,
             verbose,
             #[cfg(test)]
             stop_gate: Mutex::new(None),
@@ -438,12 +450,20 @@ fn worker_loop(shared: Arc<Shared>) {
                     stale_service = Some(service);
                 }
                 Err(error) if publish => {
+                    if let Some(log) = shared.event_log.as_ref() {
+                        let _ = log.record(EngineEvent::HistoryUnavailable {
+                            reason: HistoryUnavailableReason::from_io_error(&error),
+                        });
+                    }
                     if shared.verbose {
                         eprintln!(
                             "sakura-engine: developer input history unavailable; continuing without it: {error}"
                         );
                     }
-                    state.phase = Phase::Failed { generation, error };
+                    state.phase = Phase::Failed {
+                        generation,
+                        error: error.to_string(),
+                    };
                 }
                 Err(_) => {}
             }
@@ -495,6 +515,7 @@ mod tests {
     use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
     use super::{HistoryRuntime, Phase, State};
+    use crate::event_log::EventLog;
     use crate::input_history::{clear_path, InputHistoryService};
 
     /// Blocks each call until the test releases it. It gates the opener and,
@@ -600,11 +621,17 @@ mod tests {
         control: Arc<OpenControl>,
         opens: Arc<AtomicUsize>,
     ) -> HistoryRuntime {
-        HistoryRuntime::with_opener(None, true, false, move || {
-            opens.fetch_add(1, Ordering::SeqCst);
-            control.enter_and_wait();
-            InputHistoryService::open(&path).map_err(|error| error.to_string())
-        })
+        HistoryRuntime::with_opener(
+            None,
+            true,
+            false,
+            move || {
+                opens.fetch_add(1, Ordering::SeqCst);
+                control.enter_and_wait();
+                InputHistoryService::open(&path)
+            },
+            None,
+        )
         .expect("start test history lifecycle")
     }
 
@@ -747,10 +774,16 @@ mod tests {
     fn failed_generation_is_terminal_until_an_explicit_toggle() {
         let attempts = Arc::new(AtomicUsize::new(0));
         let opener_attempts = Arc::clone(&attempts);
-        let runtime = HistoryRuntime::with_opener(None, true, false, move || {
-            opener_attempts.fetch_add(1, Ordering::SeqCst);
-            Err("injected open failure".to_owned())
-        })
+        let runtime = HistoryRuntime::with_opener(
+            None,
+            true,
+            false,
+            move || {
+                opener_attempts.fetch_add(1, Ordering::SeqCst);
+                Err(io::Error::other("injected open failure"))
+            },
+            None,
+        )
         .expect("start test history lifecycle");
         wait_for_phase(&runtime, |phase| {
             matches!(phase, Phase::Failed { generation: 1, .. })
@@ -769,6 +802,36 @@ mod tests {
             matches!(phase, Phase::Failed { generation: 3, .. })
         });
         assert_eq!(attempts.load(Ordering::SeqCst), 2);
+        runtime.stop();
+    }
+
+    /// The terminal failure is diagnosable without a debugger: the worker
+    /// records the classified reason into the engine event log (#455).
+    #[test]
+    fn a_failed_open_records_the_reason_in_the_event_log() {
+        let dir = TestDir::new("failure-log");
+        let log_path = dir.0.join("engine.log");
+        let runtime = HistoryRuntime::with_opener(
+            None,
+            true,
+            false,
+            || {
+                Err(io::Error::new(
+                    io::ErrorKind::InvalidFilename,
+                    "input history lock is not a regular empty file",
+                ))
+            },
+            Some(EventLog::at(log_path.clone())),
+        )
+        .expect("start test history lifecycle");
+        wait_for_phase(&runtime, |phase| {
+            matches!(phase, Phase::Failed { generation: 1, .. })
+        });
+        let logged = std::fs::read_to_string(&log_path).expect("event log record");
+        assert!(
+            logged.contains("event=history_unavailable\treason=invalid-lock\n"),
+            "the terminal failure must be visible in the engine log: {logged}"
+        );
         runtime.stop();
     }
 
@@ -858,9 +921,13 @@ mod tests {
         let dir = TestDir::new("retiring-writer");
         let path = dir.store();
         let service = InputHistoryService::open(&path).expect("open history");
-        let runtime = HistoryRuntime::with_opener(Some(service), true, false, || {
-            Err("no replacement generation".to_owned())
-        })
+        let runtime = HistoryRuntime::with_opener(
+            Some(service),
+            true,
+            false,
+            || Err(io::Error::other("no replacement generation")),
+            None,
+        )
         .expect("start test history lifecycle");
         let gate = Arc::new(OpenControl::default());
         let _stops = hold_stops(&runtime, &gate);
@@ -874,8 +941,9 @@ mod tests {
         assert_eq!(
             clear_path(&path)
                 .expect_err("the retiring writer owns the store lock")
-                .kind(),
-            io::ErrorKind::AlreadyExists
+                .raw_os_error(),
+            Some(32),
+            "ownership is the exclusive handle: a held store is a sharing violation"
         );
         assert!(!settles(&runtime, Duration::from_millis(50)));
 
@@ -912,8 +980,9 @@ mod tests {
         assert_eq!(
             clear_path(&path)
                 .expect_err("the stale service's writer owns the store lock")
-                .kind(),
-            io::ErrorKind::AlreadyExists
+                .raw_os_error(),
+            Some(32),
+            "ownership is the exclusive handle: a held store is a sharing violation"
         );
         assert!(!settles(&runtime, Duration::from_millis(50)));
 
@@ -950,9 +1019,13 @@ mod tests {
 
     #[test]
     fn hold_idle_settles_after_a_failed_open_and_after_shutdown() {
-        let runtime = HistoryRuntime::with_opener(None, true, false, || {
-            Err("injected open failure".to_owned())
-        })
+        let runtime = HistoryRuntime::with_opener(
+            None,
+            true,
+            false,
+            || Err(io::Error::other("injected open failure")),
+            None,
+        )
         .expect("start test history lifecycle");
         assert_settles_promptly(&runtime);
         assert!(matches!(
@@ -968,10 +1041,16 @@ mod tests {
     fn a_panicked_worker_cannot_leave_the_lifecycle_busy() {
         let control = Arc::new(OpenControl::default());
         let gate = Arc::clone(&control);
-        let runtime = HistoryRuntime::with_opener(None, true, false, move || {
-            gate.enter_and_wait();
-            panic!("injected opener panic")
-        })
+        let runtime = HistoryRuntime::with_opener(
+            None,
+            true,
+            false,
+            move || {
+                gate.enter_and_wait();
+                panic!("injected opener panic")
+            },
+            None,
+        )
         .expect("start test history lifecycle");
         let _open = OpenOnDrop(Arc::clone(&control));
         control.wait_for_calls(1);
@@ -1001,10 +1080,16 @@ mod tests {
     fn a_hold_defers_the_next_generation_until_every_hold_is_released() {
         let opens = Arc::new(AtomicUsize::new(0));
         let counted = Arc::clone(&opens);
-        let runtime = HistoryRuntime::with_opener(None, false, false, move || {
-            counted.fetch_add(1, Ordering::SeqCst);
-            Err("test opener".to_owned())
-        })
+        let runtime = HistoryRuntime::with_opener(
+            None,
+            false,
+            false,
+            move || {
+                counted.fetch_add(1, Ordering::SeqCst);
+                Err(io::Error::other("test opener"))
+            },
+            None,
+        )
         .expect("start test history lifecycle");
 
         let first = runtime
@@ -1045,9 +1130,13 @@ mod tests {
         let dir = TestDir::new("held-service");
         let path = dir.store();
         let service = InputHistoryService::open(&path).expect("open history");
-        let runtime = HistoryRuntime::with_opener(Some(Arc::clone(&service)), true, false, || {
-            Err("no replacement generation".to_owned())
-        })
+        let runtime = HistoryRuntime::with_opener(
+            Some(Arc::clone(&service)),
+            true,
+            false,
+            || Err(io::Error::other("no replacement generation")),
+            None,
+        )
         .expect("start test history lifecycle");
 
         let hold = runtime
@@ -1068,8 +1157,9 @@ mod tests {
         assert_eq!(
             clear_path(&path)
                 .expect_err("the held service's writer still owns the store lock")
-                .kind(),
-            io::ErrorKind::AlreadyExists
+                .raw_os_error(),
+            Some(32),
+            "ownership is the exclusive handle: a held store is a sharing violation"
         );
         assert!(
             !settles(&runtime, Duration::ZERO),
@@ -1084,9 +1174,14 @@ mod tests {
 
     #[test]
     fn configure_and_service_never_wait_for_a_hold() {
-        let runtime =
-            HistoryRuntime::with_opener(None, false, false, || Err("test opener".to_owned()))
-                .expect("start test history lifecycle");
+        let runtime = HistoryRuntime::with_opener(
+            None,
+            false,
+            false,
+            || Err(io::Error::other("test opener")),
+            None,
+        )
+        .expect("start test history lifecycle");
         let (done, finished) = mpsc::channel();
 
         // `configure` runs under the configuration lock that every request
@@ -1114,9 +1209,14 @@ mod tests {
 
     #[test]
     fn stop_waits_for_a_hold_and_then_completes() {
-        let runtime =
-            HistoryRuntime::with_opener(None, false, false, || Err("test opener".to_owned()))
-                .expect("start test history lifecycle");
+        let runtime = HistoryRuntime::with_opener(
+            None,
+            false,
+            false,
+            || Err(io::Error::other("test opener")),
+            None,
+        )
+        .expect("start test history lifecycle");
         let (done, stopped) = mpsc::channel();
 
         std::thread::scope(|scope| {
