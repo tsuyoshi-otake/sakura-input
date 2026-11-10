@@ -3949,3 +3949,75 @@ fn issue_372_a_segment_before_more_preedit_keeps_its_stem() {
     assert_eq!(top(true), "歩い");
     assert_ne!(top(false), "歩い");
 }
+
+/// Issue #454: five reported readings led with a wrong context-free top-1
+/// (将暉 over 正気, the 第+全 splice over 大全, 貧弱層 over 貧弱そう, a
+/// と+カタカナ splice over トランスクリプト, and 維持+れるように over the
+/// missing potential form). The overlay admits or re-prices each owning
+/// edge and the IT coherence pass no longer rewards a lone trailing IT
+/// suffix; these readings must now lead with the expected spelling, and
+/// the reported-as-correct controls must keep theirs.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_454_reported_readings_lead_with_the_expected_spelling() {
+    let mut wrong = Vec::new();
+    for (reading, expected) in [
+        ("しょうき", "正気"),
+        ("だいぜん", "大全"),
+        ("てすとだいぜん", "テスト大全"),
+        ("ひんじゃくそう", "貧弱そう"),
+        ("とらんすくりぷと", "トランスクリプト"),
+        ("とらんすくりぷとかくにんして", "トランスクリプト確認して"),
+        ("いじれるように", "いじれるように"),
+        ("みぎくりっくでいじれるように", "右クリックでいじれるように"),
+        // The same word's other reading lost to a splice for the same reason.
+        ("たいぜん", "大全"),
+        // The potential paradigm leads kana like いじれない / いじれます do;
+        // 弄れる stays a lower candidate (checked below).
+        ("いじれる", "いじれる"),
+        ("じゆうにいじれる", "自由にいじれる"),
+        ("せっていをいじれる", "設定をいじれる"),
+        // The そう inflections of 貧弱 and 脆弱 lead そう, not the IT 層 edge.
+        ("ひんじゃくそうに", "貧弱そうに"),
+        ("ひんじゃくそうな", "貧弱そうな"),
+        ("ひんじゃくそうだ", "貧弱そうだ"),
+        ("ぜいじゃくそう", "脆弱そう"),
+        ("ぜいじゃくそうに", "脆弱そうに"),
+        // Real 層 compounds keep their top-1, including compounds where a
+        // non-IT suffix (者) sits between the technical head and 層.
+        ("ねっとわーくそう", "ネットワーク層"),
+        ("ゆーざーそう", "ユーザー層"),
+        ("じゃくねんそう", "若年層"),
+        ("ふゆうそう", "富裕層"),
+        ("ちゅうかんそう", "中間層"),
+        ("かいはつしゃそう", "開発者層"),
+        ("かいはつしゃそうにうける", "開発者層に受ける"),
+        ("りようしゃそうをひろげる", "利用者層を広げる"),
+        ("たんとうしゃそう", "担当者層"),
+        ("しょゆうしゃそう", "所有者層"),
+        ("どくしんしゃそう", "独身者層"),
+        // An IT word elsewhere in the sentence must not rescue 層.
+        ("さーばーがひんじゃくそう", "サーバーが貧弱そう"),
+        ("あぷりのせっけいがぜいじゃくそう", "アプリの設計が脆弱そう"),
+        // Reported-correct controls must keep their top-1.
+        ("しょうきですか", "正気ですか"),
+        ("ひんじゃくそうなんじゃない", "貧弱そうなんじゃない"),
+        ("じこ", "自己"),
+        ("だいぜんじ", "大善寺"),
+    ] {
+        let top = top_text(reading);
+        if top != expected {
+            wrong.push(format!("{reading}: expected {expected}, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+
+    // 弄れる remains on the いじれる page below the kana spelling.
+    let candidates = candidates_for("いじれる");
+    let kana = candidates.iter().position(|text| text == "いじれる");
+    let kanji = candidates.iter().position(|text| text == "弄れる");
+    assert!(
+        matches!((kana, kanji), (Some(kana), Some(kanji)) if kana < kanji),
+        "いじれる: kana must lead 弄れる: {candidates:?}"
+    );
+}

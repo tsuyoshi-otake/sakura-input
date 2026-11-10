@@ -6,7 +6,7 @@
 
 mod coherence;
 mod cost;
-mod it_terms;
+pub(in crate::conversion) mod it_terms;
 mod quality_gate;
 mod tie_break;
 
