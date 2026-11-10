@@ -15,7 +15,7 @@ use std::borrow::Cow;
 use std::fmt;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::os::windows::fs::OpenOptionsExt;
+use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TrySendError};
@@ -28,7 +28,7 @@ use sakura_values::{AiTextOperation, AiTextStatus, InputScope};
 mod digest;
 use digest::Sha256;
 use windows::Win32::Storage::FileSystem::{
-    FILE_FLAG_DELETE_ON_CLOSE, FILE_FLAG_OPEN_REPARSE_POINT,
+    FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_OPEN_REPARSE_POINT,
 };
 
 const MAGIC: &[u8; 4] = b"SKIH";
@@ -777,10 +777,14 @@ fn clear_owned_path(path: &Path) -> io::Result<u64> {
     Ok(before)
 }
 
-/// The lock object is independent of the replaceable history file. Windows
-/// denies other opens/removal while this exclusive handle exists and removes
-/// the lock only after its final handle closes, including process termination.
-/// This protocol coordinates updated writers using the same logical path.
+/// The lock object is permanent and normally stays empty: ownership is the
+/// exclusive handle itself, never the file's existence. An empty lock whose
+/// owner died is therefore re-acquired instead of refusing the next start.
+/// Anything this store did not create (a reparse point, a non-regular file,
+/// or one holding foreign bytes) is rejected without modification; manual
+/// recovery deletes such an object explicitly. Two owners of the same
+/// logical path can never coexist: the surviving old protocol (exclusive
+/// existence claim) and this one exclude each other in both directions.
 fn acquire_store_owner(path: &Path) -> io::Result<File> {
     let mut name = path
         .file_name()
@@ -792,16 +796,30 @@ fn acquire_store_owner(path: &Path) -> io::Result<File> {
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
-    OpenOptions::new()
+    let file = OpenOptions::new()
         .read(true)
         .write(true)
-        // Never attach delete-on-close to a preexisting object (including a
-        // reparse target). A surviving lock after OS/storage failure requires
-        // explicit recovery, rather than deleting an object we did not create.
-        .create_new(true)
+        // Open or create: the exclusive handle is the ownership claim, so a
+        // lock a dead owner left behind is re-acquired here. Keep
+        // OPEN_REPARSE_POINT so a reparse point is opened (and rejected)
+        // itself rather than silently followed into its target.
+        .create(true)
         .share_mode(0)
-        .custom_flags(FILE_FLAG_DELETE_ON_CLOSE.0 | FILE_FLAG_OPEN_REPARSE_POINT.0)
-        .open(path.with_file_name(name))
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT.0)
+        .open(path.with_file_name(name))?;
+    // Fail closed on anything we did not create. The check reads the opened
+    // handle's own attributes, so a reparse point cannot launder its target.
+    let metadata = file.metadata()?;
+    if metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT.0 != 0
+        || !metadata.is_file()
+        || metadata.len() != 0
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidFilename,
+            "input history lock is not a regular empty file",
+        ));
+    }
+    Ok(file)
 }
 
 fn writer_loop(
@@ -1765,3 +1783,7 @@ mod capacity_tests;
 #[cfg(test)]
 #[path = "input_history/recovery_tests.rs"]
 mod recovery_tests;
+
+#[cfg(test)]
+#[path = "input_history/ownership_tests.rs"]
+mod ownership_tests;

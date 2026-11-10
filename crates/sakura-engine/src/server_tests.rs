@@ -535,10 +535,16 @@ fn only_a_clear_holds_the_history_lifecycle() {
     let mut shared = test_shared(Arc::new(LearningService::memory()));
     let (release, released) = mpsc::channel::<()>();
     let released = Mutex::new(released);
-    shared.history_runtime = HistoryRuntime::with_opener(None, true, false, move || {
-        let _ = released.lock().expect("opener gate").recv();
-        Err("test opener released".to_owned())
-    })
+    shared.history_runtime = HistoryRuntime::with_opener(
+        None,
+        true,
+        false,
+        move || {
+            let _ = released.lock().expect("opener gate").recv();
+            Err(std::io::Error::other("test opener released"))
+        },
+        None,
+    )
     .expect("start a history lifecycle with a stalled open");
 
     let wait = Duration::from_millis(50);
@@ -583,10 +589,16 @@ fn a_clear_waits_out_a_lifecycle_that_settles_within_its_ceiling() {
     let mut shared = test_shared(Arc::new(LearningService::memory()));
     let (release, released) = mpsc::channel::<()>();
     let released = Mutex::new(released);
-    shared.history_runtime = HistoryRuntime::with_opener(None, true, false, move || {
-        let _ = released.lock().expect("opener gate").recv();
-        Err("test opener released".to_owned())
-    })
+    shared.history_runtime = HistoryRuntime::with_opener(
+        None,
+        true,
+        false,
+        move || {
+            let _ = released.lock().expect("opener gate").recv();
+            Err(std::io::Error::other("test opener released"))
+        },
+        None,
+    )
     .expect("start a history lifecycle with a stalled open");
     let releaser = std::thread::spawn(move || {
         std::thread::sleep(Duration::from_millis(150));
@@ -624,9 +636,13 @@ fn a_held_clear_is_dispatched_with_the_service_it_was_held_with() {
 
     let mut shared = test_shared(Arc::new(LearningService::memory()));
     let opener_store = store.clone();
-    shared.history_runtime = HistoryRuntime::with_opener(None, true, false, move || {
-        InputHistoryService::open(&opener_store).map_err(|error| error.to_string())
-    })
+    shared.history_runtime = HistoryRuntime::with_opener(
+        None,
+        true,
+        false,
+        move || InputHistoryService::open(&opener_store),
+        None,
+    )
     .expect("start a history lifecycle");
     let enabled = Preferences {
         developer_mode: true,

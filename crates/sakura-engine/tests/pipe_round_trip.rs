@@ -1307,6 +1307,31 @@ fn history_store_lock(engine: &Engine) -> std::path::PathBuf {
         .join("input.bin.writer.lock")
 }
 
+/// The store owner denies every share on the lock handle: a denied probe
+/// open means the store is held. Works under both the old existence-based
+/// lock (removed on release) and the permanent lock (stays, unowned).
+fn store_held(lock: &std::path::Path) -> bool {
+    match std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(lock)
+    {
+        Ok(_) => false,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+        Err(_) => true,
+    }
+}
+
+/// Release is the owner handle closing, not the file vanishing: the
+/// permanent lock may stay on disk unowned, where a probe open succeeds.
+fn store_released(lock: &std::path::Path) -> bool {
+    std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(lock)
+        .is_ok()
+}
+
 fn wait_for(what: &str, condition: impl Fn() -> bool) {
     let deadline = Instant::now() + PATIENT;
     while !condition() {
@@ -1322,10 +1347,10 @@ fn wait_for(what: &str, condition: impl Fn() -> bool) {
 fn cycle_developer_mode(engine: &Engine) {
     let lock = history_store_lock(engine);
     publish_test_configuration(engine, &developer_mode_configuration(true));
-    wait_for("the history store to open", || lock.exists());
+    wait_for("the history store to open", || store_held(&lock));
     publish_test_configuration(engine, &developer_mode_configuration(false));
     wait_for("the disabled history to release its store", || {
-        !lock.exists()
+        store_released(&lock)
     });
 }
 
@@ -1364,7 +1389,7 @@ fn live_engine_clear_is_not_overtaken_by_developer_mode_off() {
     ));
     publish_test_configuration(&engine, &developer_mode_configuration(true));
     let lock = history_store_lock(&engine);
-    wait_for("the history store to open", || lock.exists());
+    wait_for("the history store to open", || store_held(&lock));
 
     let mut client = engine.client();
     let answer =
@@ -1377,7 +1402,7 @@ fn live_engine_clear_is_not_overtaken_by_developer_mode_off() {
 
     // The change was deferred, not lost.
     wait_for("the disabled history to release its store", || {
-        !lock.exists()
+        store_released(&lock)
     });
     assert!(matches!(
         client.call(&Request::InputHistoryStats, PATIENT),
