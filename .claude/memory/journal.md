@@ -4132,3 +4132,14 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Gates on the integrated tree: fmt --check, clippy -D warnings (release feature set), wrapped `cargo test --workspace` (126 green targets; only the three junction/reparse os-448 environmental rows fail on this machine and are confirmed failing identically on main f180478), dependency-rules, facade, dep-policy -SelfTest and enforce, release build, check-dll-size (452608 B < 1 MiB), accuracy-gate --check (0 fixed / 0 broken), process-clean.
 - Pre-publication checks, run together: no personal-data-like strings; commit identities are the owner's usual forms; the repository is already public; no v2.0.32 tag or release exists; LICENSE is present.
 - Residual: no on-screen check of an installed 2.0.32. The publication results will follow in a separate entry.
+
+## 2026-11-10 - 2.0.32 published (#456, #455, #461, main `a8c7cb8`)
+- Release: PR #462 (the #456 shifted-ASCII reading fix and #455 history-lock ownership fix) merged as `a1dd12e` (squash); PR #463 (version bump) merged as `a8c7cb8` (squash). CI on #463: all green. Before tagging, `gh pr list --state open` returned no PRs. The annotated tag v2.0.32 on `a8c7cb8` ran `release.yml` run 42846325694, both jobs green (build, sign-and-package; signing steps skipped in unsigned owner-approved mode).
+- Candidate checks:
+  - Installer: 25,876,550 bytes, SHA-256 `a4d52bdf...`, equal to the manifest.
+  - Manifest: release_sequence 40, source_commit `a8c7cb8`, `authenticode=unsigned`, expires 2027-05-09.
+  - The bundle installer and manifest equal the candidate; the bundle notes equal `docs/release-notes-v2.0.32.md` verbatim (same SHA-256).
+  - `gh attestation verify` (release.yml signer, source digest `a8c7cb8`) exit 0 for the installer and the manifest.
+  - The installer build report pins the same reranker model as 2.0.31 (`a58ebea1...`, 7,467,219 bytes).
+- Publish: `publish-release.ps1 -Publish` with the active DPAPI key (`key.0.id` = `178bc99d...`), stdin /dev/null, exited 0. Published 2026-11-10T15:59:11Z as Latest, not a draft, 3 assets; 1 valid pinned signature locally and on read-back. The script removed its read-back folder.
+- Residual: no reinstall and no on-screen check of an installed 2.0.32 (not requested). Local-only junction/reparse os-448 test failures are this machine's mount-point policy, confirmed failing identically on the pre-change baseline.
