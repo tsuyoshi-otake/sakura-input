@@ -271,3 +271,31 @@ reading	surface	left_id	right_id	word_cost	prediction_cost	flags	annotation
 # 7200 sits on upstream's 7485 page) -- so the IT term leads with
 # margin to spare and stays predictable.
 きょうかいち	境界値	1851	1949	6000	7200	it,predict	
+#
+# Issue #454: five reported readings led with a wrong context-free top-1.
+# Each fix is data-only, in the layer that owns the cause:
+#
+# - しょうき: the name-class edge 将暉 (1922, 4113) totalled 6903 and beat
+#   正気 (1931, 4878 -> 6999). Re-price the 正気 edge to 4722 so its lattice
+#   total lands 60 below the incumbent; the reviewed detail row in
+#   curated-homophone-details.tsv carries the same price.
+# - だいぜん / たいぜん: Mozc knows 大全 only under たいぜん (1851, 5820);
+#   だいぜん had no whole-reading edge at all, so 第(2628, 0) + 全(2609, 15)
+#   spliced it at 6922, and under たいぜん the existing edge lost to a
+#   splice at 6792. Admit the missing だいぜん edge at 5796 and re-price the
+#   たいぜん edge to 5666; each total lands 60 below its incumbent.
+# - ひんじゃくそう: the IT suffix edge そう/層 (1949, 2407) let 貧弱層 reach
+#   9817 while the fused 貧弱+そう様態 path paid 10109. Admit the
+#   whole-reading edge at 7636 so its total lands 60 below.
+# - とらんすくりぷと: the whole-loanword edge (1851, 6751 -> 7817) lost to
+#   a と + ランスクリプト splice at 5874. Re-price to 4748, 60 below;
+#   とらんすくりぷとかくにんして follows the same edge.
+# - いじれる: no potential-form edge exists for 弄る (Mozc carries none), so
+#   維持 + れるように won at 13367. Admit 弄れる on the potential-verb
+#   class 680, like upstream's 怒れる / 書ける.
+いじれる	弄れる	680	680	5000	6200	predict	
+だいぜん	大全	1851	1851	5796	6996	predict	
+しょうき	正気	1931	1931	4722	5922	predict	
+たいぜん	大全	1851	1851	5666	6866	predict	
+とらんすくりぷと	トランスクリプト	1851	1851	4748	5948	predict	
+ひんじゃくそう	貧弱そう	1931	2010	7636	-		

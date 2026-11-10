@@ -516,3 +516,42 @@ fn issue_371_phrase_edges_and_reprices_keep_their_calibrated_prices() {
         );
     }
 }
+
+/// Issue #454: five reported readings led with a wrong context-free top-1.
+/// The overlay admits two missing edges (大全 under だいぜん, 弄れる under
+/// いじれる), one whole-reading edge (貧弱そう), and re-prices three losing
+/// edges (正気, たいぜん/大全, トランスクリプト). Prices are the measured
+/// lattice calibrations on the tree-built dictionary; the ignored engine
+/// test holds the ranking claim.
+#[test]
+fn issue_454_rows_keep_their_calibrated_prices() {
+    let wanted = [
+        ("いじれる", "弄れる", 680, 680, 5000),
+        ("だいぜん", "大全", 1851, 1851, 5796),
+        ("しょうき", "正気", 1931, 1931, 4722),
+        ("たいぜん", "大全", 1851, 1851, 5666),
+        ("とらんすくりぷと", "トランスクリプト", 1851, 1851, 4748),
+        ("ひんじゃくそう", "貧弱そう", 1931, 2010, 7636),
+    ];
+    let overlay = overlay();
+    for (reading, surface, left_id, right_id, word_cost) in wanted {
+        let entry = overlay
+            .iter()
+            .find(|entry| {
+                entry.reading == reading
+                    && entry.surface == surface
+                    && entry.left_id == left_id
+                    && entry.right_id == right_id
+            })
+            .unwrap_or_else(|| panic!("missing {reading} -> {surface}"));
+        assert_eq!(entry.word_cost, word_cost, "{reading} -> {surface}");
+    }
+    // The shared prefixes keep their own edges: only the listed rows were
+    // touched, so だい, ひんじゃく and いじ stay untouched by the overlay.
+    for reading in ["だい", "ひんじゃく", "いじ"] {
+        assert!(
+            !overlay.iter().any(|entry| entry.reading == reading),
+            "{reading} must not be re-priced by the overlay"
+        );
+    }
+}

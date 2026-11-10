@@ -3949,3 +3949,39 @@ fn issue_372_a_segment_before_more_preedit_keeps_its_stem() {
     assert_eq!(top(true), "歩い");
     assert_ne!(top(false), "歩い");
 }
+
+/// Issue #454: five reported readings led with a wrong context-free top-1
+/// (将暉 over 正気, the 第+全 splice over 大全, 貧弱層 over 貧弱そう, a
+/// と+カタカナ splice over トランスクリプト, and 維持+れるように over the
+/// missing 弄れる edge). The overlay admits or re-prices each owning edge;
+/// these readings must now lead with the expected spelling, and the
+/// reported-as-correct controls must keep theirs.
+#[test]
+#[ignore = "needs the built system dictionary in artifacts/release"]
+fn issue_454_reported_readings_lead_with_the_expected_spelling() {
+    let mut wrong = Vec::new();
+    for (reading, expected) in [
+        ("しょうき", "正気"),
+        ("だいぜん", "大全"),
+        ("てすとだいぜん", "テスト大全"),
+        ("ひんじゃくそう", "貧弱そう"),
+        ("とらんすくりぷと", "トランスクリプト"),
+        ("とらんすくりぷとかくにんして", "トランスクリプト確認して"),
+        ("いじれるように", "弄れるように"),
+        ("みぎくりっくでいじれるように", "右クリックで弄れるように"),
+        // The same word's other reading lost to a splice for the same reason.
+        ("たいぜん", "大全"),
+        ("いじれる", "弄れる"),
+        // Reported-correct controls must keep their top-1.
+        ("しょうきですか", "正気ですか"),
+        ("ひんじゃくそうなんじゃない", "貧弱そうなんじゃない"),
+        ("じこ", "自己"),
+        ("だいぜんじ", "大善寺"),
+    ] {
+        let top = top_text(reading);
+        if top != expected {
+            wrong.push(format!("{reading}: expected {expected}, got {top}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{wrong:#?}");
+}
