@@ -2651,6 +2651,7 @@ fn session_cross_commit_bridge(
 /// nothing (`learnable` false or a sensitive scope) still stands between the
 /// caret and the previous commit, so it learns that one instead of leaving it
 /// for the next key to misread as erased (#277).
+#[allow(clippy::too_many_arguments)]
 fn record_learning(
     session: &mut Session,
     learning: Option<&LearningService>,
@@ -2659,6 +2660,7 @@ fn record_learning(
     policy: ExecutionPolicy,
     surface: &str,
     chosen_right_id: u16,
+    reading: &str,
 ) {
     if !policy.allows_persistence() {
         return;
@@ -2693,7 +2695,7 @@ fn record_learning(
             history.record_commit(
                 session.history_session_id(),
                 scope,
-                session.preedit.as_str(),
+                reading,
                 surface,
                 session.carry_right_id(),
                 chosen_right_id,
@@ -2706,7 +2708,7 @@ fn record_learning(
     if learnable && teaches {
         service.stage(
             session.process_unique_id(),
-            session.preedit.as_str(),
+            reading,
             surface,
             session.carry_right_id(),
             chosen_right_id,
@@ -2722,6 +2724,36 @@ fn record_learning(
             staged_correction(&correction),
         );
     } else {
+        service.confirm_staged(session.process_unique_id());
+    }
+}
+
+/// A commit whose text already stands but whose reading could not be built
+/// writes nothing: a truncated reading must never reach learning or history.
+/// What the commit still owns is the lifecycle side effect `record_learning`
+/// performs — the previously staged record settles exactly the way a
+/// non-learnable commit settles it (#275/#277), and the correction trail
+/// records this commit for the next one (#305).
+fn settle_unrecorded_commit(
+    session: &mut Session,
+    learning: Option<&LearningService>,
+    policy: ExecutionPolicy,
+    surface: &str,
+    chosen_right_id: u16,
+) {
+    if !policy.allows_persistence() {
+        return;
+    }
+    if !session.host_policy().allows_persistence() {
+        session.correction_trail_mut().clear();
+        return;
+    }
+    if !scope_is_sensitive(session.scope) && session.scope_classified() {
+        let _ = session.track_commit_correction(surface, chosen_right_id);
+    } else {
+        session.correction_trail_mut().clear();
+    }
+    if let Some(service) = learning {
         service.confirm_staged(session.process_unique_id());
     }
 }
@@ -4687,6 +4719,7 @@ fn commit_candidate_surface(
         normalizer.normalize_into(text, session.mode, scratch)?;
     }
     out.set_commit(scratch.as_str())?;
+    let reading = session.preedit.clone();
     record_learning(
         session,
         learning,
@@ -4695,6 +4728,7 @@ fn commit_candidate_surface(
         policy,
         scratch.as_str(),
         meta.right_id,
+        reading.as_str(),
     );
     if meta.raw_repair || meta.synthetic_exact {
         session.record_current_commit_without_cache(
@@ -5067,6 +5101,7 @@ fn commit_converted_segments(
     // real store on this machine had `と` biased towards `ﾄ` after three such
     // commits. The commit still reaches the developer input history, which is a
     // faithful record of what happened, but never the learning store.
+    let reading = session.preedit.clone();
     record_learning(
         session,
         learning,
@@ -5075,6 +5110,7 @@ fn commit_converted_segments(
         policy,
         scratch.as_str(),
         context_right_id,
+        reading.as_str(),
     );
     if raw_repair_committed
         || synthetic_exact_committed
@@ -5881,15 +5917,36 @@ fn commit_pending(
     if !session.converting && session.shifted_ascii && !session.raw_input.is_empty() {
         let surface = session.raw_input.clone();
         out.set_commit(surface.as_str())?;
-        record_learning(
-            session,
-            learning,
-            true,
-            input_history,
-            policy,
-            surface.as_str(),
-            0,
-        );
+        // The recorded reading must match the unshifted path, which flushes
+        // pending romaji before recording. `table.flush` mutates the input it
+        // is given, so run it on a local clone; flushed romaji that maps to
+        // nothing passes through unchanged, so a trailing half-typed `t`
+        // still lands in the reading. If the flush or the append overflows,
+        // the commit already stands -- the record is skipped, the same
+        // priority the rest of this function gives the commit text, while the
+        // staged record and correction trail are settled like a non-learnable
+        // commit would settle them.
+        let mut romaji = session.romaji.clone();
+        scratch.clear();
+        let mut reading = session.preedit.clone();
+        if table
+            .flush(&mut romaji, scratch)
+            .and_then(|()| reading.push_str(scratch.as_str()))
+            .is_ok()
+        {
+            record_learning(
+                session,
+                learning,
+                true,
+                input_history,
+                policy,
+                surface.as_str(),
+                0,
+                reading.as_str(),
+            );
+        } else {
+            settle_unrecorded_commit(session, learning, policy, surface.as_str(), 0);
+        }
         session.record_current_commit(surface.as_str(), 0, 0, 0);
         session.reset();
         return Ok(());
@@ -5928,6 +5985,7 @@ fn commit_pending(
     }
     if !scratch.is_empty() {
         out.set_commit(scratch.as_str())?;
+        let reading = session.preedit.clone();
         record_learning(
             session,
             learning,
@@ -5936,6 +5994,7 @@ fn commit_pending(
             policy,
             scratch.as_str(),
             0,
+            reading.as_str(),
         );
         if preserve_exact {
             session.record_current_commit_without_cache(scratch.as_str(), 0, 0, 0);
@@ -6207,6 +6266,7 @@ fn commit_suggestion_at(
     session.raw_input.clear();
     session.preedit = preedit;
     session.cursor = u16::try_from(candidate.reading().chars().count()).unwrap_or(u16::MAX);
+    let reading = session.preedit.clone();
     record_learning(
         session,
         learning,
@@ -6215,6 +6275,7 @@ fn commit_suggestion_at(
         policy,
         scratch.as_str(),
         candidate.right_id(),
+        reading.as_str(),
     );
     session.record_current_commit(
         scratch.as_str(),
