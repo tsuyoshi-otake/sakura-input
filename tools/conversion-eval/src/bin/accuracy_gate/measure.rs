@@ -10,6 +10,7 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
@@ -224,6 +225,7 @@ pub fn measure_context(
 ) -> Result<Vec<ContextOutcome>, String> {
     let dictionary = service.dictionary();
     let next = AtomicUsize::new(0);
+    let unreachable = Mutex::new(Vec::<String>::new());
     let workers = thread::available_parallelism()
         .map_or(1, usize::from)
         .min(8);
@@ -269,7 +271,7 @@ pub fn measure_context(
                             commit_carry(service, &row.clue_reading, &row.clue_surface)
                                 .map_err(|error| format!("{}: {error}", row.id))?;
                         let has_bridge = bridge.is_some();
-                        let (top, attempted) = with_service(|| {
+                        let (top, attempted, texts) = with_service(|| {
                             service.with_conversion_input_bridge_hints(
                                 ConversionInput::ordinary(&row.reading),
                                 ConversionOptions {
@@ -284,6 +286,10 @@ pub fn measure_context(
                                             .first()
                                             .map(|candidate| candidate.text().to_owned()),
                                         diagnostics.cross_commit_bridge_attempted,
+                                        candidates
+                                            .iter()
+                                            .map(|candidate| candidate.text().to_owned())
+                                            .collect::<Vec<_>>(),
                                     )
                                 },
                             )
@@ -293,6 +299,26 @@ pub fn measure_context(
                         })?;
                         let top =
                             top.ok_or_else(|| format!("{}: no context candidates", row.id))?;
+                        // A row whose answer cannot be produced measures the
+                        // corpus, not the engine. `@not-in-dictionary` marks
+                        // intentional misses (reason in README).
+                        if !row.allow_absent_expected
+                            && !texts.iter().any(|text| {
+                                text == &row.expected || row.variants.iter().any(|v| v == text)
+                            })
+                        {
+                            unreachable
+                                .lock()
+                                .unwrap_or_else(|poison| poison.into_inner())
+                                .push(format!(
+                                    "{}: expected '{}' (or a variant) is not among the {} candidates for '{}': [{}]",
+                                    row.id,
+                                    row.expected,
+                                    texts.len(),
+                                    row.reading,
+                                    texts.join(", ")
+                                ));
+                        }
                         let state = score_state(&top, &row.expected, &row.variants);
                         done.push((
                             index,
@@ -316,6 +342,19 @@ pub fn measure_context(
             })
             .collect()
     });
+    for part in &parts {
+        part.as_ref().map_err(|error| error.clone())?;
+    }
+    let failures = unreachable
+        .into_inner()
+        .unwrap_or_else(|poison| poison.into_inner());
+    if !failures.is_empty() {
+        return Err(format!(
+            "{} context rows expect a surface their reading cannot produce; fix the corpus or mark @not-in-dictionary (reason in README):\n{}",
+            failures.len(),
+            failures.join("\n")
+        ));
+    }
     let mut outcomes: Vec<Option<ContextOutcome>> = vec![None; rows.len()];
     for part in parts {
         for (index, outcome) in part? {

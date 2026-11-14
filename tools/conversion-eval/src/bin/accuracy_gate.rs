@@ -275,15 +275,25 @@ fn run() -> Result<bool, String> {
     if let Some(path) = &options.history_replay {
         let counts = replay::replay_history(&service, &read_text(path)?)?;
         println!("history replay (counts only; no readings or surfaces leave this run):");
-        println!("  normal-scope commits  : {}", counts.commits);
-        println!("  replayed with context : {}", counts.replayed);
-        println!("  top = committed       : {}", counts.top_match);
-        println!("  top != committed      : {}", counts.top_mismatch);
+        println!("  normal-scope commits            : {}", counts.commits);
+        println!("  of which after a convert key    : {}", counts.target);
+        println!("  top = committed                 : {}", counts.top_match);
         println!(
-            "  of which homophone swap (committed surface among the candidates): {}",
+            "  top != committed                : {}",
+            counts.top_mismatch
+        );
+        println!(
+            "  of which homophone swap (same non-kanji shape, kanji differ): {}",
             counts.homophone_swap
         );
-        println!("  skipped (no carry)    : {}", counts.skipped);
+        println!("  skipped (no preceding commit)   : {}", counts.skipped);
+        println!(
+            "  of which reading <= 4 chars     : target {} | match {} | mismatch {} | swap {}",
+            counts.short.target,
+            counts.short.top_match,
+            counts.short.top_mismatch,
+            counts.short.homophone_swap
+        );
         return Ok(true);
     }
 

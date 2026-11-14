@@ -53,6 +53,11 @@ pub struct ContextRow {
     pub reading: String,
     pub expected: String,
     pub variants: Vec<String>,
+    /// `@not-in-dictionary` in `variants`: this row measures a surface the
+    /// shipped dictionary does not carry, so the measurement-time check that
+    /// `expected` (or a variant) is among the candidates is skipped. The
+    /// reason belongs in `corpus/accuracy/README.md`.
+    pub allow_absent_expected: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -192,13 +197,14 @@ pub fn parse_prediction(source: &str) -> Result<Vec<PredictionRow>, String> {
 
 /// `context.tsv` rows. A pair is exactly two rows; the loader rejects shapes
 /// that would inflate or silently drop a side: duplicate ids, a pair with
-/// one or three rows, an empty clue (the whole point of the file), and a
-/// variant equal to the reading.
+/// one or three rows, pair rows that disagree on `reading` or agree on
+/// `expected` (the rows would not be homophones of each other), an empty clue
+/// (the whole point of the file), and a variant equal to the reading.
 pub fn parse_context(source: &str) -> Result<Vec<ContextRow>, String> {
     let file = "context.tsv";
     let mut ids = BTreeSet::new();
     let mut keys = BTreeSet::new();
-    let mut pairs: std::collections::BTreeMap<String, usize> = Default::default();
+    let mut pairs: std::collections::BTreeMap<String, Vec<(&str, &str, &str)>> = Default::default();
     let mut rows = Vec::new();
     for (number, fields) in data_lines(source, CONTEXT_HEADER, file)? {
         let context = format!("{file}:{number}");
@@ -231,15 +237,29 @@ pub fn parse_context(source: &str) -> Result<Vec<ContextRow>, String> {
         if !keys.insert((clue_reading, clue_surface, reading)) {
             return Err(format!("{context}: duplicate clue and reading in '{id}'"));
         }
-        *pairs.entry(pair.to_owned()).or_default() += 1;
-        let variants: Vec<String> = if variants.is_empty() {
-            Vec::new()
-        } else {
-            variants.split('|').map(str::to_owned).collect()
-        };
-        for variant in &variants {
+        pairs
+            .entry(pair.to_owned())
+            .or_default()
+            .push((id, reading, expected));
+        let mut allow_absent_expected = false;
+        let mut accepted: Vec<String> = Vec::new();
+        if !variants.is_empty() {
+            for variant in variants.split('|') {
+                if variant == "@not-in-dictionary" {
+                    allow_absent_expected = true;
+                    continue;
+                }
+                accepted.push(variant.to_owned());
+            }
+        }
+        for variant in &accepted {
             if variant.is_empty() {
                 return Err(format!("{context}: empty variant in '{id}'"));
+            }
+            if variant.starts_with('@') {
+                return Err(format!(
+                    "{context}: unknown directive '{variant}' in '{id}'; the only directive is @not-in-dictionary"
+                ));
             }
             if variant == reading {
                 return Err(format!(
@@ -256,13 +276,30 @@ pub fn parse_context(source: &str) -> Result<Vec<ContextRow>, String> {
             clue_surface: clue_surface.to_owned(),
             reading: reading.to_owned(),
             expected: expected.to_owned(),
-            variants,
+            variants: accepted,
+            allow_absent_expected,
         });
     }
-    for (pair, count) in pairs {
-        if count != 2 {
+    for (pair, members) in pairs {
+        if members.len() != 2 {
             return Err(format!(
-                "{file}: pair '{pair}' has {count} rows; a pair is exactly two"
+                "{file}: pair '{pair}' has {} rows; a pair is exactly two",
+                members.len()
+            ));
+        }
+        let [(first_id, first_reading, first_expected), (second_id, second_reading, second_expected)] =
+            members[..]
+        else {
+            continue;
+        };
+        if first_reading != second_reading {
+            return Err(format!(
+                "{file}: pair '{pair}' rows '{first_id}' and '{second_id}' read '{first_reading}' and '{second_reading}'; both sides of a homophone pair must share the target reading"
+            ));
+        }
+        if first_expected == second_expected {
+            return Err(format!(
+                "{file}: pair '{pair}' rows '{first_id}' and '{second_id}' both expect '{first_expected}'; the two sides must expect different surfaces"
             ));
         }
     }
@@ -369,6 +406,22 @@ mod tests {
         )
         .expect_err("three rows");
         assert!(error.contains("exactly two"), "{error}");
+    }
+
+    #[test]
+    fn context_rejects_pairs_with_different_readings_or_same_expected() {
+        let error = context(
+            "x1\tp1\tかわのはし\t川の橋\tかわの\t川の\tはし\t橋\t\n\
+             x2\tp1\tしょくじのはっし\t食事の発し\tしょくじの\t食事の\tはっし\t発し\t\n",
+        )
+        .expect_err("different readings");
+        assert!(error.contains("must share the target reading"), "{error}");
+        let error = context(
+            "x1\tp1\tかわのはし\t川の橋\tかわの\t川の\tはし\t橋\t\n\
+             x2\tp1\tしょくじのはし\t食事の橋\tしょくじの\t食事の\tはし\t橋\t\n",
+        )
+        .expect_err("same expected");
+        assert!(error.contains("different surfaces"), "{error}");
     }
 
     #[test]

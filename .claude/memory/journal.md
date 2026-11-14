@@ -4161,7 +4161,7 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Verification: log analysis only. Learning-free reproduction against the installed `system.dic` was not run (no prebuilt eval binary), so Finding 4 is not yet separated into dictionary cost vs learning vs reranker.
 - Learning: the history's own timestamps expose engine stalls (gap >= 400 ms followed by >= 3 keys <= 15 ms apart); this works after `debug.tsv` has rotated. Raw history stays local; delete the scratch export after analysis.
 
-2026-11-15 - Follow-up: installed 2.0.32 developer-log findings filed, cause isolation done (no code change)
+2026-11-14 - Follow-up: installed 2.0.32 developer-log findings filed, cause isolation done (no code change)
 
 - #457: commented on the two 11-12 16:11 key timeouts (207 ms / 209 ms, EngineUnavailableRecovery + CancelledStateTerminalized, class-2 lock rejection, 1 and 2 preedit chars lost). Counts only, no input content.
 - New issues: #465 (commit recorded with no commit key mid-typing, 1 of 7,531 commits, trigger unknown), #466 (logon.status profile_repair=failed carries no error code).
@@ -4173,7 +4173,7 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Learning: commit rows' left-context field = initial_right_id used for that conversion; right-context = last edge rid handed to the next conversion. Cross-commit bridge can only rescore existing candidates, never create them; a candidate absent from the current-only list cannot appear via bridge alone (長度 needed rid=2011 to exist at all). Generated candidates (numerals) expose no commit_bridge_tail - the real system edge inside the composite (ねん->年) is what bridges.
 - Verification: probes against installed dict only; scratch files under ~/tmp (conv-probe, acc-corpus, learn-check, gh-bodies). Repository working tree unchanged except this journal entry.
 
-2026-11-15 - #466 + #467 fixes landed on branches (release work in progress)
+2026-11-14 - #466 + #467 fixes landed on branches (release work in progress)
 
 - #466: `sakura-logon` execute's profile-repair callback now returns Result<(), i32>; the HRESULT (ActivateProfile / COM init) is stored on Outcome::profile_repair_error and written as `profile_error=0x...|none` in a version=2 logon.status. Branch `fix/466-profile-repair-error-code` (2c0d13c). Fail-before: the regression test cannot compile against the old bool API.
 - #467 (partial): cross-commit bridge no longer rescores through a spanning edge that ends mid-reading. `SpanningEdge` now requires the boundary-crossing edge to be the combined path's last edge (full-cover = the designed 検討|しますか lexeme-agnostic case; 年長|度 partial span fabricated ちょうど→長度). Verified against the installed system.dic: 長度 rescore gone, ちょうど/丁度 restored. Branch `fix/467-partial-spanning-bridge` (8e2e024). Fail-before: test asserted top=ちょうど, old code returned 長度.
@@ -4181,7 +4181,7 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Verification: cargo test -p sakura-logon (4 pass via ci/run-test-quiet.ps1); cargo test -p sakura-core --lib cross_commit + a_spanning_edge (6 pass, lexeme-agnostic full-cover case still rescored).
 - Cleanup: ~/tmp scratch files (learn-check incl. plaintext history.tsv, conv-probe, acc-corpus, gh-bodies, append_journal*.py) deleted per instruction.
 
-2026-11-15 - #457/#465/#448 fixes + #467 dictionary prices (integrated for 2.0.33)
+2026-11-14 - #457/#465/#448 fixes + #467 dictionary prices (integrated for 2.0.33)
 
 - #465: input-history format v3; CommitHistoryRecord gained `origin` (KEY=1 / COMMIT_REQUEST / CANDIDATE_COMMIT / SET_MODE / OTHER_REQUEST; 0=UNKNOWN). Dispatcher stamps session origin before dispatch (probes excluded ? stamping a ProbeKey broke the pure-restore test). Format-2 frames decode with origin 0. Issue kept open per owner: next keyless commit will name its request path.
 - #457: server times queue-wait/setup/dispatch/reply/total; >=150ms writes DiagName::KeySlow with five u64 microsecond values. Diag record has no string field by construction (raw input cannot be retained); gated on attached history + valid session + scope policy. Issue kept open.
@@ -4192,7 +4192,7 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Fail-beware note: dispatch_tests.rs identity fixture uses right_id 0 which would trip the function-word band ? hence the !=0 guard.
 - Integration: branches merged into integrate/2.0.33; journal kept from both sides.
 
-2026-11-15 - Sakura Input 2.0.33 released
+2026-11-14 - Sakura Input 2.0.33 released
 
 - Integrate PR #468 merged as 8d69298; release run failed on shipped_dictionary_ranking issue_84: learned `������` expectation was stale. Investigation proved `learned.exact=����` is correctly bounded by the bridge rescore; remaining top is reading-identical `�Ȃ���` (�Ȃ�+��, right class 325) which the #448 function-word exemption intentionally keeps hiragana. `������` had won only as the old skip rule's first non-identity row. Expectation updated via PR #469 (d29c44b).
 - Other two local failures were harness requirements, not defects: issue_334 needs SAKURA_BASE_SYSTEM_DIC+SAKURA_SYSTEM_DIC envs; issue_83 percentiles needs --release (passed: p99 2.7ms vs 20ms budget).
@@ -4210,7 +4210,7 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Verification: probe run and history counts only. The 2.0.33 dictionary was not probed. The share of the 108 cases whose clue sits in the preceding 12 characters (about 4 in 10 clear, 2 in 10 weak) is my reading of the rows, not a measured label set.
 - Learning: a homophone probe needs paired rows with opposite contexts; a single-row corpus passes whenever the expected word is the cheaper lemma and cannot see context blindness (same blind spot as #348).
 
-## 2026-11-15 - #471 phase 1: committed-context measurement landed in accuracy-gate
+## 2026-11-14 - #471 phase 1: committed-context measurement landed in accuracy-gate
 
 - Symptom/issue: homophone errors are context blindness (2026-11-14 entry). Phase 1 asks "would committed context have helped?" without touching ranking. Branch feat/471-context-measurement.
 - Corpus: corpus/accuracy/context.tsv, 105 authored homophone pairs (210 rows). Each row: oneshot_reading/expected, clue_reading/clue_surface, target reading/expected/variants; parser enforces nine columns, unique ids, unique (clue_reading, clue_surface, reading), exactly two rows per pair.
@@ -4221,3 +4221,15 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Verify 2 evidence: unit test commit_carry_mirrors_the_production_apply_path recomputes the production values inline (candidate_meta right-id + session_cross_commit_bridge bounds) and compares; the code shares cross_commit_tail and the bound constants rather than reimplementing them.
 - Verification: accuracy-gate --check PASS on the 2.0.33 dictionary (conversion/prediction/context all zero diffs vs accepted snapshot); 42 unit tests via ci/run-test-quiet.ps1; cargo fmt + clippy -D warnings clean; no leftover test processes.
 - Learning: snapshot parse must reconstruct bridge_attempted=bridge (the flag is runtime-only but the bounded pass can only run when a bridge was supplied) or --check invents 34 report-only bridge-engagement diffs.
+
+## 2026-11-14 - #471 independent verification, and the association-table design (#474)
+
+- Symptom: phases 1 and 2 of #471 were reported complete (PR #472, PR #473, CI green). The owner then asked for the root-cause method itself, with Devin doing the implementation.
+- Verification (fresh-context rubric-verifier on `aca1b8c`, dictionary sha256 `0cf3ecbf...`): 13 of 15 criteria pass. Fails: P1-3 (only 6 of the Issue's 50 seed pairs appear verbatim; the phrases were reworded so the clue precedes the target, without a record of the change) and P1-6 (the baseline is recorded without a commit SHA). Gaps under a pass: no test exercises session end or engine restart, criterion 2-3 has no output-inspection test (code reading only), and `Session::committed_context()` is `pub(crate)`, so the measurement tool cannot read it yet.
+- Root cause of a wrong baseline (found by reading `corpus/accuracy/context.tsv`): five rows expect a surface their reading cannot produce (c0176 かいけい->解析, c0190 ほうそう->暴走, c0196 こうきょう->工業, c0198 さんぎょう->残業, c0200 せいやく->静脈), c0182 expects 大王 for たいおう, and pair p038 is ぶしょ/ばしょ, which is not a homophone pair. The parser checks columns, ids and pair size, not that `expected` is reachable from `reading`, so "neither 7 / one 85" contains corpus defects.
+- Root cause of an unusable replay count: `replay.rs` replays every normal-scope commit. Counted on the live history (counts only, export deleted): 20,603 normal commits; 10,262 have surface == reading, 1,631 differ only in kana script, 8,710 differ from the reading; 8,762 follow a `convert` key. `homophone_swap` counts any mismatch whose committed surface is anywhere in the list. The reported 86.7% and 1,574 therefore mix never-converted commits into both sides.
+- Design decision (#474): method (a) as a group-relative association table mined from Japanese Wikipedia, w(c,t) = 500 * ln(P(c|t) / P(c|G)) over the words that share a reading, applied outside the engine to the unchanged candidate list; the top is swapped only inside the top's segmentation and above a margin. Tuning uses context.tsv only, under "zero broken rows in the 1,630-row gate"; the history replay is read once at the frozen setting; a 78-pair held-out file written by the verifier, disjoint in target readings, is applied after the freeze. The table is derived from CC BY-SA text and the repository is public MIT, so #474 does not commit the table.
+- Fix: none in this entry. Findings were posted on #471 and the work was handed to Devin.
+- Verification: verifier verdict (overall fail on 2 criteria); clean tree, temp directory removed, no leftover cargo or rustc.
+- Learning: a paired-corpus gate must check that each expected surface is among the candidates for its reading, or unreachable rows look like ranking misses. A replay over commit records must first select the commits that were conversions.
+

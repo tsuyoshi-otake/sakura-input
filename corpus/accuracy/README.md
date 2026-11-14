@@ -53,6 +53,60 @@ The eight slices are `chat`, `email`, `general`, `grammar`, `homophone`, `it`,
 - Learning and the reranker are not measured. A regression there needs its own
   measurement.
 
+## The context corpus and its seeds (#471)
+
+`context.tsv` starts from the 50 homophone pairs listed in Issue #471 (pairs
+p001–p050, in issue order) and adds 55 more pairs the same way (p051–p105).
+The seeds are full phrases; the corpus separates each phrase into a clue that
+is committed first and a target reading converted after. Three rewrite rules
+were applied wherever a seed did not fit that shape:
+
+- The clue must precede the target, so a seed whose homophone word sits at the
+  start of the phrase was reworded (`あきじかん`/`あきのそら` became the pair
+  `あき`: 空き/秋, with ひまな→暇な and 紅葉→紅葉の as the clues). Where the
+  seed's homophone is only part of a longer word (`試作機` vs `施策`), the
+  target is the shared reading (`しさく`), not the whole word.
+- Both rows of a pair must read the same and expect different surfaces —
+  the loader rejects any other shape, and rows the review found not to be
+  homophones (`ぶしょ`/`ばしょ`, readings that carry a different vowel) were
+  replaced (`いどう`: 異動/移動 stands for the seed 部署を異動する/場所を移動する).
+- `expected` must be producible from `reading`; misread surfaces (解析 for
+  かいけい, 大王 for たいおう, and similar) were replaced by real homophones
+  of the same reading or by a new pair.
+
+All 50 seed target readings remain: p001 せいど, p002 しようりょう,
+p003 せんい, p004 ごうせい, p005 はれる, p006 ていしょく, p007 いってます,
+p008 あき, p009 きばん, p010 しさく, p011 ふか, p012 きのう, p013 かんじ,
+p014 しよう, p015 じこ, p016 けいい, p017 いじょう, p018 りようりょう,
+p019 じしん, p020 じゅよう, p021 ようい, p022 しょうか, p023 げんてん,
+p024 たいせい, p025 しゅどう, p026 こうがく, p027 きゅうでん, p028 ほかん,
+p029 しこう, p030 へいこう, p031 じき, p032 きょうちょう, p033 せんとう,
+p034 しめる, p035 かみ, p036 あつさ, p037 ひょう, p038 いどう, p039 にちじ,
+p040 かち, p041 きち, p042 たいとう, p043 こうしょう, p044 かんしょう,
+p045 せいかく, p046 こうせい, p047 たいしょう, p048 かてい, p049 しじ,
+p050 かんしん.
+
+## History replay (`--history-replay`)
+
+`accuracy-gate --history-replay <export.tsv>` replays an outside-repository
+developer-history export through the same committed-context path. Only counts
+are printed; no readings, surfaces or session data leave the run.
+
+- **Measured rows**: `commit` records in `normal` scope whose most recent
+  `key` record in the same session has `action = convert` — the convert key
+  itself committed the candidate. All other normal commits still join the
+  clue chain, because the engine's committed context sees every commit.
+- **Clue**: the previous `normal` commit in the same session; its carry is
+  derived exactly as the measurement above (`initial_right_id` + bounded
+  `cross_commit_tail` bridge).
+- **Homophone swap**: a mismatch counts only when the first candidate and the
+  committed surface both contain kanji and their non-kanji character sequence
+  (the okurigana shape) is identical — "appeared somewhere in the candidate
+  list" does not count.
+- **Columns** are read by header name (`kind`, `session`, `scope`, `action`,
+  `reading`, `surface` are required); the breakdown for readings of four
+  characters or fewer is printed alongside the totals.
+
 ## Corpus rules
 
 The loader rejects a corpus that would hide or inflate a result:
@@ -64,8 +118,16 @@ The loader rejects a corpus that would hide or inflate a result:
   `(clue_reading, clue_surface, reading)` in `context.tsv`;
 - an unknown slice, a wrong column count, a wrong header;
 - in `context.tsv`: a pair with other than exactly two rows, an empty required
-  field, or a clue surface the clue conversion does not propose (the gate
-  fails at measure time and names the row).
+  field, a clue surface the clue conversion does not propose (the gate fails
+  at measure time and names the row), or a pair whose two rows disagree on
+  `reading` or agree on `expected` — neither shape is a homophone pair;
+- in `context.tsv`: an `expected` surface (and none of its variants) that is
+  not among the candidates for `reading` — the gate fails at measure time and
+  names every such row, because an unreachable answer measures the corpus,
+  not the engine. A row that intentionally measures a surface absent from the
+  shipped dictionary opts out with `@not-in-dictionary` in `variants`; the
+  directive is not a variant, and the reason belongs in this README or the
+  row's Issue.
 
 Do not commit rows taken from Tatoeba or the Mozc evaluation set, URLs, mail
 addresses, telephone numbers or anyone's input history. A new improvement should
