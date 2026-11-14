@@ -12,7 +12,10 @@ makes some rows worse is visible even when the totals look fine. The tool is
 | `prediction.tsv` | 1,605 authored words: `id, reading, surface, slice, pos` | hand |
 | `conversion.snapshot.tsv` | per row: `id, state, top` (state 2 = expected, 1 = variant, 0 = wrong) | `--accept` |
 | `prediction.snapshot.tsv` | per word: `id, full, half, k9, k1` (ranks inside the nine suggestions; 0 = absent) | `--accept` |
+| `context.tsv` | 105 homophone pairs (210 rows): `id, pair, oneshot_reading, oneshot_expected, clue_reading, clue_surface, reading, expected, variants` | hand |
+| `context.snapshot.tsv` | per row: `id, oneshot state/top, context state/top, bridge` | `--accept` |
 | `floors.tsv` | integer floors per slice and `ALL` | `--accept` |
+| `context-floors.tsv` | integer floors for the context counts | `--accept` |
 | `accepted-breaks.tsv` | rows allowed to get worse: `kind, id, issue, reason, date` | hand |
 | `external/README.md` | the local, uncommitted Tatoeba and Mozc layer | hand |
 
@@ -35,8 +38,20 @@ The eight slices are `chat`, `email`, `general`, `grammar`, `homophone`, `it`,
   same with rank 1. They count keystrokes before the choice key and say nothing
   about how long a person takes to find the word: they are regression
   indicators, not the experienced saving.
-- Learning, the reranker and context are not measured. A regression there needs
-  its own measurement.
+- Context (#471, phase 1): each row converts `oneshot_reading` in a fresh
+  session, then replays a commit of `clue_surface` for `clue_reading` and
+  converts `reading` through the same carry the production Apply path stores —
+  the committed candidate's last-segment `initial_right_id` plus a
+  `CrossCommitBridge` derived by `cross_commit_tail` inside
+  `SessionCrossCommitBridge`'s bounds. `bridge` in the snapshot means the clue
+  produced a usable tail; `context cross-commit passes` counts runs of the
+  bounded cross-commit pass. Both forms keep `expected`/`variants` scoring.
+  Pair buckets count a pair's two rows under committed context: both expected,
+  exactly one, or neither. The measurement is read-only for ranking — it asks
+  whether context *would* have helped, it does not change what the engine
+  produces.
+- Learning and the reranker are not measured. A regression there needs its own
+  measurement.
 
 ## Corpus rules
 
@@ -45,8 +60,12 @@ The loader rejects a corpus that would hide or inflate a result:
 - a variant equal to the reading (a kana answer for a conversion that did not
   happen), an empty variant;
 - a duplicate id, a duplicate reading in `conversion.tsv`, a duplicate
-  reading and surface in `prediction.tsv`;
-- an unknown slice, a wrong column count, a wrong header.
+  reading and surface in `prediction.tsv`, a duplicate
+  `(clue_reading, clue_surface, reading)` in `context.tsv`;
+- an unknown slice, a wrong column count, a wrong header;
+- in `context.tsv`: a pair with other than exactly two rows, an empty required
+  field, or a clue surface the clue conversion does not propose (the gate
+  fails at measure time and names the row).
 
 Do not commit rows taken from Tatoeba or the Mozc evaluation set, URLs, mail
 addresses, telephone numbers or anyone's input history. A new improvement should
@@ -86,32 +105,39 @@ snapshot in the same PR.
 - Prediction improved and worsened words, rank moves inside the nine (report
   only), and the words that entered or left the nine after the full and half
   reading.
+- Context: the pair bucket and the lenient/strict counts for both forms, the
+  rows whose one-shot or committed-context state changed, and (report only)
+  same-state top changes and bridge engagement changes.
 - `check: PASS`, or `check: FAIL` with the violated conditions below.
 
 ## Failure conditions of `--check`
 
 1. A row's state changed while the snapshot was not updated (conversion: state
-   2/1/0; prediction: `full@1`, `full@9`, `half@9` or `k9`).
+   2/1/0; prediction: `full@1`, `full@9`, `half@9` or `k9`; context: the
+   one-shot or the committed-context state).
 2. A row got worse and `accepted-breaks.tsv` does not list it.
 3. A measured count is below its floor.
 4. A floor is below the count the snapshot files imply (this stops lowering
    only the floors).
 5. An accepted break names an unknown id, or a row that is now at its best
-   state (conversion state 2; prediction `full@1`, `half@9` and `k9 = 1`).
+   state (conversion state 2; prediction `full@1`, `half@9` and `k9 = 1`;
+   context: one-shot *and* committed-context state 2 — the break stays while
+   either form is worse).
 
-A changed top surface with the same state and a reordering inside the nine
-suggestions are not failures.
+A changed top surface with the same state, a reordering inside the nine
+suggestions, and a change in whether the clue produced a usable bridge are not
+failures.
 
 ## Accept a change
 
 1. Run the gate and read the report: every changed row is listed.
 2. For each worsened row, add one line to `accepted-breaks.tsv` with the kind
-   (`conversion` or `prediction`), the row id, the Issue (`#123`), a one-line
-   reason that states the Issue's measured fixed and broken rows, and the date
-   (`YYYY-MM-DD`).
+   (`conversion`, `prediction` or `context`), the row id, the Issue (`#123`), a
+   one-line reason that states the Issue's measured fixed and broken rows, and
+   the date (`YYYY-MM-DD`).
 3. Run the same command with `--accept` instead of `--check`. It refuses while
-   a worsened row has no entry; otherwise it rewrites the two snapshots and
-   sets every floor to the newly measured count.
+   a worsened row has no entry; otherwise it rewrites the snapshots and sets
+   every floor to the newly measured count.
 4. Remove accepted-break entries whose row is back at its best state (condition
    5 reports them), commit the changed files and paste the report into the PR.
 
