@@ -4266,3 +4266,18 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - v2 procedure frozen by owner before v2 tables: article-level pair dedup; beta-smoothed weight P~(t|c)=(near+B*share)/(group_near+B), w=500*ln(P~/share), B in {10,100,1000} applied at load; per-W counts files instead of weight tables; history split by session-serial parity (even=tune, odd=confirm, confirm replayed once); 216-point grid with candidates cached per row; selection = tune fixed >= 5*broken AND ctx_strict >= 105, then max (fixed-broken).
 - v1 tables/dumps stay until v2 finishes: verification still re-runs replay/grid against them.
 - Learning: a selection guard that cannot observe the failure mode it guards (intra=off sees no clues) is not a guard. Weights derived from ratios alone silently drop count evidence - always keep raw counts in the emitted artifact and apply smoothing at read time.
+
+
+## 2026-11-11 #474 v2 prototype (per owner v2 procedure)
+
+Symptom: v1 association table failed independent verification 11/14 - weight_of ignored occurrence counts, so a clue seen with only one word of a homophone group got a constant maximum weight (59-way tie at 1040 for 異動).
+
+Work so far (commit c5dd8a8, tools only; no engine/product ranking change):
+
+- Article-level counting: each (target, clue) pair tallies at most once per article into the closest distance bucket; per-target article totals kept for share(t).
+- Counts files emit raw near/group_near/target_total/group_total per W; beta applied at load time (w = 500*ln(P~/share), P~ = (near + beta*share)/(group_near + beta)).
+- assoc-eval strict args (unknown/dangling/extra args exit 2; the --per-row stray-path hole is closed); Config gains beta (7-field); grid = 216 points on cached candidates; history split by session parity (--subset even/odd/all); selection implements the pre-declared rule.
+- Part-1 benchmark BEFORE full recount: 79,090 articles / 6,724,833 paragraphs / 120,853,088 pair keys in 789s, peak WS ~7.1 GB (emit phase), scans=0 dropped=0. Same unique-pair denominators as v1 det1 for all three windows.
+- Refactored replay verified equivalent: empty table -> before=after 7,660/8,786; even 3,449 + odd 4,211 = 7,660.
+
+Learning: keep raw counts in the emitted artifact and apply smoothing at read time - recounting for every beta would have cost ~2.5h each.
