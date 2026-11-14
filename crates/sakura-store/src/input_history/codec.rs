@@ -32,6 +32,7 @@ const RECORD_KEY: u8 = 1;
 const RECORD_COMMIT: u8 = 2;
 const RECORD_AI_TEXT: u8 = 3;
 const RECORD_ENGINE: u8 = 4;
+const RECORD_DIAG: u8 = 5;
 
 fn decode_ai_operation(value: u8) -> io::Result<AiTextOperation> {
     match value {
@@ -93,6 +94,7 @@ impl InputHistoryRecord {
                 put_u16(&mut bytes, record.right_context);
                 put_string(&mut bytes, &record.reading)?;
                 put_string(&mut bytes, &record.surface)?;
+                bytes.push(record.origin);
             }
             Self::AiText(record) => {
                 bytes.push(RECORD_AI_TEXT);
@@ -122,6 +124,19 @@ impl InputHistoryRecord {
                 bytes.push(record.scope as u8);
                 put_string(&mut bytes, &record.package_version)?;
                 put_string(&mut bytes, &record.release_label)?;
+            }
+            Self::Diag(record) => {
+                bytes.push(RECORD_DIAG);
+                put_u64(&mut bytes, record.sequence);
+                put_u64(&mut bytes, record.timestamp_ms);
+                put_u64(&mut bytes, record.session);
+                bytes.push(record.scope as u8);
+                put_u16(&mut bytes, record.name);
+                put_u64(&mut bytes, record.value_a);
+                put_u64(&mut bytes, record.value_b);
+                put_u64(&mut bytes, record.value_c);
+                put_u64(&mut bytes, record.value_d);
+                put_u64(&mut bytes, record.value_e);
             }
         }
         if bytes.len() > MAX_RECORD_BYTES {
@@ -193,6 +208,12 @@ impl InputHistoryRecord {
                 right_context: reader.u16()?,
                 reading: reader.string()?,
                 surface: reader.string()?,
+                // Format-2 frames end here; format 3 appends the origin.
+                origin: if reader.remaining() > 0 {
+                    reader.u8()?
+                } else {
+                    0
+                },
             }),
             RECORD_AI_TEXT => Self::AiText(AiTextHistoryRecord {
                 sequence,
@@ -220,6 +241,18 @@ impl InputHistoryRecord {
                 scope,
                 package_version: reader.string()?,
                 release_label: reader.string()?,
+            }),
+            RECORD_DIAG => Self::Diag(DiagHistoryRecord {
+                sequence,
+                timestamp_ms,
+                session,
+                scope,
+                name: reader.u16()?,
+                value_a: reader.u64()?,
+                value_b: reader.u64()?,
+                value_c: reader.u64()?,
+                value_d: reader.u64()?,
+                value_e: reader.u64()?,
             }),
             _ => return Err(invalid_data("unknown input history record")),
         };
@@ -279,6 +312,10 @@ impl<'a> Reader<'a> {
         let length = self.u16()? as usize;
         String::from_utf8(self.take(length)?.to_vec())
             .map_err(|_| invalid_data("input history text is not UTF-8"))
+    }
+
+    fn remaining(&self) -> usize {
+        self.bytes.len().saturating_sub(self.offset)
     }
 
     fn finish(self) -> io::Result<()> {

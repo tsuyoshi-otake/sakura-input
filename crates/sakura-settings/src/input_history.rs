@@ -112,7 +112,9 @@ pub fn mine_snapshot(snapshot: &InputHistorySnapshot) -> MineReport {
             InputHistoryRecord::Key(key) => {
                 keys_by_session.entry(key.session).or_default().push(key);
             }
-            InputHistoryRecord::AiText(_) | InputHistoryRecord::Engine(_) => {}
+            InputHistoryRecord::AiText(_)
+            | InputHistoryRecord::Engine(_)
+            | InputHistoryRecord::Diag(_) => {}
         }
     }
     commits.sort_by_key(|record| (record.session, record.sequence));
@@ -777,6 +779,7 @@ mod tests {
                     surface: "synthetic".to_owned(),
                     left_context: 0,
                     right_context: 0,
+                    origin: 0,
                 }),
             ],
         )
@@ -836,6 +839,7 @@ mod tests {
             surface: surface.to_owned(),
             left_context: 0,
             right_context: 0,
+            origin: 0,
         })
     }
 

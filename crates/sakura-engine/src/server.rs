@@ -57,7 +57,7 @@ use sakura_ipc::{
 use crate::ai_text::AiTextService;
 use crate::composition_fence::CompositionFence;
 use crate::dictionary::ConversionService;
-use crate::dispatch::{Dispatcher, Reply};
+use crate::dispatch::{request_session_id, Dispatcher, Reply};
 use crate::fault_injection;
 use crate::history_runtime::{HistoryRuntime, LifecycleHold};
 use crate::input_history::InputHistoryService;
@@ -1482,6 +1482,10 @@ fn serve(
         Err(outcome) => return outcome,
     };
     loop {
+        // Issue #457: the frame's arrival starts the service-time clock so a
+        // slow key leaves a content-free phase breakdown in the history's
+        // `diag` records instead of only "the client gave up".
+        let arrived = Instant::now();
         let (id, request) = if let Some(initial) = initial.take() {
             initial
         } else {
@@ -1668,6 +1672,7 @@ fn serve(
         // the decoded frame because `WatchUi` blocks on purpose until the UI
         // moves; folding a long poll into this total would bury every key
         // request under it.
+        let service_started = Instant::now();
         let _request_span = timing::Span::start(EngineTimingSite::RequestTotal);
 
         let consumed_candidate_commit = if let Request::CommitCandidate {
@@ -1722,6 +1727,7 @@ fn serve(
             _ => None,
         };
 
+        let setup_started = Instant::now();
         let configuration = {
             let _span = timing::Span::start(EngineTimingSite::ConfigurationSnapshot);
             shared.configuration_snapshot()
@@ -1745,6 +1751,7 @@ fn serve(
                 format_args!("configuration update rejected: {error}"),
             );
         }
+        let setup_us = setup_started.elapsed().as_micros() as u64;
 
         // Configuration/runtime locks may have delayed this request since
         // the first check. Do not dispatch a client that closed while waiting.
@@ -1758,13 +1765,16 @@ fn serve(
         // moved and no reply exists. A key delayed here is the mildest of the
         // four stories, and the one a correct client should always survive.
         fault_injection::delay(FaultPoint::BeforeDispatch);
+        let dispatch_started = Instant::now();
         let reply = {
             let _span = timing::Span::start(EngineTimingSite::Dispatch);
             dispatcher.dispatch(&request, &mut bufs.out)
         };
+        let dispatch_us = dispatch_started.elapsed().as_micros() as u64;
         // Nothing past the dispatch works on the store, and sending the reply
         // can wait on a slow client for as long as that client likes.
         drop(history_hold);
+        let reply_started = Instant::now();
         match reply {
             Reply::Output => {
                 #[cfg(all(test, feature = "dev-fixtures"))]
@@ -1858,8 +1868,29 @@ fn serve(
                 return Outcome::Shutdown;
             }
         }
+        // Issue #457: a request that consumed an unusual share of a client's
+        // wait budget leaves a phase breakdown — queue/setup/dispatch/reply —
+        // so the next report can name where the wait went. The record is
+        // five integers and names no text.
+        let total_us = arrived.elapsed().as_micros() as u64;
+        if total_us >= SLOW_REQUEST_US {
+            dispatcher.record_slow_request(
+                request_session_id(&request),
+                (service_started - arrived).as_micros() as u64,
+                setup_us,
+                dispatch_us,
+                reply_started.elapsed().as_micros() as u64,
+                total_us,
+            );
+        }
     }
 }
+
+/// Engine service time above which a request leaves a `diag` evidence
+/// record (Issue #457). The observed client wait budgets run around 200ms;
+/// 150ms catches requests that would pressure that budget without recording
+/// the ordinary single-digit-millisecond key path.
+const SLOW_REQUEST_US: u64 = 150_000;
 
 fn trace_key_result(request: &Request, output: &OutputBuf) {
     let Request::SendKey { session, key } = request else {

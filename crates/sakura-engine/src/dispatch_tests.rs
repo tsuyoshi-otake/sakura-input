@@ -1403,6 +1403,76 @@ fn the_shipped_punctuation_style_stays_selected_when_it_equals_the_reading() {
     assert_eq!(out.commit_text(), Some("\u{3001}"));
 }
 
+/// Issue #448, owner decision 2026-11-14: a function-word cluster whose
+/// first row is the hiragana spelling keeps that row selected.  Edges in the
+/// dictionary's particle / auxiliary class band (< 500) mark the reading as
+/// one whose hiragana form is the right answer; the old rule skipped it and
+/// showed a rare homophone.  The class-700 kana row proves the boundary: a
+/// verb-stem spelling above the band is still skipped for the kanji.
+#[test]
+fn a_function_word_reading_keeps_its_hiragana_first_row() {
+    let entries = dictc_core::parse_entries(
+        "function-word.tsv",
+        concat!(
+            "# license: MIT\n",
+            "reading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n",
+            "ばかり\tばかり\t310\t310\t0\t0\t\t\n",
+            "ばかり\tバカリ\t320\t320\t100\t100\t\t\n",
+            "き\tき\t700\t700\t0\t0\t\t\n",
+            "き\t木\t600\t600\t100\t100\t\t\n",
+        ),
+    )
+    .unwrap();
+    let matrix = dictc_core::parse_connection(
+        "function-word-matrix.tsv",
+        "# license: MIT\nclasses\t800\ndefault\t0\n",
+        false,
+    )
+    .unwrap();
+    let image = Box::leak(
+        dictc_core::compile(&entries, &matrix)
+            .unwrap()
+            .into_boxed_slice(),
+    );
+    let service = Arc::new(ConversionService::from_static_bytes(image).unwrap());
+    let mut dispatcher = Dispatcher::new_with_conversion(service).unwrap();
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "function-word.exe");
+    type_word(&mut dispatcher, session, "bakari", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Space),
+        },
+        &mut out,
+    );
+    assert_eq!(
+        out.selected_candidate(),
+        Some(0),
+        "a particle-class hiragana row is the right answer and stays selected"
+    );
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Enter),
+        },
+        &mut out,
+    );
+    type_word(&mut dispatcher, session, "ki", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Space),
+        },
+        &mut out,
+    );
+    assert_eq!(
+        out.selected_candidate(),
+        Some(1),
+        "a kana row above the particle band is still skipped for the kanji"
+    );
+}
+
 /// A style the reader changed leaves learned surfaces behind: every commit
 /// made while ，． was configured taught the ranker that the touten reading
 /// resolves to ，.  The installed build had 150 such rows and converted one
@@ -3223,7 +3293,8 @@ fn test_only_enter_preserves_learning_preference_and_input_history_before_real_e
         InputHistoryRecord::Commit(record) => Some(record),
         InputHistoryRecord::Key(_)
         | InputHistoryRecord::AiText(_)
-        | InputHistoryRecord::Engine(_) => None,
+        | InputHistoryRecord::Engine(_)
+        | InputHistoryRecord::Diag(_) => None,
     });
     assert_eq!(commit.map(|record| record.reading.as_str()), Some(reading));
     assert_eq!(
@@ -12142,6 +12213,111 @@ fn another_dispatchers_conversion_does_not_learn_a_commit_awaiting_its_undo_outc
         learning.confirm_all_staged();
         assert_eq!(learned_kana_choice(&learning), expected, "{outcome:?}");
     }
+}
+
+/// #465: a commit history record names which request variant produced it, so
+/// a "commit with no commit key" can be blamed on the request path that
+/// issued it instead of being guessed at. The host-side `Request::Commit`
+/// records origin 2 (no key existed); a `SendKey` Enter records origin 1.
+#[test]
+fn a_commit_record_names_the_request_that_produced_it() {
+    let learning = Arc::new(LearningService::memory());
+    let history_root = phase_one_learning_path("commit-origin");
+    let history_path = history_root.with_file_name("input-history.bin");
+    let history = InputHistoryService::open(&history_path).expect("history");
+    let mut dispatcher = Dispatcher::new_with_services(conversion_fixture(), Arc::clone(&learning))
+        .expect("dispatcher");
+    dispatcher.set_input_history(Some(Arc::clone(&history)));
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "editor.exe");
+    dispatcher.dispatch(
+        &Request::SetInputScope {
+            session,
+            scope: InputScope::Normal,
+        },
+        &mut out,
+    );
+
+    type_word(&mut dispatcher, session, "ka", &mut out);
+    dispatcher.dispatch(&Request::Commit { session }, &mut out);
+    assert!(out.commit_text().is_some());
+
+    type_word(&mut dispatcher, session, "ki", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Enter),
+        },
+        &mut out,
+    );
+    assert!(out.commit_text().is_some());
+
+    history.flush().expect("flush commit origins");
+    let records = crate::input_history::read_snapshot(&history_path)
+        .expect("commit-origin history")
+        .records;
+    let origins: Vec<u8> = records
+        .iter()
+        .filter_map(|record| match record {
+            InputHistoryRecord::Commit(record) => Some(record.origin),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(origins, vec![2, 1]);
+}
+
+/// #457: a request that burns an unusual share of a client's wait budget
+/// leaves a content-free phase breakdown in a `diag` history record —
+/// queue, setup, dispatch, reply, and total microseconds, never text.
+#[test]
+fn a_slow_request_leaves_a_diag_record() {
+    let learning = Arc::new(LearningService::memory());
+    let history_root = phase_one_learning_path("slow-request-diag");
+    let history_path = history_root.with_file_name("input-history.bin");
+    let history = InputHistoryService::open(&history_path).expect("history");
+    let mut dispatcher = Dispatcher::new_with_services(conversion_fixture(), Arc::clone(&learning))
+        .expect("dispatcher");
+    dispatcher.set_input_history(Some(Arc::clone(&history)));
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "editor.exe");
+    dispatcher.dispatch(
+        &Request::SetInputScope {
+            session,
+            scope: InputScope::Normal,
+        },
+        &mut out,
+    );
+
+    dispatcher.record_slow_request(Some(session), 10, 20, 300_000, 40, 300_170);
+
+    history.flush().expect("flush slow-request diag");
+    let records = crate::input_history::read_snapshot(&history_path)
+        .expect("diag history")
+        .records;
+    let diag = records
+        .iter()
+        .find_map(|record| match record {
+            InputHistoryRecord::Diag(record) => Some(record),
+            _ => None,
+        })
+        .expect("no diag record recorded");
+    let history_session = dispatcher
+        .sessions
+        .get(session)
+        .expect("session")
+        .history_session_id();
+    assert_eq!(diag.session, history_session);
+    assert_eq!(diag.name, 1);
+    assert_eq!(
+        (
+            diag.value_a,
+            diag.value_b,
+            diag.value_c,
+            diag.value_d,
+            diag.value_e
+        ),
+        (10, 20, 300_000, 40, 300_170)
+    );
 }
 
 #[path = "dispatch_correction_tests.rs"]
