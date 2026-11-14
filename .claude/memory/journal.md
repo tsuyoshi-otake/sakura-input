@@ -4243,3 +4243,16 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Verify numbers: accuracy-gate --check PASS on the 2.0.33 dictionary - zero diffs across conversion/prediction/context. Key latency ipc_latency benchmark (5000 SendKey round trips, release): installed 2.0.33 p50 41.1us/p99 97.5us vs with-context p50 38.0us/p99 86.3us (budget 5ms). Engine WorkingSetPrivate on an isolated test pipe: 2.0.33 12.96 MiB vs with-context 12.90 MiB (budget 15 MiB; 13,586,432 vs 13,529,088 bytes); delta is noise, structurally bounded at +256B per session slot.
 - Harness addition: tests/common Engine::spawn honors SAKURA_ENGINE_EXE so the same benchmark ran the installed engine as the before-leg without a rebuild.
 - Deferred decisions reported on #471, not decided: mid-document edits the tail cannot observe, focus moves without ResetDocumentContext, and the relation to #34's worker-context contract.
+
+## 2026-11-14 - #474: association-table measurement complete (method (a) measured, not adopted)
+
+- What: built assoc-table-build (extract/count/emit/examples) + assoc-eval (baseline/grid/run/replay/perf/dump) + context-probe (research-only, feature-gated, not in default build/installer). Mined jawiki-20261101 (7 parts, all official SHA-1 verified, CC BY-SA 4.0): 2.48M articles, 75.1M paragraphs, 215.3M pairs; emitted table-W30/60/120 with min_pair=10.
+- Memory cap (owner order: <=12 GB): packed u64 pair keys, target words narrowed to same-reading competitors within min-cost+3000 (190,267 kept), clue surfaces to top 60,000 by dictionary cost; retain-scan guard at 230M pairs fired R=5 times, dropping 386M singleton occurrences (guarantee: true count >= 15 survives). Peak WS 9,939 MB.
+- Determinism: part 1 re-counted twice sequentially -> all 3 table SHA-256 identical.
+- Baseline fix: the 7,664/834 replay quote was measured on the OLD dictionary `1871683e`; shipped `0cf3ecbf` gives 7,660/838/187 deterministically (2 runs). All tools now print the opened dictionary path+SHA-256.
+- Frozen config (predeclared rule, posted before replay): conv_broken=0 all 144 grid points -> max ctx_strict=151 unique -> W=120/lambda=2000/cap=3000/margin=0/N=8/intra=off.
+- Result: context corpus strict 105->151, but REAL HISTORY replay regressed: top=committed 7,660->7,299 (fixed 108, broken 469; <=4-char 4,328->4,105). Method (a) as measured is not shippable; posted as-is to #474 for owner decision. No production ranking change.
+- Root cause hypothesis for the regression (observed, not proven): for high-frequency targets the top-10 clues collapse to same-weight month names/generic words (e.g. idou=67 x10), i.e. the group-relative score has weak discrimination where it matters most.
+- Perf (outside-engine): table load +571 MB WS; apply p50 3.4us / p99 10us.
+- Kept for owner verification (do not delete until instructed): ~/tmp/sakura-context-assoc (~7.1 GB: 3 tables, 6 det tables, 7 dump parts, logs), ~/tmp/sakura-471/history.tsv.
+- Learning: a corpus-selected optimum can invert on real history; the frozen-then-replay-once protocol caught it. Same-weight clue ties at min_pair are a visible smell of weak group-relative signal.
