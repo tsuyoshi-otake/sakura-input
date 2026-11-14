@@ -10,14 +10,19 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::thread;
 use std::time::Duration;
 
-use sakura_core::{ConversionOptions, Converter, InputSupport};
-use sakura_engine::dictionary::ConversionService;
+use sakura_core::conversion::{MAX_CROSS_COMMIT_TAIL_SURFACE_BYTES, MIN_CROSS_COMMIT_TAIL_CHARS};
+use sakura_core::{
+    ConversionInput, ConversionOptions, Converter, CrossCommitBridge, InputSupport,
+    MAX_CROSS_COMMIT_TAIL_BYTES,
+};
+use sakura_engine::dictionary::{ConversionService, ConvertFailure};
 use sakura_engine::prediction::{PredictionResult, PredictionRuntime};
 
-use crate::corpus::{ConversionRow, PredictionRow};
+use crate::corpus::{ContextRow, ConversionRow, PredictionRow};
 
 /// A prediction request must answer; the explicit terminal result `None`
 /// (stopped, coalesced, timed out) is a measurement failure, not a miss.
@@ -125,6 +130,241 @@ pub fn score_state(top: &str, expected: &str, variants: &[String]) -> u8 {
     } else {
         STATE_WRONG
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContextOutcome {
+    /// Top of `oneshot_reading` converted fresh, scored like a conversion row.
+    pub oneshot: ConversionOutcome,
+    /// Top of `reading` converted after the clue commit, scored on `expected`.
+    pub context: ConversionOutcome,
+    /// The clue commit yielded a usable cross-commit tail, so the bridge was
+    /// handed to the conversion. `false` rows still get `initial_right_id`.
+    pub bridge: bool,
+    /// The engine actually ran the bounded cross-commit pass.
+    pub bridge_attempted: bool,
+}
+
+/// The service holds two converter slots (`CONVERSION_SLOTS`); eight context
+/// workers can legitimately collide on them. `Busy` is a measurement-side
+/// artifact — the dispatch path serializes through one worker — so context
+/// rows retry instead of failing the whole run. The bound is generous: each
+/// conversion takes a millisecond-scale slice of one slot.
+const BUSY_BUDGET: Duration = Duration::from_secs(30);
+
+pub(crate) fn with_service<R>(
+    call: impl Fn() -> Result<R, ConvertFailure>,
+) -> Result<R, ConvertFailure> {
+    let started = std::time::Instant::now();
+    loop {
+        match call() {
+            Err(ConvertFailure::Busy) if started.elapsed() < BUSY_BUDGET => {
+                thread::sleep(Duration::from_millis(1));
+            }
+            result => return result,
+        }
+    }
+}
+
+/// What a session carries from one commit into the next conversion (#471):
+/// the selected candidate's terminal `right_id` becomes `initial_right_id`,
+/// and `cross_commit_tail` becomes the `CrossCommitBridge` — the same two
+/// channels `dispatch`/`session` feed on the Apply path, derived here through
+/// the same `ConversionService` calls.
+///
+/// Returns `(initial_right_id, bridge)`.
+pub(crate) fn commit_carry(
+    service: &ConversionService,
+    clue_reading: &str,
+    clue_surface: &str,
+) -> Result<(u16, Option<CrossCommitBridge<'static>>), String> {
+    with_service(|| {
+        service.with_conversion_input_hints(
+            ConversionInput::ordinary(clue_reading),
+            ConversionOptions::default(),
+            &[],
+            |candidates, _| {
+                let candidate = candidates
+                    .iter()
+                    .find(|candidate| candidate.text() == clue_surface)
+                    .ok_or_else(|| format!("clue surface '{clue_surface}' is not a candidate"))?;
+                let right_id = candidate
+                    .segments()
+                    .last()
+                    .map_or(0, |segment| segment.right_id);
+                let bridge = service.cross_commit_tail(candidate).and_then(|tail| {
+                    let tail_reading = clue_reading
+                        .get(usize::from(tail.reading_start)..)?
+                        .to_owned();
+                    let tail_surface = clue_surface.get(usize::from(tail.text_start)..)?.to_owned();
+                    // SessionCrossCommitBridge::new admits a tail only
+                    // inside these bounds; mirror them so the measurement
+                    // sees exactly what production would carry.
+                    (!tail_reading.is_empty()
+                        && !tail_surface.is_empty()
+                        && tail_reading.chars().count() >= MIN_CROSS_COMMIT_TAIL_CHARS
+                        && tail_reading.len() <= MAX_CROSS_COMMIT_TAIL_BYTES
+                        && tail_surface.len() <= MAX_CROSS_COMMIT_TAIL_SURFACE_BYTES)
+                        .then(|| CrossCommitBridge {
+                            tail_reading: Box::leak(tail_reading.into_boxed_str()) as &'static str,
+                            tail_surface: Box::leak(tail_surface.into_boxed_str()) as &'static str,
+                            prefix_right_id: tail.prefix_right_id,
+                            prefix_cost: tail.prefix_cost,
+                        })
+                });
+                Ok((right_id, bridge))
+            },
+        )
+    })
+    .map_err(|error| format!("clue conversion failed: {error}"))?
+}
+
+pub fn measure_context(
+    service: &ConversionService,
+    rows: &[ContextRow],
+) -> Result<Vec<ContextOutcome>, String> {
+    let dictionary = service.dictionary();
+    let next = AtomicUsize::new(0);
+    let unreachable = Mutex::new(Vec::<String>::new());
+    let workers = thread::available_parallelism()
+        .map_or(1, usize::from)
+        .min(8);
+    let parts: Vec<Result<Vec<(usize, ContextOutcome)>, String>> = thread::scope(|scope| {
+        let handles: Vec<_> = (0..workers)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut converter = Converter::new();
+                    let mut done = Vec::new();
+                    loop {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(row) = rows.get(index) else {
+                            return Ok(done);
+                        };
+                        let oneshot = {
+                            let candidates = converter
+                                .convert(
+                                    &dictionary,
+                                    &row.oneshot_reading,
+                                    ConversionOptions::default(),
+                                )
+                                .map_err(|error| {
+                                    format!("{}: oneshot conversion failed: {error}", row.id)
+                                })?;
+                            let top = candidates
+                                .first()
+                                .ok_or_else(|| format!("{}: no candidates", row.id))?
+                                .text()
+                                .to_owned();
+                            // A spelling variant of the clue form is the clue
+                            // surface plus a variant of the target.
+                            let oneshot_variants: Vec<String> = row
+                                .variants
+                                .iter()
+                                .map(|variant| format!("{}{}", row.clue_surface, variant))
+                                .collect();
+                            ConversionOutcome {
+                                state: score_state(&top, &row.oneshot_expected, &oneshot_variants),
+                                top,
+                            }
+                        };
+                        let (initial_right_id, bridge) =
+                            commit_carry(service, &row.clue_reading, &row.clue_surface)
+                                .map_err(|error| format!("{}: {error}", row.id))?;
+                        let has_bridge = bridge.is_some();
+                        let (top, attempted, texts) = with_service(|| {
+                            service.with_conversion_input_bridge_hints(
+                                ConversionInput::ordinary(&row.reading),
+                                ConversionOptions {
+                                    initial_right_id,
+                                    ..ConversionOptions::default()
+                                },
+                                &[],
+                                bridge,
+                                |candidates, diagnostics| {
+                                    (
+                                        candidates
+                                            .first()
+                                            .map(|candidate| candidate.text().to_owned()),
+                                        diagnostics.cross_commit_bridge_attempted,
+                                        candidates
+                                            .iter()
+                                            .map(|candidate| candidate.text().to_owned())
+                                            .collect::<Vec<_>>(),
+                                    )
+                                },
+                            )
+                        })
+                        .map_err(|error| {
+                            format!("{}: context conversion failed: {error:?}", row.id)
+                        })?;
+                        let top =
+                            top.ok_or_else(|| format!("{}: no context candidates", row.id))?;
+                        // A row whose answer cannot be produced measures the
+                        // corpus, not the engine. `@not-in-dictionary` marks
+                        // intentional misses (reason in README).
+                        if !row.allow_absent_expected
+                            && !texts.iter().any(|text| {
+                                text == &row.expected || row.variants.iter().any(|v| v == text)
+                            })
+                        {
+                            unreachable
+                                .lock()
+                                .unwrap_or_else(|poison| poison.into_inner())
+                                .push(format!(
+                                    "{}: expected '{}' (or a variant) is not among the {} candidates for '{}': [{}]",
+                                    row.id,
+                                    row.expected,
+                                    texts.len(),
+                                    row.reading,
+                                    texts.join(", ")
+                                ));
+                        }
+                        let state = score_state(&top, &row.expected, &row.variants);
+                        done.push((
+                            index,
+                            ContextOutcome {
+                                oneshot,
+                                context: ConversionOutcome { state, top },
+                                bridge: has_bridge,
+                                bridge_attempted: attempted,
+                            },
+                        ));
+                    }
+                })
+            })
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| {
+                handle
+                    .join()
+                    .unwrap_or_else(|_| Err("a context worker panicked".to_owned()))
+            })
+            .collect()
+    });
+    for part in &parts {
+        part.as_ref().map_err(|error| error.clone())?;
+    }
+    let failures = unreachable
+        .into_inner()
+        .unwrap_or_else(|poison| poison.into_inner());
+    if !failures.is_empty() {
+        return Err(format!(
+            "{} context rows expect a surface their reading cannot produce; fix the corpus or mark @not-in-dictionary (reason in README):\n{}",
+            failures.len(),
+            failures.join("\n")
+        ));
+    }
+    let mut outcomes: Vec<Option<ContextOutcome>> = vec![None; rows.len()];
+    for part in parts {
+        for (index, outcome) in part? {
+            outcomes[index] = Some(outcome);
+        }
+    }
+    outcomes
+        .into_iter()
+        .map(|outcome| outcome.ok_or_else(|| "a context row was not measured".to_owned()))
+        .collect()
 }
 
 pub fn measure_conversion(
@@ -294,7 +534,7 @@ mod tests {
     }
 
     /// Columns: reading, surface, left id, right id, word cost, prediction cost, flags.
-    fn fixture_service() -> Arc<ConversionService> {
+    pub(crate) fn fixture_service() -> Arc<ConversionService> {
         let mut source = String::from(
             "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
              でんき\t電気\t0\t1\t100\t100\tpredict\tfixture\n\
@@ -359,6 +599,99 @@ mod tests {
         // Every outcome is consistent with its own reading length.
         for (row, outcome) in prediction.iter().zip(&outcomes) {
             assert_eq!(outcome.length, row.keystrokes());
+        }
+    }
+
+    /// #471 phase 1, verify 2: `commit_carry` must derive exactly what the
+    /// production Apply path derives — `initial_right_id` is the committed
+    /// candidate's last-segment right id (`candidate_meta` in dispatch.rs),
+    /// and the bridge is `cross_commit_tail` sliced on the commit strings and
+    /// admitted only inside `SessionCrossCommitBridge::new`'s bounds. This
+    /// test recomputes the production values independently and compares them.
+    #[test]
+    fn commit_carry_mirrors_the_production_apply_path() {
+        let service = fixture_service();
+        let (expected_right_id, expected_tail) = service
+            .with_conversion_input_hints(
+                ConversionInput::ordinary("でんきじどうしゃ"),
+                ConversionOptions::default(),
+                &[],
+                |candidates, _| {
+                    let candidate = candidates
+                        .iter()
+                        .find(|candidate| candidate.text() == "電気自動車")
+                        .expect("clue surface is a candidate");
+                    (
+                        candidate
+                            .segments()
+                            .last()
+                            .map_or(0, |segment| segment.right_id),
+                        service.cross_commit_tail(candidate),
+                    )
+                },
+            )
+            .expect("clue conversion");
+        // session_cross_commit_bridge + SessionCrossCommitBridge::new:
+        // slice the commit strings at the tail start, admit only inside the
+        // shared bounds. `cross_commit_tail` already bounds prefix_cost.
+        let expected_bridge = expected_tail.and_then(|tail| {
+            let tail_reading = "でんきじどうしゃ".get(usize::from(tail.reading_start)..)?;
+            let tail_surface = "電気自動車".get(usize::from(tail.text_start)..)?;
+            (!tail_reading.is_empty()
+                && !tail_surface.is_empty()
+                && tail_reading.chars().count() >= MIN_CROSS_COMMIT_TAIL_CHARS
+                && tail_reading.len() <= MAX_CROSS_COMMIT_TAIL_BYTES
+                && tail_surface.len() <= MAX_CROSS_COMMIT_TAIL_SURFACE_BYTES)
+                .then_some((
+                    tail_reading,
+                    tail_surface,
+                    tail.prefix_right_id,
+                    tail.prefix_cost,
+                ))
+        });
+        let (initial_right_id, bridge) =
+            commit_carry(&service, "でんきじどうしゃ", "電気自動車").expect("carry");
+        assert_eq!(initial_right_id, expected_right_id);
+        assert_eq!(
+            bridge.map(|bridge| {
+                (
+                    bridge.tail_reading,
+                    bridge.tail_surface,
+                    bridge.prefix_right_id,
+                    bridge.prefix_cost,
+                )
+            }),
+            expected_bridge
+        );
+    }
+
+    #[test]
+    fn commit_carry_rejects_a_clue_surface_that_is_not_a_candidate() {
+        let service = fixture_service();
+        let error = commit_carry(&service, "でんき", "無い語").expect_err("not a candidate");
+        assert!(error.contains("not a candidate"), "{error}");
+    }
+
+    #[test]
+    fn measure_context_runs_oneshot_and_committed_forms() {
+        let service = fixture_service();
+        let rows = crate::corpus::parse_context(
+            "id\tpair\toneshot_reading\toneshot_expected\tclue_reading\tclue_surface\treading\texpected\tvariants\n\
+             x1\tp1\tでんきじどうしゃ\t電気自動車\tでんき\t電気\tじどうしゃ\t自動車\t\n\
+             x2\tp1\tかなじどうしゃ\t仮名自動車\tかな\t仮名\tじどうしゃ\t自動者\t自動車\n",
+        )
+        .expect("context corpus");
+        let outcomes = measure_context(&service, &rows).expect("measurement");
+        assert_eq!(outcomes.len(), 2);
+        // The one-shot form converts the whole phrase in a fresh session.
+        assert_eq!(outcomes[0].oneshot.state, STATE_EXPECTED);
+        assert_eq!(outcomes[0].oneshot.top, "電気自動車");
+        // The committed-context form converts the target reading alone.
+        assert_eq!(outcomes[0].context.top, "自動車");
+        assert_eq!(outcomes[0].context.state, STATE_EXPECTED);
+        // A bridge pass can only run when the clue produced a usable tail.
+        for outcome in &outcomes {
+            assert!(!outcome.bridge_attempted || outcome.bridge);
         }
     }
 }

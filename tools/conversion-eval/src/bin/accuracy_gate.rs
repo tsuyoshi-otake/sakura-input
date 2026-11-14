@@ -21,6 +21,8 @@ mod corpus;
 mod counts;
 #[path = "accuracy_gate/measure.rs"]
 mod measure;
+#[path = "accuracy_gate/replay.rs"]
+mod replay;
 #[path = "accuracy_gate/report.rs"]
 mod report;
 #[path = "accuracy_gate/snapshot.rs"]
@@ -32,18 +34,21 @@ use std::time::Instant;
 use sakura_core::ConversionOptions;
 use sha2::{Digest, Sha256};
 
-use compare::{CheckInputs, Diff};
+use compare::{CheckInputs, ContextCheckInputs, ContextDiff, Diff};
 use corpus::Corpus;
-use counts::{Floors, Tally};
-use measure::{ConversionOutcome, PredictionOutcome};
-use report::ReportInput;
+use counts::{ContextCounts, ContextFloors, Floors, Tally};
+use measure::{ContextOutcome, ConversionOutcome, PredictionOutcome};
+use report::{ContextReport, ReportInput};
 use snapshot::AcceptedBreak;
 
 const CONVERSION_FILE: &str = "conversion.tsv";
 const PREDICTION_FILE: &str = "prediction.tsv";
+const CONTEXT_FILE: &str = "context.tsv";
 const CONVERSION_SNAPSHOT: &str = "conversion.snapshot.tsv";
 const PREDICTION_SNAPSHOT: &str = "prediction.snapshot.tsv";
+const CONTEXT_SNAPSHOT: &str = "context.snapshot.tsv";
 const FLOORS_FILE: &str = "floors.tsv";
+const CONTEXT_FLOORS: &str = "context-floors.tsv";
 const BREAKS_FILE: &str = "accepted-breaks.tsv";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -60,6 +65,8 @@ struct Options {
     build_report: PathBuf,
     report: Option<PathBuf>,
     mode: Mode,
+    /// `--history-replay <file>`: replay an outside-repo export, counts only.
+    history_replay: Option<PathBuf>,
 }
 
 fn main() {
@@ -79,6 +86,7 @@ fn parse_options(args: impl Iterator<Item = String>) -> Result<Options, String> 
     let mut build_report = PathBuf::from("data/dictionary-build.report.json");
     let mut report = None;
     let mut mode = Mode::Measure;
+    let mut history_replay = None;
     let mut args = args;
     while let Some(argument) = args.next() {
         let mut value = |name: &str| args.next().ok_or_else(|| format!("{name} needs a value"));
@@ -87,6 +95,7 @@ fn parse_options(args: impl Iterator<Item = String>) -> Result<Options, String> 
             "--corpus-dir" => corpus_dir = PathBuf::from(value("--corpus-dir")?),
             "--build-report" => build_report = PathBuf::from(value("--build-report")?),
             "--report" => report = Some(PathBuf::from(value("--report")?)),
+            "--history-replay" => history_replay = Some(PathBuf::from(value("--history-replay")?)),
             "--check" | "--accept" => {
                 let requested = if argument == "--check" {
                     Mode::Check
@@ -107,6 +116,7 @@ fn parse_options(args: impl Iterator<Item = String>) -> Result<Options, String> 
         build_report,
         report,
         mode,
+        history_replay,
     })
 }
 
@@ -170,16 +180,30 @@ fn dictionary_header(options: &Options, sha: &str) -> Vec<String> {
 struct Stored {
     conversion: Vec<ConversionOutcome>,
     prediction: Vec<PredictionOutcome>,
+    /// `None` when the corpus directory has no context snapshot; the vector
+    /// stays empty when there is no context corpus either.
+    context: Option<Vec<ContextOutcome>>,
 }
 
 fn load_snapshots(dir: &Path, corpus: &Corpus) -> Result<Option<Stored>, String> {
     let conversion = read_optional(&dir.join(CONVERSION_SNAPSHOT))?;
     let prediction = read_optional(&dir.join(PREDICTION_SNAPSHOT))?;
+    let context = read_optional(&dir.join(CONTEXT_SNAPSHOT))?;
+    let context = match context {
+        Some(_) if corpus.context.is_empty() => {
+            return Err(format!(
+                "{CONTEXT_SNAPSHOT} exists but {CONTEXT_FILE} does not"
+            ))
+        }
+        Some(text) => Some(snapshot::parse_context(corpus, &text)?),
+        None => None,
+    };
     match (conversion, prediction) {
         (None, None) => Ok(None),
         (Some(conversion), Some(prediction)) => Ok(Some(Stored {
             conversion: snapshot::parse_conversion(corpus, &conversion)?,
             prediction: snapshot::parse_prediction(corpus, &prediction)?,
+            context,
         })),
         _ => Err(format!(
             "{CONVERSION_SNAPSHOT} and {PREDICTION_SNAPSHOT} must exist together"
@@ -198,18 +222,34 @@ fn run() -> Result<bool, String> {
             .map(str::to_owned)
             .map_err(|_| format!("{file} is not UTF-8"))
     };
+    let context_text = read_optional(&dir.join(CONTEXT_FILE))?;
     let corpus = Corpus {
         conversion: corpus::parse_conversion(&text(&conversion_bytes, CONVERSION_FILE)?)?,
         prediction: corpus::parse_prediction(&text(&prediction_bytes, PREDICTION_FILE)?)?,
+        context: match &context_text {
+            Some(source) => corpus::parse_context(source)?,
+            None => Vec::new(),
+        },
     };
     let stored = load_snapshots(dir, &corpus)?;
     let floors_text = read_optional(&dir.join(FLOORS_FILE))?;
+    let context_floors_text = read_optional(&dir.join(CONTEXT_FLOORS))?;
     let breaks_text = read_optional(&dir.join(BREAKS_FILE))?;
     if options.mode == Mode::Check
         && (stored.is_none() || floors_text.is_none() || breaks_text.is_none())
     {
         return Err(format!(
             "--check needs {CONVERSION_SNAPSHOT}, {PREDICTION_SNAPSHOT}, {FLOORS_FILE} and {BREAKS_FILE} in {}; run --accept once",
+            dir.display()
+        ));
+    }
+    let context_snapshot = stored.as_ref().and_then(|stored| stored.context.as_deref());
+    if options.mode == Mode::Check
+        && !corpus.context.is_empty()
+        && (context_snapshot.is_none() || context_floors_text.is_none())
+    {
+        return Err(format!(
+            "--check needs {CONTEXT_SNAPSHOT} and {CONTEXT_FLOORS} in {}; run --accept once",
             dir.display()
         ));
     }
@@ -221,10 +261,41 @@ fn run() -> Result<bool, String> {
         .as_deref()
         .map(counts::parse_floors)
         .transpose()?;
+    let context_floors = context_floors_text
+        .as_deref()
+        .map(counts::parse_context_floors)
+        .transpose()?;
 
     let dictionary_sha = hex_digest(&read_bytes(&options.dictionary)?);
     let service = sakura_engine::dictionary::open(&options.dictionary)
         .map_err(|error| format!("{}: {error}", options.dictionary.display()))?;
+
+    // `--history-replay` measures an outside-repo developer-history export
+    // and reports counts only (#471 phase 1, verify step 5).
+    if let Some(path) = &options.history_replay {
+        let counts = replay::replay_history(&service, &read_text(path)?)?;
+        println!("history replay (counts only; no readings or surfaces leave this run):");
+        println!("  normal-scope commits            : {}", counts.commits);
+        println!("  of which after a convert key    : {}", counts.target);
+        println!("  top = committed                 : {}", counts.top_match);
+        println!(
+            "  top != committed                : {}",
+            counts.top_mismatch
+        );
+        println!(
+            "  of which homophone swap (same non-kanji shape, kanji differ): {}",
+            counts.homophone_swap
+        );
+        println!("  skipped (no preceding commit)   : {}", counts.skipped);
+        println!(
+            "  of which reading <= 4 chars     : target {} | match {} | mismatch {} | swap {}",
+            counts.short.target,
+            counts.short.top_match,
+            counts.short.top_mismatch,
+            counts.short.homophone_swap
+        );
+        return Ok(true);
+    }
 
     let started = Instant::now();
     let conversion = measure::measure_conversion(&service, &corpus.conversion)?;
@@ -232,6 +303,9 @@ fn run() -> Result<bool, String> {
     let started = Instant::now();
     let prediction = measure::measure_prediction(&service, &corpus.prediction)?;
     let prediction_time = started.elapsed();
+    let started = Instant::now();
+    let context = measure::measure_context(&service, &corpus.context)?;
+    let context_time = started.elapsed();
 
     let after = counts::tally(&corpus, &conversion, &prediction);
     let before: Option<Tally> = stored
@@ -244,6 +318,12 @@ fn run() -> Result<bool, String> {
             &stored.prediction,
             &prediction,
         )
+    });
+    let context_after = counts::tally_context(&corpus, &context);
+    let context_before: Option<ContextCounts> =
+        context_snapshot.map(|snapshot| counts::tally_context(&corpus, snapshot));
+    let context_diff = context_snapshot.map_or_else(ContextDiff::default, |snapshot| {
+        compare::diff_context(snapshot, &context)
     });
 
     let mut header = dictionary_header(&options, &dictionary_sha);
@@ -259,7 +339,7 @@ fn run() -> Result<bool, String> {
     ));
     header.push(format!("mode: {:?}", options.mode).to_lowercase());
 
-    let violations = match (options.mode, &before, &floors) {
+    let mut violations = match (options.mode, &before, &floors) {
         (Mode::Check, Some(snapshot_tally), Some(floors)) => Some(compare::check(&CheckInputs {
             corpus: &corpus,
             diff: &diff,
@@ -272,12 +352,45 @@ fn run() -> Result<bool, String> {
         })),
         _ => None,
     };
+    if let (Mode::Check, Some(_), Some(floors), Some(snapshot_counts)) = (
+        options.mode,
+        context_snapshot,
+        &context_floors,
+        context_before.as_ref(),
+    ) {
+        violations
+            .get_or_insert_with(Vec::new)
+            .extend(compare::check_context(&ContextCheckInputs {
+                corpus: &corpus,
+                diff: &context_diff,
+                breaks: &breaks,
+                floors,
+                measured_counts: &context_after,
+                measured_context: &context,
+                snapshot_counts,
+            }));
+    }
 
-    let unaccepted: Vec<(snapshot::BreakKind, &str)> = if options.mode == Mode::Accept {
+    let mut unaccepted: Vec<(snapshot::BreakKind, &str)> = if options.mode == Mode::Accept {
         diff.unaccepted(&corpus, &breaks)
     } else {
         Vec::new()
     };
+    if options.mode == Mode::Accept {
+        for change in context_diff
+            .changed
+            .iter()
+            .filter(|change| change.is_worse())
+        {
+            let id = corpus.context[change.index].id.as_str();
+            if !breaks
+                .iter()
+                .any(|entry| entry.kind == snapshot::BreakKind::Context && entry.id == id)
+            {
+                unaccepted.push((snapshot::BreakKind::Context, id));
+            }
+        }
+    }
 
     let rendered = report::render(&ReportInput {
         header,
@@ -288,10 +401,27 @@ fn run() -> Result<bool, String> {
         measured_prediction: &prediction,
         snapshot_prediction: stored.as_ref().map(|stored| stored.prediction.as_slice()),
         violations: violations.as_deref(),
+        context: (!corpus.context.is_empty()).then(|| ContextReport {
+            before: context_before.as_ref(),
+            after: &context_after,
+            diff: &context_diff,
+            pairs: corpus
+                .context
+                .iter()
+                .map(|row| &row.pair)
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            bridged: context.iter().filter(|outcome| outcome.bridge).count(),
+            attempted: context
+                .iter()
+                .filter(|outcome| outcome.bridge_attempted)
+                .count(),
+        }),
         timings: vec![format!(
-            "runtime: conversion {:.1}s, prediction {:.1}s",
+            "runtime: conversion {:.1}s, prediction {:.1}s, context {:.1}s",
             conversion_time.as_secs_f64(),
-            prediction_time.as_secs_f64()
+            prediction_time.as_secs_f64(),
+            context_time.as_secs_f64()
         )],
     });
     print!("{rendered}");
@@ -311,7 +441,7 @@ fn run() -> Result<bool, String> {
                 }
                 return Ok(false);
             }
-            let snapshots = [
+            let mut snapshots = vec![
                 (
                     CONVERSION_SNAPSHOT,
                     snapshot::render_conversion(&corpus, &conversion)?,
@@ -325,14 +455,30 @@ fn run() -> Result<bool, String> {
                     counts::render_floors(&Floors::from_counts(&after.counts)),
                 ),
             ];
+            if !corpus.context.is_empty() {
+                snapshots.push((
+                    CONTEXT_SNAPSHOT,
+                    snapshot::render_context(&corpus, &context)?,
+                ));
+                snapshots.push((
+                    CONTEXT_FLOORS,
+                    counts::render_context_floors(&ContextFloors::from_counts(&context_after)),
+                ));
+            }
             for (file, content) in snapshots {
                 let path = dir.join(file);
                 std::fs::write(&path, content)
                     .map_err(|error| format!("write {}: {error}", path.display()))?;
             }
-            println!(
-                "\naccept: wrote {CONVERSION_SNAPSHOT}, {PREDICTION_SNAPSHOT} and {FLOORS_FILE}"
-            );
+            if corpus.context.is_empty() {
+                println!(
+                    "\naccept: wrote {CONVERSION_SNAPSHOT}, {PREDICTION_SNAPSHOT} and {FLOORS_FILE}"
+                );
+            } else {
+                println!(
+                    "\naccept: wrote {CONVERSION_SNAPSHOT}, {PREDICTION_SNAPSHOT}, {FLOORS_FILE}, {CONTEXT_SNAPSHOT} and {CONTEXT_FLOORS}"
+                );
+            }
             Ok(true)
         }
     }

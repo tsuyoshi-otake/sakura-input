@@ -4,9 +4,9 @@
 
 use std::fmt::Write as _;
 
-use crate::compare::{facets, Diff, Violation};
+use crate::compare::{facets, ContextDiff, Diff, Violation};
 use crate::corpus::{label, Corpus, ALL};
-use crate::counts::{Counts, Tally, Totals};
+use crate::counts::{ContextCounts, Counts, Tally, Totals};
 use crate::measure::PredictionOutcome;
 
 /// Rows shown for the changes that never fail the gate.
@@ -24,7 +24,22 @@ pub struct ReportInput<'a> {
     pub snapshot_prediction: Option<&'a [PredictionOutcome]>,
     /// `Some` for `--check`: the failure conditions that were hit.
     pub violations: Option<&'a [Violation]>,
+    /// Context-corpus section (#471); `None` when the dir has no context file.
+    pub context: Option<ContextReport<'a>>,
     pub timings: Vec<String>,
+}
+
+pub struct ContextReport<'a> {
+    /// The snapshot's context counts; `None` when no snapshot exists yet.
+    pub before: Option<&'a ContextCounts>,
+    pub after: &'a ContextCounts,
+    pub diff: &'a ContextDiff,
+    /// Total pairs in the corpus.
+    pub pairs: usize,
+    /// Rows whose clue commit produced a usable bridge tail.
+    pub bridged: usize,
+    /// Rows where the engine ran the bounded cross-commit pass.
+    pub attempted: usize,
 }
 
 fn change(before: Option<usize>, after: usize) -> String {
@@ -120,6 +135,7 @@ pub fn render(input: &ReportInput<'_>) -> String {
 
     render_conversion_changes(&mut text, input);
     render_prediction_changes(&mut text, input);
+    render_context_section(&mut text, input);
 
     if let Some(violations) = input.violations {
         if violations.is_empty() {
@@ -149,6 +165,82 @@ pub fn render(input: &ReportInput<'_>) -> String {
         let _ = writeln!(text, "{line}");
     }
     text
+}
+
+fn render_context_section(text: &mut String, input: &ReportInput<'_>) {
+    let Some(context) = &input.context else {
+        return;
+    };
+    let rows = input.corpus.context.len();
+    let (after, before) = (context.after, context.before);
+    let _ = writeln!(
+        text,
+        "\nCommitted context (#471; {rows} rows in {} pairs, {} bridged, {} cross-commit passes)",
+        context.pairs, context.bridged, context.attempted
+    );
+    let _ = writeln!(
+        text,
+        "  no-context (one-shot)   : {} lenient, {} strict of {rows}",
+        after.oneshot_lenient, after.oneshot_strict
+    );
+    let _ = writeln!(
+        text,
+        "  committed context       : {} lenient, {} strict of {rows}",
+        after.context_lenient, after.context_strict
+    );
+    if let Some(before) = before {
+        let _ = writeln!(
+            text,
+            "  (snapshot: no-context {}/{}, context {}/{})",
+            before.oneshot_lenient,
+            before.oneshot_strict,
+            before.context_lenient,
+            before.context_strict
+        );
+    }
+    let _ = writeln!(
+        text,
+        "  pairs (context form)    : both {} | one {} | neither {}",
+        after.pairs_both, after.pairs_one, after.pairs_none
+    );
+    let fixes = context
+        .diff
+        .changed
+        .iter()
+        .filter(|change| change.is_fix())
+        .count();
+    let _ = writeln!(
+        text,
+        "Context changed rows: {} ({} fixes, {} worse)",
+        context.diff.changed.len(),
+        fixes,
+        context.diff.changed.len() - fixes
+    );
+    for change in context.diff.changed.iter().take(QUIET_LIST_LIMIT) {
+        let row = &input.corpus.context[change.index];
+        let _ = writeln!(
+            text,
+            "  {} [{}] {} expected {}: states ({},{}) -> ({},{})",
+            row.id,
+            row.pair,
+            row.reading,
+            row.expected,
+            change.before.oneshot.state,
+            change.before.context.state,
+            change.after.oneshot.state,
+            change.after.context.state
+        );
+    }
+    let _ = writeln!(
+        text,
+        "Context top changed with the same state (report only): {}",
+        context.diff.retopped.len()
+    );
+    let _ = writeln!(
+        text,
+        "Context bridge engagement changed (report only): {}",
+        context.diff.bridge_changed.len()
+    );
 }
 
 fn render_conversion_changes(text: &mut String, input: &ReportInput<'_>) {

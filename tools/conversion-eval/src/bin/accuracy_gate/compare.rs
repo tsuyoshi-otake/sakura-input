@@ -14,8 +14,10 @@
 //! suggestions, are reported but never fail.
 
 use crate::corpus::{label, Corpus, ALL};
-use crate::counts::{Counts, Floors, FLOOR_METRICS};
-use crate::measure::{ConversionOutcome, PredictionOutcome, STATE_EXPECTED};
+use crate::counts::{
+    ContextCounts, ContextFloors, Counts, Floors, CONTEXT_FLOOR_METRICS, FLOOR_METRICS,
+};
+use crate::measure::{ContextOutcome, ConversionOutcome, PredictionOutcome, STATE_EXPECTED};
 use crate::snapshot::{AcceptedBreak, BreakKind};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -156,6 +158,64 @@ impl Diff {
     }
 }
 
+/// A context row whose one-shot or committed-context state changed (#471).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContextChange {
+    pub index: usize,
+    pub before: ContextOutcome,
+    pub after: ContextOutcome,
+}
+
+impl ContextChange {
+    /// Either measurement's state improved.
+    pub const fn is_fix(&self) -> bool {
+        (self.after.oneshot.state > self.before.oneshot.state
+            || self.after.context.state > self.before.context.state)
+            && !self.is_worse()
+    }
+
+    /// Either measurement's state worsened.
+    pub const fn is_worse(&self) -> bool {
+        self.after.oneshot.state < self.before.oneshot.state
+            || self.after.context.state < self.before.context.state
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ContextDiff {
+    /// Rows whose one-shot or committed-context state changed.
+    pub changed: Vec<ContextChange>,
+    /// Same states, different tops on either measurement (report only).
+    pub retopped: Vec<ContextChange>,
+    /// Same states and tops, different bridge engagement (report only).
+    pub bridge_changed: Vec<ContextChange>,
+}
+
+pub fn diff_context(before: &[ContextOutcome], after: &[ContextOutcome]) -> ContextDiff {
+    let mut result = ContextDiff::default();
+    for (index, (before, after)) in before.iter().zip(after).enumerate() {
+        if before == after {
+            continue;
+        }
+        let change = ContextChange {
+            index,
+            before: before.clone(),
+            after: after.clone(),
+        };
+        if before.oneshot.state != after.oneshot.state
+            || before.context.state != after.context.state
+        {
+            result.changed.push(change);
+        } else if before.oneshot.top != after.oneshot.top || before.context.top != after.context.top
+        {
+            result.retopped.push(change);
+        } else {
+            result.bridge_changed.push(change);
+        }
+    }
+    result
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Violation {
     pub condition: u8,
@@ -243,6 +303,9 @@ pub fn check(inputs: &CheckInputs<'_>) -> Vec<Violation> {
                 .map(|index| inputs.measured_conversion[index].state == STATE_EXPECTED),
             BreakKind::Prediction => position(&corpus.prediction, &entry.id, |row| &row.id)
                 .map(|index| inputs.measured_prediction[index].is_best()),
+            // Context breaks are checked by `check_context` against the
+            // context snapshot; a context id is not an unknown id here.
+            BreakKind::Context => continue,
         };
         match best {
             None => {
@@ -273,6 +336,106 @@ fn position<T>(rows: &[T], id: &str, key: impl Fn(&T) -> &String) -> Option<usiz
     rows.iter().position(|row| key(row) == id)
 }
 
+pub struct ContextCheckInputs<'a> {
+    pub corpus: &'a Corpus,
+    pub diff: &'a ContextDiff,
+    pub breaks: &'a [AcceptedBreak],
+    pub floors: &'a ContextFloors,
+    pub measured_counts: &'a ContextCounts,
+    pub measured_context: &'a [ContextOutcome],
+    /// Counts the context snapshot implies.
+    pub snapshot_counts: &'a ContextCounts,
+}
+
+/// The five `--check` conditions applied to the context corpus. The messages
+/// carry a `context` prefix but reuse the same condition numbers.
+pub fn check_context(inputs: &ContextCheckInputs<'_>) -> Vec<Violation> {
+    let corpus = inputs.corpus;
+    let mut violations = Vec::new();
+    let mut push =
+        |condition: u8, message: String| violations.push(Violation { condition, message });
+
+    for change in &inputs.diff.changed {
+        let id = &corpus.context[change.index].id;
+        push(
+            1,
+            format!(
+                "context {id}: states ({},{}) -> ({},{}); the snapshot is not updated (run --accept)",
+                change.before.oneshot.state,
+                change.before.context.state,
+                change.after.oneshot.state,
+                change.after.context.state
+            ),
+        );
+    }
+    for change in inputs
+        .diff
+        .changed
+        .iter()
+        .filter(|change| change.is_worse())
+    {
+        let id = &corpus.context[change.index].id;
+        if !inputs
+            .breaks
+            .iter()
+            .any(|entry| entry.kind == BreakKind::Context && entry.id == *id)
+        {
+            push(
+                2,
+                format!("context {id}: got worse and is not in accepted-breaks.tsv"),
+            );
+        }
+    }
+    let measured = inputs.measured_counts.floor_values();
+    let implied = inputs.snapshot_counts.floor_values();
+    for (metric, name) in CONTEXT_FLOOR_METRICS.iter().enumerate() {
+        let floor = inputs.floors.0[metric];
+        if measured[metric] < floor {
+            push(
+                3,
+                format!(
+                    "context {name}: measured {} is below the floor {floor}",
+                    measured[metric]
+                ),
+            );
+        }
+        if floor < implied[metric] {
+            push(
+                4,
+                format!(
+                    "context {name}: floor {floor} is below {} implied by the snapshot files",
+                    implied[metric]
+                ),
+            );
+        }
+    }
+    for entry in inputs
+        .breaks
+        .iter()
+        .filter(|entry| entry.kind == BreakKind::Context)
+    {
+        let best = position(&corpus.context, &entry.id, |row| &row.id).map(|index| {
+            let outcome = &inputs.measured_context[index];
+            outcome.oneshot.state == STATE_EXPECTED && outcome.context.state == STATE_EXPECTED
+        });
+        match best {
+            None => push(
+                5,
+                format!("accepted break context {}: unknown id", entry.id),
+            ),
+            Some(true) => push(
+                5,
+                format!(
+                    "accepted break context {}: the row is at its best state; remove the entry",
+                    entry.id
+                ),
+            ),
+            Some(false) => {}
+        }
+    }
+    violations
+}
+
 pub fn facets(outcome: &PredictionOutcome) -> String {
     format!(
         "full@1={} full@9={} half@9={} k9={}",
@@ -287,7 +450,7 @@ pub fn facets(outcome: &PredictionOutcome) -> String {
 mod tests {
     use super::*;
     use crate::corpus::{parse_conversion, parse_prediction};
-    use crate::counts::tally;
+    use crate::counts::{tally, tally_context};
     use crate::measure::summarize_ranks;
 
     fn corpus() -> Corpus {
@@ -305,6 +468,7 @@ mod tests {
                  p2\tかきく\t柿\tit\tnoun\n",
             )
             .expect("prediction"),
+            context: Vec::new(),
         }
     }
 
@@ -556,5 +720,106 @@ mod tests {
         );
         assert!(violations[0].message.contains("best state"));
         assert!(violations[2].message.contains("unknown id"));
+    }
+
+    fn context_corpus() -> Corpus {
+        let mut corpus = corpus();
+        corpus.context = crate::corpus::parse_context(
+            "id\tpair\toneshot_reading\toneshot_expected\tclue_reading\tclue_surface\treading\texpected\tvariants\n\
+             x1\tp1\tかわのはし\t川の橋\tかわの\t川の\tはし\t橋\t\n\
+             x2\tp1\tしょくじのはし\t食事の箸\tしょくじの\t食事の\tはし\t箸\t\n",
+        )
+        .expect("context");
+        corpus
+    }
+
+    fn ctx(oneshot: (u8, &str), context: (u8, &str), bridge: bool) -> ContextOutcome {
+        ContextOutcome {
+            oneshot: conv(oneshot.0, oneshot.1),
+            context: conv(context.0, context.1),
+            bridge,
+            bridge_attempted: bridge,
+        }
+    }
+
+    #[test]
+    fn context_diff_classifies_state_top_and_bridge_changes() {
+        let before = vec![
+            ctx((2, "橋"), (2, "橋"), true),
+            ctx((1, "橋"), (1, "橋"), false),
+        ];
+        let after = vec![
+            ctx((2, "橋"), (0, "端"), true), // context state worsened
+            ctx((1, "橋"), (1, "箸"), true), // same states, new top + bridge
+        ];
+        let diff = diff_context(&before, &after);
+        assert_eq!(
+            diff.changed.iter().map(|c| c.index).collect::<Vec<_>>(),
+            [0]
+        );
+        assert!(diff.changed[0].is_worse());
+        assert_eq!(
+            diff.retopped.iter().map(|c| c.index).collect::<Vec<_>>(),
+            [1]
+        );
+        assert!(diff.bridge_changed.is_empty());
+    }
+
+    #[test]
+    fn context_check_flags_uncommitted_worse_and_bad_floors() {
+        let corpus = context_corpus();
+        let before = vec![
+            ctx((2, "橋"), (2, "橋"), true),
+            ctx((2, "箸"), (2, "箸"), false),
+        ];
+        let after = vec![
+            ctx((2, "橋"), (0, "端"), true),
+            ctx((2, "箸"), (2, "箸"), false),
+        ];
+        let diff = diff_context(&before, &after);
+        let measured = tally_context(&corpus, &after);
+        let snapshot = tally_context(&corpus, &before);
+        // Floors committed with the snapshot: the measured context counts are
+        // now below them (condition 3 fires alongside 1 and 2).
+        let floors = ContextFloors::from_counts(&snapshot);
+        let inputs = ContextCheckInputs {
+            corpus: &corpus,
+            diff: &diff,
+            breaks: &[],
+            floors: &floors,
+            measured_counts: &measured,
+            measured_context: &after,
+            snapshot_counts: &snapshot,
+        };
+        let conditions: Vec<u8> = check_context(&inputs).iter().map(|v| v.condition).collect();
+        assert!(conditions.contains(&1) && conditions.contains(&2));
+        assert!(conditions.contains(&3));
+
+        // An accepted break for x1 removes the condition-2 violation only;
+        // conditions 1 and 3 remain until the snapshot and floors are
+        // regenerated by --accept.
+        let breaks = vec![accepted(BreakKind::Context, "x1")];
+        let conditions: Vec<u8> = check_context(&ContextCheckInputs {
+            breaks: &breaks,
+            ..inputs
+        })
+        .iter()
+        .map(|v| v.condition)
+        .collect();
+        assert!(!conditions.contains(&2));
+        assert!(conditions.contains(&1) && conditions.contains(&3));
+
+        // Post-accept state: snapshot and floors hold the new outcomes, so a
+        // still-worse row covered by a break produces no violation at all.
+        let inputs = ContextCheckInputs {
+            corpus: &corpus,
+            diff: &diff_context(&after, &after),
+            breaks: &breaks,
+            floors: &ContextFloors::from_counts(&measured),
+            measured_counts: &measured,
+            measured_context: &after,
+            snapshot_counts: &measured,
+        };
+        assert_eq!(check_context(&inputs), []);
     }
 }

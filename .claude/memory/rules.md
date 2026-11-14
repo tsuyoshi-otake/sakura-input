@@ -72,6 +72,10 @@ provenance; active work should load the smaller matching topic extracts above.
 
 ## Cross-topic checks
 
+- Before designing a new ranking method, first measure the remaining
+  mismatches using a replay with the product's learning enabled; they bound
+  the possible fixes. #474 compared without learning and overestimated the
+  available headroom (#471 and #477).
 - Candidate order and selected candidate are separate contracts; assertions
   that cover only one do not prove committed output.
 - Suppressing persisted learning at write time does not neutralize older stored

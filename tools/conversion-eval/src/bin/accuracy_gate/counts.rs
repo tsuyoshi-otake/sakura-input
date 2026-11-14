@@ -4,8 +4,12 @@
 //! snapshot stores into counts, so "what the snapshot implies" and "what was
 //! measured" can never disagree about how a count is defined.
 
+use std::collections::BTreeMap;
+
 use crate::corpus::{label, Corpus, ALL, SLICES};
-use crate::measure::{ConversionOutcome, PredictionOutcome, STATE_EXPECTED, STATE_VARIANT};
+use crate::measure::{
+    ContextOutcome, ConversionOutcome, PredictionOutcome, STATE_EXPECTED, STATE_VARIANT,
+};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Counts {
@@ -86,6 +90,117 @@ pub fn tally(
         }
     }
     Tally { counts, totals }
+}
+
+/// Context-corpus counts (#471): one-shot versus committed-context accuracy
+/// and the pair buckets a phase-3 method comparison is measured against.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct ContextCounts {
+    pub oneshot_lenient: usize,
+    pub oneshot_strict: usize,
+    pub context_lenient: usize,
+    pub context_strict: usize,
+    /// Pairs where both sides are expected under committed context.
+    pub pairs_both: usize,
+    /// Pairs where exactly one side is expected under committed context.
+    pub pairs_one: usize,
+    /// Pairs where neither side is expected under committed context.
+    pub pairs_none: usize,
+}
+
+/// The context counts that carry a floor, in `context-floors.tsv` order.
+pub const CONTEXT_FLOOR_METRICS: [&str; 6] = [
+    "context_lenient",
+    "context_strict",
+    "oneshot_lenient",
+    "oneshot_strict",
+    "pairs_both",
+    "pairs_one",
+];
+
+impl ContextCounts {
+    pub const fn floor_values(&self) -> [usize; 6] {
+        [
+            self.context_lenient,
+            self.context_strict,
+            self.oneshot_lenient,
+            self.oneshot_strict,
+            self.pairs_both,
+            self.pairs_one,
+        ]
+    }
+}
+
+/// `outcomes` are aligned with `corpus.context`. Pair buckets are decided on
+/// the committed-context measurement; the one-shot side stands on its own.
+pub fn tally_context(corpus: &Corpus, outcomes: &[ContextOutcome]) -> ContextCounts {
+    let mut counts = ContextCounts::default();
+    let mut by_pair: BTreeMap<&str, usize> = Default::default();
+    for (row, outcome) in corpus.context.iter().zip(outcomes) {
+        counts.oneshot_lenient += usize::from(outcome.oneshot.state >= STATE_VARIANT);
+        counts.oneshot_strict += usize::from(outcome.oneshot.state == STATE_EXPECTED);
+        counts.context_lenient += usize::from(outcome.context.state >= STATE_VARIANT);
+        counts.context_strict += usize::from(outcome.context.state == STATE_EXPECTED);
+        *by_pair.entry(row.pair.as_str()).or_default() +=
+            usize::from(outcome.context.state == STATE_EXPECTED);
+    }
+    for expected in by_pair.values() {
+        match expected {
+            2 => counts.pairs_both += 1,
+            1 => counts.pairs_one += 1,
+            _ => counts.pairs_none += 1,
+        }
+    }
+    counts
+}
+
+/// One row of context floors in `context-floors.tsv`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ContextFloors(pub [usize; 6]);
+
+impl ContextFloors {
+    pub fn from_counts(counts: &ContextCounts) -> Self {
+        Self(counts.floor_values())
+    }
+}
+
+pub fn render_context_floors(floors: &ContextFloors) -> String {
+    let cells: Vec<String> = floors.0.iter().map(usize::to_string).collect();
+    format!(
+        "{}\n{}\n",
+        CONTEXT_FLOOR_METRICS.join("\t"),
+        cells.join("\t")
+    )
+}
+
+pub fn parse_context_floors(source: &str) -> Result<ContextFloors, String> {
+    let file = "context-floors.tsv";
+    let mut lines = source.lines();
+    let expected_header = CONTEXT_FLOOR_METRICS.join("\t");
+    if lines.next() != Some(expected_header.as_str()) {
+        return Err(format!("{file}:1: the header must be '{expected_header}'"));
+    }
+    let row = lines
+        .next()
+        .ok_or_else(|| format!("{file}: no floor row"))?;
+    let fields: Vec<&str> = row.split('\t').collect();
+    if fields.len() != CONTEXT_FLOOR_METRICS.len() {
+        return Err(format!(
+            "{file}:2: expected {} columns, found {}",
+            CONTEXT_FLOOR_METRICS.len(),
+            fields.len()
+        ));
+    }
+    let mut floors = [0usize; 6];
+    for (slot, field) in floors.iter_mut().zip(&fields) {
+        *slot = field
+            .parse()
+            .map_err(|_| format!("{file}:2: '{field}' is not an integer"))?;
+    }
+    if lines.next().is_some() {
+        return Err(format!("{file}: more than one floor row"));
+    }
+    Ok(ContextFloors(floors))
 }
 
 /// Integer floors: one row per slice and one for `ALL`.
@@ -171,6 +286,7 @@ mod tests {
                  p2\tかき\t柿\tit\tnoun\n",
             )
             .expect("prediction"),
+            context: Vec::new(),
         }
     }
 
@@ -239,5 +355,87 @@ mod tests {
         assert!(parse_floors(&twice)
             .expect_err("duplicate")
             .contains("duplicate row"));
+    }
+
+    fn context_corpus() -> Corpus {
+        let mut corpus = corpus();
+        corpus.context = crate::corpus::parse_context(
+            "id\tpair\toneshot_reading\toneshot_expected\tclue_reading\tclue_surface\treading\texpected\tvariants\n\
+             x1\tp1\tかわのはし\t川の橋\tかわの\t川の\tはし\t橋\t\n\
+             x2\tp1\tしょくじのはし\t食事の箸\tしょくじの\t食事の\tはし\t箸\t\n\
+             x3\tp2\tみせのこうひい\t店のコーヒー\tみせの\t店の\tこうひい\tコーヒー\t\n\
+             x4\tp2\tくろのこうひい\t黒のコーヒー\tくろの\t黒の\tこうひい\t珈琲\t\n\
+             x5\tp3\tまえのかち\t前の価値\tまえの\t前の\tかち\t価値\t\n\
+             x6\tp3\tしあいのかち\t試合の勝ち\tしあいの\t試合の\tかち\t勝ち\t\n",
+        )
+        .expect("context");
+        corpus
+    }
+
+    fn context_outcome(oneshot: u8, context: u8) -> ContextOutcome {
+        ContextOutcome {
+            oneshot: ConversionOutcome {
+                state: oneshot,
+                top: String::new(),
+            },
+            context: ConversionOutcome {
+                state: context,
+                top: String::new(),
+            },
+            bridge: false,
+            bridge_attempted: false,
+        }
+    }
+
+    #[test]
+    fn context_counts_split_oneshot_and_committed_and_bucket_pairs() {
+        // p1: both sides expected under context; p2: one; p3: neither.
+        let outcomes = [
+            context_outcome(2, 2),
+            context_outcome(1, 2),
+            context_outcome(0, 2),
+            context_outcome(2, 0),
+            context_outcome(0, 1),
+            context_outcome(2, 0),
+        ];
+        let counts = tally_context(&context_corpus(), &outcomes);
+        assert_eq!(
+            (
+                counts.context_lenient,
+                counts.context_strict,
+                counts.oneshot_lenient,
+                counts.oneshot_strict
+            ),
+            (4, 3, 4, 3)
+        );
+        assert_eq!(
+            (counts.pairs_both, counts.pairs_one, counts.pairs_none),
+            (1, 1, 1)
+        );
+    }
+
+    #[test]
+    fn context_floors_round_trip_and_reject_malformed_files() {
+        let floors = ContextFloors::from_counts(&ContextCounts {
+            context_lenient: 10,
+            context_strict: 8,
+            oneshot_lenient: 9,
+            oneshot_strict: 7,
+            pairs_both: 3,
+            pairs_one: 2,
+            pairs_none: 1,
+        });
+        let text = render_context_floors(&floors);
+        assert_eq!(parse_context_floors(&text).expect("round trip"), floors);
+        assert!(parse_context_floors("a\tb\n1\t2\n")
+            .expect_err("header")
+            .contains("header"));
+        assert!(parse_context_floors(&format!("{text}1\t2\t3\t4\t5\t6\n"))
+            .expect_err("extra row")
+            .contains("more than one floor row"));
+        let bad = format!("{}\nten\t8\t9\t7\t3\t2\n", CONTEXT_FLOOR_METRICS.join("\t"));
+        assert!(parse_context_floors(&bad)
+            .expect_err("not an integer")
+            .contains("not an integer"));
     }
 }
