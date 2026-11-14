@@ -454,7 +454,15 @@ fn main() {
                     top_n: 5,
                     intra_candidate: false,
                 });
-            run(&service, &dictionary, &vocab, &table, &corpus_path, &config);
+            run(
+                &service,
+                &dictionary,
+                &vocab,
+                &table,
+                &corpus_path,
+                &config,
+                args.iter().any(|arg| arg == "--per-row"),
+            );
         }
         "replay" => {
             let table = PathBuf::from(arg_value(&args, "--table").unwrap_or_else(|| usage()));
@@ -487,7 +495,7 @@ fn main() {
 
 /// Rows for the grid/replay: measured outcome of one context row under a
 /// config. `state` mirrors the gate's expected/variant/miss scoring.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum State {
     Expected,
     Variant,
@@ -820,7 +828,10 @@ fn grid(
 }
 
 /// Held-out file evaluation (#474 condition 7): a verifier supplies a file
-/// in context.tsv format and this prints the same summary lines.
+/// in context.tsv format and this prints the same summary lines. `--per-row`
+/// additionally prints one line per row with the before/after state, and the
+/// summary gains fixed (miss→hit), broken (hit→miss) and unreachable
+/// (expected absent from the candidate list, so no ranking could find it).
 fn run(
     service: &ConversionService,
     dictionary: &Dictionary<'_>,
@@ -828,6 +839,7 @@ fn run(
     table_path: &Path,
     corpus_path: &Path,
     config: &Config,
+    per_row: bool,
 ) {
     let rows = parse_context(&fs::read_to_string(corpus_path).expect("held-out corpus"))
         .expect("held-out parse");
@@ -849,10 +861,64 @@ fn run(
         _,
         _,
     ) = evaluate(&stage, &empty, &rows, &table, config, &HashMap::new());
+    let mut fixed = 0usize;
+    let mut broken = 0usize;
+    let mut unreachable = 0usize;
+    if per_row {
+        println!("id\tpair\tbefore\tafter\tverdict");
+    }
+    for row in &rows {
+        let snaps = context_candidates(service, row).expect("context candidates");
+        let reachable = snaps
+            .iter()
+            .any(|snap| state_of(&snap.text, &row.expected, &row.variants) != State::Miss);
+        let mut clues = clues_of(vocab, &row.clue_surface);
+        if config.intra_candidate {
+            if let Some(top) = snaps.first() {
+                for skip in 0..top.segments.len() {
+                    clues.extend(intra_clues(vocab, &row.reading, top, skip));
+                }
+            }
+        }
+        let index = apply_association(&stage, &row.reading, &table, &clues, &snaps, config);
+        let before = snaps
+            .first()
+            .map(|snap| state_of(&snap.text, &row.expected, &row.variants))
+            .unwrap_or(State::Miss);
+        let after = snaps
+            .get(index)
+            .map(|snap| state_of(&snap.text, &row.expected, &row.variants))
+            .unwrap_or(State::Miss);
+        if !reachable {
+            unreachable += 1;
+        }
+        if before == State::Miss && after != State::Miss {
+            fixed += 1;
+        }
+        if before != State::Miss && after == State::Miss {
+            broken += 1;
+        }
+        if per_row {
+            let verdict = if !reachable {
+                "unreachable"
+            } else if before == State::Miss && after != State::Miss {
+                "fixed"
+            } else if before != State::Miss && after == State::Miss {
+                "broken"
+            } else {
+                "unchanged"
+            };
+            println!(
+                "{}\t{}\t{:?}\t{:?}\t{verdict}",
+                row.id, row.pair, before, after
+            );
+        }
+    }
     println!("rows={}", rows.len());
     println!("context_lenient={ctx_lenient} context_strict={ctx_strict}");
     println!("oneshot_lenient={oneshot_lenient} oneshot_strict={oneshot_strict}");
     println!("pairs_both={pairs_both} pairs_one={pairs_one} pairs_neither={pairs_neither}");
+    println!("fixed={fixed} broken={broken} unreachable={unreachable}");
 }
 
 /// #474 condition 11 input: dump each context row's engine candidates (top 6,

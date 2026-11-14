@@ -202,7 +202,54 @@ fn main() {
     }
 }
 
+/// No-model baseline row: the engine's candidate order untouched
+/// (`candidates[0]`), which is what `accuracy-gate` counts for the same
+/// 210 context rows. Kept separate from `local_choice_index` on purpose —
+/// the gate scores index 0 verbatim while the neural local choice skips a
+/// raw-reading surface, and the difference shows up as a small delta.
+fn top1_tally(rows: &[Row]) {
+    let mut tally = Tally::default();
+    let mut pair_strict: std::collections::BTreeMap<String, usize> =
+        std::collections::BTreeMap::new();
+    for row in rows {
+        let Some(first) = row.candidates.first() else {
+            tally.skipped += 1;
+            continue;
+        };
+        let state = state_of(&first.text, &row.expected, &row.variants);
+        tally.rows += 1;
+        if state == 2 {
+            tally.strict += 1;
+            *pair_strict.entry(row.pair.clone()).or_insert(0) += 1;
+        } else {
+            pair_strict.entry(row.pair.clone()).or_insert(0);
+        }
+        if state >= 1 {
+            tally.lenient += 1;
+        }
+    }
+    tally.pairs_both = pair_strict.values().filter(|&&n| n == 2).count();
+    tally.pairs_one = pair_strict.values().filter(|&&n| n == 1).count();
+    tally.pairs_neither = pair_strict.values().filter(|&&n| n == 0).count();
+    println!(
+        "pass=N gate=- rows={} strict={} lenient={} \
+         pairs_both={} pairs_one={} pairs_neither={} \
+         fixed=0 broken=0 unavailable=0 skipped={} \
+         p50_us=0 p99_us=0",
+        tally.rows,
+        tally.strict,
+        tally.lenient,
+        tally.pairs_both,
+        tally.pairs_one,
+        tally.pairs_neither,
+        tally.skipped,
+    );
+}
+
 fn run_model(name: &str, model_bytes: &[u8], rows: &[Row]) {
+    // Engine order with no model at all — must equal the accuracy-gate
+    // context baseline for the same file.
+    top1_tally(rows);
     let executable = env::current_exe().expect("exe");
     let dll = sakura_runtime::sibling_dll(&executable).expect("onnxruntime.dll sibling");
     ort::init_from(dll).expect("ort init").commit();
@@ -222,6 +269,10 @@ fn run_model(name: &str, model_bytes: &[u8], rows: &[Row]) {
         for pass in ["A", "B", "C"] {
             let mut tally = Tally::default();
             let mut latencies = Vec::with_capacity(rows.len() * 2);
+            // Input signature: nonzero id cells actually fed to the model,
+            // proving the three passes send different tensors.
+            let mut reading_cells = 0usize;
+            let mut context_cells = 0usize;
             let mut pair_strict: std::collections::BTreeMap<String, usize> =
                 std::collections::BTreeMap::new();
             for row in rows {
@@ -249,19 +300,19 @@ fn run_model(name: &str, model_bytes: &[u8], rows: &[Row]) {
                 };
                 match pass {
                     "B" | "C" => {
-                        let (ids, len) =
-                            text_ids(&row.reading, sakura_runtime::READING_LENGTH);
+                        let (ids, len) = text_ids(&row.reading, sakura_runtime::READING_LENGTH);
                         inputs.reading_ids = ids;
                         inputs.reading_lengths = vec![len];
                     }
                     _ => {}
                 }
                 if pass == "C" {
-                    let (ids, len) =
-                        text_ids(&row.clue_surface, sakura_runtime::CONTEXT_LENGTH);
+                    let (ids, len) = text_ids(&row.clue_surface, sakura_runtime::CONTEXT_LENGTH);
                     inputs.context_ids = ids;
                     inputs.context_lengths = vec![len];
                 }
+                reading_cells += inputs.reading_ids.iter().filter(|&&id| id != 0).count();
+                context_cells += inputs.context_ids.iter().filter(|&&id| id != 0).count();
                 let start = Instant::now();
                 let scores = score_once(&mut session, &inputs);
                 latencies.push(start.elapsed());
@@ -302,7 +353,7 @@ fn run_model(name: &str, model_bytes: &[u8], rows: &[Row]) {
                 "pass={pass} gate={} rows={} strict={} lenient={} \
                  pairs_both={} pairs_one={} pairs_neither={} \
                  fixed={} broken={} unavailable={} skipped={} \
-                 p50_us={} p99_us={}",
+                 p50_us={} p99_us={} reading_cells={} context_cells={}",
                 if gated { "1.7" } else { "off" },
                 tally.rows,
                 tally.strict,
@@ -316,6 +367,8 @@ fn run_model(name: &str, model_bytes: &[u8], rows: &[Row]) {
                 tally.skipped,
                 tally.p50_us,
                 tally.p99_us,
+                reading_cells,
+                context_cells,
             );
         }
     }
