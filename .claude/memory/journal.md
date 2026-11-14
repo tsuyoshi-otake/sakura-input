@@ -4210,6 +4210,10 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Verification: probe run and history counts only. The 2.0.33 dictionary was not probed. The share of the 108 cases whose clue sits in the preceding 12 characters (about 4 in 10 clear, 2 in 10 weak) is my reading of the rows, not a measured label set.
 - Learning: a homophone probe needs paired rows with opposite contexts; a single-row corpus passes whenever the expected word is the cheaper lemma and cannot see context blindness (same blind spot as #348).
 
+### Result (#471 owner decision, 2026-11-15)
+
+Only phase 1 is to be integrated; phases 2 and 3 are stopped. With product learning enabled, 8,120 of 8,595 replayed conversions already match the committed choice. Of 235 tuning mismatches, only 12 have the committed choice in the context tail; the tested methods fixed at most 3. Reopen this work only after a learning-enabled replay first establishes a sufficient number of mismatches that context could fix.
+
 ## 2026-11-14 - #471 phase 1: committed-context measurement landed in accuracy-gate
 
 - Symptom/issue: homophone errors are context blindness (2026-11-14 entry). Phase 1 asks "would committed context have helped?" without touching ranking. Branch feat/471-context-measurement.
@@ -4233,3 +4237,11 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Verification: verifier verdict (overall fail on 2 criteria); clean tree, temp directory removed, no leftover cargo or rustc.
 - Learning: a paired-corpus gate must check that each expected surface is among the candidates for its reading, or unreachable rows look like ranking misses. A replay over commit records must first select the commits that were conversions.
 
+
+## 2026-11-15 - #471 owner decision: stop context ranking research
+
+- #474 method (a), v1: the learning-free history replay fixed 108 and broke 469; independent verification passed 11/14 and found frequency-insensitive weights and a vacuous guard. V2 used article counts and smoothed weights: no point in the 216-point tuning grid passed; the best net result fixed 28 and broke 27. Independent verification passed 7/7.
+- #477 method (c): learning-enabled replay matched 8,120 of 8,595 converted commits. In 3,762 tuning targets, 235 mismatched and only 12 had the committed choice in the tail. No one of 20 S/P points passed the 5:1 filter; S fixed at most 3 (with 19 broken), and P fixed at most 2 (with at least 1 broken). Independent verification passed 7/7, noting session-tail and undo limitations.
+- Owner chose option A: integrate phase 1 only and stop phases 2 and 3. #476 was closed because method (a) was not adopted; #473 was closed because the retained tail would have no consumer. No product ranking change or release is planned.
+- The measurement-only archive is branch feat/477-personal-context at 734a24fc5685fbe9edab28f4462545b7f69ab1d9; the independent result is issuecomment-6884934427.
+- Learning: context-favorable examples and learning-free comparisons overstate real-world headroom. First measure remaining mismatches using the product learning baseline, then include broken counts in the decision.
