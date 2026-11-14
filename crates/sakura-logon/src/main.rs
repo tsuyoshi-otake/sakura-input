@@ -25,7 +25,9 @@ fn main() {
             .and_then(Path::parent)
             .map(Path::to_path_buf)
     });
-    let com = ComApartment::new().ok();
+    let com_result = ComApartment::new();
+    let com_error = com_result.as_ref().err().map(|error| error.code().0);
+    let com = com_result.ok();
 
     let outcome = execute(
         || {
@@ -34,7 +36,10 @@ fn main() {
                     .as_deref()
                     .is_some_and(|stub| launcher::register_if_missing(&[stub]).is_ok())
         },
-        || com.as_ref().is_some() && user_profile::enable().is_ok(),
+        || match com_error {
+            Some(code) => Err(code),
+            None => user_profile::enable().map_err(|error| error.code().0),
+        },
         |component| launch(payload.as_deref(), component),
     );
 
