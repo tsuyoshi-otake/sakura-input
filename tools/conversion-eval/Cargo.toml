@@ -40,6 +40,16 @@ name = "accuracy-gate"
 path = "src/bin/accuracy_gate.rs"
 required-features = ["accuracy-gate"]
 
+[[bin]]
+name = "assoc-table-build"
+path = "src/bin/assoc_table_build.rs"
+required-features = ["accuracy-gate"]
+
+[[bin]]
+name = "assoc-eval"
+path = "src/bin/assoc_eval.rs"
+required-features = ["accuracy-gate"]
+
 [dependencies]
 sakura-core = { path = "../../crates/sakura-core" }
 sakura-engine = { path = "../../crates/sakura-engine", optional = true }

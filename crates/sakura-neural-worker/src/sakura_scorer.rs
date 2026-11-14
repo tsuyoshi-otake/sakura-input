@@ -75,7 +75,9 @@ pub(crate) fn score(
         .collect())
 }
 
-fn prepare_inputs(request: &Request) -> Result<Inputs, Error> {
+/// pub(crate) so the #474 `context-probe` binary builds the identical
+/// candidate block; the shipped worker is unchanged.
+pub(crate) fn prepare_inputs(request: &Request) -> Result<Inputs, Error> {
     let count = request.candidates.len();
     if !(2..=sakura_runtime::TOP_K).contains(&count) {
         return Err(Error::InvalidCandidates);
@@ -130,7 +132,9 @@ fn prepare_inputs(request: &Request) -> Result<Inputs, Error> {
     })
 }
 
-fn character_id(character: char) -> u32 {
+/// pub(crate) so the #474 `context-probe` binary reuses the training-time
+/// character hash verbatim; the shipped worker is unchanged.
+pub(crate) fn character_id(character: char) -> u32 {
     let product = u64::from(u32::from(character)) * u64::from(CHARACTER_MULTIPLIER);
     ((product % u64::from(VOCAB_SIZE - 1)) + 1) as u32
 }

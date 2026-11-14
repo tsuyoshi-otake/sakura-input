@@ -7,9 +7,20 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
+[features]
+# sakura-input #474 condition 11: the `context-probe` binary is a
+# measurement-only tool that feeds non-zero context/reading tensors. It is
+# never part of the default build or the installer payload.
+context-probe = []
+
 [[bin]]
 name = "sakura_neural_worker"
 path = "src/main.rs"
+
+[[bin]]
+name = "context_probe"
+path = "src/bin/context_probe.rs"
+required-features = ["context-probe"]
 
 [dependencies]
 sakura-rerank-proto.workspace = true
