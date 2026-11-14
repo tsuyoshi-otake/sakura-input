@@ -1578,7 +1578,13 @@ fn make_candidate(
             u16::try_from(node.start).map_err(|_| ConversionError::ReadingTooLong)?;
         let reading_end = u16::try_from(node.end).map_err(|_| ConversionError::ReadingTooLong)?;
         if let Some(boundary) = bridge_reading_boundary {
-            if node.start < boundary && node.end > boundary {
+            if node.start < boundary && node.end > boundary && node.end == reading.len() {
+                // A spanning edge is lexeme-agnostic evidence only when it
+                // covers the whole current reading: the joint lexeme explains
+                // the current surface as one unit (検討|しますか). A spanning
+                // edge that ends mid-reading re-labels part of the committed
+                // lexeme as current surface (年長|度 made ちょうど→長度, #467),
+                // so it must not re-score the current-only list.
                 bridge_boundary_kind = Some(BridgeBoundaryKind::SpanningEdge);
             } else if node.end == boundary && bridge_boundary_kind.is_none() {
                 bridge_boundary_kind = Some(BridgeBoundaryKind::TypedFrontier);

@@ -1252,6 +1252,41 @@ fn cross_commit_bridge_is_lexeme_agnostic() {
 }
 
 #[test]
+fn a_spanning_edge_that_ends_mid_reading_does_not_bridge() {
+    // #467: committing 年 then converting ちょうど surfaced 長度 because the
+    // spanning path 年長(ねんちょう)|度(ど) re-labelled the tail half of the
+    // joint lexeme as part of the current surface. A spanning path is only
+    // lexeme-agnostic evidence when the spanning edge covers the whole
+    // current reading (検討しますか style); one that ends mid-reading must not
+    // re-score a current-only candidate.
+    let bytes = synthetic_dictionary(&[
+        fixture_entry("ねん", "年", 0, EntryFlags::NONE),
+        fixture_entry("ねんちょう", "年長", 5, EntryFlags::NONE),
+        fixture_entry("ど", "度", 0, EntryFlags::NONE),
+        fixture_entry("ちょう", "長", 90, EntryFlags::NONE),
+        fixture_entry("ちょうど", "ちょうど", 30, EntryFlags::NONE),
+        fixture_entry("ちょうど", "丁度", 40, EntryFlags::NONE),
+    ]);
+    let dictionary = Dictionary::parse(&bytes).expect("synthetic dictionary");
+    let mut converter = Converter::new();
+    let result = converter
+        .convert_with_user_dictionary_input_bridge_detailed(
+            &dictionary,
+            None,
+            ConversionInput::ordinary("ちょうど"),
+            ConversionOptions::default(),
+            Some(CrossCommitBridge {
+                tail_reading: "ねん",
+                tail_surface: "年",
+                prefix_right_id: RightContextId::new(0),
+                prefix_cost: 0,
+            }),
+        )
+        .expect("bridged conversion");
+    assert_eq!(result.candidates()[0].text(), "ちょうど");
+}
+
+#[test]
 fn commit_bridge_tail_preserves_the_exact_final_raw_edge() {
     let bytes = synthetic_dictionary(&[
         fixture_entry("まえ", "前", 3, EntryFlags::NONE),
