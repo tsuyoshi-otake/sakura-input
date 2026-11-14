@@ -4291,3 +4291,10 @@ Learning: keep raw counts in the emitted artifact and apply smoothing at read ti
 - Grid (216 points, cached candidates: 210 context + 3,816/3,957 even-session rows): max ctx_strict 149, best fixed-broken = +1, **0 points pass** the pre-declared filter (fixed >= 5*broken && ctx_strict >= 105). Selected: no improvement. Confirmation half (odd sessions) NOT run; held-out 78 pairs untouched.
 - Direction matches v1's failure: real-history fixed < broken at every point even though context-corpus strict improves - the tuning corpus can't measure the breaking side (all rows have context pointing at the answer).
 - Reported in issuecomment-6879466478. Owner decides next steps; no shipping/integration.
+
+
+## 2026-11-14 #474 v2 conclusion (issuecomment-6880081952)
+
+Independent verification of v2 passed all 7 items on c8c6dc4 (counts SHA-256/bytes, article-level counting, hand-computed weights 870/871/847, two replayed grid points matching, mechanical re-read of all 216 rows, confirmation half never run, repo clean). Conclusion: method (a) — the Wikipedia co-occurrence table — is not used in this form. Best grid point still came out 28 fixed vs 27 broken; v1 was 108 vs 469. On real input the top candidate already matches committed text for 7,660/8,786 (87%), so fixing at a 5:1 ratio needed stronger evidence than Wikipedia association could supply.
+
+Learning: a tuning set built only from sentences whose context points at the right answer cannot see the breaking side — context.tsv rose 105 -> 149 while real history went negative. Split real history into tuning and confirmation halves, and put the broken count in the acceptance gate.
