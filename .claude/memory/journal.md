@@ -4256,3 +4256,13 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Perf (outside-engine): table load +571 MB WS; apply p50 3.4us / p99 10us.
 - Kept for owner verification (do not delete until instructed): ~/tmp/sakura-context-assoc (~7.1 GB: 3 tables, 6 det tables, 7 dump parts, logs), ~/tmp/sakura-471/history.tsv.
 - Learning: a corpus-selected optimum can invert on real history; the frozen-then-replay-once protocol caught it. Same-weight clue ties at min_pair are a visible smell of weak group-relative signal.
+
+## 2026-11-14 - #474 v1 independent verification: 11/14 pass, method (a) rejected for v1 table
+
+- Verifier (fresh context, `a9329d4`, dictionary `0cf3ecbf`) re-ran the procedures itself: 11 of 14 items pass. Passes include the table SHA-256s, replay reproduction (7,660 -> 7,299; fixed 108 / broken 469), OFF zero-diffs, the 78-pair held-out (71 -> 113, fixed 44 / broken 2), perf, repository cleanliness, and the #471 A-E fixes.
+- FAILED condition 2 root cause (design bug): `weight_of` computes 500*ln(P(c|t)/P(c|G)) with no occurrence-count awareness. A clue that co-occurs with exactly one group member gets the constant `500*ln(group_total/target_total)` no matter how rare the pair is: in W120, 59 clues tie at idou's max 1040, 86 at seido/¸“x's 1315, 5,130 at seido/§“x's 37. Rare targets get max weight from a 10-occurrence accident; frequent targets are capped low. Matches the replay direction (broken 469 > fixed 108).
+- Condition 4 partially failed by construction: with intra=off the 1,630 conversion rows receive no clues, so `conv_broken = 0` held by construction - the guard was toothless. The tuning corpus also only contains context-helps rows, so the break-side was never measurable. Owner-owned design error, recorded.
+- Condition 10 partially: Issue body's background still quoted pre-A-E baselines (115/210, 13/85/7, 34/210); corrected to 105/210, 7/91/7, 29/210 with the old values marked as pre-fix.
+- v2 procedure frozen by owner before v2 tables: article-level pair dedup; beta-smoothed weight P~(t|c)=(near+B*share)/(group_near+B), w=500*ln(P~/share), B in {10,100,1000} applied at load; per-W counts files instead of weight tables; history split by session-serial parity (even=tune, odd=confirm, confirm replayed once); 216-point grid with candidates cached per row; selection = tune fixed >= 5*broken AND ctx_strict >= 105, then max (fixed-broken).
+- v1 tables/dumps stay until v2 finishes: verification still re-runs replay/grid against them.
+- Learning: a selection guard that cannot observe the failure mode it guards (intra=off sees no clues) is not a guard. Weights derived from ratios alone silently drop count evidence - always keep raw counts in the emitted artifact and apply smoothing at read time.
