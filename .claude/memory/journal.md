@@ -4191,3 +4191,12 @@ Windows high contrast, and 144/192 DPI remain unconfirmed on screen.
 - Corpus: a7-088..a7-100 (public readings only); snapshots/floors regenerated, accuracy-gate --check clean, a5-190/a6-056 restored.
 - Fail-beware note: dispatch_tests.rs identity fixture uses right_id 0 which would trip the function-word band ? hence the !=0 guard.
 - Integration: branches merged into integrate/2.0.33; journal kept from both sides.
+
+2026-11-15 - Sakura Input 2.0.33 released
+
+- Integrate PR #468 merged as 8d69298; release run failed on shipped_dictionary_ranking issue_84: learned `ñ≥Ç¢Ç©` expectation was stale. Investigation proved `learned.exact=ì‡â»` is correctly bounded by the bridge rescore; remaining top is reading-identical `Ç»Ç¢Ç©` (Ç»Ç¢+Ç©, right class 325) which the #448 function-word exemption intentionally keeps hiragana. `ñ≥Ç¢Ç©` had won only as the old skip rule's first non-identity row. Expectation updated via PR #469 (d29c44b).
+- Other two local failures were harness requirements, not defects: issue_334 needs SAKURA_BASE_SYSTEM_DIC+SAKURA_SYSTEM_DIC envs; issue_83 percentiles needs --release (passed: p99 2.7ms vs 20ms budget).
+- Tag v2.0.33 moved to d29c44b (main); release run 43546412431 green (build + sign-and-package; Authenticode skipped, secretless path). publish-release.ps1 -Publish: manifest signed with pinned key 178bc99dÅc, draft readback verified, published.
+- Release: https://github.com/tsuyoshi-otake/sakura-input/releases/tag/v2.0.33 ? assets sakura_setup.exe + release-manifest-v2.txt + .sig; sequence 41; authenticode=unsigned per release-signing.md; notes carry the unsigned notice + SHA-256 check.
+- Open follow-ups: #457 and #465 stay open awaiting next observations (KeySlow diag + commit origin now recorded); #466/#467 fixed.
+- Cleanup: ~/tmp task files removed (sakura-history.tsv plaintext history, conv-probe, dict-fix, dictionary builds/sources, probe-*.txt, rtq.ps1, rebuild-dict.ps1); release-candidate download dir removed; no leftover test processes.
