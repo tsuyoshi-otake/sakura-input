@@ -39,7 +39,9 @@ impl Converter {
 
 /// Whether `candidate` opens with a bare one-character hiragana fragment and
 /// then spends a whole kanji or katakana word to finish the reading.
-fn is_kana_fragment_prefix_split(candidate: &ConversionCandidate) -> bool {
+pub(in crate::conversion) fn is_kana_fragment_prefix_split(
+    candidate: &ConversionCandidate,
+) -> bool {
     let segments = candidate.segments();
     let (Some(first), Some(second)) = (segments.first(), segments.get(1)) else {
         return false;
