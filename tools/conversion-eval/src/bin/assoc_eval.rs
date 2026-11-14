@@ -178,9 +178,16 @@ fn load_table(vocab: &Vocab, path: &Path) -> Result<Table, String> {
         let target_entry = vocab
             .lookup(target)
             .iter()
-            .find(|&&index| vocab.entries[index as usize].reading == reading)
+            .find(|&&index| {
+                vocab.entries[index as usize].reading == reading
+                    && vocab.entries[index as usize].is_target
+            })
             .copied();
-        let clue_entry = vocab.lookup(clue).first().copied();
+        let clue_entry = vocab
+            .lookup(clue)
+            .iter()
+            .find(|&&index| vocab.entries[index as usize].is_clue)
+            .copied();
         let (Some(target_entry), Some(clue_entry)) = (target_entry, clue_entry) else {
             continue;
         };
@@ -203,7 +210,7 @@ fn clues_of(vocab: &Vocab, text: &str) -> Vec<u32> {
         .segment(text)
         .into_iter()
         .filter_map(|token| token.entry)
-        .filter(|&index| vocab.entries[index as usize].is_clue)
+        .filter_map(|index| vocab.clue_entry(index))
         .collect()
 }
 
@@ -295,6 +302,11 @@ fn may_swap(
     };
     let score_top = score_candidate(stage.vocab, table, reading, top, clues);
     let score_alt = score_candidate(stage.vocab, table, reading, candidate, clues);
+    // The association must actually improve the score; otherwise an empty
+    // table would still rerank candidates by raw dictionary price.
+    if score_alt <= score_top {
+        return false;
+    }
     let adjusted_top = price_top * 1000 - config.lambda_milli * score_top.min(config.cap);
     let adjusted_alt = price_alt * 1000 - config.lambda_milli * score_alt.min(config.cap);
     adjusted_alt <= adjusted_top - config.margin * 1000
@@ -936,6 +948,7 @@ fn replay(
     let mut short_after = 0usize;
     let mut short_fixed = 0usize;
     let mut short_broken = 0usize;
+    let mut skipped = 0usize;
     for line in input.lines() {
         if line.is_empty() || line.starts_with('#') {
             continue;
@@ -996,12 +1009,14 @@ fn replay(
             short_target += 1;
         }
         let Some((clue_reading, clue_surface)) = clue else {
+            skipped += 1;
             continue;
         };
-        let (initial_right_id, bridge) = match commit_carry(service, &clue_reading, &clue_surface) {
-            Ok(carry) => carry,
-            Err(_) => continue,
-        };
+        // Same rule as the accuracy gate's replay: an unrecoverable previous
+        // commit carries nothing, so the row is measured as a no-bridge
+        // conversion rather than dropped.
+        let (initial_right_id, bridge) =
+            commit_carry(service, &clue_reading, &clue_surface).unwrap_or_default();
         let snaps = with_service(|| {
             service.with_conversion_input_bridge_hints(
                 ConversionInput::ordinary(fields[indexes.4]),
@@ -1016,6 +1031,7 @@ fn replay(
         })
         .unwrap_or_default();
         if snaps.is_empty() {
+            skipped += 1;
             continue;
         }
         let committed = fields[indexes.5];
@@ -1068,6 +1084,7 @@ fn replay(
     }
     println!("history replay under frozen config (counts only):");
     println!("  targets                          : {target}");
+    println!("  skipped                          : {skipped}");
     println!("  top=committed before             : {before_match}");
     println!("  top=committed after              : {after_match}");
     println!("  fixed                            : {fixed}");

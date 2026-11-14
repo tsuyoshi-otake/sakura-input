@@ -15,7 +15,7 @@
 //! per the Issue's counting rule, enforced at use sites where neighbours
 //! are known).
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::HashMap;
 
 use sakura_core::dictionary::{Dictionary, EntryFlags};
 
@@ -53,6 +53,13 @@ pub struct Vocab {
     /// Surface text -> entry indices that carry it.
     #[allow(dead_code)] // read by assoc-eval, not assoc-table-build
     by_surface: HashMap<String, Vec<u32>>,
+    /// Entry -> the canonical target for counting: the cheapest entry
+    /// sharing its (reading, surface), or u32::MAX when the word is not a
+    /// counted target under the competition rules.
+    target_of: Vec<u32>,
+    /// Entry -> the canonical clue for counting: the cheapest entry
+    /// sharing its surface, or u32::MAX when the surface is not a clue.
+    clue_of: Vec<u32>,
     /// Longest-match trie over every dictionary surface.
     root: usize,
     nodes: Vec<Node>,
@@ -65,6 +72,15 @@ struct Node {
     /// surface per node; surfaces shared by several entries keep the first).
     entry: Option<u32>,
 }
+
+/// Price band for real competition: an association bonus is capped at 3000
+/// in the grid, so a word farther than this from its reading's cheapest can
+/// never be swapped to the top by the measured rules.
+pub const TARGET_BAND: i32 = 3000;
+
+/// How many distinct clue surfaces are counted — the cheapest surfaces as a
+/// frequency proxy (dictionary cost). Chosen inside the owner's "数万語".
+pub const CLUE_CAP: usize = 60_000;
 
 fn has_kanji_or_katakana(text: &str) -> bool {
     text.chars().any(|c| {
@@ -113,15 +129,109 @@ impl Vocab {
             .map_err(|error| format!("dictionary entry walk failed: {error:?}"))?;
 
         let mut by_surface: HashMap<String, Vec<u32>> = HashMap::new();
-        let mut nodes = vec![Node::default()];
         for entry in &mut entries {
-            let homophones = &surfaces_of_reading[&entry.reading];
-            entry.is_target = homophones.len() >= 2 && has_kanji_or_katakana(&entry.surface);
-            entry.is_clue = has_kanji_or_katakana(&entry.surface);
             by_surface
                 .entry(entry.surface.clone())
                 .or_default()
                 .push(entry.index);
+        }
+
+        // Target rule (memory-bounded): within one reading, keep only the
+        // entries that genuinely compete — surface clusters whose cheapest
+        // entry costs at most TARGET_BAND more than the reading's cheapest.
+        // A reading keeps targets only when at least two surfaces survive.
+        let mut kept_targets = 0usize;
+        let mut mark_targets: Vec<u32> = Vec::new();
+        let mut target_of = vec![u32::MAX; entries.len()];
+        for homophones in surfaces_of_reading.values() {
+            let group_min = homophones
+                .iter()
+                .map(|&index| entries[index as usize].word_cost)
+                .min()
+                .unwrap_or(i32::MAX);
+            // Canonical entry per (reading, surface): the cheapest member.
+            let mut canonical: HashMap<&str, u32> = HashMap::new();
+            for &index in homophones {
+                let entry = &entries[index as usize];
+                if !has_kanji_or_katakana(&entry.surface) {
+                    continue;
+                }
+                canonical
+                    .entry(entry.surface.as_str())
+                    .and_modify(|best| {
+                        if entry.word_cost < entries[*best as usize].word_cost {
+                            *best = index;
+                        }
+                    })
+                    .or_insert(index);
+            }
+            let kept: Vec<u32> = canonical
+                .values()
+                .copied()
+                .filter(|&index| entries[index as usize].word_cost <= group_min + TARGET_BAND)
+                .collect();
+            if kept.len() < 2 {
+                continue;
+            }
+            for &index in homophones {
+                let entry = &entries[index as usize];
+                if let Some(&best) = canonical.get(entry.surface.as_str()) {
+                    if kept.contains(&best) {
+                        target_of[index as usize] = best;
+                        mark_targets.push(best);
+                    }
+                }
+            }
+            kept_targets += kept.len();
+        }
+        for best in mark_targets {
+            entries[best as usize].is_target = true;
+        }
+
+        // Clue rule (memory-bounded): the CLUE_CAP cheapest distinct
+        // kanji/katakana surfaces; one canonical entry per surface.
+        let mut clue_surfaces: Vec<(i32, &str, u32)> = Vec::new();
+        for indices in by_surface.values() {
+            let canonical = *indices
+                .iter()
+                .min_by_key(|&&index| (entries[index as usize].word_cost, index))
+                .expect("surface cluster is never empty");
+            let entry = &entries[canonical as usize];
+            if has_kanji_or_katakana(&entry.surface) {
+                clue_surfaces.push((entry.word_cost, entry.surface.as_str(), canonical));
+            }
+        }
+        clue_surfaces.sort();
+        let kept_canonicals: Vec<u32> = clue_surfaces
+            .iter()
+            .take(CLUE_CAP)
+            .map(|&(_, _, canonical)| canonical)
+            .collect();
+        drop(clue_surfaces);
+        let mut clue_of = vec![u32::MAX; entries.len()];
+        let mut kept_clues: std::collections::HashSet<u32> = std::collections::HashSet::new();
+        for canonical in kept_canonicals {
+            kept_clues.insert(canonical);
+            entries[canonical as usize].is_clue = true;
+        }
+        for indices in by_surface.values() {
+            let canonical = *indices
+                .iter()
+                .min_by_key(|&&index| (entries[index as usize].word_cost, index))
+                .expect("surface cluster is never empty");
+            if kept_clues.contains(&canonical) {
+                for &index in indices {
+                    clue_of[index as usize] = canonical;
+                }
+            }
+        }
+        eprintln!(
+            "vocab kept: {kept_targets} targets, {} clue surfaces",
+            kept_clues.len()
+        );
+
+        let mut nodes = vec![Node::default()];
+        for entry in &mut entries {
             let mut node = 0usize;
             for ch in entry.surface.chars() {
                 node = match nodes[node].children.get(&ch) {
@@ -141,9 +251,21 @@ impl Vocab {
         Ok(Self {
             entries,
             by_surface,
+            target_of,
+            clue_of,
             root: 0,
             nodes,
         })
+    }
+
+    /// The canonical clue entry behind a trie-matched entry, if the surface
+    /// is a counted clue.
+    #[allow(dead_code)] // read by assoc-eval, not assoc-table-build
+    pub fn clue_entry(&self, entry: u32) -> Option<u32> {
+        match self.clue_of[entry as usize] {
+            u32::MAX => None,
+            canonical => Some(canonical),
+        }
     }
 
     /// Entry indices that carry `surface` (several entries can share one).
@@ -238,49 +360,91 @@ pub struct Token {
 }
 
 /// The co-occurrence counters shared by the build and its checkpoint file.
-/// `counts[(target, clue, distance)]` is one bucket; `distance` is the char
-/// gap between the two tokens' nearest boundaries (before: clue_end ->
-/// target_start, after: target_end -> clue_start), capped at 127 so every
-/// window W <= 128 can be emitted from the same counts.
+/// Packs (target canonical entry, clue canonical entry, distance bucket)
+/// into one u64 key: ids stay below 2^22, the bucket below 4.
+#[allow(dead_code)] // read by assoc-table-build only
+pub fn pack_key(target: u32, clue: u32, bucket: u8) -> u64 {
+    ((target as u64) << 24) | ((clue as u64) << 2) | u64::from(bucket)
+}
+
+/// Inverse of `pack_key`.
+#[allow(dead_code)] // read by assoc-table-build only
+pub fn unpack_key(key: u64) -> (u32, u32, u8) {
+    (
+        (key >> 24) as u32,
+        ((key >> 2) & 0x3f_ffff) as u32,
+        (key & 3) as u8,
+    )
+}
+
+/// Small deterministic multiply-xor hasher for the packed u64 keys — the
+/// map sees tens of millions of inserts, and a local measurement tool has
+/// no adversarial-input concern.
+#[derive(Default)]
+#[allow(dead_code)] // read by assoc-table-build only
+pub struct PairHasher(u64);
+
+impl std::hash::Hasher for PairHasher {
+    fn finish(&self) -> u64 {
+        self.0
+    }
+    fn write(&mut self, bytes: &[u8]) {
+        for &byte in bytes {
+            self.0 = (self.0 ^ u64::from(byte)).wrapping_mul(0x0000_0100_0000_01b3);
+        }
+    }
+    fn write_u64(&mut self, value: u64) {
+        self.0 = (self.0 ^ value)
+            .wrapping_mul(0x9e37_79b9_7f4a_7c15)
+            .rotate_left(23);
+    }
+}
+
+/// `counts[(target, clue, distance_bucket)]` is one bucket; the gap between
+/// the two tokens' nearest boundaries is folded into the three tiers the
+/// grid needs (0: gap < 30, 1: gap < 60, 2: gap < 120), so one counts file
+/// serves windows 30, 60 and 120 while keeping the map small enough to hold.
 #[derive(Debug, Default)]
 #[allow(dead_code)] // read by assoc-table-build only
 pub struct Counts {
-    /// (target entry, clue entry, distance) -> occurrences.
-    pub pairs: BTreeMap<(u32, u32, u8), u64>,
+    /// pack_key(target, clue, bucket) -> occurrences; HashMap keeps one
+    /// entry per key without per-node tree overhead.
+    pub pairs: HashMap<u64, u64, std::hash::BuildHasherDefault<PairHasher>>,
     /// Articles processed, for the report.
     pub articles: u64,
     /// Paragraphs processed, for the report.
     pub paragraphs: u64,
 }
 
-/// Distance cap: counts store min(gap, DISTANCE_CAP); a window `W` includes
-/// every pair with gap < W, so stored counts support W <= DISTANCE_CAP + 1.
+/// Distance cap: counting looks DISTANCE_CAP+1 characters each way.
 #[allow(dead_code)] // read by assoc-table-build only
 pub const DISTANCE_CAP: u8 = 127;
 
-/// Counts `text` (paragraphs separated by newlines, articles by form feeds)
-/// into `counts` under the Issue's rules.
+/// Distance tier for a gap: 0 = under 30, 1 = under 60, 2 = under 120;
+/// gaps of 120+ return None (outside the largest grid window). A window W
+/// keeps every bucket fully below W: 30 -> {0}, 60 -> {0,1}, 120 -> {0,1,2}.
 #[allow(dead_code)] // read by assoc-table-build only
-pub fn count_text(vocab: &Vocab, counts: &mut Counts, text: &str) {
-    for article in text.split('\u{0c}') {
-        counts.articles += 1;
-        for paragraph in article.lines() {
-            if paragraph.is_empty() {
-                continue;
-            }
-            counts.paragraphs += 1;
-            count_paragraph(vocab, counts, paragraph);
-        }
+pub fn distance_bucket(gap: usize) -> Option<u8> {
+    if gap < 30 {
+        Some(0)
+    } else if gap < 60 {
+        Some(1)
+    } else if gap < 120 {
+        Some(2)
+    } else {
+        None
     }
 }
 
 /// One paragraph: tokenize, then for every target token look `DISTANCE_CAP`
 /// characters each way and count the clue words found there.
-fn count_paragraph(vocab: &Vocab, counts: &mut Counts, paragraph: &str) {
+#[allow(dead_code)] // read by assoc-table-build only
+pub fn count_paragraph(vocab: &Vocab, counts: &mut Counts, paragraph: &str) {
     let tokens = vocab.segment(paragraph);
     for (position, token) in tokens.iter().enumerate() {
-        let Some(target) = token.entry else { continue };
-        if !vocab.entries[target as usize].is_target {
+        let Some(entry) = token.entry else { continue };
+        let target = vocab.target_of[entry as usize];
+        if target == u32::MAX {
             continue;
         }
         let lo = token.start.saturating_sub(usize::from(DISTANCE_CAP) + 1);
@@ -292,32 +456,39 @@ fn count_paragraph(vocab: &Vocab, counts: &mut Counts, paragraph: &str) {
             if other.start >= token.start && other.end <= token.end {
                 continue;
             }
-            let Some(clue) = other.entry else { continue };
-            if !vocab.entries[clue as usize].is_clue {
+            let Some(other_entry) = other.entry else {
+                continue;
+            };
+            let clue = vocab.clue_of[other_entry as usize];
+            if clue == u32::MAX {
                 continue;
             }
-            if !counts_as_clue(vocab, &tokens, other_at) {
+            if !counts_as_clue(vocab, &tokens, other_at, clue) {
                 continue;
             }
             let gap = if other.end <= token.start {
                 token.start - other.end
             } else {
                 other.start - token.end
-            } as u8;
-            *counts.pairs.entry((target, clue, gap)).or_insert(0) += 1;
+            };
+            let Some(bucket) = distance_bucket(gap) else {
+                continue;
+            };
+            *counts
+                .pairs
+                .entry(pack_key(target, clue, bucket))
+                .or_insert(0) += 1;
         }
     }
 }
 
 /// A single-kanji clue counts only when its neighbours are not kanji (#474
-/// counting rule). Longer clue words always count.
+/// counting rule). `canonical` is the clue's canonical surface entry; longer
+/// clue words always count.
 #[allow(dead_code)] // read by assoc-table-build only
-fn counts_as_clue(vocab: &Vocab, tokens: &[Token], at: usize) -> bool {
+fn counts_as_clue(vocab: &Vocab, tokens: &[Token], at: usize, canonical: u32) -> bool {
     let token = tokens[at];
-    let Some(entry) = token.entry else {
-        return false;
-    };
-    let surface = &vocab.entries[entry as usize].surface;
+    let surface = &vocab.entries[canonical as usize].surface;
     if surface.chars().count() != 1 || !is_kanji(surface.chars().next().unwrap_or('\0')) {
         return true;
     }
