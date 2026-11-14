@@ -1512,9 +1512,15 @@ fn issue_84_bridge_bounds_conflicting_learning_but_preserves_other_authorities()
                 .collect::<String>()
         })
         .unwrap_or_default();
+    // The learned 内科 stays bounded: the bridge-rescored window rejects a
+    // learned preference that was not itself rescored, so it cannot override
+    // the context. What remains is the reading-identical first row — and
+    // since #448 exempts function-word clusters (ない + か, right class 325)
+    // from the reading skip, the hiragana form is the intended surface.
+    // The old code reached 無いか only as the first non-identity row.
     assert_eq!(
-        learned_surface, "無いか",
-        "even strong learned homophones must stay inside the bridge-supported continuation set"
+        learned_surface, "ないか",
+        "bounded learning yields to the function-word cluster's hiragana row (#448)"
     );
     drop(learned);
     std::fs::remove_dir_all(learning_root).expect("remove durable learning root");
