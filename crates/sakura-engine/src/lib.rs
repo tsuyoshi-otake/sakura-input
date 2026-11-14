@@ -26,6 +26,7 @@
 
 pub mod ai_text;
 pub(crate) mod candidate_projection;
+pub mod committed_context;
 pub mod composition_fence;
 pub mod configuration;
 pub(crate) mod correction;

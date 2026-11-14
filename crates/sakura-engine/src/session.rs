@@ -254,6 +254,11 @@ impl SessionCrossCommitBridge {
     }
 }
 
+/// The committed-context tail's capacity and mechanics live in
+/// [`crate::committed_context`], shared with the #474 measurement tools so
+/// both sides apply one implementation.
+use crate::committed_context::CommittedContext;
+
 /// One editing session's state: what mode it is in, what input scope the
 /// focused field reported, and the composition (if any) in progress.
 ///
@@ -417,6 +422,9 @@ pub struct Session {
     /// Recent commits and erasures, to notice a commit the user erased and
     /// retyped with another spelling (#305).
     correction_trail: CorrectionTrail,
+    /// Committed text the engine may read back for context (#471 phase 2).
+    /// Bounded, volatile, and written only at the commit terminal.
+    committed_context: CommittedContext,
     /// Which request variant is currently being dispatched (Issue #465). The
     /// dispatcher stamps it before every session-scoped request so a commit
     /// record can name the path that produced it — a commit whose origin is
@@ -495,6 +503,7 @@ impl Session {
             undo_record: UndoRecord::default(),
             undo_armed: false,
             undo_pending: false,
+            committed_context: CommittedContext::default(),
             correction_trail: CorrectionTrail::default(),
             commit_origin: 0,
         }
@@ -581,6 +590,9 @@ impl Session {
             self.scope = InputScope::Normal;
             self.scope_classified = false;
             self.clear_cross_commit_bridge();
+            // A field the host could not classify must not retain typed text,
+            // even while the rest of the personal-context state survives.
+            self.committed_context.clear();
             if was_sensitive {
                 self.reset();
                 self.clear_personal_context();
@@ -1320,6 +1332,18 @@ impl Session {
 
         self.ascii_space_latch = prefers_ascii_idle_space(surface);
 
+        // The one committed-context write site (#471 phase 2). Repaired and
+        // synthetic commits count too — the surface is document text even
+        // though the commit cache intentionally skips it. A scope that is
+        // not classified-Normal (today only an unclassified read passes the
+        // guard above) revokes the tail rather than letting it leak across
+        // an unknown field.
+        if self.scope_classified && self.scope == InputScope::Normal {
+            self.committed_context.append(surface);
+        } else {
+            self.committed_context.clear();
+        }
+
         self.undo_record.reading.clear();
         self.undo_record.raw_input.clear();
         self.undo_record.shifted_ascii = self.shifted_ascii;
@@ -1442,6 +1466,11 @@ impl Session {
             self.commit_cache_len = self.commit_cache_len.saturating_sub(1);
             self.commit_cache[previous] = CommitCacheEntry::default();
         }
+        // The host deleted exactly this surface, so it leaves the committed
+        // tail. When the tail does not end with it the middle was edited —
+        // the remaining bytes still describe committed text and stay.
+        self.committed_context
+            .remove_suffix(self.undo_record.surface.as_str());
         self.clear_undo_record();
         true
     }
@@ -1497,6 +1526,15 @@ impl Session {
         self.undo_record.post_commit_had_carry = false;
     }
 
+    /// The committed-text tail this session is carrying (#471 phase 2). The
+    /// phase-3 context methods read this same buffer, so what they compare
+    /// on is exactly what the session remembered. Tests exercise it now; the
+    /// in-product reader lands with phase 3.
+    #[allow(dead_code)]
+    pub(crate) fn committed_context(&self) -> &str {
+        self.committed_context.as_str()
+    }
+
     /// Reports a persisted commit of the current reading to the correction
     /// trail and returns the correction it completes, if any (#305).
     pub(crate) fn track_commit_correction(
@@ -1515,6 +1553,7 @@ impl Session {
 
     pub(crate) fn clear_personal_context(&mut self) {
         self.correction_trail.clear();
+        self.committed_context.clear();
         self.reset_carryover();
         self.commit_cache.fill(CommitCacheEntry::default());
         self.commit_cache_len = 0;

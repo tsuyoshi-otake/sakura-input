@@ -12320,5 +12320,235 @@ fn a_slow_request_leaves_a_diag_record() {
     );
 }
 
+/// #471 phase 2 (review D): the committed-context tail is session state —
+/// deleting a session (host close) or restarting the engine must not carry
+/// it anywhere. This exercises the real dispatch path, not field reads.
+#[test]
+fn committed_context_dies_with_the_session_and_a_restart_starts_empty() {
+    let mut dispatcher = conversion_dispatcher();
+    let mut out = OutputBuf::new();
+    let first = create_session(&mut dispatcher, &mut out, "context-first.exe");
+    dispatcher.dispatch(
+        &Request::SetInputScope {
+            session: first,
+            scope: InputScope::Normal,
+        },
+        &mut out,
+    );
+    type_word(&mut dispatcher, first, "kana", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session: first,
+            key: named_key(KeyCode::Space),
+        },
+        &mut out,
+    );
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session: first,
+            key: named_key(KeyCode::Enter),
+        },
+        &mut out,
+    );
+    assert_eq!(out.commit_text(), Some("仮名"));
+    assert_eq!(
+        dispatcher
+            .sessions
+            .get(first)
+            .expect("first session")
+            .committed_context(),
+        "仮名"
+    );
+
+    // The host closed the session: nothing may survive into the next one.
+    dispatcher.dispatch(&Request::DeleteSession { session: first }, &mut out);
+    let second = create_session(&mut dispatcher, &mut out, "context-second.exe");
+    assert_eq!(
+        dispatcher
+            .sessions
+            .get(second)
+            .expect("second session")
+            .committed_context(),
+        ""
+    );
+
+    // An engine restart owns no sessions at all.
+    let mut restarted = conversion_dispatcher();
+    let mut out = OutputBuf::new();
+    let third = create_session(&mut restarted, &mut out, "context-third.exe");
+    assert_eq!(
+        restarted
+            .sessions
+            .get(third)
+            .expect("third session")
+            .committed_context(),
+        ""
+    );
+}
+
+/// #471 phase 2 (review D): a commit in a sensitive scope must never enter
+/// the committed-context tail — proven end to end through the dispatcher.
+#[test]
+fn sensitive_scope_commits_never_reach_committed_context_through_dispatch() {
+    let mut dispatcher = conversion_dispatcher();
+    let mut out = OutputBuf::new();
+    let session = create_session(&mut dispatcher, &mut out, "sensitive.exe");
+    for scope in [
+        InputScope::Password,
+        InputScope::Url,
+        InputScope::Email,
+        InputScope::Digits,
+    ] {
+        dispatcher.dispatch(&Request::SetInputScope { session, scope }, &mut out);
+        type_word(&mut dispatcher, session, "kana", &mut out);
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Space),
+            },
+            &mut out,
+        );
+        dispatcher.dispatch(
+            &Request::SendKey {
+                session,
+                key: named_key(KeyCode::Enter),
+            },
+            &mut out,
+        );
+        // A sensitive field forwards keys without composing: no commit can
+        // reach the output, so nothing can enter the tail from this scope.
+        assert!(
+            out.commit_text().is_none(),
+            "{scope:?} unexpectedly produced a commit"
+        );
+        assert_eq!(
+            dispatcher
+                .sessions
+                .get(session)
+                .expect("session")
+                .committed_context(),
+            "",
+            "{scope:?} must not admit text into the committed context"
+        );
+        dispatcher.dispatch(&Request::ResetDocumentContext { session }, &mut out);
+    }
+}
+
+/// #471 phase 2 (review D): while the tail is held, no output channel may
+/// contain its text beyond the commit's own records — the developer-history
+/// snapshot, the Debug dumps and the diag stream are all inspected.
+#[test]
+fn committed_context_text_never_leaks_into_output_channels() {
+    let learning = Arc::new(LearningService::memory());
+    let history_root = phase_one_learning_path("committed-context-channels");
+    let history_path = history_root.with_file_name("input-history.bin");
+    let history = InputHistoryService::open(&history_path).expect("history");
+    let mut dispatcher = Dispatcher::new_with_services(conversion_fixture(), Arc::clone(&learning))
+        .expect("dispatcher");
+    dispatcher.set_input_history(Some(Arc::clone(&history)));
+    let mut out = OutputBuf::new();
+
+    let session = create_session(&mut dispatcher, &mut out, "channels.exe");
+    dispatcher.dispatch(
+        &Request::SetInputScope {
+            session,
+            scope: InputScope::Normal,
+        },
+        &mut out,
+    );
+    type_word(&mut dispatcher, session, "kana", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Space),
+        },
+        &mut out,
+    );
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Enter),
+        },
+        &mut out,
+    );
+    assert_eq!(out.commit_text(), Some("仮名"));
+
+    // A second commit generates records after the first one — if the tail
+    // leaked into history, it would show up in those later records.
+    type_word(&mut dispatcher, session, "kyou", &mut out);
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Space),
+        },
+        &mut out,
+    );
+    dispatcher.dispatch(
+        &Request::SendKey {
+            session,
+            key: named_key(KeyCode::Enter),
+        },
+        &mut out,
+    );
+    assert!(
+        out.commit_text().is_some(),
+        "the second commit did not happen"
+    );
+
+    // The tail is held at inspection time.
+    let tail = dispatcher
+        .sessions
+        .get(session)
+        .expect("session")
+        .committed_context();
+    assert!(tail.starts_with("仮名"), "tail held: {tail:?}");
+
+    // The tail's Debug describes only its size — other Session fields
+    // legitimately hold surfaces (preedit, undo), so the check is scoped to
+    // the committed_context field itself.
+    let session_debug = format!("{:?}", dispatcher.sessions.get(session).expect("session"));
+    let tail_debug = session_debug
+        .split("committed_context:")
+        .nth(1)
+        .expect("session Debug includes committed_context");
+    let tail_debug = &tail_debug[..tail_debug.find('}').expect("field ends") + 1];
+    assert!(
+        tail_debug.contains("tail_bytes") && !tail_debug.contains("仮名"),
+        "committed_context Debug leaked committed text: {tail_debug}"
+    );
+
+    // The developer-history snapshot may contain the surface only inside the
+    // records that describe the commit itself — a Commit record's surface, or
+    // the commit field of the Key record that produced it. Any other record
+    // holding the text is a context leak.
+    history.flush().expect("flush");
+    let records = crate::input_history::read_snapshot(&history_path)
+        .expect("history snapshot")
+        .records;
+    // A record may hold the surface only where it describes producing that
+    // commit: the Commit record's surface, the producing key's commit field,
+    // or the preedit that showed the conversion while it was composed. The
+    // committed-context tail is not part of any record — nothing else may
+    // contain the committed text.
+    for record in &records {
+        let leaked = match record {
+            InputHistoryRecord::Commit(record) => {
+                record.surface != "仮名"
+                    && (record.surface.contains("仮名") || record.reading.contains("仮名"))
+            }
+            InputHistoryRecord::Key(record) => {
+                let producing = record.commit == "仮名"
+                    || record.preedit_before == "仮名"
+                    || record.preedit_after == "仮名";
+                !producing && format!("{record:?}").contains("仮名")
+            }
+            InputHistoryRecord::Diag(_)
+            | InputHistoryRecord::AiText(_)
+            | InputHistoryRecord::Engine(_) => format!("{record:?}").contains("仮名"),
+        };
+        assert!(!leaked, "committed text escaped into {record:?}");
+    }
+}
+
 #[path = "dispatch_correction_tests.rs"]
 mod correction;

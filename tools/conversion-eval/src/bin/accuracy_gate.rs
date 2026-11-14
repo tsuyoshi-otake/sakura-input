@@ -288,6 +288,10 @@ fn run() -> Result<bool, String> {
         );
         println!("  skipped (no preceding commit)   : {}", counts.skipped);
         println!(
+            "  sessions holding a context tail : {}",
+            counts.sessions_with_context
+        );
+        println!(
             "  of which reading <= 4 chars     : target {} | match {} | mismatch {} | swap {}",
             counts.short.target,
             counts.short.top_match,

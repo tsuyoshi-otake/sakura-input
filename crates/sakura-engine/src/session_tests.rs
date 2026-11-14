@@ -1,4 +1,5 @@
 use super::*;
+use crate::committed_context::MAX_COMMITTED_CONTEXT_BYTES;
 use sakura_proto::ErrorCode;
 
 #[test]
@@ -691,4 +692,147 @@ fn clear_empties_the_table_without_resetting_the_id_counter() {
 #[test]
 fn default_matches_new() {
     assert_eq!(SessionTable::default().len(), SessionTable::new().len());
+}
+
+// #471 phase 2: the committed-context owner is bounded, volatile, written at
+// exactly one place, and dies with every personal-context clear path.
+
+fn classified_session() -> Session {
+    let mut session = Session::new("editor.exe");
+    session.apply_input_scope(InputScope::Normal);
+    session
+}
+
+#[test]
+fn committed_context_collects_normal_scope_commits_only() {
+    let mut session = classified_session();
+    session.preedit.push_str("かいぎ").expect("fits");
+    session.record_current_commit("会議", 1, 0, 1);
+    session.reset();
+    session.preedit.push_str("しりょ").expect("fits");
+    session.record_current_commit("資料", 1, 0, 1);
+    session.reset();
+    assert_eq!(session.committed_context(), "会議資料");
+
+    // A session whose scope was never positively classified admits nothing.
+    let mut unclassified = Session::new("editor.exe");
+    unclassified.preedit.push_str("かいぎ").expect("fits");
+    unclassified.record_current_commit("会議", 1, 0, 1);
+    assert_eq!(unclassified.committed_context(), "");
+}
+
+#[test]
+fn committed_context_is_bounded_and_drops_the_oldest_text() {
+    let mut session = classified_session();
+    // ~1.5x the bound across several commits, then a final commit.
+    let filler = "会議資料を確認する。".repeat(30);
+    for chunk in filler.as_bytes().chunks(60) {
+        session.record_current_commit(std::str::from_utf8(chunk).expect("aligned"), 1, 0, 1);
+        session.reset();
+    }
+    session.record_current_commit("最後", 1, 0, 1);
+    session.reset();
+    let context = session.committed_context();
+    assert!(context.len() <= MAX_COMMITTED_CONTEXT_BYTES);
+    assert!(context.ends_with("最後"));
+}
+
+#[test]
+fn committed_context_dies_on_every_clear_path() {
+    // Sensitive entry clears; the sensitive commit itself lands nothing; the
+    // exit does not resurrect anything.
+    let mut session = classified_session();
+    session.record_current_commit("会議", 1, 0, 1);
+    session.reset();
+    session.apply_input_scope(InputScope::Password);
+    assert_eq!(session.committed_context(), "");
+    session.apply_input_scope(InputScope::Normal);
+    assert_eq!(session.committed_context(), "");
+    for scope in [
+        InputScope::Password,
+        InputScope::Url,
+        InputScope::Email,
+        InputScope::Digits,
+    ] {
+        session.apply_input_scope(scope);
+        session.record_current_commit("ないしょ", 1, 0, 1);
+        assert_eq!(session.committed_context(), "", "{scope:?} must not admit");
+        session.apply_input_scope(InputScope::Normal);
+    }
+
+    // Moving to an unclassifiable field revokes the tail immediately.
+    session.record_current_commit("会議", 1, 0, 1);
+    session.reset();
+    session.apply_input_scope(InputScope::Unclassified);
+    assert_eq!(session.committed_context(), "");
+
+    // A document-context reset (focus moved, caret jumped) clears it.
+    session.apply_input_scope(InputScope::Normal);
+    session.record_current_commit("会議", 1, 0, 1);
+    session.reset();
+    session.reset_document_context();
+    assert_eq!(session.committed_context(), "");
+
+    // A carry reset (mode change) keeps it: the document text did not move,
+    // so the tail still describes exactly what the session committed.
+    session.record_current_commit("会議", 1, 0, 1);
+    session.reset();
+    session.reset_carryover();
+    assert_eq!(session.committed_context(), "会議");
+}
+
+#[test]
+fn commit_undo_removes_only_the_undone_surface() {
+    let mut session = classified_session();
+    session.preedit.push_str("かいぎ").expect("fits");
+    session.record_current_commit("会議", 1, 0, 1);
+    session.reset();
+    session.preedit.push_str("しりょ").expect("fits");
+    session.record_current_commit("資料", 1, 0, 1);
+    session.reset();
+    assert_eq!(session.committed_context(), "会議資料");
+
+    // Host rejected the deletion: the commit stands, so the tail stands.
+    assert!(session.undo_commit().is_some());
+    assert!(session.reject_undo_commit());
+    assert_eq!(session.committed_context(), "会議資料");
+
+    // Host applied the deletion: the surface leaves the tail.
+    session.preedit.push_str("しりょ").expect("fits");
+    session.record_current_commit("資料", 1, 0, 1);
+    session.reset();
+    assert!(session.undo_commit().is_some());
+    assert!(session.acknowledge_undo_commit());
+    assert_eq!(session.committed_context(), "会議");
+}
+
+#[test]
+fn a_probe_clone_cannot_write_back_to_the_live_context() {
+    let mut session = classified_session();
+    session.record_current_commit("会議", 1, 0, 1);
+    session.reset();
+    let mut probe = session.clone();
+    probe.record_current_commit("さくら", 1, 0, 1);
+    probe.reset();
+    assert_eq!(probe.committed_context(), "会議さくら");
+    assert_eq!(
+        session.committed_context(),
+        "会議",
+        "test_only dispatch works on a clone; the live tail is untouched"
+    );
+}
+
+#[test]
+fn session_debug_never_prints_the_committed_tail() {
+    let mut session = classified_session();
+    session.preedit.push_str("かいぎ").expect("fits");
+    session.record_current_commit("会議", 1, 0, 1);
+    session.reset();
+    session.preedit.push_str("しりょ").expect("fits");
+    session.record_current_commit("資料", 1, 0, 1);
+    session.reset();
+    let debug = format!("{session:?}");
+    // "資料" legitimately appears in the undo record until the next commit;
+    // "会議" lives only in the committed tail, which must not leak.
+    assert!(!debug.contains("会議"), "{debug}");
 }
