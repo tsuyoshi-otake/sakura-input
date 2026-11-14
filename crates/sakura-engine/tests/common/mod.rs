@@ -180,7 +180,14 @@ impl Engine {
             PipeBinding::WellKnown(_) => sakura_ipc::pipe_name_for(Endpoint::Control)
                 .expect("the AppContainer test parent can resolve the control pipe name"),
         };
-        let mut command = Command::new(env!("CARGO_BIN_EXE_sakura_engine"));
+        // SAKURA_ENGINE_EXE pins the child binary, so a benchmark can run
+        // against an installed or previously built engine for before/after
+        // measurement (#471 phase 2 verify 5) without rebuilding the test.
+        let engine_exe = std::env::var_os("SAKURA_ENGINE_EXE").map_or_else(
+            || PathBuf::from(env!("CARGO_BIN_EXE_sakura_engine")),
+            PathBuf::from,
+        );
+        let mut command = Command::new(engine_exe);
         command
             .env("SAKURA_DICTIONARY", &dictionary)
             .env("LOCALAPPDATA", &identity.local_app_data);
@@ -232,7 +239,10 @@ impl Engine {
             self.owned_child_pid_while_running("waiting for named-pipe readiness")
                 .unwrap_or_else(|detail| panic!("{detail}"));
             let policy =
-                ServerTrustPolicy::Exact(PathBuf::from(env!("CARGO_BIN_EXE_sakura_engine")));
+                ServerTrustPolicy::Exact(std::env::var_os("SAKURA_ENGINE_EXE").map_or_else(
+                    || PathBuf::from(env!("CARGO_BIN_EXE_sakura_engine")),
+                    PathBuf::from,
+                ));
             match Client::connect_verified_to(&self.pipe_name, &policy, Duration::from_millis(100))
             {
                 Ok(client) => {
