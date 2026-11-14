@@ -50,6 +50,7 @@ use sakura_core::dictionary::Dictionary;
 use sakura_core::{ConversionInput, ConversionOptions, Converter};
 use sakura_engine::committed_context::CommittedContext;
 use sakura_engine::dictionary::ConversionService;
+use sha2::{Digest, Sha256};
 
 #[allow(dead_code)] // prediction rows and helpers are used by accuracy-gate only
 #[path = "accuracy_gate/corpus.rs"]
@@ -426,6 +427,13 @@ fn main() {
     };
     let dictionary_path = arg_value(&args, "--dictionary").unwrap_or_else(|| usage());
     let bytes = fs::read(&dictionary_path).expect("dictionary read");
+    // Report the dictionary actually opened — never a transcribed hash
+    // (#474: a copied SHA once named the wrong build in a baseline report).
+    let dictionary_sha: String = Sha256::digest(&bytes)
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect();
+    println!("dictionary: {dictionary_path} sha256 {dictionary_sha}");
     let service = ConversionService::from_static_bytes(Box::leak(bytes.into_boxed_slice()))
         .expect("conversion service");
     let dictionary = service.dictionary();

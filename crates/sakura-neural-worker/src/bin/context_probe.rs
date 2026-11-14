@@ -202,48 +202,58 @@ fn main() {
     }
 }
 
-/// No-model baseline row: the engine's candidate order untouched
-/// (`candidates[0]`), which is what `accuracy-gate` counts for the same
-/// 210 context rows. Kept separate from `local_choice_index` on purpose —
-/// the gate scores index 0 verbatim while the neural local choice skips a
-/// raw-reading surface, and the difference shows up as a small delta.
+/// No-model baseline rows. Two different "the engine's own choice"
+/// references are printed side by side because the grid's fixed/broken
+/// counters hang off the second one:
+///   N: `candidates[0]` verbatim — the accuracy-gate baseline (105/110).
+///   L: `local_choice_index` — the product default the gate override
+///      starts from; it skips a raw-reading surface (107/112).
 fn top1_tally(rows: &[Row]) {
-    let mut tally = Tally::default();
-    let mut pair_strict: std::collections::BTreeMap<String, usize> =
-        std::collections::BTreeMap::new();
-    for row in rows {
-        let Some(first) = row.candidates.first() else {
-            tally.skipped += 1;
-            continue;
-        };
-        let state = state_of(&first.text, &row.expected, &row.variants);
-        tally.rows += 1;
-        if state == 2 {
-            tally.strict += 1;
-            *pair_strict.entry(row.pair.clone()).or_insert(0) += 1;
-        } else {
-            pair_strict.entry(row.pair.clone()).or_insert(0);
+    let picks: [(&str, fn(&Row) -> usize); 2] = [
+        ("N", |_| 0),
+        ("L", |row: &Row| {
+            local_choice_index(&row.candidates, &row.reading)
+        }),
+    ];
+    for (label, pick) in picks {
+        let mut tally = Tally::default();
+        let mut pair_strict: std::collections::BTreeMap<String, usize> =
+            std::collections::BTreeMap::new();
+        for row in rows {
+            if row.candidates.is_empty() {
+                tally.skipped += 1;
+                continue;
+            }
+            let index = pick(row);
+            let state = state_of(&row.candidates[index].text, &row.expected, &row.variants);
+            tally.rows += 1;
+            if state == 2 {
+                tally.strict += 1;
+                *pair_strict.entry(row.pair.clone()).or_insert(0) += 1;
+            } else {
+                pair_strict.entry(row.pair.clone()).or_insert(0);
+            }
+            if state >= 1 {
+                tally.lenient += 1;
+            }
         }
-        if state >= 1 {
-            tally.lenient += 1;
-        }
+        tally.pairs_both = pair_strict.values().filter(|&&n| n == 2).count();
+        tally.pairs_one = pair_strict.values().filter(|&&n| n == 1).count();
+        tally.pairs_neither = pair_strict.values().filter(|&&n| n == 0).count();
+        println!(
+            "pass={label} gate=- rows={} strict={} lenient={} \
+             pairs_both={} pairs_one={} pairs_neither={} \
+             fixed=0 broken=0 unavailable=0 skipped={} \
+             p50_us=0 p99_us=0",
+            tally.rows,
+            tally.strict,
+            tally.lenient,
+            tally.pairs_both,
+            tally.pairs_one,
+            tally.pairs_neither,
+            tally.skipped,
+        );
     }
-    tally.pairs_both = pair_strict.values().filter(|&&n| n == 2).count();
-    tally.pairs_one = pair_strict.values().filter(|&&n| n == 1).count();
-    tally.pairs_neither = pair_strict.values().filter(|&&n| n == 0).count();
-    println!(
-        "pass=N gate=- rows={} strict={} lenient={} \
-         pairs_both={} pairs_one={} pairs_neither={} \
-         fixed=0 broken=0 unavailable=0 skipped={} \
-         p50_us=0 p99_us=0",
-        tally.rows,
-        tally.strict,
-        tally.lenient,
-        tally.pairs_both,
-        tally.pairs_one,
-        tally.pairs_neither,
-        tally.skipped,
-    );
 }
 
 fn run_model(name: &str, model_bytes: &[u8], rows: &[Row]) {

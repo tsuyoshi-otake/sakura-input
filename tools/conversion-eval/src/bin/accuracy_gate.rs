@@ -274,6 +274,13 @@ fn run() -> Result<bool, String> {
     // and reports counts only (#471 phase 1, verify step 5).
     if let Some(path) = &options.history_replay {
         let counts = replay::replay_history(&service, &read_text(path)?)?;
+        // Print the dictionary actually opened — transcribed SHAs in reports
+        // once pointed at the wrong build (#474 record correction).
+        println!(
+            "dictionary: {} sha256 {}",
+            options.dictionary.display(),
+            dictionary_sha
+        );
         println!("history replay (counts only; no readings or surfaces leave this run):");
         println!("  normal-scope commits            : {}", counts.commits);
         println!("  of which after a convert key    : {}", counts.target);
