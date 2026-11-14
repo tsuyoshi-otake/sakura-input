@@ -4281,3 +4281,13 @@ Work so far (commit c5dd8a8, tools only; no engine/product ranking change):
 - Refactored replay verified equivalent: empty table -> before=after 7,660/8,786; even 3,449 + odd 4,211 = 7,660.
 
 Learning: keep raw counts in the emitted artifact and apply smoothing at read time - recounting for every beta would have cost ~2.5h each.
+
+
+### v2 outcome (same-day, commit 694cf94 + uncommitted measurement artifacts under ~/tmp)
+
+- Recount (all 7 parts, article-level dedup): 2,478,501 articles / 75,109,439 paragraphs / 209,437,706 pair keys in 9,229s. R=3, dropped 336,423,208, first scan at paragraph 20,357,760. Peak WS 11.91 GB (whole run) vs part-1 benchmark 7.1 GB / 789s.
+- Counts files: W30 19.18M kept (849MB) / W60 26.03M (1,158MB) / W120 31.94M (1,428MB); sha256 recorded in issue comment.
+- Examples: constant-weight ties gone (異動: 871/870/847/843/838 - differentiated by occurrence counts).
+- Grid (216 points, cached candidates: 210 context + 3,816/3,957 even-session rows): max ctx_strict 149, best fixed-broken = +1, **0 points pass** the pre-declared filter (fixed >= 5*broken && ctx_strict >= 105). Selected: no improvement. Confirmation half (odd sessions) NOT run; held-out 78 pairs untouched.
+- Direction matches v1's failure: real-history fixed < broken at every point even though context-corpus strict improves - the tuning corpus can't measure the breaking side (all rows have context pointing at the answer).
+- Reported in issuecomment-6879466478. Owner decides next steps; no shipping/integration.
