@@ -21,6 +21,9 @@ use std::path::PathBuf;
 use sakura_core::{ConversionOptions, Converter, Dictionary};
 use sakura_engine::replay_eval::{ReplayCommit, ReplayLearning, ReplayTrail};
 
+#[path = "learning_replay/personal_context.rs"]
+mod personal_context;
+
 /// `KeyCode::Backspace` as the history records it.
 const KEY_BACKSPACE: u16 = 5;
 const MODIFIER_CTRL: u8 = 0x02;
@@ -43,6 +46,7 @@ struct Options {
     learning: PathBuf,
     dictionary: PathBuf,
     examples: bool,
+    personal: Option<personal_context::Mode>,
 }
 
 fn main() {
@@ -55,8 +59,29 @@ fn main() {
             .map_err(|error| format!("{}: {error:?}", options.dictionary.display()))?;
         let rows = parse_history(&history)?;
         let records = parse_learning(&learning)?;
-        let replay = replay(&dictionary, &rows, &records)?;
-        print!("{}", replay.report());
+        if options.personal.is_some() && rows.windows(2).any(|pair| pair[0].day > pair[1].day) {
+            return Err("history sequence is not chronological by day".to_owned());
+        }
+        let mut personal = options
+            .personal
+            .map(|mode| personal_context::Measurement::new(mode, &rows));
+        let replay = replay_observed(&dictionary, &rows, &records, personal.as_mut())?;
+        if let Some(personal) = personal {
+            if matches!(options.personal, Some(personal_context::Mode::Baseline)) {
+                print!("{}", replay.report());
+                println!(
+                    "committed-top-match\t{}",
+                    replay
+                        .conversions
+                        .iter()
+                        .filter(|conversion| conversion.after.surface == conversion.committed)
+                        .count()
+                );
+            }
+            print!("{}", personal.report());
+        } else {
+            print!("{}", replay.report());
+        }
         if options.examples {
             eprintln!("# examples are personal input: never publish them");
             print!("{}", replay.examples());
@@ -74,6 +99,11 @@ fn parse_options(args: impl Iterator<Item = std::ffi::OsString>) -> Result<Optio
     let mut learning = None;
     let mut dictionary = None;
     let mut examples = false;
+    let mut personal = None;
+    let mut method = None;
+    let mut n = None;
+    let mut k = None;
+    let mut q = None;
     let mut args = args.peekable();
     while let Some(argument) = args.next() {
         let Some(name) = argument.to_str() else {
@@ -81,7 +111,7 @@ fn parse_options(args: impl Iterator<Item = std::ffi::OsString>) -> Result<Optio
         };
         if matches!(name, "--help" | "-h") {
             println!(
-                "Usage: learning-replay --history FILE --learning FILE --dictionary FILE [--examples]"
+                "Usage: learning-replay --history FILE --learning FILE --dictionary FILE [--examples] [--personal baseline|grid|confirm --method S|P --n 2|3 --k 2|3|5 --q 60|80|90]"
             );
             std::process::exit(0);
         }
@@ -94,6 +124,20 @@ fn parse_options(args: impl Iterator<Item = std::ffi::OsString>) -> Result<Optio
             .ok_or_else(|| format!("{name} requires a value"))?
             .into_string()
             .map_err(|_| format!("{name} value must be valid Unicode"))?;
+        let personal_slot = match name {
+            "--personal" => Some(&mut personal),
+            "--method" => Some(&mut method),
+            "--n" => Some(&mut n),
+            "--k" => Some(&mut k),
+            "--q" => Some(&mut q),
+            _ => None,
+        };
+        if let Some(slot) = personal_slot {
+            if slot.replace(value).is_some() {
+                return Err(format!("{name} was specified more than once"));
+            }
+            continue;
+        }
         let slot = match name {
             "--history" => &mut history,
             "--learning" => &mut learning,
@@ -104,11 +148,16 @@ fn parse_options(args: impl Iterator<Item = std::ffi::OsString>) -> Result<Optio
             return Err(format!("{name} was specified more than once"));
         }
     }
+    let personal = personal_context::parse_mode(personal, method, n, k, q)?;
+    if personal.is_some() && examples {
+        return Err("--examples cannot be combined with --personal".to_owned());
+    }
     Ok(Options {
         history: history.ok_or("--history is required")?,
         learning: learning.ok_or("--learning is required")?,
         dictionary: dictionary.ok_or("--dictionary is required")?,
         examples,
+        personal,
     })
 }
 
@@ -208,14 +257,15 @@ fn parse_history(text: &str) -> Result<Vec<HistoryRow>, String> {
             continue;
         }
         let fields: Vec<String> = line.split('\t').map(unescape).collect();
-        if fields.len() != HISTORY_COLUMNS {
+        if fields.len() < HISTORY_COLUMNS {
             return Err(format!(
-                "history line {line_number}: {} columns, expected {HISTORY_COLUMNS}",
+                "history line {line_number}: {} columns, expected at least {HISTORY_COLUMNS}",
                 fields.len()
             ));
         }
         let timestamp_ms: u64 = number(&fields, 2, line_number)?;
         let event = match fields[0].as_str() {
+            "diag" => continue,
             "key" => Event::Key(KeyRow {
                 key_code: number(&fields, 5, line_number)?,
                 modifiers: number(&fields, 7, line_number)?,
@@ -356,10 +406,20 @@ struct Replay {
     conversions: Vec<Conversion>,
 }
 
+#[cfg(test)]
 fn replay(
     dictionary: &Dictionary<'_>,
     rows: &[HistoryRow],
     learning: &[LearningRow],
+) -> Result<Replay, String> {
+    replay_observed(dictionary, rows, learning, None)
+}
+
+fn replay_observed(
+    dictionary: &Dictionary<'_>,
+    rows: &[HistoryRow],
+    learning: &[LearningRow],
+    mut personal: Option<&mut personal_context::Measurement>,
 ) -> Result<Replay, String> {
     let mut result = Replay {
         history_rows: rows.len(),
@@ -405,6 +465,15 @@ fn replay(
     let mut sessions = BTreeMap::<u64, SessionReplay>::new();
     let mut engine = None;
     for row in rows {
+        if personal
+            .as_ref()
+            .is_some_and(|measure| measure.should_stop(row.day))
+        {
+            break;
+        }
+        if let Some(measure) = personal.as_deref_mut() {
+            measure.begin_row(row);
+        }
         before.set_day(row.day);
         after.set_day(row.day);
         let session = sessions.entry(row.session).or_default();
@@ -441,6 +510,7 @@ fn replay(
                     .pending
                     .take()
                     .filter(|pending| pending.reading == commit.reading);
+                let converted = pending.is_some();
                 if let (Some(pending), false) = (pending, candidates.is_empty()) {
                     let choose = |replay: &ReplayLearning| {
                         let choice = replay.first_candidate(
@@ -454,10 +524,14 @@ fn replay(
                                 learned: choice.learned,
                             },
                             choice.exact,
+                            choice.index,
                         )
                     };
-                    let (before_choice, before_exact) = choose(&before);
-                    let (after_choice, _) = choose(&after);
+                    let (before_choice, before_exact, _) = choose(&before);
+                    let (after_choice, _, after_index) = choose(&after);
+                    if let Some(measure) = personal.as_deref_mut() {
+                        measure.score(row, commit, candidates, after_index);
+                    }
                     if before_exact
                         && pending
                             .engine
@@ -476,6 +550,9 @@ fn replay(
                         before: before_choice,
                         after: after_choice,
                     });
+                }
+                if let Some(measure) = personal.as_deref_mut() {
+                    measure.commit(row, commit, converted);
                 }
                 let replayed = ReplayCommit {
                     reading: &commit.reading,
@@ -1021,5 +1098,30 @@ mod tests {
         assert_eq!(learning.len(), 2);
         assert_eq!(learning[0].surface, "仮\t名");
         assert!(learning[1].rejection);
+    }
+
+    #[test]
+    fn history_accepts_extended_columns_and_ignores_diagnostic_rows() {
+        let mut history = History::new();
+        history.row("diag", 1, |_| {});
+        history.commit(1, "かな", "仮名", 0, 1);
+        let extended = history
+            .text
+            .lines()
+            .map(|line| {
+                if line.starts_with("diag\t")
+                    || line.starts_with("commit\t")
+                    || line.starts_with("key\t")
+                {
+                    format!("{line}\t\t\t\t\t\t\t")
+                } else {
+                    line.to_owned()
+                }
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let parsed = parse_history(&extended).expect("extended history");
+        assert_eq!(parsed.len(), 2);
+        assert!(matches!(parsed[0].event, Event::Commit(_)));
     }
 }
