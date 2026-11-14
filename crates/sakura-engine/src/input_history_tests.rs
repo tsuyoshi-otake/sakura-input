@@ -1120,7 +1120,7 @@ fn clear_rejects_content_prepared_before_its_epoch() {
                     false,
                     "char",
                 ),
-                1 => producer_service.record_commit(1, ScopeClass::Normal, "x", "X", 0, 0),
+                1 => producer_service.record_commit(1, ScopeClass::Normal, "x", "X", 0, 0, 0),
                 _ => producer_service.record_ai_text(
                     1,
                     ScopeClass::Normal,
@@ -1147,7 +1147,7 @@ fn clear_rejects_content_prepared_before_its_epoch() {
         // Always release/join the owned producer before assertions.
         let _ = resume.send(());
         let producer_result = producer.join();
-        service.record_commit(2, ScopeClass::Normal, "new", "NEW", 0, 0);
+        service.record_commit(2, ScopeClass::Normal, "new", "NEW", 0, 0, 0);
         let flushed = service.flush();
         let stopped = service.stop();
         assert!(paused_ok);
@@ -1867,7 +1867,7 @@ fn key_and_commit_records_roundtrip_through_dpapi() {
         false,
         "char",
     );
-    service.record_commit(7, ScopeClass::Normal, "かな", "仮名", 3, 4);
+    service.record_commit(7, ScopeClass::Normal, "かな", "仮名", 3, 4, 0);
     service.flush().expect("flush");
     let snapshot = read_snapshot(&path).expect("snapshot");
     assert_eq!(snapshot.records.len(), 3);
@@ -1913,10 +1913,10 @@ fn key_and_commit_records_roundtrip_through_dpapi() {
     let tsv_lines: Vec<_> = tsv.lines().collect();
     // 4 comment lines + header + engine + key + commit
     assert_eq!(tsv_lines.len(), 8);
-    assert_eq!(tsv_lines[4].split('\t').count(), 40);
+    assert_eq!(tsv_lines[4].split('\t').count(), 47);
     assert!(tsv_lines[6].contains("\t\\t\t"));
     for line in &tsv_lines[5..] {
-        assert_eq!(line.split('\t').count(), 40);
+        assert_eq!(line.split('\t').count(), 47);
     }
     service.stop().expect("stop");
     let _ = fs::remove_file(path);
@@ -1972,7 +1972,7 @@ fn ai_records_roundtrip_and_aggregate_logical_requests_attempts_and_tokens() {
             .expect("TSV")
             .split('\t')
             .count(),
-        40
+        47
     );
     service.stop().expect("stop");
     let _ = fs::remove_file(path);
@@ -2053,14 +2053,14 @@ fn counter_exhaustion_last_sequence_and_clear_epoch_are_terminal() {
     let fixture = ReadFailureFixture(temporary_path("last-sequence-epoch"));
     let service = InputHistoryService::open(&fixture.0).unwrap();
     service.next_sequence.store(u64::MAX - 1, Ordering::Relaxed);
-    service.record_commit(1, ScopeClass::Normal, "a", "a", 0, 0);
-    service.record_commit(1, ScopeClass::Normal, "b", "b", 0, 0);
+    service.record_commit(1, ScopeClass::Normal, "a", "a", 0, 0, 0);
+    service.record_commit(1, ScopeClass::Normal, "b", "b", 0, 0, 0);
     service.flush().unwrap();
     let snapshot = read_snapshot(&fixture.0).unwrap();
     service.epoch.store(u64::MAX - 1, Ordering::Release);
     let last_clear = service.clear();
     let rejected_clear = service.clear();
-    service.record_commit(1, ScopeClass::Normal, "c", "c", 0, 0);
+    service.record_commit(1, ScopeClass::Normal, "c", "c", 0, 0, 0);
     service.stop().unwrap();
     assert_eq!(snapshot.records.len(), 2);
     assert_eq!(snapshot.records[1].sequence(), u64::MAX);
@@ -2076,7 +2076,7 @@ fn counter_exhaustion_last_sequence_and_clear_epoch_are_terminal() {
 fn counter_exhaustion_unavailable_session_rejects_all_content_variants() {
     let fixture = ReadFailureFixture(temporary_path("unavailable-session"));
     let service = InputHistoryService::open(&fixture.0).unwrap();
-    service.record_commit(0, ScopeClass::Normal, "a", "a", 0, 0);
+    service.record_commit(0, ScopeClass::Normal, "a", "a", 0, 0, 0);
     service.record_key(
         0,
         ScopeClass::Normal,
@@ -2152,7 +2152,7 @@ fn counter_exhaustion_record_variants_never_panic_or_wrap() {
         service.next_sequence.store(u64::MAX, Ordering::Relaxed);
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match variant {
             0 => service.record_engine_start(),
-            1 => service.record_commit(1, ScopeClass::Normal, "a", "a", 0, 0),
+            1 => service.record_commit(1, ScopeClass::Normal, "a", "a", 0, 0, 0),
             2 => service.record_key(
                 1,
                 ScopeClass::Normal,
@@ -2259,7 +2259,7 @@ fn sensitive_scope_is_rejected_and_clear_is_race_safe() {
         false,
         "char",
     );
-    service.record_commit(1, ScopeClass::Unclassified, "u", "u", 0, 0);
+    service.record_commit(1, ScopeClass::Unclassified, "u", "u", 0, 0, 0);
     service.record_key(
         1,
         ScopeClass::Sensitive,
@@ -2448,7 +2448,7 @@ const GOLDEN_KEY_UNCLASSIFIED: &[u8] = &[
 const GOLDEN_COMMIT_NORMAL: &[u8] = &[
     0x02, 0x09, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
     0x00, 0x0b, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x13, 0x12, 0x15, 0x14, 0x06, 0x00,
-    0xe3, 0x81, 0x8b, 0xe3, 0x81, 0xaa, 0x06, 0x00, 0xe4, 0xbb, 0xae, 0xe5, 0x90, 0x8d,
+    0xe3, 0x81, 0x8b, 0xe3, 0x81, 0xaa, 0x06, 0x00, 0xe4, 0xbb, 0xae, 0xe5, 0x90, 0x8d, 0x07,
 ];
 
 const GOLDEN_AI_SENSITIVE: &[u8] = &[
@@ -2511,6 +2511,7 @@ fn plaintext_record_payloads_are_stable_golden_bytes() {
             surface: "仮名".to_owned(),
             left_context: 0x1213,
             right_context: 0x1415,
+            origin: 7,
         }),
         GOLDEN_COMMIT_NORMAL,
     );
@@ -2569,8 +2570,10 @@ fn plaintext_record_decoder_rejects_malformed_boundaries() {
         "invalid input history boolean"
     );
 
+    // Dropping only the trailing origin byte yields a valid format-2 commit;
+    // cutting two bytes truncates the surface string instead.
     assert_eq!(
-        InputHistoryRecord::decode(&GOLDEN_COMMIT_NORMAL[..GOLDEN_COMMIT_NORMAL.len() - 1])
+        InputHistoryRecord::decode(&GOLDEN_COMMIT_NORMAL[..GOLDEN_COMMIT_NORMAL.len() - 2])
             .unwrap_err()
             .to_string(),
         "truncated input history record"

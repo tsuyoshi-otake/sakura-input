@@ -39,7 +39,8 @@ repeat\tconsumed\tstate-before\tstate-after\tmode-before\tmode-after\tpreedit-be
 preedit-after\tcommit\tdelete-before\tbeep\taction\tdropped-before\treading\tsurface\t\
 left-context\tright-context\tai-operation\tai-status\tai-source\tai-result\tai-model\t\
 ai-provider\tai-style\tai-error-code\tai-latency-ms\tai-input-tokens\tai-output-tokens\t\
-ai-cached-tokens\tai-http-attempts\tengine-package-version\tengine-release-label\n",
+ai-cached-tokens\tai-http-attempts\tengine-package-version\tengine-release-label\t\
+commit-origin\tdiag-name\tdiag-a\tdiag-b\tdiag-c\tdiag-d\tdiag-e\n",
             self.format_version
         );
         for record in &self.records {
@@ -70,7 +71,7 @@ ai-cached-tokens\tai-http-attempts\tengine-package-version\tengine-release-label
                         escape(&record.action),
                         record.dropped_before.to_string(),
                     ];
-                    fields.extend((0..17).map(|_| String::new()));
+                    fields.extend((0..24).map(|_| String::new()));
                     fields.push(String::new());
                     fields.push(String::new());
                     output.push_str(&fields.join("\t"));
@@ -94,6 +95,29 @@ ai-cached-tokens\tai-http-attempts\tengine-package-version\tengine-release-label
                     fields.extend((0..13).map(|_| String::new()));
                     fields.push(String::new());
                     fields.push(String::new());
+                    fields.push(record.origin.to_string());
+                    fields.extend((0..6).map(|_| String::new()));
+                    output.push_str(&fields.join("\t"));
+                    output.push('\n');
+                }
+                InputHistoryRecord::Diag(record) => {
+                    let mut fields = vec![
+                        "diag".to_owned(),
+                        record.sequence.to_string(),
+                        record.timestamp_ms.to_string(),
+                        record.session.to_string(),
+                        record.scope.name().to_owned(),
+                    ];
+                    fields.extend((0..33).map(|_| String::new()));
+                    fields.push(String::new());
+                    fields.push(String::new());
+                    fields.push(String::new());
+                    fields.push(record.name.to_string());
+                    fields.push(record.value_a.to_string());
+                    fields.push(record.value_b.to_string());
+                    fields.push(record.value_c.to_string());
+                    fields.push(record.value_d.to_string());
+                    fields.push(record.value_e.to_string());
                     output.push_str(&fields.join("\t"));
                     output.push('\n');
                 }
@@ -123,6 +147,7 @@ ai-cached-tokens\tai-http-attempts\tengine-package-version\tengine-release-label
                     ]);
                     fields.push(String::new());
                     fields.push(String::new());
+                    fields.extend((0..7).map(|_| String::new()));
                     output.push_str(&fields.join("\t"));
                     output.push('\n');
                 }
@@ -137,6 +162,7 @@ ai-cached-tokens\tai-http-attempts\tengine-package-version\tengine-release-label
                     fields.extend((0..33).map(|_| String::new()));
                     fields.push(escape(&record.package_version));
                     fields.push(escape(&record.release_label));
+                    fields.extend((0..7).map(|_| String::new()));
                     output.push_str(&fields.join("\t"));
                     output.push('\n');
                 }

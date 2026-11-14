@@ -49,7 +49,8 @@ pub use options::{candidate_budget, ConversionOptions};
 /// test can guard them without `sakura-core` reading `id.def` itself.
 pub use ranking::it_terms::{IT_SUFFIX_CLASS_RANGE, PLAIN_NOUN_STEM_RANGES, SOU_STEM_CLAIM_RANGES};
 pub(in crate::conversion) use ranking::{
-    connection_cost, numeric_form_cost, sort_by_cost, synthetic_run_cost,
+    connection_cost, is_kana_fragment_prefix_split, numeric_form_cost, sort_by_cost,
+    synthetic_run_cost,
 };
 pub use repair_plan::{
     CorrectionMap, CorrectionMapError, CorrectionRun, CorrectionRunKind, RawRepairBudget,
@@ -760,10 +761,29 @@ impl Converter {
                     bridge_costs[anchor_index] = bridge_costs[anchor_index].min(bridge_cost);
                 }
 
+                // A kana-fragment splice may keep its own cost, but the bridge
+                // must not promote one below the best whole-reading path: the
+                // same candidates the kana-fragment window confines to the
+                // back page must not jump to the front on context credit
+                // (きむすめ→き娘 behind 生娘, #467).
+                let best_whole_reading_cost = self
+                    .cross_commit_scratch
+                    .iter()
+                    .filter(|candidate| candidate.segments().len() == 1)
+                    .map(|candidate| candidate.cost)
+                    .min()
+                    .unwrap_or(i64::MAX);
                 for anchor_index in 0..self.cross_commit_scratch.len() {
                     let bridge_cost = bridge_costs[anchor_index];
                     let anchor_cost = self.cross_commit_scratch[anchor_index].cost;
                     if bridge_cost >= anchor_cost {
+                        continue;
+                    }
+                    if bridge_cost < best_whole_reading_cost
+                        && is_kana_fragment_prefix_split(
+                            &self.cross_commit_scratch[anchor_index],
+                        )
+                    {
                         continue;
                     }
                     proposed_costs[anchor_index] = proposed_costs[anchor_index].min(bridge_cost);
@@ -1578,7 +1598,13 @@ fn make_candidate(
             u16::try_from(node.start).map_err(|_| ConversionError::ReadingTooLong)?;
         let reading_end = u16::try_from(node.end).map_err(|_| ConversionError::ReadingTooLong)?;
         if let Some(boundary) = bridge_reading_boundary {
-            if node.start < boundary && node.end > boundary {
+            if node.start < boundary && node.end > boundary && node.end == reading.len() {
+                // A spanning edge is lexeme-agnostic evidence only when it
+                // covers the whole current reading: the joint lexeme explains
+                // the current surface as one unit (検討|しますか). A spanning
+                // edge that ends mid-reading re-labels part of the committed
+                // lexeme as current surface (年長|度 made ちょうど→長度, #467),
+                // so it must not re-score the current-only list.
                 bridge_boundary_kind = Some(BridgeBoundaryKind::SpanningEdge);
             } else if node.end == boundary && bridge_boundary_kind.is_none() {
                 bridge_boundary_kind = Some(BridgeBoundaryKind::TypedFrontier);
