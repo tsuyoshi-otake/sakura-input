@@ -208,8 +208,10 @@ fn main() {
 ///   N: `candidates[0]` verbatim — the accuracy-gate baseline (105/110).
 ///   L: `local_choice_index` — the product default the gate override
 ///      starts from; it skips a raw-reading surface (107/112).
+type Pick = (&'static str, fn(&Row) -> usize);
+
 fn top1_tally(rows: &[Row]) {
-    let picks: [(&str, fn(&Row) -> usize); 2] = [
+    let picks: [Pick; 2] = [
         ("N", |_| 0),
         ("L", |row: &Row| {
             local_choice_index(&row.candidates, &row.reading)

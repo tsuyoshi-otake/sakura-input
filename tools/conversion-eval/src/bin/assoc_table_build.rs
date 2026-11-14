@@ -301,7 +301,7 @@ fn main() {
                     }
                     if !piece.is_empty() {
                         counts.paragraphs += 1;
-                        vocab::count_paragraph(&vocab, &mut counts, &piece);
+                        vocab::count_paragraph(&vocab, &mut counts, piece);
                     }
                 }
                 // Amortized guard: at most one full scan per PRUNE_INTERVAL
@@ -321,7 +321,7 @@ fn main() {
                         }
                     });
                 }
-                if lines_read % PROGRESS_LINES == 0 {
+                if lines_read.is_multiple_of(PROGRESS_LINES) {
                     eprintln!(
                         "progress: paragraphs={} pairs={} scans={} elapsed={}s",
                         counts.paragraphs,
