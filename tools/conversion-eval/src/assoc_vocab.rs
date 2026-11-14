@@ -404,16 +404,48 @@ impl std::hash::Hasher for PairHasher {
 /// the two tokens' nearest boundaries is folded into the three tiers the
 /// grid needs (0: gap < 30, 1: gap < 60, 2: gap < 120), so one counts file
 /// serves windows 30, 60 and 120 while keeping the map small enough to hold.
+/// v2: each value is an ARTICLE count — the pair's occurrences within one
+/// article collapse into a single tally (#474 v2 counting rule).
 #[derive(Debug, Default)]
 #[allow(dead_code)] // read by assoc-table-build only
 pub struct Counts {
-    /// pack_key(target, clue, bucket) -> occurrences; HashMap keeps one
+    /// pack_key(target, clue, bucket) -> articles; HashMap keeps one
     /// entry per key without per-node tree overhead.
     pub pairs: HashMap<u64, u64, std::hash::BuildHasherDefault<PairHasher>>,
+    /// Canonical target entry -> articles where it appears at all (the
+    /// document frequency behind `share(t)` in the v2 weight).
+    pub target_total: HashMap<u32, u64>,
     /// Articles processed, for the report.
     pub articles: u64,
     /// Paragraphs processed, for the report.
     pub paragraphs: u64,
+}
+
+/// Per-article accumulator (#474 v2): one (target, clue) pair contributes
+/// at most one tally per article, into its CLOSEST distance tier.
+#[derive(Default)]
+#[allow(dead_code)] // read by assoc-table-build only
+pub struct ArticleAcc {
+    /// pack_key(target, clue, 0) -> closest distance tier seen so far.
+    min_bucket: HashMap<u64, u8, std::hash::BuildHasherDefault<PairHasher>>,
+    /// Targets present anywhere in the article.
+    targets: std::collections::HashSet<u32>,
+}
+
+#[allow(dead_code)] // flush is called by assoc-table-build only
+impl ArticleAcc {
+    /// Fold the finished article into the global counters and reset for
+    /// the next one. Called at every form-feed boundary and once at EOF.
+    pub fn flush(&mut self, counts: &mut Counts) {
+        for (&key, &bucket) in &self.min_bucket {
+            *counts.pairs.entry(key | u64::from(bucket)).or_insert(0) += 1;
+        }
+        for &target in &self.targets {
+            *counts.target_total.entry(target).or_insert(0) += 1;
+        }
+        self.min_bucket.clear();
+        self.targets.clear();
+    }
 }
 
 /// Distance cap: counting looks DISTANCE_CAP+1 characters each way.
@@ -436,17 +468,20 @@ pub fn distance_bucket(gap: usize) -> Option<u8> {
     }
 }
 
-/// One paragraph: tokenize, then for every target token look `DISTANCE_CAP`
-/// characters each way and count the clue words found there.
+/// One piece of an article: tokenize, then for every target token look
+/// `DISTANCE_CAP` characters each way and fold the clue words found there
+/// into the article accumulator (pair -> closest distance tier, plus the
+/// target's presence for `target_total`).
 #[allow(dead_code)] // read by assoc-table-build only
-pub fn count_paragraph(vocab: &Vocab, counts: &mut Counts, paragraph: &str) {
-    let tokens = vocab.segment(paragraph);
+pub fn count_piece(vocab: &Vocab, acc: &mut ArticleAcc, piece: &str) {
+    let tokens = vocab.segment(piece);
     for (position, token) in tokens.iter().enumerate() {
         let Some(entry) = token.entry else { continue };
         let target = vocab.target_of[entry as usize];
         if target == u32::MAX {
             continue;
         }
+        acc.targets.insert(target);
         let lo = token.start.saturating_sub(usize::from(DISTANCE_CAP) + 1);
         let hi = token.end + usize::from(DISTANCE_CAP) + 1;
         for (other_at, other) in tokens.iter().enumerate() {
@@ -474,10 +509,10 @@ pub fn count_paragraph(vocab: &Vocab, counts: &mut Counts, paragraph: &str) {
             let Some(bucket) = distance_bucket(gap) else {
                 continue;
             };
-            *counts
-                .pairs
-                .entry(pack_key(target, clue, bucket))
-                .or_insert(0) += 1;
+            acc.min_bucket
+                .entry(pack_key(target, clue, 0))
+                .and_modify(|seen| *seen = (*seen).min(bucket))
+                .or_insert(bucket);
         }
     }
 }

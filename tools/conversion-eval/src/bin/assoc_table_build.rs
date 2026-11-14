@@ -9,13 +9,19 @@
 //!     | assoc-table-build count --dictionary <system.dic> --counts <counts.tsv>
 //! ```
 //!
-//! After the last part, `emit` applies the Issue's weight
-//! `w(c,t) = 500 * ln(P(c|t)/P(c|G))` at window W, drops pairs under the
-//! pair threshold, sorts the output (deterministic table for a fixed dump),
-//! and prints the counts the Issue asks for. `--examples` prints the ten
-//! heaviest clues for each of the five public example readings. Counts,
-//! dumps and tables live outside the repository (under ~/tmp); nothing here
-//! is committed but this tool.
+//! v2 (#474 verification fix): one (target, clue) pair is counted at most
+//! once per article (a repeated proper noun can no longer farm weight), and
+//! the emitted per-window files carry COUNTS — `near`, `group_near`,
+//! `target_total`, `group_total` — instead of baked weights. The beta
+//! smoothing
+//!   `share(t)   = target_total(t) / group_total(G)`
+//!   `P~(t|c)    = (near(c,t) + beta*share(t)) / (group_near(c,G) + beta)`
+//!   `w          = 500 * ln(P~/share)`
+//! is applied when assoc-eval loads a counts file, so beta changes need no
+//! recount. `--examples` prints the ten heaviest clues per target under the
+//! given `--beta` for the five public example readings. Counts, dumps and
+//! tables live outside the repository (under ~/tmp); nothing here is
+//! committed but this tool.
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -84,6 +90,12 @@ fn load_counts(path: &PathBuf) -> Result<Counts, String> {
             continue;
         }
         let fields: Vec<&str> = line.split('\t').collect();
+        if fields.len() == 3 && fields[0] == "T" {
+            let target: u32 = fields[1].parse().map_err(|_| "target id")?;
+            let count: u64 = fields[2].parse().map_err(|_| "count")?;
+            *counts.target_total.entry(target).or_insert(0) += count;
+            continue;
+        }
         if fields.len() != 4 {
             return Err(format!("counts:{}: expected 4 columns", number + 1));
         }
@@ -102,11 +114,17 @@ fn load_counts(path: &PathBuf) -> Result<Counts, String> {
 fn write_counts(counts: &Counts, path: &PathBuf) -> Result<(), String> {
     let mut out = String::with_capacity(1 << 20);
     out.push_str(&format!(
-        "# articles={} paragraphs={} pairs={}\n",
+        "# articles={} paragraphs={} pairs={} targets={}\n",
         counts.articles,
         counts.paragraphs,
-        counts.pairs.len()
+        counts.pairs.len(),
+        counts.target_total.len()
     ));
+    let mut totals: Vec<u32> = counts.target_total.keys().copied().collect();
+    totals.sort_unstable();
+    for target in totals {
+        out.push_str(&format!("T\t{target}\t{}\n", counts.target_total[&target]));
+    }
     let mut rows: Vec<u64> = counts.pairs.keys().copied().collect();
     rows.sort_unstable();
     for key in rows {
@@ -135,69 +153,9 @@ fn windowed(counts: &Counts, window: usize) -> BTreeMap<(u32, u32), u64> {
     pairs
 }
 
-/// Emit one table for `window`: apply min-pair, keep positive weights only,
-/// write sorted rows and print size/SHA-256 to stderr.
-fn emit_table(vocab: &Vocab, counts: &Counts, window: usize, min_pair: u64, path: &Path) {
-    let pairs = windowed(counts, window);
-    let stats = compute_stats(vocab, &pairs);
-    let mut rows: Vec<(u32, u32, i64)> = Vec::new();
-    for &(target, clue) in pairs.keys() {
-        let near = pairs[&(target, clue)];
-        if near < min_pair {
-            continue;
-        }
-        if let Some(weight) = weight_of(&stats, target, clue) {
-            if weight > 0 {
-                rows.push((target, clue, weight));
-            }
-        }
-    }
-    rows.sort_unstable();
-    let mut out = String::with_capacity(rows.len() * 40);
-    out.push_str("# reading\ttarget\tclue\tweight\n");
-    for (target, clue, weight) in &rows {
-        out.push_str(&format!(
-            "{}\t{}\t{}\t{}\n",
-            vocab.entries[*target as usize].reading,
-            vocab.entries[*target as usize].surface,
-            vocab.entries[*clue as usize].surface,
-            weight
-        ));
-    }
-    fs::write(path, &out).expect("table write");
-    let digest = <sha2::Sha256 as sha2::Digest>::digest(out.as_bytes());
-    eprintln!(
-        "table {}: {} pairs kept of {}",
-        path.display(),
-        rows.len(),
-        pairs.len()
-    );
-    eprintln!("table bytes: {}", out.len());
-    eprintln!("table sha256: {digest:x}");
-}
-
-/// Fully expanded statistics for `pairs`: each pair's near count, its
-/// target's total clue count (P(c|t) denominator), the same clue's near
-/// count summed across every target sharing the reading (P(c|G) numerator),
-/// and the group's total clue count (P(c|G) denominator).
-struct Stats<'a> {
-    /// (target, clue) -> near.
-    near: &'a BTreeMap<(u32, u32), u64>,
-    /// target -> sum of near.
-    target_total: HashMap<u32, u64>,
-    /// (reading-key, clue) -> near summed across the reading's targets.
-    group_near: HashMap<(u32, u32), u64>,
-    /// reading-key -> sum of near.
-    group_total: HashMap<u32, u64>,
-    /// reading key -> reading string (keys are the first target's index).
-    reading_key: HashMap<u32, String>,
-    /// target entry -> its reading group key.
-    key_of_target: HashMap<u32, u32>,
-}
-
-fn compute_stats<'a>(vocab: &Vocab, pairs: &'a BTreeMap<(u32, u32), u64>) -> Stats<'a> {
-    // Reading group key: the smallest entry index under the reading keeps
-    // the map cheap while staying deterministic.
+/// Reading-group key per target: the smallest target entry index under the
+/// reading keeps the map cheap while staying deterministic.
+fn group_keys(vocab: &Vocab) -> HashMap<u32, u32> {
     let mut reading_key_of: HashMap<&str, u32> = HashMap::new();
     for entry in &vocab.entries {
         if entry.is_target {
@@ -207,42 +165,87 @@ fn compute_stats<'a>(vocab: &Vocab, pairs: &'a BTreeMap<(u32, u32), u64>) -> Sta
                 .or_insert(entry.index);
         }
     }
-    let mut stats = Stats {
-        near: pairs,
-        target_total: HashMap::new(),
-        group_near: HashMap::new(),
-        group_total: HashMap::new(),
-        reading_key: HashMap::new(),
-        key_of_target: HashMap::new(),
-    };
-    for (&(target, clue), &count) in pairs {
-        *stats.target_total.entry(target).or_insert(0) += count;
-        let entry = &vocab.entries[target as usize];
-        let key = reading_key_of[entry.reading.as_str()];
-        stats.key_of_target.insert(target, key);
-        stats
-            .reading_key
-            .entry(key)
-            .or_insert_with(|| entry.reading.clone());
-        *stats.group_near.entry((key, clue)).or_insert(0) += count;
-        *stats.group_total.entry(key).or_insert(0) += count;
+    let mut key_of_target = HashMap::new();
+    for entry in &vocab.entries {
+        if entry.is_target {
+            key_of_target.insert(entry.index, reading_key_of[entry.reading.as_str()]);
+        }
     }
-    stats
+    key_of_target
 }
 
-/// w(c,t) in milli-nat-ish dictionary cost units: 500 * ln(P(c|t)/P(c|G)).
-fn weight_of(stats: &Stats<'_>, target: u32, clue: u32) -> Option<i64> {
-    let near = *stats.near.get(&(target, clue))?;
-    let target_total = *stats.target_total.get(&target)?;
-    let key = *stats.key_of_target.get(&target)?;
-    let group_near = *stats.group_near.get(&(key, clue))?;
-    let group_total = *stats.group_total.get(&key)?;
-    if target_total == 0 || group_total == 0 || group_near == 0 {
-        return None;
+/// Emit one counts file for `window` (#474 v2): rows keep the four numbers
+/// the beta-smoothed weight needs — `near` (articles with the pair inside
+/// the window), `group_near` (same, summed over the reading's targets),
+/// `target_total` (articles containing the target) and `group_total`
+/// (summed over the reading's targets). Rows under `min_pair` drop out;
+/// output is sorted and its SHA-256 printed to stderr.
+fn emit_counts(vocab: &Vocab, counts: &Counts, window: usize, min_pair: u64, path: &Path) {
+    let pairs = windowed(counts, window);
+    let key_of_target = group_keys(vocab);
+    // group_near[(key, clue)] = sum of near over the reading's targets;
+    // group_total[key] = sum of target_total over the reading's targets.
+    let mut group_near: HashMap<(u32, u32), u64> = HashMap::new();
+    let mut group_total: HashMap<u32, u64> = HashMap::new();
+    for (&(target, clue), &near) in &pairs {
+        *group_near
+            .entry((key_of_target[&target], clue))
+            .or_insert(0) += near;
     }
-    let p_t = near as f64 / target_total as f64;
-    let p_g = group_near as f64 / group_total as f64;
-    Some((500.0 * (p_t / p_g).ln()).round() as i64)
+    for (&target, &total) in &counts.target_total {
+        *group_total.entry(key_of_target[&target]).or_insert(0) += total;
+    }
+    let mut rows: Vec<(u32, u32, u64, u64, u64, u64)> = Vec::new();
+    for (&(target, clue), &near) in &pairs {
+        if near < min_pair {
+            continue;
+        }
+        let key = key_of_target[&target];
+        rows.push((
+            target,
+            clue,
+            near,
+            group_near[&(key, clue)],
+            counts.target_total[&target],
+            group_total[&key],
+        ));
+    }
+    rows.sort_unstable();
+    let mut out = String::with_capacity(rows.len() * 56);
+    out.push_str("# reading\ttarget\tclue\tnear\tgroup_near\ttarget_total\tgroup_total\n");
+    for (target, clue, near, gn, tt, gt) in &rows {
+        out.push_str(&format!(
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
+            vocab.entries[*target as usize].reading,
+            vocab.entries[*target as usize].surface,
+            vocab.entries[*clue as usize].surface,
+            near,
+            gn,
+            tt,
+            gt
+        ));
+    }
+    fs::write(path, &out).expect("counts write");
+    let digest = <sha2::Sha256 as sha2::Digest>::digest(out.as_bytes());
+    eprintln!(
+        "counts {}: {} pairs kept of {}",
+        path.display(),
+        rows.len(),
+        pairs.len()
+    );
+    eprintln!("counts bytes: {}", out.len());
+    eprintln!("counts sha256: {digest:x}");
+}
+
+/// The v2 weight at smoothing `beta` (#474): a clue seen only a handful of
+/// times lands near the share prior and earns ~0 weight; only frequently
+/// repeated co-occurrence earns a large weight.
+fn weight_v2(near: u64, group_near: u64, share: f64, beta: f64) -> i64 {
+    if share <= 0.0 || group_near == 0 {
+        return 0;
+    }
+    let p_hat = (near as f64 + beta * share) / (group_near as f64 + beta);
+    (500.0 * (p_hat / share).ln()).round() as i64
 }
 
 fn main() {
@@ -263,6 +266,9 @@ fn main() {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(10);
             let examples = args.iter().any(|arg| arg == "--examples");
+            let beta: f64 = arg_value(&args, "--beta")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(100.0);
             let bytes = fs::read(&dictionary_path).expect("dictionary read");
             let dictionary = Dictionary::parse(&bytes).expect("dictionary parse");
             let vocab = Vocab::load(&dictionary).expect("vocab");
@@ -278,12 +284,16 @@ fn main() {
             };
             // Stream lines: an article boundary is a form feed inside a line,
             // each non-empty piece between boundaries is one paragraph.
-            // PAIR_HARD_CAP is the memory guard: past it, pairs seen once are
-            // dropped (a pair needs near >= min-pair anyway; dropped singles
-            // are reported so the table's undercount is on record).
+            // v2: a pair tallies at most once per article, so paragraph
+            // counting writes into a per-article accumulator that flushes at
+            // each form feed. PAIR_HARD_CAP is the memory guard: past it,
+            // pairs seen in a single article so far are dropped (a pair
+            // needs near >= min-pair anyway; dropped singles are reported so
+            // the table's undercount is on record).
             let stdin = std::io::stdin();
             let reader = std::io::BufReader::with_capacity(1 << 20, stdin.lock());
             let start = std::time::Instant::now();
+            let mut acc = vocab::ArticleAcc::default();
             let mut lines_read = 0u64;
             let mut dropped_singletons = 0u64;
             let mut scans = 0u64;
@@ -297,11 +307,12 @@ fn main() {
                     if first {
                         first = false;
                     } else {
+                        acc.flush(&mut counts);
                         counts.articles += 1;
                     }
                     if !piece.is_empty() {
                         counts.paragraphs += 1;
-                        vocab::count_paragraph(&vocab, &mut counts, piece);
+                        vocab::count_piece(&vocab, &mut acc, piece);
                     }
                 }
                 // Amortized guard: at most one full scan per PRUNE_INTERVAL
@@ -331,6 +342,7 @@ fn main() {
                     );
                 }
             }
+            acc.flush(&mut counts);
             counts.articles += 1;
             eprintln!(
                 "counts: {} articles, {} paragraphs, {} pairs in {}s",
@@ -355,11 +367,11 @@ fn main() {
             if let Some(prefix) = &emit_prefix {
                 for window in [30usize, 60, 120] {
                     let path = PathBuf::from(format!("{}-W{window}.tsv", prefix.display()));
-                    emit_table(&vocab, &counts, window, min_pair, &path);
+                    emit_counts(&vocab, &counts, window, min_pair, &path);
                 }
                 if examples {
                     let pairs = windowed(&counts, 120);
-                    print_examples(&vocab, &pairs);
+                    print_examples(&vocab, &counts, &pairs, beta);
                 }
             }
         }
@@ -376,6 +388,9 @@ fn main() {
                 .and_then(|v| v.parse().ok())
                 .unwrap_or_else(|| usage());
             let examples = args.iter().any(|arg| arg == "--examples");
+            let beta: f64 = arg_value(&args, "--beta")
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(100.0);
             assert!(
                 matches!(window, 30 | 60 | 120),
                 "window {window} is not a grid value (30/60/120)"
@@ -384,10 +399,10 @@ fn main() {
             let dictionary = Dictionary::parse(&bytes).expect("dictionary parse");
             let vocab = Vocab::load(&dictionary).expect("vocab");
             let counts = load_counts(&counts_path).expect("counts load");
-            emit_table(&vocab, &counts, window, min_pair, &table_path);
+            emit_counts(&vocab, &counts, window, min_pair, &table_path);
             if examples {
                 let pairs = windowed(&counts, window);
-                print_examples(&vocab, &pairs);
+                print_examples(&vocab, &counts, &pairs, beta);
             }
         }
         "stats" => {
@@ -397,16 +412,28 @@ fn main() {
             println!("articles={}", counts.articles);
             println!("paragraphs={}", counts.paragraphs);
             println!("pairs={}", counts.pairs.len());
+            println!("targets={}", counts.target_total.len());
         }
         _ => usage(),
     }
 }
 
 /// The five public example readings (#474 condition 2): ten heaviest clues
-/// per target word, printed for human review.
-fn print_examples(vocab: &Vocab, pairs: &BTreeMap<(u32, u32), u64>) {
+/// per target word under the v2 beta-smoothed weight, printed for human
+/// review.
+fn print_examples(vocab: &Vocab, counts: &Counts, pairs: &BTreeMap<(u32, u32), u64>, beta: f64) {
     const READINGS: [&str; 5] = ["せいど", "しよう", "きのう", "こうせい", "いどう"];
-    let stats = compute_stats(vocab, pairs);
+    let key_of_target = group_keys(vocab);
+    let mut group_near: HashMap<(u32, u32), u64> = HashMap::new();
+    let mut group_total: HashMap<u32, u64> = HashMap::new();
+    for (&(target, clue), &near) in pairs {
+        *group_near
+            .entry((key_of_target[&target], clue))
+            .or_insert(0) += near;
+    }
+    for (&target, &total) in &counts.target_total {
+        *group_total.entry(key_of_target[&target]).or_insert(0) += total;
+    }
     for reading in READINGS {
         let targets: Vec<u32> = vocab
             .entries
@@ -417,13 +444,14 @@ fn print_examples(vocab: &Vocab, pairs: &BTreeMap<(u32, u32), u64>) {
         println!("=== {reading} ({} target words) ===", targets.len());
         let target_set: std::collections::HashSet<u32> = targets.iter().copied().collect();
         let mut per_target: HashMap<u32, Vec<(u32, i64)>> = HashMap::new();
-        for &(target, clue) in stats.near.keys() {
+        for (&(target, clue), &near) in pairs {
             if !target_set.contains(&target) {
                 continue;
             }
-            if let Some(weight) = weight_of(&stats, target, clue) {
-                per_target.entry(target).or_default().push((clue, weight));
-            }
+            let key = key_of_target[&target];
+            let share = counts.target_total[&target] as f64 / group_total[&key] as f64;
+            let weight = weight_v2(near, group_near[&(key, clue)], share, beta);
+            per_target.entry(target).or_default().push((clue, weight));
         }
         for &target in &targets {
             let entry = &vocab.entries[target as usize];

@@ -18,27 +18,30 @@
 //!     tool's top candidates with the committed accuracy-gate snapshots:
 //!     the 1,630 conversion rows and the 210 context rows must differ 0
 //!     times (proves the same engine is measured).
-//! assoc-eval grid --dictionary <dic> --table-dir <dir> [--corpus-dir <dir>]
-//!     Runs every grid point: W picks table-W{W}.tsv; each point prints
-//!     context strict/lenient, one-shot strict/lenient, pair buckets and
-//!     conversion-row fixed/broken.
+//! assoc-eval grid --dictionary <dic> --table-dir <dir> --history <export>
+//!         [--corpus-dir <dir>]
+//!     Runs every v2 grid point: W picks counts-W{W}.tsv; each point prints
+//!     context strict and the even-session tuning history's fixed/broken.
+//!     Candidates are converted once per row and reused across all 216
+//!     points (#474 v2 step 5).
 //! assoc-eval run --dictionary <dic> --table <file> --corpus <file>
-//!         [--config W,lambda_milli,cap,margin,N,intra]
+//!         [--config W,beta,lambda_milli,cap,margin,N,intra] [--per-row]
 //!     Applies one frozen configuration to a separate context-format file —
 //!     the verifier's held-out pairs (#474 condition 7).
 //! assoc-eval replay --dictionary <dic> --table <file> --history <export>
-//!         [--config ...]
+//!         [--config ...] [--subset all|even|odd]
 //!     Replays a developer-history export once under the frozen config,
 //!     counts only (target, matches before/after, fixed, broken; strict
-//!     homophone-swap and <=4-char-reading breakdowns).
+//!     homophone-swap and <=4-char-reading breakdowns). `--subset` selects
+//!     sessions by numeric parity (#474 v2 step 4).
 //! assoc-eval perf --dictionary <dic> --table <file>
 //!     p50/p99 apply time per conversion and table-load memory — explicit
 //!     outside-engine estimates.
 //! ```
 //!
-//! Grid parameter strings are `W,lambda_milli,cap,margin,top_n,intra` where
-//! `lambda_milli` is λ × 1000 and `intra` is 0/1 for clue words inside the
-//! candidate itself.
+//! Config strings are `W,beta,lambda_milli,cap,margin,top_n,intra` where
+//! `beta` is the v2 smoothing strength in articles, `lambda_milli` is
+//! λ × 1000 and `intra` is 0/1 for clue words inside the candidate itself.
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
@@ -65,12 +68,16 @@ use corpus::{parse_context, parse_conversion, ContextRow};
 use measure::{commit_carry, with_service};
 use vocab::Vocab;
 
-/// One frozen application configuration (#474 condition 5).
+/// One frozen application configuration (#474 v2). The v2 counts files
+/// store raw counts, so `beta` (the smoothing strength, in articles) is an
+/// application-side parameter applied when the weight is computed.
 #[derive(Debug, Clone, Copy)]
 struct Config {
-    /// Clue window in chars — selects the W-suffixed table file.
+    /// Clue window in chars — selects the W-suffixed counts file.
     #[allow(dead_code)] // read only through file naming, kept for provenance
     window: usize,
+    /// β smoothing strength in articles (#474 v2).
+    beta: u64,
     /// λ × 1000 applied to the summed clue weight.
     lambda_milli: i64,
     /// Cap on the summed clue weight per candidate.
@@ -79,16 +86,17 @@ struct Config {
     margin: i64,
     /// Swappable candidates sit within the top N.
     top_n: usize,
-    /// Also use the other words inside the candidate as clues.
+    /// Also use the other words inside the candidate as clues (v2 grid
+    /// keeps this off; the flag stays for ad-hoc `run`/`replay` configs).
     intra_candidate: bool,
 }
 
 impl Config {
     fn parse(text: &str) -> Result<Self, String> {
         let fields: Vec<&str> = text.split(',').collect();
-        if fields.len() != 6 {
+        if fields.len() != 7 {
             return Err(format!(
-                "config '{text}' needs 6 fields: W,lambda_milli,cap,margin,N,intra"
+                "config '{text}' needs 7 fields: W,beta,lambda_milli,cap,margin,N,intra"
             ));
         }
         let parse_i64 = |index: usize| {
@@ -101,11 +109,12 @@ impl Config {
         };
         Ok(Self {
             window: parse_i64(0)? as usize,
-            lambda_milli: parse_i64(1)?,
-            cap: parse_i64(2)?,
-            margin: parse_i64(3)?,
-            top_n: parse_i64(4)? as usize,
-            intra_candidate: parse_i64(5)? != 0,
+            beta: parse_i64(1)? as u64,
+            lambda_milli: parse_i64(2)?,
+            cap: parse_i64(3)?,
+            margin: parse_i64(4)?,
+            top_n: parse_i64(5)? as usize,
+            intra_candidate: parse_i64(6)? != 0,
         })
     }
 }
@@ -150,30 +159,72 @@ fn snap(candidate: &sakura_core::ConversionCandidate) -> CandSnap {
     }
 }
 
-/// The association table for one window: (target entry, clue entry) ->
-/// weight, plus for application the surface->entry lookup comes from Vocab.
+/// One counted row of a v2 counts file: the raw article counts behind the
+/// beta-smoothed weight (kept verbatim so β can change without recounting).
+#[derive(Debug, Clone, Copy)]
+struct CountRow {
+    /// Articles where the clue co-occurs with this target inside the window.
+    near: u64,
+    /// `near` summed over every target sharing the reading.
+    group_near: u64,
+    /// `target_total / group_total` — the document-frequency share.
+    share: f64,
+}
+
+/// The association counts for one window: (target entry, clue entry) ->
+/// CountRow, plus for application the surface->entry lookup comes from
+/// Vocab. Weights are computed on demand at the grid point's β.
 struct Table {
-    weights: HashMap<(u32, u32), i64>,
+    counts: HashMap<(u32, u32), CountRow>,
     pairs: usize,
     bytes: usize,
 }
 
+impl Table {
+    /// w(c,t) in milli-units at smoothing `beta`:
+    /// `500 * ln( ((near + β·share) / (group_near + β)) / share )`.
+    /// A clue that appears once or twice lands on the share prior and earns
+    /// ~0; only repeated co-occurrence earns weight (#474 v2 fix for the
+    /// constant-weight tie the v1 reviewer flagged).
+    fn weight(&self, target: u32, clue: u32, beta: u64) -> i64 {
+        let Some(row) = self.counts.get(&(target, clue)) else {
+            return 0;
+        };
+        if row.share <= 0.0 || row.group_near == 0 {
+            return 0;
+        }
+        let beta = beta as f64;
+        let p_hat = (row.near as f64 + beta * row.share) / (row.group_near as f64 + beta);
+        (500.0 * (p_hat / row.share).ln()).round() as i64
+    }
+}
+
 fn load_table(vocab: &Vocab, path: &Path) -> Result<Table, String> {
-    let text = fs::read_to_string(path).map_err(|e| format!("table read: {e}"))?;
-    let mut weights = HashMap::new();
+    let text = fs::read_to_string(path).map_err(|e| format!("counts read: {e}"))?;
+    let mut counts = HashMap::new();
     let mut pairs = 0usize;
     for (number, line) in text.lines().enumerate() {
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
         let fields: Vec<&str> = line.split('\t').collect();
-        if fields.len() != 4 {
-            return Err(format!("table:{}: expected 4 columns", number + 1));
+        if fields.len() != 7 {
+            return Err(format!(
+                "counts:{}: expected 7 columns (reading/target/clue/near/group_near/target_total/group_total)",
+                number + 1
+            ));
         }
-        let (reading, target, clue, weight) = (fields[0], fields[1], fields[2], fields[3]);
-        let weight: i64 = weight
-            .parse()
-            .map_err(|_| format!("table:{}: weight not an integer", number + 1))?;
+        let (reading, target, clue) = (fields[0], fields[1], fields[2]);
+        let parse_u64 = |index: usize| {
+            fields[index]
+                .parse::<u64>()
+                .map_err(|_| format!("counts:{}: field {} not an integer", number + 1, index))
+        };
+        let (near, group_near, target_total, group_total) =
+            (parse_u64(3)?, parse_u64(4)?, parse_u64(5)?, parse_u64(6)?);
+        if target_total == 0 || group_total == 0 {
+            continue;
+        }
         // The target resolves to the entry under (reading, surface); several
         // entries may share a surface so filter by reading.
         let target_entry = vocab
@@ -192,11 +243,18 @@ fn load_table(vocab: &Vocab, path: &Path) -> Result<Table, String> {
         let (Some(target_entry), Some(clue_entry)) = (target_entry, clue_entry) else {
             continue;
         };
-        weights.insert((target_entry, clue_entry), weight);
+        counts.insert(
+            (target_entry, clue_entry),
+            CountRow {
+                near,
+                group_near,
+                share: target_total as f64 / group_total as f64,
+            },
+        );
         pairs += 1;
     }
     Ok(Table {
-        weights,
+        counts,
         pairs,
         bytes: text.len(),
     })
@@ -221,6 +279,7 @@ fn clues_of(vocab: &Vocab, text: &str) -> Vec<u32> {
 fn score_candidate(
     vocab: &Vocab,
     table: &Table,
+    beta: u64,
     reading: &str,
     candidate: &CandSnap,
     clues: &[u32],
@@ -241,9 +300,7 @@ fn score_candidate(
             continue;
         };
         for &clue in clues {
-            if let Some(&weight) = table.weights.get(&(target, clue)) {
-                total += weight;
-            }
+            total += table.weight(target, clue, beta);
         }
     }
     total
@@ -301,8 +358,8 @@ fn may_swap(
     ) else {
         return false;
     };
-    let score_top = score_candidate(stage.vocab, table, reading, top, clues);
-    let score_alt = score_candidate(stage.vocab, table, reading, candidate, clues);
+    let score_top = score_candidate(stage.vocab, table, config.beta, reading, top, clues);
+    let score_alt = score_candidate(stage.vocab, table, config.beta, reading, candidate, clues);
     // The association must actually improve the score; otherwise an empty
     // table would still rerank candidates by raw dictionary price.
     if score_alt <= score_top {
@@ -338,7 +395,7 @@ fn apply_association(
     let mut best_adjusted = i64::MAX;
     for (index, candidate) in candidates.iter().enumerate().take(config.top_n).skip(1) {
         if may_swap(stage, reading, table, clues, top, candidate, config) {
-            let score = score_candidate(stage.vocab, table, reading, candidate, clues);
+            let score = score_candidate(stage.vocab, table, config.beta, reading, candidate, clues);
             let Some(price) = price_of(stage.vocab, stage.dictionary, reading, candidate) else {
                 continue;
             };
@@ -384,15 +441,65 @@ fn arg_value(args: &[String], name: &str) -> Option<String> {
         .and_then(|at| args.get(at + 1).cloned())
 }
 
+/// The flags each mode accepts, split into value-taking flags and boolean
+/// flags. Everything else — unknown flags, positional strays, a flag left
+/// dangling at the end of the line — stops the tool with usage (#474
+/// review: a stray path after `--per-row` used to be silently ignored).
+fn check_args(mode: &str, args: &[String]) {
+    let (value_flags, bool_flags): (&[&str], &[&str]) = match mode {
+        "baseline" => (&["--dictionary", "--corpus-dir"], &[]),
+        "grid" => (
+            &["--dictionary", "--table-dir", "--corpus-dir", "--history"],
+            &[],
+        ),
+        "run" => (
+            &["--dictionary", "--table", "--corpus", "--config"],
+            &["--per-row"],
+        ),
+        "replay" => (
+            &[
+                "--dictionary",
+                "--table",
+                "--history",
+                "--config",
+                "--subset",
+            ],
+            &[],
+        ),
+        "perf" => (&["--dictionary", "--table", "--corpus-dir"], &[]),
+        "dump" => (&["--dictionary", "--corpus", "--out"], &[]),
+        _ => usage(),
+    };
+    let mut at = 2;
+    while at < args.len() {
+        let arg = args[at].as_str();
+        if bool_flags.contains(&arg) {
+            at += 1;
+            continue;
+        }
+        if !value_flags.contains(&arg) {
+            eprintln!("assoc-eval: unknown argument '{arg}'");
+            usage();
+        }
+        match args.get(at + 1) {
+            Some(value) if !value.starts_with("--") => at += 2,
+            _ => {
+                eprintln!("assoc-eval: {arg} needs a value");
+                usage();
+            }
+        }
+    }
+}
+
 fn usage() -> ! {
     eprintln!(
-        "usage: assoc-eval <baseline|grid|run|replay|perf> --dictionary <system.dic> [options]\n  \
+        "usage: assoc-eval <baseline|grid|run|replay|perf|dump> --dictionary <system.dic> [options]\n  \
          baseline: [--corpus-dir corpus/accuracy]\n  \
-         grid:     --table-dir <dir> [--corpus-dir corpus/accuracy]\n  \
+         grid:     --table-dir <dir> --history <export.tsv> [--corpus-dir corpus/accuracy]\n  \
          dump:     --corpus <context.tsv> --out <candidates.jsonl>\n  \
-         run:      --table <file> --corpus <file> [--config W,lam,cap,margin,N,intra]\n  \
-         replay:   --table <file> --history <export.tsv> [--config ...]\n  \
-         perf:     --table <file>"
+         run:      --table <file> --corpus <file> [--config W,beta,lam,cap,margin,N,intra] [--per-row]\n  \
+         replay:   --table <file> --history <export.tsv> [--config ...] [--subset all|even|odd]\n  \
+         perf:     --table <file> [--corpus-dir corpus/accuracy]"
     );
     std::process::exit(2);
 }
@@ -425,6 +532,7 @@ fn main() {
     let Some(mode) = args.get(1).map(String::as_str) else {
         usage();
     };
+    check_args(mode, &args);
     let dictionary_path = arg_value(&args, "--dictionary").unwrap_or_else(|| usage());
     let bytes = fs::read(&dictionary_path).expect("dictionary read");
     // Report the dictionary actually opened — never a transcribed hash
@@ -446,7 +554,15 @@ fn main() {
         "grid" => {
             let table_dir =
                 PathBuf::from(arg_value(&args, "--table-dir").unwrap_or_else(|| usage()));
-            grid(&service, &dictionary, &vocab, &corpus_dir, &table_dir);
+            let history = PathBuf::from(arg_value(&args, "--history").unwrap_or_else(|| usage()));
+            grid(
+                &service,
+                &dictionary,
+                &vocab,
+                &corpus_dir,
+                &table_dir,
+                &history,
+            );
         }
         "run" => {
             let table = PathBuf::from(arg_value(&args, "--table").unwrap_or_else(|| usage()));
@@ -456,6 +572,7 @@ fn main() {
                 .map(|s| Config::parse(&s).expect("config"))
                 .unwrap_or(Config {
                     window: 0,
+                    beta: 100,
                     lambda_milli: 1000,
                     cap: i64::MAX,
                     margin: 0,
@@ -479,13 +596,27 @@ fn main() {
                 .map(|s| Config::parse(&s).expect("config"))
                 .unwrap_or(Config {
                     window: 0,
+                    beta: 100,
                     lambda_milli: 1000,
                     cap: i64::MAX,
                     margin: 0,
                     top_n: 5,
                     intra_candidate: false,
                 });
-            replay(&service, &dictionary, &vocab, &table, &history, &config);
+            let subset = arg_value(&args, "--subset").unwrap_or_else(|| "all".into());
+            if !matches!(subset.as_str(), "all" | "even" | "odd") {
+                eprintln!("assoc-eval: --subset must be all|even|odd");
+                usage();
+            }
+            replay(
+                &service,
+                &dictionary,
+                &vocab,
+                &table,
+                &history,
+                &config,
+                &subset,
+            );
         }
         "perf" => {
             let table = PathBuf::from(arg_value(&args, "--table").unwrap_or_else(|| usage()));
@@ -760,31 +891,240 @@ fn evaluate(
     )
 }
 
+/// One measured commit row collected from the history export (#474 v2):
+/// everything the association application needs, resolved at collection
+/// time so the engine conversion runs once per row for the whole grid.
+struct HistoryRow {
+    reading: String,
+    committed: String,
+    clue_text: String,
+    clue_reading: String,
+    clue_surface: String,
+    short: bool,
+}
+
+/// Whether a session id belongs to `subset` ("all", "even", "odd").
+/// Non-numeric sessions only belong to "all".
+fn session_in_subset(session: &str, subset: &str) -> bool {
+    match subset {
+        "all" => true,
+        want => session
+            .parse::<u64>()
+            .map(|n| (n % 2 == 1) == (want == "odd"))
+            .unwrap_or(false),
+    }
+}
+
+/// History rows for the measured subset (#474 v2 step 4: even session ids
+/// tune, odd confirm). Mirrors `replay`'s row semantics exactly — a
+/// `commit` with scope `normal` whose session's previous key action was
+/// `convert` is a target; the clue is the per-session committed tail plus
+/// the previous commit's (reading, surface). Returns (target, skipped,
+/// short_target, rows); `target` and `short_target` count converted
+/// commits without a usable clue too, matching replay's denominators.
+fn collect_history(history_path: &Path, subset: &str) -> (usize, usize, usize, Vec<HistoryRow>) {
+    let mut input = String::new();
+    fs::File::open(history_path)
+        .expect("history open")
+        .read_to_string(&mut input)
+        .expect("history read");
+    let mut header_seen = false;
+    let mut indexes = (0, 0, 0, 0, 0, 0);
+    let mut last_action: HashMap<String, String> = HashMap::new();
+    let mut tails: HashMap<String, CommittedContext> = HashMap::new();
+    let mut last: HashMap<String, (String, String)> = HashMap::new();
+    let mut target = 0usize;
+    let mut short_target = 0usize;
+    let mut skipped = 0usize;
+    let mut rows = Vec::new();
+    for line in input.lines() {
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if !header_seen {
+            let names: Vec<&str> = line.split('\t').collect();
+            let find = |name: &str| {
+                names
+                    .iter()
+                    .position(|column| *column == name)
+                    .unwrap_or(usize::MAX)
+            };
+            indexes = (
+                find("kind"),
+                find("session"),
+                find("scope"),
+                find("action"),
+                find("reading"),
+                find("surface"),
+            );
+            header_seen = true;
+            continue;
+        }
+        let fields: Vec<&str> = line.split('\t').collect();
+        let width = [
+            indexes.0, indexes.1, indexes.2, indexes.3, indexes.4, indexes.5,
+        ]
+        .iter()
+        .max()
+        .copied()
+        .unwrap_or(0)
+            + 1;
+        if fields.len() < width {
+            continue;
+        }
+        if !session_in_subset(fields[indexes.1], subset) {
+            continue;
+        }
+        if fields[indexes.0] == "key" {
+            last_action.insert(fields[indexes.1].to_owned(), fields[indexes.3].to_owned());
+            continue;
+        }
+        if fields[indexes.0] != "commit" || fields[indexes.2] != "normal" {
+            continue;
+        }
+        let session = fields[indexes.1].to_owned();
+        let converted = last_action.get(&session).is_some_and(|a| a == "convert");
+        let tail = tails.entry(session.clone()).or_default();
+        let clue_text = tail.as_str().to_owned();
+        tail.append(fields[indexes.5]);
+        let clue = last.insert(
+            session.clone(),
+            (fields[indexes.4].to_owned(), fields[indexes.5].to_owned()),
+        );
+        if !converted {
+            continue;
+        }
+        target += 1;
+        let short = fields[indexes.4].chars().count() <= 4;
+        if short {
+            short_target += 1;
+        }
+        let Some((clue_reading, clue_surface)) = clue else {
+            skipped += 1;
+            continue;
+        };
+        rows.push(HistoryRow {
+            reading: fields[indexes.4].to_owned(),
+            committed: fields[indexes.5].to_owned(),
+            clue_text,
+            clue_reading,
+            clue_surface,
+            short,
+        });
+    }
+    (target, skipped, short_target, rows)
+}
+
+/// A cached evaluation row: candidates the engine produced once, reused
+/// for every grid point (#474 v2 step 5 — conversion is not repeated per
+/// point, only the association application is).
+struct CachedCtx {
+    reading: String,
+    expected: String,
+    variants: Vec<String>,
+    clues: Vec<u32>,
+    snaps: Vec<CandSnap>,
+}
+
+struct CachedHist {
+    reading: String,
+    committed: String,
+    clues: Vec<u32>,
+    snaps: Vec<CandSnap>,
+}
+
+/// One grid point's parameters and measured outcomes (#474 v2 selection).
+struct GridPoint {
+    window: usize,
+    beta: u64,
+    lambda: i64,
+    cap: i64,
+    margin: i64,
+    top_n: usize,
+    ctx_strict: usize,
+    fixed: usize,
+    broken: usize,
+}
+
+/// The v2 grid (#474 step 5): W {30,60,120} x beta {10,100,1000} x lambda
+/// {500,1000,2000} x cap {1500,3000} x margin {0,500} x N {3,8}, intra
+/// always off — 216 points on cached candidates. `fixed`/`broken` are
+/// measured on the even-session tuning half of `--history`; `ctx_strict`
+/// on context.tsv. Selection implements step 6 verbatim.
 fn grid(
     service: &ConversionService,
     dictionary: &Dictionary<'_>,
     vocab: &Vocab,
     corpus_dir: &Path,
     table_dir: &Path,
+    history_path: &Path,
 ) {
-    let (conversion_rows, context_rows) = load_corpora(corpus_dir);
+    let (_, context_rows) = load_corpora(corpus_dir);
     let stage = Stage {
         service,
         dictionary,
         vocab,
     };
-    // The grid the Issue fixed in advance: W x lambda x cap x margin x N x intra.
+    let mut cached_ctx: Vec<CachedCtx> = Vec::with_capacity(context_rows.len());
+    for row in &context_rows {
+        let snaps = context_candidates(service, row).expect("context candidates");
+        cached_ctx.push(CachedCtx {
+            reading: row.reading.clone(),
+            expected: row.expected.clone(),
+            variants: row.variants.clone(),
+            clues: clues_of(vocab, &row.clue_surface),
+            snaps,
+        });
+    }
+    eprintln!("grid: cached {} context rows", cached_ctx.len());
+    let (hist_target, mut hist_skipped, _, history_rows) = collect_history(history_path, "even");
+    let mut cached_hist: Vec<CachedHist> = Vec::with_capacity(history_rows.len());
+    for row in &history_rows {
+        let (initial_right_id, bridge) =
+            commit_carry(service, &row.clue_reading, &row.clue_surface).unwrap_or_default();
+        let snaps = with_service(|| {
+            service.with_conversion_input_bridge_hints(
+                ConversionInput::ordinary(&row.reading),
+                ConversionOptions {
+                    initial_right_id,
+                    ..ConversionOptions::default()
+                },
+                &[],
+                bridge,
+                |candidates, _| candidates.iter().map(snap).collect::<Vec<_>>(),
+            )
+        })
+        .unwrap_or_default();
+        if snaps.is_empty() {
+            hist_skipped += 1;
+            continue;
+        }
+        cached_hist.push(CachedHist {
+            reading: row.reading.clone(),
+            committed: row.committed.clone(),
+            clues: clues_of(vocab, &row.clue_text),
+            snaps,
+        });
+    }
+    eprintln!(
+        "grid: cached {}/{} even-session history rows ({} skipped)",
+        cached_hist.len(),
+        hist_target,
+        hist_skipped
+    );
+
     let windows = [30usize, 60, 120];
+    let betas = [10u64, 100, 1000];
     let lambdas = [500i64, 1000, 2000];
     let caps = [1500i64, 3000];
     let margins = [0i64, 500];
     let top_ns = [3usize, 8];
-    let intras = [false, true];
     println!(
-        "W\tlambda\tcap\tmargin\tN\tintra\tctx_lenient\tctx_strict\toneshot_lenient\toneshot_strict\tpairs_both\tpairs_one\tpairs_neither\tconv_fixed\tconv_broken"
+        "W\tbeta\tlambda\tcap\tmargin\tN\tintra\tctx_strict\thist_target\thist_fixed\thist_broken"
     );
+    let mut points: Vec<GridPoint> = Vec::new();
     for &window in &windows {
-        let table_path = table_dir.join(format!("table-W{window}.tsv"));
+        let table_path = table_dir.join(format!("counts-W{window}.tsv"));
         let table = match load_table(vocab, &table_path) {
             Ok(table) => table,
             Err(error) => {
@@ -792,46 +1132,130 @@ fn grid(
                 continue;
             }
         };
-        for &lambda in &lambdas {
-            for &cap in &caps {
-                for &margin in &margins {
-                    for &top_n in &top_ns {
-                        for &intra in &intras {
+        for &beta in &betas {
+            for &lambda in &lambdas {
+                for &cap in &caps {
+                    for &margin in &margins {
+                        for &top_n in &top_ns {
                             let config = Config {
                                 window,
+                                beta,
                                 lambda_milli: lambda,
                                 cap,
                                 margin,
                                 top_n,
-                                intra_candidate: intra,
+                                intra_candidate: false,
                             };
-                            let (
-                                ctx_lenient,
-                                ctx_strict,
-                                oneshot_lenient,
-                                oneshot_strict,
-                                pairs_both,
-                                pairs_one,
-                                pairs_neither,
-                                conv_fixed,
-                                conv_broken,
-                            ) = evaluate(
-                                &stage,
-                                &conversion_rows,
-                                &context_rows,
-                                &table,
-                                &config,
-                                &HashMap::new(),
-                            );
+                            let mut ctx_strict = 0usize;
+                            for row in &cached_ctx {
+                                let index = apply_association(
+                                    &stage,
+                                    &row.reading,
+                                    &table,
+                                    &row.clues,
+                                    &row.snaps,
+                                    &config,
+                                );
+                                let top =
+                                    row.snaps.get(index).map(|c| c.text.as_str()).unwrap_or("");
+                                if state_of(top, &row.expected, &row.variants) == State::Expected {
+                                    ctx_strict += 1;
+                                }
+                            }
+                            let mut fixed = 0usize;
+                            let mut broken = 0usize;
+                            for row in &cached_hist {
+                                let index = apply_association(
+                                    &stage,
+                                    &row.reading,
+                                    &table,
+                                    &row.clues,
+                                    &row.snaps,
+                                    &config,
+                                );
+                                let before = &row.snaps[0].text;
+                                let after = &row.snaps[index].text;
+                                if *before != row.committed && *after == row.committed {
+                                    fixed += 1;
+                                }
+                                if *before == row.committed && *after != row.committed {
+                                    broken += 1;
+                                }
+                            }
                             println!(
-                                "{window}\t{lambda}\t{cap}\t{margin}\t{top_n}\t{}\t{ctx_lenient}\t{ctx_strict}\t{oneshot_lenient}\t{oneshot_strict}\t{pairs_both}\t{pairs_one}\t{pairs_neither}\t{conv_fixed}\t{conv_broken}",
-                                usize::from(intra),
+                                "{window}\t{beta}\t{lambda}\t{cap}\t{margin}\t{top_n}\t0\t{ctx_strict}\t{}\t{fixed}\t{broken}",
+                                cached_hist.len()
                             );
+                            points.push(GridPoint {
+                                window,
+                                beta,
+                                lambda,
+                                cap,
+                                margin,
+                                top_n,
+                                ctx_strict,
+                                fixed,
+                                broken,
+                            });
                         }
                     }
                 }
             }
         }
+    }
+    // Selection (#474 step 6): keep fixed >= 5*broken and ctx_strict >= 105,
+    // maximize fixed - broken, ties take the conservative order
+    // margin>cap^lambda^beta>N^W^ (bigger margin first, then smaller cap,
+    // smaller lambda, bigger beta, smaller N, smaller W).
+    let mut best: Option<&GridPoint> = None;
+    for point in &points {
+        if !(point.fixed as i64 >= 5 * point.broken as i64 && point.ctx_strict >= 105) {
+            continue;
+        }
+        let diff = point.fixed as i64 - point.broken as i64;
+        let better = match best {
+            None => true,
+            Some(b) => {
+                let b_diff = b.fixed as i64 - b.broken as i64;
+                diff > b_diff
+                    || (diff == b_diff
+                        && (
+                            point.margin,
+                            -point.cap,
+                            -point.lambda,
+                            point.beta,
+                            -(point.top_n as i64),
+                            -(point.window as i64),
+                        ) > (
+                            b.margin,
+                            -b.cap,
+                            -b.lambda,
+                            b.beta,
+                            -(b.top_n as i64),
+                            -(b.window as i64),
+                        ))
+            }
+        };
+        if better {
+            best = Some(point);
+        }
+    }
+    match best {
+        Some(p) => println!(
+            "selected: W={} beta={} lambda={} cap={} margin={} N={} \
+             (ctx_strict={} fixed={} broken={} diff={})",
+            p.window,
+            p.beta,
+            p.lambda,
+            p.cap,
+            p.margin,
+            p.top_n,
+            p.ctx_strict,
+            p.fixed,
+            p.broken,
+            p.fixed as i64 - p.broken as i64
+        ),
+        None => println!("selected: no improvement"),
     }
 }
 
@@ -989,24 +1413,15 @@ fn replay(
     table_path: &Path,
     history_path: &Path,
     config: &Config,
+    subset: &str,
 ) {
     let table = load_table(vocab, table_path).expect("table");
-    let mut input = String::new();
-    fs::File::open(history_path)
-        .expect("history open")
-        .read_to_string(&mut input)
-        .expect("history read");
-    let mut header_seen = false;
-    let mut indexes = (0, 0, 0, 0, 0, 0);
-    let mut last_action: HashMap<String, String> = HashMap::new();
-    let mut tails: HashMap<String, CommittedContext> = HashMap::new();
-    let mut last: HashMap<String, (String, String)> = HashMap::new();
     let stage = Stage {
         service,
         dictionary,
         vocab,
     };
-    let mut target = 0usize;
+    let (target, mut skipped, short_target, rows) = collect_history(history_path, subset);
     let mut before_match = 0usize;
     let mut after_match = 0usize;
     let mut fixed = 0usize;
@@ -1017,83 +1432,20 @@ fn replay(
     let mut swap_after_match = 0usize;
     let mut swap_broken_new = 0usize;
     // Same five counters for readings of four characters or fewer.
-    let mut short_target = 0usize;
     let mut short_before = 0usize;
     let mut short_after = 0usize;
     let mut short_fixed = 0usize;
     let mut short_broken = 0usize;
-    let mut skipped = 0usize;
-    for line in input.lines() {
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        if !header_seen {
-            let names: Vec<&str> = line.split('\t').collect();
-            let find = |name: &str| {
-                names
-                    .iter()
-                    .position(|column| *column == name)
-                    .unwrap_or(usize::MAX)
-            };
-            indexes = (
-                find("kind"),
-                find("session"),
-                find("scope"),
-                find("action"),
-                find("reading"),
-                find("surface"),
-            );
-            header_seen = true;
-            continue;
-        }
-        let fields: Vec<&str> = line.split('\t').collect();
-        let width = [
-            indexes.0, indexes.1, indexes.2, indexes.3, indexes.4, indexes.5,
-        ]
-        .iter()
-        .max()
-        .copied()
-        .unwrap_or(0)
-            + 1;
-        if fields.len() < width {
-            continue;
-        }
-        if fields[indexes.0] == "key" {
-            last_action.insert(fields[indexes.1].to_owned(), fields[indexes.3].to_owned());
-            continue;
-        }
-        if fields[indexes.0] != "commit" || fields[indexes.2] != "normal" {
-            continue;
-        }
-        let session = fields[indexes.1].to_owned();
-        let converted = last_action.get(&session).is_some_and(|a| a == "convert");
-        let tail = tails.entry(session.clone()).or_default();
-        let clue_text = tail.as_str().to_owned();
-        tail.append(fields[indexes.5]);
-        let clue = last.insert(
-            session.clone(),
-            (fields[indexes.4].to_owned(), fields[indexes.5].to_owned()),
-        );
-        if !converted {
-            continue;
-        }
-        target += 1;
-        let short = fields[indexes.4].chars().count() <= 4;
-        if short {
-            short_target += 1;
-        }
-        let Some((clue_reading, clue_surface)) = clue else {
-            skipped += 1;
-            continue;
-        };
+    for row in &rows {
+        let short = row.short;
         // Same rule as the accuracy gate's replay: an unrecoverable previous
         // commit carries nothing, so the row is measured as a no-bridge
         // conversion rather than dropped.
         let (initial_right_id, bridge) =
-            commit_carry(service, &clue_reading, &clue_surface).unwrap_or_default();
+            commit_carry(service, &row.clue_reading, &row.clue_surface).unwrap_or_default();
         let snaps = with_service(|| {
             service.with_conversion_input_bridge_hints(
-                ConversionInput::ordinary(fields[indexes.4]),
+                ConversionInput::ordinary(&row.reading),
                 ConversionOptions {
                     initial_right_id,
                     ..ConversionOptions::default()
@@ -1108,15 +1460,15 @@ fn replay(
             skipped += 1;
             continue;
         }
-        let committed = fields[indexes.5];
+        let committed = row.committed.as_str();
         let before = snaps[0].text.clone();
-        let mut clues = clues_of(vocab, &clue_text);
+        let mut clues = clues_of(vocab, &row.clue_text);
         if config.intra_candidate {
             for skip in 0..snaps[0].segments.len() {
-                clues.extend(intra_clues(vocab, fields[indexes.4], &snaps[0], skip));
+                clues.extend(intra_clues(vocab, &row.reading, &snaps[0], skip));
             }
         }
-        let index = apply_association(&stage, fields[indexes.4], &table, &clues, &snaps, config);
+        let index = apply_association(&stage, &row.reading, &table, &clues, &snaps, config);
         let after = snaps[index].text.clone();
         let before_is_swap = is_strict_swap(&before, committed);
         let after_is_swap = is_strict_swap(&after, committed);
@@ -1157,6 +1509,7 @@ fn replay(
         }
     }
     println!("history replay under frozen config (counts only):");
+    println!("  subset                           : {subset}");
     println!("  targets                          : {target}");
     println!("  skipped                          : {skipped}");
     println!("  top=committed before             : {before_match}");
@@ -1264,6 +1617,7 @@ fn perf(
     let (_, context_rows) = load_corpora(corpus_dir);
     let config = Config {
         window: 0,
+        beta: 100,
         lambda_milli: 1000,
         cap: 3000,
         margin: 0,
