@@ -46,6 +46,7 @@ Read only the decision files relevant to the task:
 | Hardening choices / Issue #360 (A3, #3, A6, A8, A9, bak) | `docs/decisions/issue-360-hardening.md` |
 | Key response wait / Issue #415 | `docs/decisions/issue-415-key-wait.md` |
 | User-dictionary exact match as dictionary evidence / Issue #446 | `docs/decisions/issue-446-user-exact-evidence.md` |
+| Function-word hiragana selection / Issue #448 | `docs/decisions/issue-448-function-word-skip.md` |
 
 Consult `.claude/memory/rules.md` for verified rules relevant to the code or
 command being changed. These rules include machine-specific Cargo constraints,

@@ -3,7 +3,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use sakura_values::{AiTextOperation, AiTextStatus};
 
 pub const MAX_RECORD_BYTES: usize = 16 * 1024;
-pub const INPUT_HISTORY_FORMAT_VERSION: u16 = 2;
+/// Format 3 adds the `Diag` record kind (Issue #457 slow-request evidence)
+/// and a trailing `origin` byte on commit records (Issue #465). The commit
+/// field is length-optional on decode so format-2 files still read.
+pub const INPUT_HISTORY_FORMAT_VERSION: u16 = 3;
 pub const INPUT_HISTORY_FORMAT_VERSION_MIN: u16 = 1;
 pub const HISTORY_MAGIC: [u8; 4] = *b"SKIH";
 pub const HISTORY_HEADER_LEN: usize = 8;
@@ -72,6 +75,29 @@ pub struct CommitHistoryRecord {
     pub surface: String,
     pub left_context: u16,
     pub right_context: u16,
+    /// Which code path issued the commit (Issue #465). See
+    /// `CommitOrigin` in sakura-engine; 0 means a record written before the
+    /// field existed or a path that could not attribute a trigger.
+    pub origin: u8,
+}
+
+/// A bounded, content-free diagnostic event (Issue #457). `name` is a
+/// `DiagName` id from sakura-engine and the five values are whatever that
+/// name's contract fixes — for `KeySlow` they are microseconds of the
+/// request's queue, setup, dispatch, reply-write, and total service time.
+/// No text field exists, so a diagnostic record can never carry input.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiagHistoryRecord {
+    pub sequence: u64,
+    pub timestamp_ms: u64,
+    pub session: u64,
+    pub scope: HistoryScope,
+    pub name: u16,
+    pub value_a: u64,
+    pub value_b: u64,
+    pub value_c: u64,
+    pub value_d: u64,
+    pub value_e: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,6 +142,7 @@ pub enum InputHistoryRecord {
     Commit(CommitHistoryRecord),
     AiText(AiTextHistoryRecord),
     Engine(EngineHistoryRecord),
+    Diag(DiagHistoryRecord),
 }
 
 impl InputHistoryRecord {
@@ -125,6 +152,7 @@ impl InputHistoryRecord {
             Self::Commit(record) => record.session,
             Self::AiText(record) => record.session,
             Self::Engine(record) => record.session,
+            Self::Diag(record) => record.session,
         }
     }
 
@@ -134,6 +162,7 @@ impl InputHistoryRecord {
             Self::Commit(record) => record.sequence,
             Self::AiText(record) => record.sequence,
             Self::Engine(record) => record.sequence,
+            Self::Diag(record) => record.sequence,
         }
     }
 
@@ -143,6 +172,7 @@ impl InputHistoryRecord {
             Self::Commit(record) => record.timestamp_ms,
             Self::AiText(record) => record.timestamp_ms,
             Self::Engine(record) => record.timestamp_ms,
+            Self::Diag(record) => record.timestamp_ms,
         }
     }
 }

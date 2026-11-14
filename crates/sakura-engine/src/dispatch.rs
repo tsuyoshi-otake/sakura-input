@@ -64,7 +64,7 @@ use crate::candidate_projection::{CandidateProjection, ProjectionError};
 use crate::composition_fence::CompositionFence;
 use crate::correction::Correction;
 use crate::dictionary::{ConversionService, ConvertFailure};
-use crate::input_history::{clear_path, default_path, InputHistoryService, ScopeClass};
+use crate::input_history::{clear_path, default_path, DiagName, InputHistoryService, ScopeClass};
 use crate::learning::{
     ForgetPredictionOutcome, LearningPreference, LearningService, StagedCorrection,
 };
@@ -647,6 +647,17 @@ impl Dispatcher {
         if !probe {
             self.invalidate_stale_prediction_cache();
         }
+        // Stamp the commit origin before the request runs so any commit it
+        // produces can name its trigger (Issue #465). Probe requests never
+        // reach `record_learning`, and stamping them would mutate a session
+        // the probe contract promises to leave untouched.
+        if !probe {
+            if let Some(session) =
+                request_session_id(request).and_then(|id| self.sessions.get_mut(id))
+            {
+                session.set_commit_origin(commit_origin_tag(request));
+            }
+        }
         match request {
             Request::Hello { client_version } => self.hello(*client_version),
             Request::CreateSession { process_name } => self.create_session(process_name),
@@ -753,39 +764,44 @@ impl Dispatcher {
         }
     }
 
+    /// Records a `diag` evidence record for a request whose engine service
+    /// time crossed the slow-request threshold (Issue #457). The five values
+    /// are microseconds of queue, setup, dispatch, reply, and total service
+    /// time — integers only, so the record can never carry input text.
+    /// Resolves the wire session id to the history session id so the record
+    /// correlates with the same session's key and commit records; a request
+    /// without a session (or history unattached) records nothing.
+    pub(crate) fn record_slow_request(
+        &self,
+        session: Option<SessionId>,
+        queue_us: u64,
+        setup_us: u64,
+        dispatch_us: u64,
+        reply_us: u64,
+        total_us: u64,
+    ) {
+        let Some(history) = self.input_history.as_ref() else {
+            return;
+        };
+        let Some(session) = session.and_then(|id| self.sessions.get(id)) else {
+            return;
+        };
+        let scope = ScopeClass::from_scope(session.scope, session.scope_classified());
+        history.record_diag(
+            session.history_session_id(),
+            scope,
+            DiagName::KeySlow,
+            queue_us,
+            setup_us,
+            dispatch_us,
+            reply_us,
+            total_us,
+        );
+    }
+
     fn is_blocked_by_pending_undo(&self, request: &Request) -> bool {
-        let session = match request {
-            Request::SendKey { session, .. }
-            | Request::ProbeKey { session, .. }
-            | Request::Commit { session }
-            | Request::Reconvert { session, .. }
-            | Request::Revert { session }
-            | Request::ResetDocumentContext { session }
-            | Request::SetInputScope { session, .. }
-            | Request::SetMode { session, .. }
-            | Request::ApplyAiComposition { session, .. }
-            | Request::PollCandidateCommit { session }
-            | Request::CommitCandidate { session, .. }
-            | Request::StartAiText { session, .. }
-            | Request::DeleteSession { session } => *session,
-            Request::Hello { .. }
-            | Request::CreateSession { .. }
-            | Request::UndoCommit { .. }
-            | Request::ClearLearning
-            | Request::ClearInputHistory
-            | Request::FlushInputHistory
-            | Request::InputHistoryStats
-            | Request::EngineTiming
-            | Request::FaultStatus
-            | Request::RecordAiText { .. }
-            | Request::PollAiText { .. }
-            | Request::CancelAiText { .. }
-            | Request::DeleteHistoryCandidate { .. }
-            | Request::QueueCandidateCommit { .. }
-            | Request::Ping
-            | Request::Shutdown
-            | Request::WatchUi { .. }
-            | Request::SetUiPlacement { .. } => return false,
+        let Some(session) = request_session_id(request) else {
+            return false;
         };
         self.sessions
             .get(session)
@@ -1801,6 +1817,88 @@ impl ExecutionPolicy {
     }
 }
 
+/// Commit-origin values recorded on commit history records (Issue #465).
+/// A commit whose origin is not `KEY` was produced by a request that never
+/// carried a key — which is exactly the "commit with no commit key" shape
+/// the issue reports. `UNKNOWN` marks records written before the field.
+mod commit_origin {
+    /// Kept for the TSV/binary contract: format-2 records and sessions that
+    /// never saw a stamped request decode as this value.
+    #[allow(dead_code)]
+    pub const UNKNOWN: u8 = 0;
+    /// `SendKey` / `ProbeKey`: the request carried a key; a key record should
+    /// exist for the same session.
+    pub const KEY: u8 = 1;
+    /// `Request::Commit`: the host asked to commit without a key.
+    pub const COMMIT_REQUEST: u8 = 2;
+    /// `CommitCandidate` / `PollCandidateCommit`: a queued renderer-side
+    /// candidate commit.
+    pub const CANDIDATE_COMMIT: u8 = 3;
+    /// `Reconvert`: reconversion committed replacement text.
+    pub const RECONVERT: u8 = 4;
+    /// `SetMode`: a mode switch committed pending preedit.
+    pub const SET_MODE: u8 = 5;
+    /// `ApplyAiComposition`: an AI composition commit.
+    pub const AI_COMPOSITION: u8 = 6;
+    /// Any other session-scoped request that committed.
+    pub const OTHER_REQUEST: u8 = 7;
+}
+
+/// Maps a request variant to the session it targets, mirroring the match in
+/// `Dispatcher::dispatch`.
+pub(crate) fn request_session_id(request: &Request) -> Option<SessionId> {
+    match request {
+        Request::SendKey { session, .. }
+        | Request::ProbeKey { session, .. }
+        | Request::Commit { session }
+        | Request::Reconvert { session, .. }
+        | Request::Revert { session }
+        | Request::ResetDocumentContext { session }
+        | Request::SetInputScope { session, .. }
+        | Request::SetMode { session, .. }
+        | Request::ApplyAiComposition { session, .. }
+        | Request::PollCandidateCommit { session }
+        | Request::CommitCandidate { session, .. }
+        | Request::StartAiText { session, .. }
+        | Request::DeleteSession { session } => Some(*session),
+        Request::Hello { .. }
+        | Request::CreateSession { .. }
+        | Request::UndoCommit { .. }
+        | Request::ClearLearning
+        | Request::ClearInputHistory
+        | Request::FlushInputHistory
+        | Request::InputHistoryStats
+        | Request::EngineTiming
+        | Request::FaultStatus
+        | Request::RecordAiText { .. }
+        | Request::PollAiText { .. }
+        | Request::CancelAiText { .. }
+        | Request::DeleteHistoryCandidate { .. }
+        | Request::QueueCandidateCommit { .. }
+        | Request::Ping
+        | Request::Shutdown
+        | Request::WatchUi { .. }
+        | Request::SetUiPlacement { .. } => None,
+    }
+}
+
+/// Maps a request variant to the origin stamped on commits it produces
+/// (Issue #465). Only request kinds that can reach `record_learning` need a
+/// dedicated value; the rest fall under `OTHER_REQUEST`.
+fn commit_origin_tag(request: &Request) -> u8 {
+    match request {
+        Request::SendKey { .. } | Request::ProbeKey { .. } => commit_origin::KEY,
+        Request::Commit { .. } => commit_origin::COMMIT_REQUEST,
+        Request::CommitCandidate { .. } | Request::PollCandidateCommit { .. } => {
+            commit_origin::CANDIDATE_COMMIT
+        }
+        Request::Reconvert { .. } => commit_origin::RECONVERT,
+        Request::SetMode { .. } => commit_origin::SET_MODE,
+        Request::ApplyAiComposition { .. } => commit_origin::AI_COMPOSITION,
+        _ => commit_origin::OTHER_REQUEST,
+    }
+}
+
 fn state_code(state: State) -> u8 {
     match state {
         State::Idle => 0,
@@ -2364,6 +2462,21 @@ pub(crate) fn preferred_candidate_index(
         {
             return index;
         }
+        // Issue #448 / owner decision 2026-11-14: when the first row is the
+        // reading itself and every edge in it lives in the dictionary's
+        // particle / auxiliary class band (< 500), the reading is a
+        // function-word cluster whose correct answer is the hiragana
+        // spelling (ばかり, だけ, には, になって). Keep it instead of skipping
+        // to a rare homophone (バカリ, 担って). Verb and noun kana rows sit
+        // above the band, so the skip still applies to them.
+        if direct.first().is_some_and(|first| {
+            first.text() == reading
+                && first.segments().iter().all(|segment| {
+                    segment.right_id != 0 && segment.right_id < FUNCTION_WORD_RIGHT_ID_MAX
+                })
+        }) {
+            return 0;
+        }
         if let Some(index) = direct
             .iter()
             .position(|candidate| candidate.text() != reading)
@@ -2373,6 +2486,14 @@ pub(crate) fn preferred_candidate_index(
     }
     requested.rem_euclid(candidates.len() as i16) as usize
 }
+
+/// Connection classes below this bound hold the system dictionary's
+/// particles, auxiliaries, and conjunction endings. Verified on the 2.0.32
+/// image: ばかり 310, だけ 296, から 330, ながら 355, ので 359, のに 360, and
+/// the split edges of になって (372/348) all land under it, while verb and
+/// noun kana spellings (してる 1097, カタカナ noun rows at 1851+) stay above.
+/// Class 0 belongs to BOS / unset edges and must not count as function word.
+const FUNCTION_WORD_RIGHT_ID_MAX: u16 = 500;
 
 fn has_authoritative_candidate_preference(
     candidates: &[ConversionCandidate],
@@ -2699,6 +2820,7 @@ fn record_learning(
                 surface,
                 session.carry_right_id(),
                 chosen_right_id,
+                session.commit_origin(),
             );
         }
     }

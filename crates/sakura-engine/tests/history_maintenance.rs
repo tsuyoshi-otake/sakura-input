@@ -347,7 +347,15 @@ fn full_history_keeps_all_1200_commits_and_stops_promptly() {
     let session = service.allocate_session_id().unwrap();
     let started = Instant::now();
     for index in 0..1200u16 {
-        service.record_commit(session, ScopeClass::Normal, "けんしょう", "検証", index, 0);
+        service.record_commit(
+            session,
+            ScopeClass::Normal,
+            "けんしょう",
+            "検証",
+            index,
+            0,
+            0,
+        );
         sleep(
             (started + Duration::from_millis((u64::from(index) + 1) * 50))
                 .saturating_duration_since(Instant::now()),

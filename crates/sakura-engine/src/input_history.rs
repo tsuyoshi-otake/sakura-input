@@ -60,6 +60,20 @@ impl From<ScopeClass> for HistoryScope {
     }
 }
 
+/// The bounded set of `Diag` record names (Issue #457). Values are stored
+/// as `u16` so a record can never carry text; each name's contract fixes
+/// the meaning of `value_a..=value_e`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u16)]
+pub enum DiagName {
+    /// A key-adjacent request whose engine service time crossed
+    /// `SLOW_REQUEST_US`. Values are microseconds: queue wait after the
+    /// frame was decoded, setup (history hold + configuration snapshot +
+    /// runtime services), dispatcher time, reply-write time, and the
+    /// request total.
+    KeySlow = 1,
+}
+
 impl ScopeClass {
     /// Converts the engine's current scope plus the positive-classification
     /// bit into a history policy. URL, email, and digit fields are treated as
@@ -111,7 +125,7 @@ use sakura_store::input_history::persistence::{
 };
 pub use sakura_store::input_history::persistence::{default_path, MAX_INPUT_HISTORY_BYTES};
 pub use sakura_store::input_history::{
-    AiTextHistoryRecord, CommitHistoryRecord, EngineHistoryRecord, HistoryScope,
+    AiTextHistoryRecord, CommitHistoryRecord, DiagHistoryRecord, EngineHistoryRecord, HistoryScope,
     InputHistoryRecord, InputHistorySnapshot, InputHistoryStats, InputHistoryStatsSnapshot,
     KeyHistoryRecord, INPUT_HISTORY_FORMAT_VERSION, INPUT_HISTORY_FORMAT_VERSION_MIN,
     MAX_RECORD_BYTES,
@@ -156,7 +170,8 @@ repeat\tconsumed\tstate-before\tstate-after\tmode-before\tmode-after\tpreedit-be
 preedit-after\tcommit\tdelete-before\tbeep\taction\tdropped-before\treading\tsurface\t\
 left-context\tright-context\tai-operation\tai-status\tai-source\tai-result\tai-model\t\
 ai-provider\tai-style\tai-error-code\tai-latency-ms\tai-input-tokens\tai-output-tokens\t\
-ai-cached-tokens\tai-http-attempts\tengine-package-version\tengine-release-label\n",
+ai-cached-tokens\tai-http-attempts\tengine-package-version\tengine-release-label\t\
+commit-origin\tdiag-name\tdiag-a\tdiag-b\tdiag-c\tdiag-d\tdiag-e\n",
             self.format_version
         );
         for record in &self.records {
@@ -187,7 +202,7 @@ ai-cached-tokens\tai-http-attempts\tengine-package-version\tengine-release-label
                         escape(&record.action),
                         record.dropped_before.to_string(),
                     ];
-                    fields.extend((0..17).map(|_| String::new()));
+                    fields.extend((0..24).map(|_| String::new()));
                     fields.push(String::new());
                     fields.push(String::new());
                     output.push_str(&fields.join("\t"));
@@ -211,6 +226,29 @@ ai-cached-tokens\tai-http-attempts\tengine-package-version\tengine-release-label
                     fields.extend((0..13).map(|_| String::new()));
                     fields.push(String::new());
                     fields.push(String::new());
+                    fields.push(record.origin.to_string());
+                    fields.extend((0..6).map(|_| String::new()));
+                    output.push_str(&fields.join("\t"));
+                    output.push('\n');
+                }
+                InputHistoryRecord::Diag(record) => {
+                    let mut fields = vec![
+                        "diag".to_owned(),
+                        record.sequence.to_string(),
+                        record.timestamp_ms.to_string(),
+                        record.session.to_string(),
+                        record.scope.name().to_owned(),
+                    ];
+                    fields.extend((0..33).map(|_| String::new()));
+                    fields.push(String::new());
+                    fields.push(String::new());
+                    fields.push(String::new());
+                    fields.push(record.name.to_string());
+                    fields.push(record.value_a.to_string());
+                    fields.push(record.value_b.to_string());
+                    fields.push(record.value_c.to_string());
+                    fields.push(record.value_d.to_string());
+                    fields.push(record.value_e.to_string());
                     output.push_str(&fields.join("\t"));
                     output.push('\n');
                 }
@@ -240,6 +278,7 @@ ai-cached-tokens\tai-http-attempts\tengine-package-version\tengine-release-label
                     ]);
                     fields.push(String::new());
                     fields.push(String::new());
+                    fields.extend((0..7).map(|_| String::new()));
                     output.push_str(&fields.join("\t"));
                     output.push('\n');
                 }
@@ -254,6 +293,7 @@ ai-cached-tokens\tai-http-attempts\tengine-package-version\tengine-release-label
                     fields.extend((0..33).map(|_| String::new()));
                     fields.push(escape(&record.package_version));
                     fields.push(escape(&record.release_label));
+                    fields.extend((0..7).map(|_| String::new()));
                     output.push_str(&fields.join("\t"));
                     output.push('\n');
                 }
@@ -575,6 +615,7 @@ impl InputHistoryService {
         self.enqueue(epoch, record);
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn record_commit(
         &self,
         session: u64,
@@ -583,6 +624,7 @@ impl InputHistoryService {
         surface: &str,
         left_context: u16,
         right_context: u16,
+        origin: u8,
     ) {
         let epoch = self.epoch.load(Ordering::Acquire);
         if excludes(&self.stats, scope, false) || reading.is_empty() || surface.is_empty() {
@@ -603,6 +645,48 @@ impl InputHistoryService {
             surface: surface.to_owned(),
             left_context,
             right_context,
+            origin,
+        });
+        self.enqueue(epoch, record);
+    }
+
+    /// Records a bounded, content-free diagnostic event (Issue #457). The
+    /// values carry no text, so this is deliberately outside the reading /
+    /// surface retention rules: a slow request still leaves evidence about
+    /// *where* the engine spent the key's budget.
+    #[allow(clippy::too_many_arguments)]
+    pub fn record_diag(
+        &self,
+        session: u64,
+        scope: ScopeClass,
+        name: DiagName,
+        value_a: u64,
+        value_b: u64,
+        value_c: u64,
+        value_d: u64,
+        value_e: u64,
+    ) {
+        let epoch = self.epoch.load(Ordering::Acquire);
+        if excludes(&self.stats, scope, false) {
+            return;
+        }
+        if self.excludes_session(session) {
+            return;
+        }
+        let Some(sequence) = self.allocate_counter(&self.next_sequence, Ordering::Relaxed) else {
+            return;
+        };
+        let record = InputHistoryRecord::Diag(DiagHistoryRecord {
+            sequence,
+            timestamp_ms: now_ms(),
+            session,
+            scope: scope.into(),
+            name: name as u16,
+            value_a,
+            value_b,
+            value_c,
+            value_d,
+            value_e,
         });
         self.enqueue(epoch, record);
     }

@@ -46,6 +46,10 @@ pub struct Outcome {
     pub profile_repair: StepState,
     pub engine_launch: StepState,
     pub renderer_launch: StepState,
+    /// HRESULT-style code reported by the profile repair callback. Without it
+    /// a `profile_repair=failed` record cannot be told apart from any other
+    /// `ActivateProfile` failure after the process is gone (#466).
+    pub profile_repair_error: Option<i32>,
 }
 
 impl Outcome {
@@ -76,10 +80,14 @@ impl Outcome {
     }
 
     pub fn status_record(self) -> String {
+        let profile_error = self
+            .profile_repair_error
+            .map_or_else(|| "none".to_owned(), |code| format!("0x{code:08x}"));
         format!(
-            "version=1\ttask_repair={}\tprofile_repair={}\tengine_launch={}\trenderer_launch={}\texit_code={}\n",
+            "version=2\ttask_repair={}\tprofile_repair={}\tprofile_error={}\tengine_launch={}\trenderer_launch={}\texit_code={}\n",
             self.task_repair.name(),
             self.profile_repair.name(),
+            profile_error,
             self.engine_launch.name(),
             self.renderer_launch.name(),
             self.exit_code()
@@ -92,17 +100,23 @@ impl Outcome {
 /// Launching still proceeds when a repair fails: the current session may have
 /// intact machine state, and the renderer can recover an engine launch failure.
 /// The nonzero terminal result makes Task Scheduler retry the failed work.
+/// `repair_profile` returns the underlying error code on failure so the
+/// status record keeps the reason (`ActivateProfile`'s HRESULT) instead of a
+/// bare `failed` (#466).
 pub fn execute<TR, PR, L>(mut repair_task: TR, mut repair_profile: PR, mut launch: L) -> Outcome
 where
     TR: FnMut() -> bool,
-    PR: FnMut() -> bool,
+    PR: FnMut() -> Result<(), i32>,
     L: FnMut(Component) -> bool,
 {
+    let task_repair = StepState::from_success(repair_task());
+    let profile_repair_error = repair_profile().err();
     Outcome {
-        task_repair: StepState::from_success(repair_task()),
-        profile_repair: StepState::from_success(repair_profile()),
+        task_repair,
+        profile_repair: StepState::from_success(profile_repair_error.is_none()),
         engine_launch: StepState::from_success(launch(Component::Engine)),
         renderer_launch: StepState::from_success(launch(Component::Renderer)),
+        profile_repair_error,
     }
 }
 
@@ -132,7 +146,13 @@ mod tests {
         for failed_bits in 0..16 {
             let outcome = execute(
                 || failed_bits & 1 == 0,
-                || failed_bits & 2 == 0,
+                || {
+                    if failed_bits & 2 == 0 {
+                        Ok(())
+                    } else {
+                        Err(0)
+                    }
+                },
                 |component| match component {
                     Component::Engine => failed_bits & 4 == 0,
                     Component::Renderer => failed_bits & 8 == 0,
@@ -159,7 +179,7 @@ mod tests {
             || {
                 order.borrow_mut().push("profile");
                 profile_present.set(true);
-                true
+                Ok(())
             },
             |component| {
                 assert!(profile_present.get(), "launch raced profile repair");
@@ -178,16 +198,26 @@ mod tests {
     }
 
     #[test]
+    fn a_failed_profile_repair_keeps_its_error_code_in_the_status_record() {
+        const ACTIVATE_DENIED: i32 = 0x8007_0005u32 as i32; // E_ACCESSDENIED
+        let outcome = execute(|| true, || Err(ACTIVATE_DENIED), |_| true);
+        assert_eq!(outcome.profile_repair, StepState::Failed);
+        assert_eq!(outcome.profile_repair_error, Some(ACTIVATE_DENIED));
+        assert!(outcome.status_record().contains("profile_error=0x80070005"));
+    }
+
+    #[test]
     fn status_contains_only_fixed_tokens_and_the_terminal_bitmask() {
         let outcome = Outcome {
             task_repair: StepState::Succeeded,
             profile_repair: StepState::Failed,
             engine_launch: StepState::Succeeded,
             renderer_launch: StepState::Failed,
+            profile_repair_error: Some(0x8007_0005u32 as i32),
         };
         assert_eq!(
             outcome.status_record(),
-            "version=1\ttask_repair=ok\tprofile_repair=failed\tengine_launch=ok\trenderer_launch=failed\texit_code=10\n"
+            "version=2\ttask_repair=ok\tprofile_repair=failed\tprofile_error=0x80070005\tengine_launch=ok\trenderer_launch=failed\texit_code=10\n"
         );
     }
 }

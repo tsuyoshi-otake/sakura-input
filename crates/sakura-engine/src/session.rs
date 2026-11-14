@@ -417,6 +417,11 @@ pub struct Session {
     /// Recent commits and erasures, to notice a commit the user erased and
     /// retyped with another spelling (#305).
     correction_trail: CorrectionTrail,
+    /// Which request variant is currently being dispatched (Issue #465). The
+    /// dispatcher stamps it before every session-scoped request so a commit
+    /// record can name the path that produced it — a commit whose origin is
+    /// not `SendKey` had no key record to begin with.
+    commit_origin: u8,
 }
 
 impl Session {
@@ -491,6 +496,7 @@ impl Session {
             undo_armed: false,
             undo_pending: false,
             correction_trail: CorrectionTrail::default(),
+            commit_origin: 0,
         }
     }
 
@@ -1163,6 +1169,16 @@ impl Session {
         if let Some(stored_cycle) = self.segment_transform_cycles.get_mut(index) {
             *stored_cycle = cycle;
         }
+    }
+
+    /// Records which request variant is being dispatched; read by the commit
+    /// recording path so a commit can name its trigger (Issue #465).
+    pub(crate) fn set_commit_origin(&mut self, origin: u8) {
+        self.commit_origin = origin;
+    }
+
+    pub(crate) fn commit_origin(&self) -> u8 {
+        self.commit_origin
     }
 
     pub(crate) fn carry_right_id(&self) -> u16 {

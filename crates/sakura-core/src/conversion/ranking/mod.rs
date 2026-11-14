@@ -10,5 +10,6 @@ pub(in crate::conversion) mod it_terms;
 mod quality_gate;
 mod tie_break;
 
+pub(in crate::conversion) use coherence::is_kana_fragment_prefix_split;
 pub(in crate::conversion) use cost::{connection_cost, numeric_form_cost, synthetic_run_cost};
 pub(in crate::conversion) use tie_break::sort_by_cost;

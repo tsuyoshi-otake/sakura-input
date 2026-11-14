@@ -48,8 +48,25 @@ fn all_v2_record_tags_and_history_scope_values_round_trip() {
             surface: "桜".into(),
             left_context: 4,
             right_context: 5,
+            origin: 7,
         }),
         2,
+        HistoryScope::Normal,
+    );
+    round_trip(
+        InputHistoryRecord::Diag(DiagHistoryRecord {
+            sequence: 1,
+            timestamp_ms: 2,
+            session: 3,
+            scope: HistoryScope::Normal,
+            name: 1,
+            value_a: 10,
+            value_b: 20,
+            value_c: 30,
+            value_d: 40,
+            value_e: 50,
+        }),
+        5,
         HistoryScope::Normal,
     );
     round_trip(
@@ -112,6 +129,7 @@ fn malformed_or_oversized_payloads_fail_closed() {
         surface: String::new(),
         left_context: 0,
         right_context: 0,
+        origin: 0,
     });
     assert!(oversized.encode().is_err());
 }
