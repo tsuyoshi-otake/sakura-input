@@ -1,4 +1,5 @@
 use super::*;
+use crate::committed_context::MAX_COMMITTED_CONTEXT_BYTES;
 use sakura_proto::ErrorCode;
 
 #[test]

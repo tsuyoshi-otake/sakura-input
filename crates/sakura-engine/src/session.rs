@@ -26,7 +26,6 @@
 //! `Mode::Katakana` as a promise that its preedit text is katakana yet — see
 //! `crate::dispatch`'s module docs for how the dispatcher handles this seam.
 
-use std::fmt;
 use std::mem;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -255,94 +254,10 @@ impl SessionCrossCommitBridge {
     }
 }
 
-/// The capacity, in UTF-8 bytes, of [`Session::committed_context`].
-///
-/// The committed-context tail only needs to reach back far enough to hold
-/// the words that would decide a homophone: median commits are two
-/// characters and the observed clues sit within about the previous twelve,
-/// so ~85 Japanese characters is well past the useful window while the
-/// whole field stays stack-priced for Probe clones.
-pub(crate) const MAX_COMMITTED_CONTEXT_BYTES: usize = 256;
-
-/// Volatile tail of text this session committed while a classified
-/// [`InputScope::Normal`] field was focused (#471 phase 2).
-///
-/// [`Session::record_current_commit_with_cache`] is the only writer and
-/// every [`Session::clear_personal_context`] path drops it, so the text
-/// inherits exactly the lifetime rules the rest of the personal-context
-/// state already enforces. It is never persisted, recorded to the history
-/// sink, or sent off-session; its `Debug` impl prints the byte length only.
-#[derive(Clone, PartialEq, Eq, Default)]
-pub(crate) struct CommittedContext {
-    tail: FixedStr<MAX_COMMITTED_CONTEXT_BYTES>,
-}
-
-impl CommittedContext {
-    /// Read by `Session::committed_context`, which phase-3 code calls.
-    #[allow(dead_code)]
-    pub(crate) fn as_str(&self) -> &str {
-        self.tail.as_str()
-    }
-
-    fn clear(&mut self) {
-        self.tail.clear();
-    }
-
-    /// Appends `surface`, dropping the oldest bytes on a char boundary when
-    /// the commit overflows the bound.
-    fn append(&mut self, surface: &str) {
-        if self.tail.len() + surface.len() <= self.tail.capacity() {
-            // The bounded append cannot fail: the sum fits.
-            let _ = self.tail.push_str(surface);
-            return;
-        }
-        let mut replacement = FixedStr::new();
-        if surface.len() >= replacement.capacity() {
-            let _ = replacement.push_str(utf8_suffix(surface, replacement.capacity()));
-        } else {
-            let retained = replacement.capacity() - surface.len();
-            let _ = replacement.push_str(utf8_suffix(self.tail.as_str(), retained));
-            let _ = replacement.push_str(surface);
-        }
-        self.tail = replacement;
-    }
-
-    /// Removes `surface` when it is the most recently appended text — the
-    /// commit-undo terminal, where the host deleted exactly that text. Any
-    /// other result means the middle was edited, which this bounded trail
-    /// cannot see; the bytes that stay are still bytes the session
-    /// committed, so they stay.
-    fn remove_suffix(&mut self, surface: &str) -> bool {
-        if surface.is_empty() || !self.tail.as_str().ends_with(surface) {
-            return false;
-        }
-        let keep = self.tail.as_str().chars().count() - surface.chars().count();
-        self.tail.truncate_chars(keep);
-        true
-    }
-}
-
-impl fmt::Debug for CommittedContext {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("CommittedContext")
-            .field("tail_bytes", &self.tail.len())
-            .finish()
-    }
-}
-
-/// The longest UTF-8 suffix of `text` that fits in `max_bytes`, aligned to a
-/// char boundary.
-fn utf8_suffix(text: &str, max_bytes: usize) -> &str {
-    if text.len() <= max_bytes {
-        return text;
-    }
-    let mut start = text.len() - max_bytes;
-    while !text.is_char_boundary(start) {
-        start += 1;
-    }
-    &text[start..]
-}
+/// The committed-context tail's capacity and mechanics live in
+/// [`crate::committed_context`], shared with the #474 measurement tools so
+/// both sides apply one implementation.
+use crate::committed_context::CommittedContext;
 
 /// One editing session's state: what mode it is in, what input scope the
 /// focused field reported, and the composition (if any) in progress.

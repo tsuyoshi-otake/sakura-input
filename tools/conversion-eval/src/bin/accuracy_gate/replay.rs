@@ -17,6 +17,7 @@
 use std::collections::BTreeMap;
 
 use sakura_core::{ConversionInput, ConversionOptions};
+use sakura_engine::committed_context::CommittedContext;
 use sakura_engine::dictionary::ConversionService;
 
 use crate::measure::commit_carry;
@@ -54,6 +55,9 @@ pub struct ReplayCounts {
     /// Targets skipped: no preceding commit (nothing to carry) or the
     /// conversion call failed.
     pub skipped: usize,
+    /// Sessions whose bounded committed-context tail is non-empty at the end
+    /// of the export — the sessions a context reader would have text for.
+    pub sessions_with_context: usize,
     /// The same four counters restricted to readings of four characters or
     /// fewer — short readings dominate the homophone risk.
     pub short: Breakdown,
@@ -111,6 +115,11 @@ pub fn replay_history(service: &ConversionService, source: &str) -> Result<Repla
     // function observes them.
     let mut last: BTreeMap<String, (String, String)> = BTreeMap::new();
     let mut last_action: BTreeMap<String, String> = BTreeMap::new();
+    // The same bounded tail the engine keeps per session (#471 phase 2 E):
+    // every normal commit appends its surface through the shared
+    // `CommittedContext`, so a context reader (the #474 association
+    // measurement) sees exactly the bytes a live session would hold.
+    let mut tails: BTreeMap<String, CommittedContext> = BTreeMap::new();
     for (number, line) in source.lines().enumerate() {
         if line.is_empty() || line.starts_with('#') {
             continue;
@@ -146,6 +155,10 @@ pub fn replay_history(service: &ConversionService, source: &str) -> Result<Repla
         let converted = last_action
             .get(fields[session])
             .is_some_and(|name| name == "convert");
+        tails
+            .entry(fields[session].to_owned())
+            .or_default()
+            .append(fields[surface]);
         let clue = last.insert(
             fields[session].to_owned(),
             (fields[reading].to_owned(), fields[surface].to_owned()),
@@ -210,6 +223,10 @@ pub fn replay_history(service: &ConversionService, source: &str) -> Result<Repla
     if !header_seen {
         return Err("history export: no header line".to_owned());
     }
+    counts.sessions_with_context = tails
+        .values()
+        .filter(|tail| !tail.as_str().is_empty())
+        .count();
     Ok(counts)
 }
 
