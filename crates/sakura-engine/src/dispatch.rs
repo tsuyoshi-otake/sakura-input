@@ -64,9 +64,7 @@ use crate::candidate_projection::{CandidateProjection, ProjectionError};
 use crate::composition_fence::CompositionFence;
 use crate::correction::Correction;
 use crate::dictionary::{ConversionService, ConvertFailure};
-use crate::input_history::{
-    clear_path, default_path, DiagName, InputHistoryService, ScopeClass,
-};
+use crate::input_history::{clear_path, default_path, DiagName, InputHistoryService, ScopeClass};
 use crate::learning::{
     ForgetPredictionOutcome, LearningPreference, LearningService, StagedCorrection,
 };
@@ -654,8 +652,8 @@ impl Dispatcher {
         // reach `record_learning`, and stamping them would mutate a session
         // the probe contract promises to leave untouched.
         if !probe {
-            if let Some(session) = request_session_id(request)
-                .and_then(|id| self.sessions.get_mut(id))
+            if let Some(session) =
+                request_session_id(request).and_then(|id| self.sessions.get_mut(id))
             {
                 session.set_commit_origin(commit_origin_tag(request));
             }
@@ -2473,13 +2471,9 @@ pub(crate) fn preferred_candidate_index(
         // above the band, so the skip still applies to them.
         if direct.first().is_some_and(|first| {
             first.text() == reading
-                && first
-                    .segments()
-                    .iter()
-                    .all(|segment| {
-                        segment.right_id != 0
-                            && segment.right_id < FUNCTION_WORD_RIGHT_ID_MAX
-                    })
+                && first.segments().iter().all(|segment| {
+                    segment.right_id != 0 && segment.right_id < FUNCTION_WORD_RIGHT_ID_MAX
+                })
         }) {
             return 0;
         }

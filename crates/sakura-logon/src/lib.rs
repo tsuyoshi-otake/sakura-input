@@ -203,9 +203,7 @@ mod tests {
         let outcome = execute(|| true, || Err(ACTIVATE_DENIED), |_| true);
         assert_eq!(outcome.profile_repair, StepState::Failed);
         assert_eq!(outcome.profile_repair_error, Some(ACTIVATE_DENIED));
-        assert!(outcome
-            .status_record()
-            .contains("profile_error=0x80070005"));
+        assert!(outcome.status_record().contains("profile_error=0x80070005"));
     }
 
     #[test]

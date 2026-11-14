@@ -125,10 +125,9 @@ use sakura_store::input_history::persistence::{
 };
 pub use sakura_store::input_history::persistence::{default_path, MAX_INPUT_HISTORY_BYTES};
 pub use sakura_store::input_history::{
-    AiTextHistoryRecord, CommitHistoryRecord, DiagHistoryRecord, EngineHistoryRecord,
-    HistoryScope, InputHistoryRecord, InputHistorySnapshot, InputHistoryStats,
-    InputHistoryStatsSnapshot, KeyHistoryRecord, INPUT_HISTORY_FORMAT_VERSION,
-    INPUT_HISTORY_FORMAT_VERSION_MIN,
+    AiTextHistoryRecord, CommitHistoryRecord, DiagHistoryRecord, EngineHistoryRecord, HistoryScope,
+    InputHistoryRecord, InputHistorySnapshot, InputHistoryStats, InputHistoryStatsSnapshot,
+    KeyHistoryRecord, INPUT_HISTORY_FORMAT_VERSION, INPUT_HISTORY_FORMAT_VERSION_MIN,
     MAX_RECORD_BYTES,
 };
 

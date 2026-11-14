@@ -780,9 +780,7 @@ impl Converter {
                         continue;
                     }
                     if bridge_cost < best_whole_reading_cost
-                        && is_kana_fragment_prefix_split(
-                            &self.cross_commit_scratch[anchor_index],
-                        )
+                        && is_kana_fragment_prefix_split(&self.cross_commit_scratch[anchor_index])
                     {
                         continue;
                     }

@@ -1320,9 +1320,7 @@ fn a_kana_fragment_splice_keeps_its_own_cost_under_the_bridge() {
         .expect("bridged conversion");
     assert_eq!(result.candidates()[0].text(), "生娘");
     assert_eq!(
-        result
-            .diagnostics()
-            .cross_commit_bridge_candidates_rescored,
+        result.diagnostics().cross_commit_bridge_candidates_rescored,
         0
     );
 }
