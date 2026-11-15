@@ -4272,7 +4272,7 @@ Only phase 1 is to be integrated; phases 2 and 3 are stopped. With product learn
 
 ## 2026-11-15 - Sakura Input 2.0.34 published (#481, PR #482)
 
-- The owner approved release after independent verification; its sole C9 finding, missing evidence counts in the decision document, was addressed by commit ba2e1138ad72dc825bccc099c35110375a9d0a12.
+- The owner approved the release; it proceeded only after independent verification passed. Its sole finding, C9 (missing evidence counts in the decision document), was addressed by commit ba2e1138ad72dc825bccc099c35110375a9d0a12.
 - PR #482 was squash-merged as 11b93db96f7aa261dd5644b98289478c91d062fe. Tag v2.0.34 points to that main commit; release.yml run 43676622594 succeeded in both jobs.
 - Publish: scripts/publish-release.ps1 used the existing active DPAPI key and succeeded. https://github.com/tsuyoshi-otake/sakura-input/releases/tag/v2.0.34 is Latest and not draft; read-back verified one pinned manifest signature, sequence 42, exact release notes, and the installer size and SHA-256.
 - Assets: sakura_setup.exe 25,888,955 bytes, release-manifest-v2.txt 519 bytes, release-manifest-v2.sig 348 bytes. Installer SHA-256 3f129b95596064bfd33d9f1849dfae5e7fd469706b72eb3382274fc8668ef2a1 matches the manifest and GitHub digest; Authenticode is unsigned.
