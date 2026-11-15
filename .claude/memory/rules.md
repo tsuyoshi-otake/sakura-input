@@ -153,10 +153,9 @@ provenance; active work should load the smaller matching topic extracts above.
   worker neither retires nor opens, and `configure` still never waits for it,
   because it runs under the configuration lock that every request reads
   through.
-- `.claude/memory/journal.md` is not valid UTF-8: the 2.0.20 entry holds a
-  Shift-JIS fragment. A script that rewrites it (a keep-both conflict resolver,
-  an appender that decodes) must work on bytes or decode with
-  `surrogateescape`; a strict decode fails with `UnicodeDecodeError` (#431).
+- Write `.claude/memory/journal.md` additions as UTF-8 and verify the whole
+  file decodes as UTF-8 after appending. Mixed CP932 lines previously broke
+  strict decoding (#431, #478).
 - Reviewed detail sources (`data/curated-*.tsv`) replace an imported glossary
   or WordNet description of the same exact identity, relations included
   (#429). Before that the imported text won and the curated report only
