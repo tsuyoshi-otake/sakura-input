@@ -149,6 +149,19 @@ struct TrailEntry {
     rejected: RejectedList,
 }
 
+/// Surfaces erased for a pending retype, borrowed without changing the trail.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct RetypeRejections<'a> {
+    erased: &'a str,
+    carried: &'a RejectedList,
+}
+
+impl RetypeRejections<'_> {
+    pub(crate) fn contains(&self, surface: &str) -> bool {
+        self.erased == surface || self.carried.iter().any(|item| item.surface() == surface)
+    }
+}
+
 /// The session's recent commits and erasures (#305). See the module docs.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub(crate) struct CorrectionTrail {
@@ -230,10 +243,19 @@ impl CorrectionTrail {
     /// to the caret, with the same surface or another.
     #[cfg(feature = "replay-eval")]
     pub(crate) fn would_retype(&self, reading: &str) -> bool {
-        self.erase_overflow == 0
-            && self.len > self.standing
-            && self.entries[usize::from(self.len) - 1].tracked
-            && self.entries[usize::from(self.len) - 1].reading.as_str() == reading
+        self.retype_rejections(reading).is_some()
+    }
+
+    /// The pending top's erased and carried surfaces, if this reading retypes it.
+    pub(crate) fn retype_rejections(&self, reading: &str) -> Option<RetypeRejections<'_>> {
+        if self.erase_overflow != 0 || self.len <= self.standing {
+            return None;
+        }
+        let top = &self.entries[usize::from(self.len) - 1];
+        (top.tracked && top.reading.as_str() == reading).then_some(RetypeRejections {
+            erased: top.surface.as_str(),
+            carried: &top.rejected,
+        })
     }
 
     /// One idle Backspace the host handled: one character left of the caret

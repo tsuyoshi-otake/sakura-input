@@ -188,6 +188,260 @@ fn normal_session(dispatcher: &mut Dispatcher, out: &mut OutputBuf, name: &str) 
     session
 }
 
+fn convert_retype(harness: &mut Harness) {
+    type_word(
+        &mut harness.dispatcher,
+        harness.session,
+        "kana",
+        &mut harness.out,
+    );
+    harness.keys(&[named_key(KeyCode::Space)]);
+}
+
+#[test]
+fn issue_481_g3_scene_1_full_erase_skips_first() {
+    let mut harness = Harness::new();
+    harness.commit("kana", FIRST);
+    harness.erase(2);
+    convert_retype(&mut harness);
+    assert_eq!(harness.out.preedit_text(), SECOND);
+}
+
+#[test]
+fn issue_481_g3_scene_2_canceled_composition_preserves_erase() {
+    let mut harness = Harness::new();
+    harness.commit("kana", FIRST);
+    type_word(
+        &mut harness.dispatcher,
+        harness.session,
+        "ka",
+        &mut harness.out,
+    );
+    harness.keys(&[named_key(KeyCode::Backspace)]);
+    assert_eq!(harness.out.preedit_text(), "");
+    harness.erase(2);
+    convert_retype(&mut harness);
+    assert_eq!(harness.out.preedit_text(), SECOND);
+}
+
+#[test]
+fn issue_481_scene_3_partial_erase_keeps_first() {
+    let mut harness = Harness::new();
+    harness.commit("kana", FIRST);
+    harness.erase(1);
+    convert_retype(&mut harness);
+    assert_eq!(harness.out.preedit_text(), FIRST);
+}
+
+#[test]
+fn issue_481_scene_4_idle_arrow_clears_trail() {
+    let mut harness = Harness::new();
+    harness.commit("kana", FIRST);
+    harness.erase(2);
+    harness.keys(&[named_key(KeyCode::Right)]);
+    convert_retype(&mut harness);
+    assert_eq!(harness.out.preedit_text(), FIRST);
+}
+
+#[test]
+fn issue_481_scene_5_different_reading_keeps_first() {
+    let mut harness = Harness::new();
+    harness.commit("kana", FIRST);
+    harness.erase(2);
+    type_word(
+        &mut harness.dispatcher,
+        harness.session,
+        "denki",
+        &mut harness.out,
+    );
+    harness.keys(&[named_key(KeyCode::Space)]);
+    assert_eq!(harness.out.preedit_text(), "電気");
+}
+
+#[test]
+fn issue_481_scene_6_no_alternative_keeps_first() {
+    let mut trail = CorrectionTrail::default();
+    trail.commit(READING, FIRST, 0, 1);
+    trail.erase();
+    trail.erase();
+    correction_conversion()
+        .with_candidates(READING, ConversionOptions::default(), |candidates| {
+            let rejected = candidates.iter().find(|c| c.text() == FIRST).expect("X");
+            let identity = candidates
+                .iter()
+                .find(|c| c.text() == READING)
+                .expect("reading");
+            let direct = [rejected.clone(), identity.clone()];
+            let r1 = usable_retype_rejections(
+                &direct,
+                READING,
+                direct.len(),
+                trail.retype_rejections(READING),
+            );
+            assert!(r1.is_none(), "the only non-identity row is rejected");
+            let learned = LearningPreference {
+                exact: Some(0),
+                general: None,
+            };
+            assert_eq!(
+                preferred_candidate_index(&direct, READING, 0, None, learned, direct.len(), r1),
+                0
+            );
+        })
+        .expect("conversion");
+}
+
+#[test]
+fn issue_481_scene_7_rejected_candidate_remains_selectable() {
+    let mut harness = Harness::new();
+    harness.commit("kana", FIRST);
+    harness.erase(2);
+    let trail = harness
+        .dispatcher
+        .sessions
+        .get(harness.session)
+        .expect("session")
+        .correction_trail()
+        .clone();
+    convert_retype(&mut harness);
+    assert_eq!(
+        harness
+            .dispatcher
+            .sessions
+            .get(harness.session)
+            .expect("session")
+            .correction_trail(),
+        &trail,
+        "conversion only reads the correction trail"
+    );
+    let r1_order: Vec<_> = harness
+        .out
+        .to_output()
+        .candidates
+        .expect("list")
+        .items
+        .iter()
+        .map(|c| c.text.clone())
+        .collect();
+    let mut control = Harness::new();
+    control.commit("kana", FIRST);
+    control.erase(2);
+    control.keys(&[named_key(KeyCode::Right)]);
+    convert_retype(&mut control);
+    let control_order: Vec<_> = control
+        .out
+        .to_output()
+        .candidates
+        .expect("list")
+        .items
+        .iter()
+        .map(|c| c.text.clone())
+        .collect();
+    assert_eq!(r1_order, control_order, "R1 must not reorder candidates");
+    assert!(harness
+        .out
+        .to_output()
+        .candidates
+        .expect("list")
+        .items
+        .iter()
+        .any(|c| c.text == FIRST));
+    for _ in 0..8 {
+        if harness.out.preedit_text() == FIRST {
+            break;
+        }
+        harness.keys(&[named_key(KeyCode::Down)]);
+    }
+    assert_eq!(harness.out.preedit_text(), FIRST);
+    harness.keys(&[named_key(KeyCode::Enter)]);
+    assert_eq!(harness.out.commit_text(), Some(FIRST));
+}
+
+#[test]
+fn issue_481_learned_alternative_beats_dictionary_fallback() {
+    let mut harness = Harness::new();
+    for _ in 0..8 {
+        harness.learning.learn(READING, THIRD, 0, 2);
+    }
+    for _ in 0..8 {
+        harness.learning.learn(READING, FIRST, 0, 1);
+    }
+    harness.commit("kana", FIRST);
+    harness.erase(2);
+    convert_retype(&mut harness);
+    assert_eq!(harness.out.preedit_text(), THIRD);
+}
+
+#[test]
+fn issue_481_reranker_cannot_select_a_rejected_surface() {
+    let mut trail = CorrectionTrail::default();
+    trail.commit(READING, FIRST, 0, 1);
+    trail.erase();
+    trail.erase();
+    correction_conversion()
+        .with_candidates(READING, ConversionOptions::default(), |candidates| {
+            let first = candidates
+                .iter()
+                .position(|c| c.text() == FIRST)
+                .expect("X");
+            let second = candidates
+                .iter()
+                .position(|c| c.text() == SECOND)
+                .expect("Y");
+            let rejected = usable_retype_rejections(
+                candidates,
+                READING,
+                candidates.len(),
+                trail.retype_rejections(READING),
+            );
+            assert_eq!(
+                protect_retype_selection(candidates, first, second, rejected),
+                second
+            );
+            assert_eq!(
+                protect_retype_selection(candidates, second, first, rejected),
+                second
+            );
+            assert_eq!(
+                protect_retype_selection(candidates, first, second, None),
+                first
+            );
+        })
+        .expect("conversion");
+}
+
+#[test]
+fn issue_481_g3_scene_8_applied_undo_skips_undone() {
+    let mut harness = Harness::new();
+    harness.commit("kana", FIRST);
+    harness.keys(&[modified_named_key(KeyCode::Backspace, Modifiers::CTRL)]);
+    assert_eq!(harness.out.delete_before(), FIRST);
+    assert_eq!(
+        harness.dispatcher.dispatch(
+            &Request::UndoCommit {
+                session: harness.session,
+                outcome: UndoCommitOutcome::Applied,
+            },
+            &mut harness.out,
+        ),
+        Reply::Message(Response::Ok)
+    );
+    harness.keys(&[named_key(KeyCode::Space)]);
+    assert_eq!(harness.out.preedit_text(), SECOND);
+}
+
+#[test]
+fn issue_481_g3_scene_9_carried_rejection_skips_both() {
+    let mut harness = Harness::new();
+    harness.commit("kana", FIRST);
+    harness.erase(2);
+    harness.commit("kana", SECOND);
+    harness.erase(2);
+    convert_retype(&mut harness);
+    assert_ne!(harness.out.preedit_text(), FIRST);
+    assert_ne!(harness.out.preedit_text(), SECOND);
+}
+
 // T1: a commit learned eight times, erased and retyped through the katakana
 // transform, stops leading its context; the transform itself is not learned
 // (fail-before).

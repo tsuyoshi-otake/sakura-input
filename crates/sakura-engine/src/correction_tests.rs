@@ -95,6 +95,33 @@ fn a_retyped_correction_erased_again_rejects_both_surfaces() {
 }
 
 #[test]
+fn issue_481_retype_view_is_read_only_and_includes_carried_surfaces() {
+    let mut trail = CorrectionTrail::default();
+    trail.commit("かな", "仮名", L, 1);
+    assert!(trail.retype_rejections("かな").is_none());
+    erase(&mut trail, 1);
+    assert!(trail.retype_rejections("かな").is_none());
+    erase(&mut trail, 1);
+    assert!(trail.retype_rejections("ほか").is_none());
+    let before = trail.clone();
+    let view = trail.retype_rejections("かな").expect("pending top");
+    assert!(view.contains("仮名"));
+    assert!(!view.contains("加奈"));
+    assert_eq!(trail, before);
+
+    trail.commit("かな", "加奈", 0, 2).expect("correction");
+    erase(&mut trail, 2);
+    let before = trail.clone();
+    let view = trail.retype_rejections("かな").expect("retyped correction");
+    assert!(view.contains("仮名"));
+    assert!(view.contains("加奈"));
+    assert!(!view.contains("香奈"));
+    assert_eq!(trail, before);
+    erase(&mut trail, 1);
+    assert!(trail.retype_rejections("かな").is_none());
+}
+
+#[test]
 fn retyping_an_erased_correction_unchanged_keeps_its_rejection() {
     // The erased correction's staged record was discarded with it, so the
     // same surface typed again must carry the rejection forward.

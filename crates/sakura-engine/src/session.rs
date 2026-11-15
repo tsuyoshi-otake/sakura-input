@@ -1513,6 +1513,10 @@ impl Session {
         &mut self.correction_trail
     }
 
+    pub(crate) fn correction_trail(&self) -> &CorrectionTrail {
+        &self.correction_trail
+    }
+
     pub(crate) fn clear_personal_context(&mut self) {
         self.correction_trail.clear();
         self.reset_carryover();
