@@ -4261,3 +4261,11 @@ Only phase 1 is to be integrated; phases 2 and 3 are stopped. With product learn
 - Fix: apply R1 only to one pending erased commit, clear the cloned trail before preview, and apply replay R1 only to convert actions. Multi-commit correction learning remains unchanged.
 - Verification: scenarios 10 and 11 failed before and passed after; replay run twice matched, changing G1 from 25 fixed / 5 broken to 20 / 0. The scope was narrowed after inspecting results. Fmt, clippy, dependency/facade/policy gates, IRV compare, release build, DLL size, and process cleanup completed. Workspace tests reproduced only the three documented local reparse-point failures; the pre-change PR CI passed. CI for the new head is pending.
 - Learning: distinguish post-hoc selection criteria from preregistered gates, and keep replay and preview behavior aligned with the actual engine entry points.
+
+## 2026-11-15 - Prepare 2.0.34 for #481 (implementation a0a2e81392b2411394747a3553953c48d3ae6f93)
+
+- Symptom: the owner authorized release preparation for the retype-selection fix, but release metadata still identified 2.0.33 and sequence 41.
+- Cause: the workspace, installer, workflow default, signed-update sequence and release notes must agree before a release can be built.
+- Fix: prepare 2.0.34 and sequence 42, update only workspace crate versions in the lockfile offline, and add Japanese release notes with the existing unsigned-installer warning. The PR remains draft; no tag or release is created.
+- Verification: cargo metadata reports 28 workspace members at 2.0.34; the lockfile differs only in those 28 versions; installer, workflow, sequence and notes agree; fmt, clippy and release-workflow policy pass; journal decodes as UTF-8.
+- Learning: check the lockfile semantically and bytewise after an offline workspace-only version update, and keep preparation distinct from approval to merge or publish.
