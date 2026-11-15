@@ -78,6 +78,7 @@ provenance; active work should load the smaller matching topic extracts above.
   available headroom (#471 and #477).
 - Candidate order and selected candidate are separate contracts; assertions
   that cover only one do not prove committed output.
+- On this Windows host, three reparse-point tests fail with 0x800701C0 even in pre-change binaries; use the named tests and CI substitution in `docs/rules/this-machine.md` (#481).
 - Suppressing persisted learning at write time does not neutralize older stored
   learning at read/rank time. Preference invariants must close both directions.
 - Error names and diagnostics must state what was actually determined. Trace

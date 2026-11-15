@@ -62,7 +62,7 @@ use sakura_proto::{
 use crate::ai_text::{AiTextService, Poll as AiPoll, StartError as AiStartError};
 use crate::candidate_projection::{CandidateProjection, ProjectionError};
 use crate::composition_fence::CompositionFence;
-use crate::correction::Correction;
+use crate::correction::{Correction, RetypeRejections};
 use crate::dictionary::{ConversionService, ConvertFailure};
 use crate::input_history::{clear_path, default_path, DiagName, InputHistoryService, ScopeClass};
 use crate::learning::{
@@ -1663,6 +1663,7 @@ impl Dispatcher {
 
         if preview {
             let mut probe = existing.clone();
+            probe.correction_trail_mut().clear();
             return match build_reconversion(
                 &mut probe,
                 text,
@@ -2429,6 +2430,7 @@ pub(crate) fn preferred_candidate_index(
     cached: Option<(u64, u16)>,
     learned: LearningPreference,
     direct_limit: usize,
+    rejected: Option<RetypeRejections<'_>>,
 ) -> usize {
     if candidates.is_empty() {
         return 0;
@@ -2441,6 +2443,7 @@ pub(crate) fn preferred_candidate_index(
             .filter(|index| *index < direct.len())
             .filter(|index| candidate_preference_matches_context(direct, *index))
             .filter(|index| direct[*index].text() != reading)
+            .filter(|index| !rejected.is_some_and(|r| r.contains(direct[*index].text())))
         {
             return index;
         }
@@ -2450,6 +2453,7 @@ pub(crate) fn preferred_candidate_index(
                     && text_hash(candidate.text()) == surface_hash
                     && candidate.text() != reading
                     && candidate_preference_matches_context(direct, index)
+                    && !rejected.is_some_and(|r| r.contains(candidate.text()))
             }) {
                 return index;
             }
@@ -2459,6 +2463,7 @@ pub(crate) fn preferred_candidate_index(
             .filter(|index| *index < direct.len())
             .filter(|index| candidate_preference_matches_context(direct, *index))
             .filter(|index| direct[*index].text() != reading)
+            .filter(|index| !rejected.is_some_and(|r| r.contains(direct[*index].text())))
         {
             return index;
         }
@@ -2471,16 +2476,16 @@ pub(crate) fn preferred_candidate_index(
         // above the band, so the skip still applies to them.
         if direct.first().is_some_and(|first| {
             first.text() == reading
+                && !rejected.is_some_and(|r| r.contains(first.text()))
                 && first.segments().iter().all(|segment| {
                     segment.right_id != 0 && segment.right_id < FUNCTION_WORD_RIGHT_ID_MAX
                 })
         }) {
             return 0;
         }
-        if let Some(index) = direct
-            .iter()
-            .position(|candidate| candidate.text() != reading)
-        {
+        if let Some(index) = direct.iter().position(|candidate| {
+            candidate.text() != reading && !rejected.is_some_and(|r| r.contains(candidate.text()))
+        }) {
             return index;
         }
     }
@@ -2502,6 +2507,7 @@ fn has_authoritative_candidate_preference(
     cached: Option<(u64, u16)>,
     learned: LearningPreference,
     direct_limit: usize,
+    rejected: Option<RetypeRejections<'_>>,
 ) -> bool {
     if requested != 0 {
         return true;
@@ -2512,10 +2518,12 @@ fn has_authoritative_candidate_preference(
         index < direct.len()
             && candidate_preference_matches_context(direct, index)
             && direct[index].text() != reading
+            && !rejected.is_some_and(|r| r.contains(direct[index].text()))
     }) || learned.general.is_some_and(|index| {
         index < direct.len()
             && candidate_preference_matches_context(direct, index)
             && direct[index].text() != reading
+            && !rejected.is_some_and(|r| r.contains(direct[index].text()))
     }) {
         return true;
     }
@@ -2525,8 +2533,36 @@ fn has_authoritative_candidate_preference(
                 && text_hash(candidate.text()) == surface_hash
                 && candidate.text() != reading
                 && candidate_preference_matches_context(direct, index)
+                && !rejected.is_some_and(|r| r.contains(candidate.text()))
         })
     })
+}
+
+/// R1 is inactive if it cannot leave a non-identity direct candidate.
+pub(crate) fn usable_retype_rejections<'a>(
+    candidates: &[ConversionCandidate],
+    reading: &str,
+    direct_limit: usize,
+    rejected: Option<RetypeRejections<'a>>,
+) -> Option<RetypeRejections<'a>> {
+    rejected.filter(|r| {
+        candidates[..direct_limit.min(candidates.len())]
+            .iter()
+            .any(|candidate| candidate.text() != reading && !r.contains(candidate.text()))
+    })
+}
+
+fn protect_retype_selection(
+    candidates: &[ConversionCandidate],
+    selected: usize,
+    preferred: usize,
+    rejected: Option<RetypeRejections<'_>>,
+) -> usize {
+    if rejected.is_some_and(|r| r.contains(candidates[selected].text())) {
+        preferred
+    } else {
+        selected
+    }
 }
 
 /// A preference learned or cached without the retained lexical tail must not
@@ -2945,6 +2981,19 @@ pub(crate) fn candidate_learning_key(candidate: &ConversionCandidate) -> (&str, 
             .last()
             .map_or(0, |segment| segment.right_id),
     )
+}
+
+/// Preserve candidate indexes and learning's index gates while excluding R1 surfaces.
+pub(crate) fn retype_learning_key<'a>(
+    candidate: &'a ConversionCandidate,
+    reading: &'a str,
+    rejected: Option<RetypeRejections<'_>>,
+) -> (&'a str, u16) {
+    if rejected.is_some_and(|r| r.contains(candidate.text())) {
+        (reading, 0)
+    } else {
+        candidate_learning_key(candidate)
+    }
 }
 
 /// What a [`commit_pending`] caller does with the left context that a plain
@@ -5402,6 +5451,18 @@ fn begin_conversion(
                 let preserve_exact_initial = (literal_policy != LiteralPolicy::Ranked
                     || punctuation_family)
                     && initial_selection == 0;
+                let rejected = if initial_selection == 0 && !preserve_exact_initial {
+                    usable_retype_rejections(
+                        candidates,
+                        session.preedit.as_str(),
+                        direct_limit,
+                        session
+                            .correction_trail()
+                            .retype_rejections(session.preedit.as_str()),
+                    )
+                } else {
+                    None
+                };
                 let learned = if preserve_exact_initial {
                     LearningPreference {
                         exact: None,
@@ -5417,9 +5478,13 @@ fn begin_conversion(
                             service.preference(
                                 session.preedit.as_str(),
                                 initial_context,
-                                candidates[..direct_limit]
-                                    .iter()
-                                    .map(candidate_learning_key),
+                                candidates[..direct_limit].iter().map(|candidate| {
+                                    retype_learning_key(
+                                        candidate,
+                                        session.preedit.as_str(),
+                                        rejected,
+                                    )
+                                }),
                             )
                         },
                     )
@@ -5431,6 +5496,7 @@ fn begin_conversion(
                     cached,
                     learned,
                     direct_limit,
+                    rejected,
                 );
                 let preferred = preferred_candidate_index(
                     candidates,
@@ -5439,6 +5505,7 @@ fn begin_conversion(
                     cached,
                     learned,
                     direct_limit,
+                    rejected,
                 );
                 let mut selected = if preserve_exact_initial {
                     0
@@ -5466,6 +5533,7 @@ fn begin_conversion(
                 if selected >= direct_limit {
                     selected = 0;
                 }
+                selected = protect_retype_selection(candidates, selected, preferred, rejected);
                 let (visible_selected, raw_selected) = match project_conversion_candidates(
                     candidates,
                     "",

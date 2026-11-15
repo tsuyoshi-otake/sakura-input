@@ -10,8 +10,8 @@
 use sakura_core::conversion::CandidateOrigin;
 use sakura_core::ConversionCandidate;
 
-use crate::correction::{Correction, CorrectionTrail};
-use crate::dispatch::{candidate_learning_key, preferred_candidate_index};
+use crate::correction::{Correction, CorrectionTrail, RetypeRejections};
+use crate::dispatch::{preferred_candidate_index, retype_learning_key, usable_retype_rejections};
 use crate::learning::{LearningService, StagedCorrection};
 
 /// One session's correction trail, fed with what the history recorded.
@@ -199,18 +199,53 @@ impl ReplayLearning {
         left_context: u16,
         candidates: &[ConversionCandidate],
     ) -> ReplayChoice {
+        self.first_candidate_with_rejections(reading, left_context, candidates, None)
+    }
+
+    /// The same choice with R1 applied to this session's current trail.
+    pub fn first_candidate_with_trail(
+        &self,
+        reading: &str,
+        left_context: u16,
+        candidates: &[ConversionCandidate],
+        trail: &ReplayTrail,
+    ) -> ReplayChoice {
+        self.first_candidate_with_rejections(
+            reading,
+            left_context,
+            candidates,
+            trail.0.retype_rejections(reading),
+        )
+    }
+
+    fn first_candidate_with_rejections(
+        &self,
+        reading: &str,
+        left_context: u16,
+        candidates: &[ConversionCandidate],
+        rejected: Option<RetypeRejections<'_>>,
+    ) -> ReplayChoice {
         let direct_limit = candidates
             .iter()
             .position(|candidate| candidate.origin() != CandidateOrigin::Direct)
             .unwrap_or(candidates.len());
+        let rejected = usable_retype_rejections(candidates, reading, direct_limit, rejected);
         let learned = self.service.preference(
             reading,
             left_context,
             candidates[..direct_limit]
                 .iter()
-                .map(candidate_learning_key),
+                .map(|candidate| retype_learning_key(candidate, reading, rejected)),
         );
-        let index = preferred_candidate_index(candidates, reading, 0, None, learned, direct_limit);
+        let index = preferred_candidate_index(
+            candidates,
+            reading,
+            0,
+            None,
+            learned,
+            direct_limit,
+            rejected,
+        );
         let exact = learned.exact == Some(index);
         ReplayChoice {
             index,

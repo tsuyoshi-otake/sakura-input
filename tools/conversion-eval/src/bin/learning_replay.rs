@@ -208,14 +208,15 @@ fn parse_history(text: &str) -> Result<Vec<HistoryRow>, String> {
             continue;
         }
         let fields: Vec<String> = line.split('\t').map(unescape).collect();
-        if fields.len() != HISTORY_COLUMNS {
+        if fields.len() < HISTORY_COLUMNS {
             return Err(format!(
-                "history line {line_number}: {} columns, expected {HISTORY_COLUMNS}",
+                "history line {line_number}: {} columns, expected at least {HISTORY_COLUMNS}",
                 fields.len()
             ));
         }
         let timestamp_ms: u64 = number(&fields, 2, line_number)?;
         let event = match fields[0].as_str() {
+            "diag" => continue,
             "key" => Event::Key(KeyRow {
                 key_code: number(&fields, 5, line_number)?,
                 modifiers: number(&fields, 7, line_number)?,
@@ -322,6 +323,7 @@ struct Conversion {
     final_choice: String,
     before: Choice,
     after: Choice,
+    r1: Choice,
 }
 
 #[derive(Debug, Clone)]
@@ -329,6 +331,7 @@ struct PendingConversion {
     reading: String,
     first_candidate: String,
     engine: Option<(u32, u32, u32)>,
+    r1_eligible: bool,
 }
 
 #[derive(Debug, Default)]
@@ -458,6 +461,20 @@ fn replay(
                     };
                     let (before_choice, before_exact) = choose(&before);
                     let (after_choice, _) = choose(&after);
+                    let r1_choice = if pending.r1_eligible {
+                        let choice = after.first_candidate_with_trail(
+                            &commit.reading,
+                            commit.left_context,
+                            candidates,
+                            &session.trail,
+                        );
+                        Choice {
+                            surface: candidates[choice.index].text().to_owned(),
+                            learned: choice.learned,
+                        }
+                    } else {
+                        after_choice.clone()
+                    };
                     if before_exact
                         && pending
                             .engine
@@ -475,6 +492,7 @@ fn replay(
                         final_choice: commit.surface.clone(),
                         before: before_choice,
                         after: after_choice,
+                        r1: r1_choice,
                     });
                 }
                 let replayed = ReplayCommit {
@@ -533,6 +551,7 @@ fn replay_key(
             reading: key.preedit_before.clone(),
             first_candidate: key.preedit_after.clone(),
             engine,
+            r1_eligible: key.action == "convert",
         });
     } else if key.action == "undo_commit" && key.delete_before > 0 {
         // The history does not record the host's outcome; assume applied.
@@ -625,6 +644,43 @@ impl Replay {
         line("seeded-rejections", self.seeded_rejections.to_string());
         line("commits", self.commits.to_string());
         line("conversions", self.conversions.len().to_string());
+        let r1_off_correct = self
+            .conversions
+            .iter()
+            .filter(|conversion| conversion.after.surface == conversion.final_choice)
+            .count();
+        line("r1-off-correct", r1_off_correct.to_string());
+        line(
+            "r1-off-incorrect",
+            (self.conversions.len() - r1_off_correct).to_string(),
+        );
+        let r1_changed = self
+            .conversions
+            .iter()
+            .filter(|c| c.after.surface != c.r1.surface)
+            .count();
+        let r1_fixed = self
+            .conversions
+            .iter()
+            .filter(|c| c.after.surface != c.final_choice && c.r1.surface == c.final_choice)
+            .count();
+        let r1_broken = self
+            .conversions
+            .iter()
+            .filter(|c| c.after.surface == c.final_choice && c.r1.surface != c.final_choice)
+            .count();
+        line("r1-changed", r1_changed.to_string());
+        line("r1-fixed", r1_fixed.to_string());
+        line("r1-broken", r1_broken.to_string());
+        line(
+            "r1-gate",
+            if r1_fixed >= 10 && r1_fixed >= 5 * r1_broken {
+                "pass"
+            } else {
+                "fail"
+            }
+            .to_owned(),
+        );
         line("corrections", self.corrections.to_string());
         line(
             "same-surface-retypes",
@@ -1012,6 +1068,13 @@ mod tests {
     fn history_fields_are_unescaped_and_rows_need_every_column() {
         assert_eq!(unescape(r"a\tb\\c\nd"), "a\tb\\c\nd");
         assert!(parse_history("key\t1\t2\n").is_err());
+        let mut history = History::new();
+        history.row("diag", 0, |_| {});
+        history.engine("2.0.15");
+        let with_extra = history.text.replace("2.0.15\t\n", "2.0.15\t\textra\n");
+        let parsed = parse_history(&with_extra).expect("current history columns");
+        assert_eq!(parsed.len(), 1);
+        assert!(matches!(parsed[0].event, Event::Engine(Some((2, 0, 15)))));
         assert_eq!(parse_version("2.0.13"), Some((2, 0, 13)));
         assert_eq!(parse_version("2.0"), None);
         let learning = parse_learning(
@@ -1021,5 +1084,46 @@ mod tests {
         assert_eq!(learning.len(), 2);
         assert_eq!(learning[0].surface, "仮\t名");
         assert!(learning[1].rejection);
+    }
+
+    #[test]
+    fn r1_replay_compares_choices_against_the_final_corrected_surface() {
+        let mut history = History::new();
+        history.convert(1, "かな", "仮名");
+        history.commit(1, "かな", "仮名", 0, 1);
+        history.backspace(1);
+        history.backspace(1);
+        history.convert(1, "かな", "仮名");
+        history.commit(1, "かな", "加奈", 0, 2);
+        let result = run(&history, "");
+        assert_eq!(result.conversions.len(), 2);
+        assert_eq!(result.conversions[0].final_choice, "加奈");
+        assert_eq!(result.conversions[1].after.surface, "仮名");
+        assert_eq!(result.conversions[1].r1.surface, "加奈");
+        assert!(result.report().contains("r1-fixed\t1\n"));
+        assert!(result.report().contains("r1-broken\t0\n"));
+    }
+
+    #[test]
+    fn r1_replay_does_not_apply_to_kana_cycle() {
+        let mut history = History::new();
+        history.convert(1, "かな", "仮名");
+        history.commit(1, "かな", "仮名", 0, 1);
+        history.backspace(1);
+        history.backspace(1);
+        history.key(
+            1,
+            2,
+            0,
+            (STATE_COMPOSING, STATE_CONVERTING),
+            ("かな", "カナ"),
+            0,
+            "mode_kana_cycle",
+        );
+        history.commit(1, "かな", "加奈", 0, 2);
+        let result = run(&history, "");
+        let kana_cycle = result.conversions.last().expect("kana cycle");
+        assert_eq!(kana_cycle.r1, kana_cycle.after);
+        assert!(result.report().contains("r1-changed\t0\n"));
     }
 }

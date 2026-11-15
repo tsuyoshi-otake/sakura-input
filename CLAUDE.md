@@ -43,6 +43,7 @@ Read only the decision files relevant to the task:
 | IME key behavior | `docs/decisions/input-behavior.md` |
 | Developer input history | `docs/decisions/developer-history.md` |
 | Correction learning / Issue #305 | `docs/decisions/issue-305-correction-learning.md` |
+| Immediate retype selection / Issue #481 | `docs/decisions/issue-481-retype-skip.md` |
 | Hardening choices / Issue #360 (A3, #3, A6, A8, A9, bak) | `docs/decisions/issue-360-hardening.md` |
 | Key response wait / Issue #415 | `docs/decisions/issue-415-key-wait.md` |
 | User-dictionary exact match as dictionary evidence / Issue #446 | `docs/decisions/issue-446-user-exact-evidence.md` |
