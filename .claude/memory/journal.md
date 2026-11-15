@@ -4253,3 +4253,11 @@ Only phase 1 is to be integrated; phases 2 and 3 are stopped. With product learn
 - Fix: read the session trail without mutation, exclude its erased and carried surfaces from initial selection when a non-identity alternative exists, and preserve candidate order, learning, prediction and no-alternative fallback.
 - Verification: engine replay G1 fixed 25 / broken 5; G3 scenes 1, 2, 8 and 9 failed before and passed after. Fmt, clippy, static gates, IRV compare, release build and DLL size passed. G2 is not green: three workspace tests fail under the local untrusted reparse-point restriction; pre-task test binaries reproduce the same failures. No repository runner remained.
 - Learning: pre-register fixed/broken gates and measure using the engine with learning; the replay does not model commit cache or reranker, so retain explicit scenario coverage for those boundaries.
+
+## 2026-11-15 - Refine immediate retype selection (#481, a0a2e81392b2411394747a3553953c48d3ae6f93)
+
+- Symptom: retyping after several commits were erased could suppress a wanted surface; reconversion preview and actual reconversion could differ; kana-cycle replay incorrectly applied R1.
+- Cause: the selection rule treated multiple pending erased commits like one, the preview retained a cloned trail, and replay treated all composing-to-converting transitions as ordinary conversion.
+- Fix: apply R1 only to one pending erased commit, clear the cloned trail before preview, and apply replay R1 only to convert actions. Multi-commit correction learning remains unchanged.
+- Verification: scenarios 10 and 11 failed before and passed after; replay run twice matched, changing G1 from 25 fixed / 5 broken to 20 / 0. The scope was narrowed after inspecting results. Fmt, clippy, dependency/facade/policy gates, IRV compare, release build, DLL size, and process cleanup completed. Workspace tests reproduced only the three documented local reparse-point failures; the pre-change PR CI passed. CI for the new head is pending.
+- Learning: distinguish post-hoc selection criteria from preregistered gates, and keep replay and preview behavior aligned with the actual engine entry points.
