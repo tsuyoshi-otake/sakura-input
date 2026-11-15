@@ -4245,3 +4245,11 @@ Only phase 1 is to be integrated; phases 2 and 3 are stopped. With product learn
 - Owner chose option A: integrate phase 1 only and stop phases 2 and 3. #476 was closed because method (a) was not adopted; #473 was closed because the retained tail would have no consumer. No product ranking change or release is planned.
 - The measurement-only archive is branch feat/477-personal-context at 734a24fc5685fbe9edab28f4462545b7f69ab1d9; the independent result is issuecomment-6884934427.
 - Learning: context-favorable examples and learning-free comparisons overstate real-world headroom. First measure remaining mismatches using the product learning baseline, then include broken counts in the decision.
+
+## 2026-11-15 - Immediate retype selection (#481, e148035d1391bca4dad8c5bfcdee8ed80ecbc503)
+
+- Symptom: erasing a committed surface and immediately retyping the reading could select the erased surface again.
+- Root cause: the initial selection used learning, commit cache and ordinary ranking without consulting the pending correction trail.
+- Fix: read the session trail without mutation, exclude its erased and carried surfaces from initial selection when a non-identity alternative exists, and preserve candidate order, learning, prediction and no-alternative fallback.
+- Verification: engine replay G1 fixed 25 / broken 5; G3 scenes 1, 2, 8 and 9 failed before and passed after. Fmt, clippy, static gates, IRV compare, release build and DLL size passed. G2 is not green: three workspace tests fail under the local untrusted reparse-point restriction; pre-task test binaries reproduce the same failures. No repository runner remained.
+- Learning: pre-register fixed/broken gates and measure using the engine with learning; the replay does not model commit cache or reranker, so retain explicit scenario coverage for those boundaries.
