@@ -15,11 +15,14 @@
 //! The report holds counts only. `--examples` adds the readings and surfaces
 //! of the differing conversions for local inspection; never publish them.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use sakura_core::{ConversionOptions, Converter, Dictionary};
 use sakura_engine::replay_eval::{ReplayCommit, ReplayLearning, ReplayTrail};
+
+#[path = "learning_replay/compound_counts.rs"]
+mod compound_counts;
 
 /// `KeyCode::Backspace` as the history records it.
 const KEY_BACKSPACE: u16 = 5;
@@ -43,6 +46,7 @@ struct Options {
     learning: PathBuf,
     dictionary: PathBuf,
     examples: bool,
+    compound_counts: bool,
 }
 
 fn main() {
@@ -55,8 +59,18 @@ fn main() {
             .map_err(|error| format!("{}: {error:?}", options.dictionary.display()))?;
         let rows = parse_history(&history)?;
         let records = parse_learning(&learning)?;
-        let replay = replay(&dictionary, &rows, &records)?;
+        if options.compound_counts
+            && rows.windows(2).any(|pair| {
+                pair[0].timestamp_ms > pair[1].timestamp_ms || pair[0].sequence == pair[1].sequence
+            })
+        {
+            return Err("history sequence is not chronological".to_owned());
+        }
+        let replay = replay(&dictionary, &rows, &records, options.compound_counts)?;
         print!("{}", replay.report());
+        if options.compound_counts {
+            print!("{}", replay.compound.report());
+        }
         if options.examples {
             eprintln!("# examples are personal input: never publish them");
             print!("{}", replay.examples());
@@ -74,6 +88,7 @@ fn parse_options(args: impl Iterator<Item = std::ffi::OsString>) -> Result<Optio
     let mut learning = None;
     let mut dictionary = None;
     let mut examples = false;
+    let mut compound_counts = false;
     let mut args = args.peekable();
     while let Some(argument) = args.next() {
         let Some(name) = argument.to_str() else {
@@ -81,12 +96,16 @@ fn parse_options(args: impl Iterator<Item = std::ffi::OsString>) -> Result<Optio
         };
         if matches!(name, "--help" | "-h") {
             println!(
-                "Usage: learning-replay --history FILE --learning FILE --dictionary FILE [--examples]"
+                "Usage: learning-replay --history FILE --learning FILE --dictionary FILE [--examples | --compound-counts]"
             );
             std::process::exit(0);
         }
         if name == "--examples" {
             examples = true;
+            continue;
+        }
+        if name == "--compound-counts" {
+            compound_counts = true;
             continue;
         }
         let value = args
@@ -104,11 +123,15 @@ fn parse_options(args: impl Iterator<Item = std::ffi::OsString>) -> Result<Optio
             return Err(format!("{name} was specified more than once"));
         }
     }
+    if examples && compound_counts {
+        return Err("--examples cannot be combined with --compound-counts".to_owned());
+    }
     Ok(Options {
         history: history.ok_or("--history is required")?,
         learning: learning.ok_or("--learning is required")?,
         dictionary: dictionary.ok_or("--dictionary is required")?,
         examples,
+        compound_counts,
     })
 }
 
@@ -168,6 +191,7 @@ enum Event {
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct HistoryRow {
     sequence: u64,
+    timestamp_ms: u64,
     day: u32,
     session: u64,
     scope: String,
@@ -208,14 +232,15 @@ fn parse_history(text: &str) -> Result<Vec<HistoryRow>, String> {
             continue;
         }
         let fields: Vec<String> = line.split('\t').map(unescape).collect();
-        if fields.len() != HISTORY_COLUMNS {
+        if fields.len() < HISTORY_COLUMNS {
             return Err(format!(
-                "history line {line_number}: {} columns, expected {HISTORY_COLUMNS}",
+                "history line {line_number}: {} columns, expected at least {HISTORY_COLUMNS}",
                 fields.len()
             ));
         }
         let timestamp_ms: u64 = number(&fields, 2, line_number)?;
         let event = match fields[0].as_str() {
+            "diag" => continue,
             "key" => Event::Key(KeyRow {
                 key_code: number(&fields, 5, line_number)?,
                 modifiers: number(&fields, 7, line_number)?,
@@ -243,6 +268,7 @@ fn parse_history(text: &str) -> Result<Vec<HistoryRow>, String> {
         };
         rows.push(HistoryRow {
             sequence: number(&fields, 1, line_number)?,
+            timestamp_ms,
             day: u32::try_from(timestamp_ms / DAY_MS).unwrap_or(u32::MAX),
             session: number(&fields, 3, line_number)?,
             scope: fields[4].clone(),
@@ -354,12 +380,14 @@ struct Replay {
     fidelity_conversions: usize,
     fidelity_matches: usize,
     conversions: Vec<Conversion>,
+    compound: compound_counts::Counts,
 }
 
 fn replay(
     dictionary: &Dictionary<'_>,
     rows: &[HistoryRow],
     learning: &[LearningRow],
+    compound_counts: bool,
 ) -> Result<Replay, String> {
     let mut result = Replay {
         history_rows: rows.len(),
@@ -404,6 +432,7 @@ fn replay(
     let mut converter = Converter::new();
     let mut sessions = BTreeMap::<u64, SessionReplay>::new();
     let mut engine = None;
+    let mut seen_readings = BTreeSet::new();
     for row in rows {
         before.set_day(row.day);
         after.set_day(row.day);
@@ -426,6 +455,8 @@ fn replay(
             }
             Event::Commit(commit) => {
                 result.commits += 1;
+                let first_reading =
+                    compound_counts && seen_readings.insert(commit.reading.as_str());
                 let candidates = converter
                     .convert(
                         dictionary,
@@ -458,6 +489,15 @@ fn replay(
                     };
                     let (before_choice, before_exact) = choose(&before);
                     let (after_choice, _) = choose(&after);
+                    if compound_counts {
+                        result.compound.observe(
+                            dictionary,
+                            &commit.reading,
+                            &commit.surface,
+                            &after_choice.surface,
+                            first_reading,
+                        )?;
+                    }
                     if before_exact
                         && pending
                             .engine
@@ -707,6 +747,37 @@ mod tests {
         dictc_core::compile(&entries, &matrix).expect("dictionary image")
     }
 
+    #[test]
+    fn compound_counts_use_actual_commits_and_all_earlier_readings() {
+        let source = "# license: MIT\nreading\tsurface\tleft_id\tright_id\tword_cost\tprediction_cost\tflags\tannotation\n\
+                      あいうえ\t山川\t0\t0\t100\t100\t\tfixture\n\
+                      おかきく\t山川\t0\t0\t100\t100\t\tfixture\n";
+        let entries = dictc_core::parse_entries("fixture.tsv", source).expect("entries");
+        let matrix = dictc_core::parse_connection(
+            "matrix.tsv",
+            "# license: MIT\nclasses\t1\ndefault\t0\n",
+            false,
+        )
+        .expect("matrix");
+        let image = dictc_core::compile(&entries, &matrix).expect("dictionary image");
+        let dictionary = Dictionary::parse(&image).expect("dictionary");
+        let mut history = History::new();
+        history.convert(1, "あいうえ", "山川");
+        history.commit(1, "あいうえ", "山林", 0, 0);
+        history.convert(1, "あいうえ", "山川");
+        history.commit(1, "あいうえ", "山林", 0, 0);
+        // An earlier non-conversion commit also makes the next reading non-first.
+        history.commit(1, "おかきく", "山川", 0, 0);
+        history.convert(1, "おかきく", "山川");
+        history.commit(1, "おかきく", "山森", 0, 0);
+        let rows = parse_history(&history.text).expect("history");
+        let result = replay(&dictionary, &rows, &[], true).expect("replay");
+        assert_eq!(
+            result.compound.report(),
+            "compound-mismatches\t3\ncompound-swaps\t3\ncompound-absent\t3\ncompound-absent-first-reading\t1\n"
+        );
+    }
+
     const DAY: u64 = 20_000;
 
     struct History {
@@ -841,7 +912,7 @@ mod tests {
         let dictionary = Dictionary::parse(&image).expect("dictionary");
         let rows = parse_history(&history.text).expect("history");
         let records = parse_learning(learning).expect("learning");
-        replay(&dictionary, &rows, &records).expect("replay")
+        replay(&dictionary, &rows, &records, false).expect("replay")
     }
 
     /// 電気 then かな→仮名 in `session`, as the user typed it.
