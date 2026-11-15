@@ -16,6 +16,7 @@
   Show they fail at the same lines on the base commit, judge them by CI, and
   run local workspace tests with `--no-fail-fast` so the first failing crate
   does not hide the rest. The same tests passed locally on 2026-11-07.
+- The WinGet `jq` symlink cannot run from Git Bash (`Permission denied`, confirmed 2026-11-15; this session reported `Invalid argument`); use `gh --jq`.
 
 - **Heredocs through the Bash tool fail here** (`unexpected EOF`, and
   `$TMPDIR` is unset so `/msg.txt` is a permission error). Write commit
