@@ -243,19 +243,27 @@ impl CorrectionTrail {
     /// to the caret, with the same surface or another.
     #[cfg(feature = "replay-eval")]
     pub(crate) fn would_retype(&self, reading: &str) -> bool {
-        self.retype_rejections(reading).is_some()
+        self.pending_top(reading).is_some()
     }
 
     /// The pending top's erased and carried surfaces, if this reading retypes it.
     pub(crate) fn retype_rejections(&self, reading: &str) -> Option<RetypeRejections<'_>> {
+        if self.len.checked_sub(self.standing) != Some(1) {
+            return None;
+        }
+        let top = self.pending_top(reading)?;
+        Some(RetypeRejections {
+            erased: top.surface.as_str(),
+            carried: &top.rejected,
+        })
+    }
+
+    fn pending_top(&self, reading: &str) -> Option<&TrailEntry> {
         if self.erase_overflow != 0 || self.len <= self.standing {
             return None;
         }
         let top = &self.entries[usize::from(self.len) - 1];
-        (top.tracked && top.reading.as_str() == reading).then_some(RetypeRejections {
-            erased: top.surface.as_str(),
-            carried: &top.rejected,
-        })
+        (top.tracked && top.reading.as_str() == reading).then_some(top)
     }
 
     /// One idle Backspace the host handled: one character left of the caret

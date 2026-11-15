@@ -331,6 +331,7 @@ struct PendingConversion {
     reading: String,
     first_candidate: String,
     engine: Option<(u32, u32, u32)>,
+    r1_eligible: bool,
 }
 
 #[derive(Debug, Default)]
@@ -460,12 +461,20 @@ fn replay(
                     };
                     let (before_choice, before_exact) = choose(&before);
                     let (after_choice, _) = choose(&after);
-                    let r1_choice = after.first_candidate_with_trail(
-                        &commit.reading,
-                        commit.left_context,
-                        candidates,
-                        &session.trail,
-                    );
+                    let r1_choice = if pending.r1_eligible {
+                        let choice = after.first_candidate_with_trail(
+                            &commit.reading,
+                            commit.left_context,
+                            candidates,
+                            &session.trail,
+                        );
+                        Choice {
+                            surface: candidates[choice.index].text().to_owned(),
+                            learned: choice.learned,
+                        }
+                    } else {
+                        after_choice.clone()
+                    };
                     if before_exact
                         && pending
                             .engine
@@ -483,10 +492,7 @@ fn replay(
                         final_choice: commit.surface.clone(),
                         before: before_choice,
                         after: after_choice,
-                        r1: Choice {
-                            surface: candidates[r1_choice.index].text().to_owned(),
-                            learned: r1_choice.learned,
-                        },
+                        r1: r1_choice,
                     });
                 }
                 let replayed = ReplayCommit {
@@ -545,6 +551,7 @@ fn replay_key(
             reading: key.preedit_before.clone(),
             first_candidate: key.preedit_after.clone(),
             engine,
+            r1_eligible: key.action == "convert",
         });
     } else if key.action == "undo_commit" && key.delete_before > 0 {
         // The history does not record the host's outcome; assume applied.
@@ -1095,5 +1102,28 @@ mod tests {
         assert_eq!(result.conversions[1].r1.surface, "加奈");
         assert!(result.report().contains("r1-fixed\t1\n"));
         assert!(result.report().contains("r1-broken\t0\n"));
+    }
+
+    #[test]
+    fn r1_replay_does_not_apply_to_kana_cycle() {
+        let mut history = History::new();
+        history.convert(1, "かな", "仮名");
+        history.commit(1, "かな", "仮名", 0, 1);
+        history.backspace(1);
+        history.backspace(1);
+        history.key(
+            1,
+            2,
+            0,
+            (STATE_COMPOSING, STATE_CONVERTING),
+            ("かな", "カナ"),
+            0,
+            "mode_kana_cycle",
+        );
+        history.commit(1, "かな", "加奈", 0, 2);
+        let result = run(&history, "");
+        let kana_cycle = result.conversions.last().expect("kana cycle");
+        assert_eq!(kana_cycle.r1, kana_cycle.after);
+        assert!(result.report().contains("r1-changed\t0\n"));
     }
 }

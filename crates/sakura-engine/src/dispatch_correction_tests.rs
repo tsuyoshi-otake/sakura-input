@@ -442,6 +442,59 @@ fn issue_481_g3_scene_9_carried_rejection_skips_both() {
     assert_ne!(harness.out.preedit_text(), SECOND);
 }
 
+#[test]
+fn issue_481_scene_10_multiple_erased_commits_keep_first() {
+    let mut harness = Harness::new();
+    harness.commit("kana", FIRST);
+    harness.commit("denki", "電気");
+    harness.erase(4);
+    convert_retype(&mut harness);
+    assert_eq!(harness.out.preedit_text(), FIRST);
+}
+
+#[test]
+fn issue_481_scene_11_reconversion_preview_matches_actual() {
+    let mut harness = Harness::new();
+    harness.commit("kana", FIRST);
+    harness.erase(2);
+    let trail = harness
+        .dispatcher
+        .sessions
+        .get(harness.session)
+        .expect("session")
+        .correction_trail()
+        .clone();
+    let request = |preview| Request::Reconvert {
+        session: harness.session,
+        text: FIRST.to_owned(),
+        preview,
+    };
+    assert_eq!(
+        harness
+            .dispatcher
+            .dispatch(&request(true), &mut harness.out),
+        Reply::Output
+    );
+    let preview = harness.out.preedit_text().to_owned();
+    assert_eq!(
+        harness
+            .dispatcher
+            .sessions
+            .get(harness.session)
+            .expect("session")
+            .correction_trail(),
+        &trail,
+        "preview must not mutate the live trail"
+    );
+    assert_eq!(
+        harness
+            .dispatcher
+            .dispatch(&request(false), &mut harness.out),
+        Reply::Output
+    );
+    assert_eq!(harness.out.preedit_text(), preview);
+}
+
 // T1: a commit learned eight times, erased and retyped through the katakana
 // transform, stops leading its context; the transform itself is not learned
 // (fail-before).

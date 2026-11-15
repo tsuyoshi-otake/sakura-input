@@ -8,8 +8,9 @@ rejections. This changes the initial selection only; candidate contents and
 order stay unchanged, and the user can still select the erased surface.
 
 The session-owned correction trail is read without mutation and without
-allocation. A match requires an exactly erased tracked top entry, no erase
-overflow, and the same complete reading. Partial erasure, an interrupted
+allocation. A match requires exactly one pending erased commit, an exactly
+erased tracked top entry, no erase overflow, and the same complete reading.
+Multiple erased commits, partial erasure, an interrupted
 trail, a different reading, non-initial selection, and
 `preserve_exact_initial` do not activate the rule.
 
@@ -24,6 +25,8 @@ existing preference computed with those exclusions.
 The rule does not modify correction learning, tombstones, the trail, or
 prediction candidates. A later commit remains subject to #305's existing
 correction and staging rules.
+Reconversion preview clears the trail on its cloned session, just as actual
+reconversion clears it on the live session.
 
 ## Verification and limits
 
@@ -32,6 +35,9 @@ using the same recorded commits and #305 learning. Fixed and broken use the
 final corrected surface as the target. The pre-registered gate requires at
 least 10 fixed and at least five fixed per broken. The replay cannot reproduce
 the commit cache, reranker, or host-side caret moves, and its input is private.
+R1 is compared only for conversions started by `convert`; kana cycling does not
+use the initial selection path. Narrowing the pending-stack condition was
+decided after examining the data, not before the original gate was registered.
 Scenario tests additionally cover complete and partial erasure, interrupted
 and different readings, the no-alternative fallback, candidate navigation,
 applied undo, and carried rejections.

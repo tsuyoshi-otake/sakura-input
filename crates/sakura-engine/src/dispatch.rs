@@ -1663,6 +1663,7 @@ impl Dispatcher {
 
         if preview {
             let mut probe = existing.clone();
+            probe.correction_trail_mut().clear();
             return match build_reconversion(
                 &mut probe,
                 text,
