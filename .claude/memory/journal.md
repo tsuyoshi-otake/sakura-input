@@ -4296,3 +4296,11 @@ Only phase 1 is to be integrated; phases 2 and 3 are stopped. With product learn
 - Fix: workspace version, installer product version and versioned directory, release.yml default tag, and the signed-update sequence now say 2.0.35 and 43. `cargo update --workspace --offline` changed only the 28 workspace versions in the lockfile. Japanese release notes keep the unsigned-installer paragraph and say the fix applies to update checks made after updating to 2.0.35. The preparation rides on PR #485 so one CI run covers both.
 - Verification: cargo metadata reports 28 workspace members at 2.0.35; the lockfile diff holds only `version` lines; release-workflow policy, fmt and a sakura-settings build pass.
 - Learning: a fix to the updater itself reaches users only through the old updater, so release notes for such a fix must say what to do when the old one still fails.
+
+## 2026-11-18 - ONNX Runtime source moved to NuGet (#484 release blocker)
+
+- Symptom: PR #485's `Build installer` failed at `scripts/build-sakura-reranker.ps1` with HTTP 404 while downloading `onnxruntime-win-x64-1.28.0.zip`. The 2.0.34 build on 2026-11-15 had fetched it.
+- Root cause: `github.com/microsoft/onnxruntime` answered 404 on both the web and the API (other repositories answered 200), so the release asset was gone. NuGet and PyPI still served 1.28.0. Why the repository disappeared was not established.
+- Fix (owner chose NuGet over mirroring the zip or waiting): download `microsoft.ml.onnxruntime.1.28.0.nupkg` from api.nuget.org (139,145,017 bytes, published 2026-07-25), pin its SHA-256, extract only `runtimes/win-x64/native/onnxruntime.dll`, `LICENSE` and `ThirdPartyNotices.txt`, and pin the DLL's SHA-256 as well.
+- Verification: the three extracted files are byte-identical to the same files in the locally cached zip that matched the old pin. The DLL carries a valid Microsoft Authenticode signature, and `dotnet nuget verify --all` accepted the Microsoft author signature and the NuGet.org repository signature. With the same model and worker, the old script on the cached zip and the new script on the package staged the same 8 payload files (all SHA-256 equal).
+- Learning: pin a third-party binary by the hash of the file that ships, not only of the archive it came in; then a change of distribution channel can be proven not to change the product.
