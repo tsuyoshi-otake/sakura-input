@@ -5,29 +5,33 @@
 //! explicit terminal outcome, and an installer cannot be launched until the
 //! exact size, SHA-256 digest, and Authenticode trust checks all pass.
 
+use std::collections::hash_map::RandomState;
 use std::ffi::c_void;
 use std::fmt;
 use std::fs::{self, OpenOptions};
+use std::hash::BuildHasher;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::os::windows::ffi::OsStrExt;
 use std::os::windows::fs::OpenOptionsExt;
 use std::os::windows::io::AsRawHandle;
 use std::path::{Path, PathBuf};
+use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use windows::core::PCWSTR;
+use windows::core::{HRESULT, PCWSTR};
 use windows::Win32::Foundation::{
     CloseHandle, HANDLE, HWND, TRUST_E_NOSIGNATURE, WAIT_OBJECT_0, WAIT_TIMEOUT,
 };
 use windows::Win32::Networking::WinHttp::{
     WinHttpCloseHandle, WinHttpConnect, WinHttpOpen, WinHttpOpenRequest, WinHttpQueryHeaders,
     WinHttpReadData, WinHttpReceiveResponse, WinHttpSendRequest, WinHttpSetOption,
-    WinHttpSetTimeouts, INTERNET_DEFAULT_HTTPS_PORT, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
-    WINHTTP_FLAG_REFRESH, WINHTTP_FLAG_SECURE, WINHTTP_OPEN_REQUEST_FLAGS,
-    WINHTTP_OPTION_CONNECT_RETRIES, WINHTTP_OPTION_MAX_RESPONSE_HEADER_SIZE,
-    WINHTTP_OPTION_REDIRECT_POLICY, WINHTTP_OPTION_REDIRECT_POLICY_NEVER,
-    WINHTTP_OPTION_REJECT_USERPWD_IN_URL, WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_LOCATION,
-    WINHTTP_QUERY_RETRY_AFTER, WINHTTP_QUERY_STATUS_CODE,
+    WinHttpSetTimeouts, ERROR_WINHTTP_CONNECTION_ERROR, INTERNET_DEFAULT_HTTPS_PORT,
+    WINHTTP_ACCESS_TYPE, WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_FLAG_REFRESH,
+    WINHTTP_FLAG_SECURE, WINHTTP_OPEN_REQUEST_FLAGS, WINHTTP_OPTION_CONNECT_RETRIES,
+    WINHTTP_OPTION_MAX_RESPONSE_HEADER_SIZE, WINHTTP_OPTION_REDIRECT_POLICY,
+    WINHTTP_OPTION_REDIRECT_POLICY_NEVER, WINHTTP_OPTION_REJECT_USERPWD_IN_URL,
+    WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_LOCATION, WINHTTP_QUERY_RETRY_AFTER,
+    WINHTTP_QUERY_STATUS_CODE,
 };
 use windows::Win32::Security::Cryptography::{
     BCryptCloseAlgorithmProvider, BCryptCreateHash, BCryptDestroyHash, BCryptFinishHash,
@@ -72,6 +76,11 @@ const INSTALLER_TOTAL_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 const TRUST_LOCK_TIMEOUT: Duration = Duration::from_secs(2);
 const UPDATE_SETTINGS_SCHEMA: &str = "1";
 const HTTP_BUFFER_BYTES: usize = 64 * 1024;
+/// Attempts per hop when an established connection is dropped before any
+/// response arrives (#484). No other failure is retried.
+const TRANSPORT_ATTEMPTS: u32 = 3;
+/// Longest wait before the second attempt; the ceiling triples per failure.
+const RETRY_DELAY_CEILING_MS: u64 = 500;
 
 pub fn current_version() -> Version {
     Version::parse(env!("CARGO_PKG_VERSION")).expect("package version is valid semantic version")
@@ -1032,13 +1041,67 @@ fn stream_http_get(
     initial_url: &str,
     limit: u64,
     total_timeout: Duration,
+    consume: impl FnMut(&[u8]) -> Result<(), String>,
+) -> Result<u64, String> {
+    stream_http_get_on(
+        Wire::Https,
+        initial_url,
+        limit,
+        total_timeout,
+        &mut thread::sleep,
+        consume,
+    )
+}
+
+/// How a hop reaches its host. Release builds contain only `Https`. The
+/// loopback form lets tests drive the real WinHTTP calls without a
+/// certificate; URL validation and redirects still run on the allowlisted
+/// names, and only the socket goes elsewhere.
+#[derive(Debug, Clone, Copy)]
+enum Wire {
+    Https,
+    #[cfg(test)]
+    PlainLoopback(u16),
+}
+
+impl Wire {
+    fn proxy_policy(self) -> WINHTTP_ACCESS_TYPE {
+        match self {
+            Self::Https => WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
+            #[cfg(test)]
+            Self::PlainLoopback(_) => {
+                windows::Win32::Networking::WinHttp::WINHTTP_ACCESS_TYPE_NO_PROXY
+            }
+        }
+    }
+
+    /// Server name, port, and request flags for a hop to `host`.
+    fn endpoint(self, host: &str) -> (&str, u16, WINHTTP_OPEN_REQUEST_FLAGS) {
+        match self {
+            Self::Https => (
+                host,
+                INTERNET_DEFAULT_HTTPS_PORT,
+                WINHTTP_FLAG_SECURE | WINHTTP_FLAG_REFRESH,
+            ),
+            #[cfg(test)]
+            Self::PlainLoopback(port) => ("127.0.0.1", port, WINHTTP_FLAG_REFRESH),
+        }
+    }
+}
+
+fn stream_http_get_on(
+    wire: Wire,
+    initial_url: &str,
+    limit: u64,
+    total_timeout: Duration,
+    pause: &mut dyn FnMut(Duration),
     mut consume: impl FnMut(&[u8]) -> Result<(), String>,
 ) -> Result<u64, String> {
     if limit == 0 || limit > MAX_INSTALLER_BYTES {
         return Err("HTTP response limit is invalid".to_owned());
     }
     let deadline = Instant::now() + total_timeout;
-    let session = InternetHandle::open_session()?;
+    let session = InternetHandle::open_session(wire.proxy_policy())?;
     let mut url = initial_url.to_owned();
 
     for redirect_count in 0..=MAX_REDIRECTS {
@@ -1049,12 +1112,8 @@ fn stream_http_get(
             ));
         }
         let parsed = parse_allowed_https_url(&url)?;
-        let host = wide(&parsed.host);
-        let connect = InternetHandle::connect(session.0, PCWSTR(host.as_ptr()))?;
-        let path = wide(&parsed.path_and_query);
-        let request = InternetHandle::request(connect.0, PCWSTR(path.as_ptr()))?;
-        request.configure()?;
-        request.send()?;
+        let hop = Hop::open(&session, wire, &parsed, deadline, pause)?;
+        let request = &hop.request;
         let status = request.status_code()?;
         if matches!(status, 301 | 302 | 303 | 307 | 308) {
             if redirect_count == MAX_REDIRECTS {
@@ -1075,7 +1134,7 @@ fn stream_http_get(
             ));
         }
         if status != 200 {
-            return Err(format!("HTTP request returned status {status}"));
+            return Err(format!("{} returned HTTP status {status}", parsed.host));
         }
 
         let mut total = 0u64;
@@ -1103,22 +1162,120 @@ fn stream_http_get(
     Err("HTTP redirect state did not reach a terminal response".to_owned())
 }
 
+/// Why a hop produced no response.
+struct HopFailure {
+    message: String,
+    /// An established connection ended before any response arrived, so
+    /// repeating the GET can neither duplicate nor tear a download.
+    connection_dropped: bool,
+}
+
+impl From<String> for HopFailure {
+    fn from(message: String) -> Self {
+        Self {
+            message,
+            connection_dropped: false,
+        }
+    }
+}
+
+impl HopFailure {
+    fn winhttp(operation: &str, error: &windows::core::Error) -> Self {
+        Self {
+            message: format!("{operation} failed: {error}"),
+            connection_dropped: error.code() == HRESULT::from_win32(ERROR_WINHTTP_CONNECTION_ERROR),
+        }
+    }
+}
+
+/// One GET whose response headers have arrived. Fields drop in declaration
+/// order, so the request closes before its connection.
+struct Hop {
+    request: InternetHandle,
+    _connection: InternetHandle,
+}
+
+impl Hop {
+    /// Sends the GET for `target` and waits for its response headers.
+    ///
+    /// Terminal states: a response with any status is returned to the caller;
+    /// a failure other than a dropped connection is returned at once; a
+    /// dropped connection is retried until `TRANSPORT_ATTEMPTS` is reached or
+    /// the wait before the next attempt would pass `deadline`, and is then
+    /// returned with the attempt count.
+    fn open(
+        session: &InternetHandle,
+        wire: Wire,
+        target: &HttpsUrl,
+        deadline: Instant,
+        pause: &mut dyn FnMut(Duration),
+    ) -> Result<Self, String> {
+        let mut attempt = 1u32;
+        loop {
+            let failure = match Self::send(session, wire, target) {
+                Ok(hop) => return Ok(hop),
+                Err(failure) => failure,
+            };
+            let HopFailure {
+                message,
+                connection_dropped,
+            } = failure;
+            let host = &target.host;
+            if !connection_dropped {
+                return Err(format!("{host}: {message}"));
+            }
+            if attempt == TRANSPORT_ATTEMPTS {
+                return Err(format!("{host}: {message} ({attempt} attempts)"));
+            }
+            let delay = retry_delay(attempt, jitter_entropy());
+            if delay >= deadline.saturating_duration_since(Instant::now()) {
+                return Err(format!(
+                    "{host}: {message} (attempt {attempt} of {TRANSPORT_ATTEMPTS}; the total deadline left no time to retry)"
+                ));
+            }
+            pause(delay);
+            attempt += 1;
+        }
+    }
+
+    fn send(session: &InternetHandle, wire: Wire, target: &HttpsUrl) -> Result<Self, HopFailure> {
+        let (server, port, flags) = wire.endpoint(&target.host);
+        let server = wide(server);
+        let connection = InternetHandle::connect(session.0, PCWSTR(server.as_ptr()), port)?;
+        let path = wide(&target.path_and_query);
+        let request = InternetHandle::request(connection.0, PCWSTR(path.as_ptr()), flags)?;
+        request.configure()?;
+        request.send()?;
+        Ok(Self {
+            request,
+            _connection: connection,
+        })
+    }
+}
+
+/// Wait before the attempt that follows `failed_attempts` failures. The
+/// ceiling triples per failure and the upper half of each window is random,
+/// so clients that failed together do not retry together.
+fn retry_delay(failed_attempts: u32, entropy: u64) -> Duration {
+    let ceiling = RETRY_DELAY_CEILING_MS * 3u64.pow(failed_attempts.saturating_sub(1));
+    let half = ceiling / 2;
+    Duration::from_millis(half + entropy % (half + 1))
+}
+
+fn jitter_entropy() -> u64 {
+    // Each `RandomState` carries keys derived from operating-system
+    // randomness, which is enough to spread retries apart.
+    RandomState::new().hash_one(0u8)
+}
+
 struct InternetHandle(*mut c_void);
 
 impl InternetHandle {
-    fn open_session() -> Result<Self, String> {
+    fn open_session(access: WINHTTP_ACCESS_TYPE) -> Result<Self, String> {
         let agent = windows::core::w!("Sakura Input Updater/1");
         // SAFETY: all strings are static and the returned handle is owned by
         // this RAII wrapper.
-        let handle = unsafe {
-            WinHttpOpen(
-                agent,
-                WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY,
-                PCWSTR::null(),
-                PCWSTR::null(),
-                0,
-            )
-        };
+        let handle = unsafe { WinHttpOpen(agent, access, PCWSTR::null(), PCWSTR::null(), 0) };
         let session = Self::from_raw(handle, "WinHttpOpen")?;
         // SAFETY: this is a live session handle and all option buffers are
         // fixed-size native-endian scalars consumed during the calls.
@@ -1140,15 +1297,18 @@ impl InternetHandle {
         Ok(session)
     }
 
-    fn connect(session: *mut c_void, host: PCWSTR) -> Result<Self, String> {
+    fn connect(session: *mut c_void, host: PCWSTR, port: u16) -> Result<Self, String> {
         // SAFETY: `session` is live and `host` points to a NUL-terminated
         // buffer that outlives the synchronous call.
-        let handle = unsafe { WinHttpConnect(session, host, INTERNET_DEFAULT_HTTPS_PORT, 0) };
+        let handle = unsafe { WinHttpConnect(session, host, port, 0) };
         Self::from_raw(handle, "WinHttpConnect")
     }
 
-    fn request(connection: *mut c_void, path: PCWSTR) -> Result<Self, String> {
-        let flags: WINHTTP_OPEN_REQUEST_FLAGS = WINHTTP_FLAG_SECURE | WINHTTP_FLAG_REFRESH;
+    fn request(
+        connection: *mut c_void,
+        path: PCWSTR,
+        flags: WINHTTP_OPEN_REQUEST_FLAGS,
+    ) -> Result<Self, String> {
         // SAFETY: `connection` is live, `path` is NUL-terminated, and the
         // remaining optional string pointers are intentionally null.
         let handle = unsafe {
@@ -1181,17 +1341,24 @@ impl InternetHandle {
         unsafe { set_u32_option(self.0, WINHTTP_OPTION_REJECT_USERPWD_IN_URL, 1) }
     }
 
-    fn send(&self) -> Result<(), String> {
-        let headers: Vec<u16> = "Accept: application/octet-stream\r\nAccept-Encoding: identity\r\nCache-Control: no-cache\r\n"
+    fn send(&self) -> Result<(), HopFailure> {
+        // `Connection: close` keeps WinHTTP from returning the connection to
+        // its pool, which every session of the process shares. A later hop
+        // would otherwise reuse it, and WinHTTP reports a pooled connection
+        // that the peer closed in the meantime as
+        // `ERROR_WINHTTP_CONNECTION_ERROR` instead of reconnecting (#484).
+        // `WINHTTP_DISABLE_KEEP_ALIVE` has the same effect but is documented
+        // as breaking NTLM and other connection-bound authentication.
+        let headers: Vec<u16> = "Accept: application/octet-stream\r\nAccept-Encoding: identity\r\nCache-Control: no-cache\r\nConnection: close\r\n"
             .encode_utf16()
             .collect();
         // SAFETY: the request is live. WinHTTP consumes the bounded header
         // slice synchronously and no request body is supplied.
         unsafe {
             WinHttpSendRequest(self.0, Some(&headers), None, 0, 0, 0)
-                .map_err(|error| format!("WinHttpSendRequest failed: {error}"))?;
+                .map_err(|error| HopFailure::winhttp("WinHttpSendRequest", &error))?;
             WinHttpReceiveResponse(self.0, std::ptr::null_mut())
-                .map_err(|error| format!("WinHttpReceiveResponse failed: {error}"))
+                .map_err(|error| HopFailure::winhttp("WinHttpReceiveResponse", &error))
         }
     }
 
@@ -1593,3 +1760,7 @@ fn wide_os(value: &std::ffi::OsStr) -> Vec<u16> {
 #[cfg(test)]
 #[path = "updater_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "updater_transport_tests.rs"]
+mod transport_tests;
