@@ -38,9 +38,20 @@ $outputDirectory = [IO.Path]::GetFullPath($OutputDirectory)
 $workDirectory = [IO.Path]::GetFullPath($WorkDirectory)
 $stageScript = Join-Path $PSScriptRoot 'stage-sakura-rerank.ps1'
 
+# ONNX Runtime comes from Microsoft's official NuGet package. The GitHub
+# release zip used before (#484) stopped resolving in 2026-11; the DLL,
+# LICENSE and ThirdPartyNotices.txt inside this package are byte-identical to
+# the ones that zip carried, so the shipped payload does not change. Both the
+# package and the extracted DLL are pinned.
 $ortVersion = '1.28.0'
-$ortArchiveSha256 = 'abef733dacbe2f571547a7150b479b5cb9cc0df22f96c24983a42cadb1b4f8bc'
-$ortArchiveUrl = "https://github.com/microsoft/onnxruntime/releases/download/v$ortVersion/onnxruntime-win-x64-$ortVersion.zip"
+$ortPackageSha256 = '769d1d3ea8ab6cd69f737c9dd4d4462aa4ad0ccfa106eaf506efc40d7bead5db'
+$ortPackageUrl = "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/$ortVersion/microsoft.ml.onnxruntime.$ortVersion.nupkg"
+$ortRuntimeDllSha256 = '18370c375f07357fa5874344a9d9ac17e6b6fe1eb18b1dd209d79483b4470257'
+$ortPackageEntries = [ordered]@{
+    'runtimes/win-x64/native/onnxruntime.dll' = 'onnxruntime.dll'
+    'LICENSE' = 'LICENSE'
+    'ThirdPartyNotices.txt' = 'ThirdPartyNotices.txt'
+}
 
 function Get-Sha256 {
     param([Parameter(Mandatory)][string]$Path)
@@ -74,26 +85,26 @@ Require-File $workerExe 'release Sakura neural worker' | Out-Null
 Require-File $stageScript 'Sakura reranker staging script' | Out-Null
 [IO.Directory]::CreateDirectory($workDirectory) | Out-Null
 
-$archive = Join-Path $workDirectory "onnxruntime-win-x64-$ortVersion.zip"
-if (-not [IO.File]::Exists($archive) -or (Get-Sha256 $archive) -cne $ortArchiveSha256) {
+$package = Join-Path $workDirectory "microsoft.ml.onnxruntime.$ortVersion.nupkg"
+if (-not [IO.File]::Exists($package) -or (Get-Sha256 $package) -cne $ortPackageSha256) {
     Add-Type -AssemblyName System.Net.Http
     $client = [Net.Http.HttpClient]::new()
     try {
-        $bytes = $client.GetByteArrayAsync($ortArchiveUrl).GetAwaiter().GetResult()
-        [IO.File]::WriteAllBytes($archive, $bytes)
+        $bytes = $client.GetByteArrayAsync($ortPackageUrl).GetAwaiter().GetResult()
+        [IO.File]::WriteAllBytes($package, $bytes)
     }
     finally {
         $client.Dispose()
     }
 }
-if ((Get-Sha256 $archive) -cne $ortArchiveSha256) {
-    throw 'downloaded ONNX Runtime archive does not match the pinned SHA-256'
+if ((Get-Sha256 $package) -cne $ortPackageSha256) {
+    throw 'downloaded ONNX Runtime package does not match the pinned SHA-256'
 }
 
-$ortParent = Join-Path $workDirectory 'onnxruntime'
-$ortRoot = Join-Path $ortParent "onnxruntime-win-x64-$ortVersion"
-$runtimeDll = Join-Path $ortRoot 'lib\onnxruntime.dll'
-if (-not [IO.File]::Exists($runtimeDll)) {
+$ortParent = Join-Path $workDirectory 'onnxruntime-nuget'
+$ortRoot = Join-Path $ortParent "microsoft.ml.onnxruntime-$ortVersion"
+$runtimeDll = Join-Path $ortRoot 'onnxruntime.dll'
+if (-not [IO.File]::Exists($runtimeDll) -or (Get-Sha256 $runtimeDll) -cne $ortRuntimeDllSha256) {
     if ([IO.Directory]::Exists($ortParent)) {
         $resolvedParent = [IO.Path]::GetFullPath($ortParent)
         $resolvedWork = $workDirectory.TrimEnd('\', '/') + [IO.Path]::DirectorySeparatorChar
@@ -102,12 +113,27 @@ if (-not [IO.File]::Exists($runtimeDll)) {
         }
         [IO.Directory]::Delete($resolvedParent, $true)
     }
-    [IO.Directory]::CreateDirectory($ortParent) | Out-Null
+    [IO.Directory]::CreateDirectory($ortRoot) | Out-Null
     Add-Type -AssemblyName System.IO.Compression.FileSystem
-    [IO.Compression.ZipFile]::ExtractToDirectory($archive, $ortParent)
+    $zip = [IO.Compression.ZipFile]::OpenRead($package)
+    try {
+        foreach ($entryName in $ortPackageEntries.Keys) {
+            $entry = $zip.GetEntry($entryName)
+            if ($null -eq $entry) {
+                throw "ONNX Runtime package lacks $entryName"
+            }
+            [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, (Join-Path $ortRoot $ortPackageEntries[$entryName]), $false)
+        }
+    }
+    finally {
+        $zip.Dispose()
+    }
 }
 
 $runtimeDll = Require-File $runtimeDll 'ONNX Runtime DLL'
+if ((Get-Sha256 $runtimeDll) -cne $ortRuntimeDllSha256) {
+    throw 'extracted ONNX Runtime DLL does not match the pinned SHA-256'
+}
 $runtimeLicense = Require-File (Join-Path $ortRoot 'LICENSE') 'ONNX Runtime license'
 $runtimeNotices = Require-File (Join-Path $ortRoot 'ThirdPartyNotices.txt') 'ONNX Runtime third-party notices'
 $modelLicense = Require-File (Join-Path $repositoryRoot 'LICENSE') 'Sakura model MIT license'
